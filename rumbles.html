@@ -278,6 +278,7 @@
   var state = {
     mode: "ppr", // "ppr" | "custom"
     history: null, // parsed rumbles_history.json
+    historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
     liveError: null,
     refreshing: false,
@@ -411,13 +412,19 @@
   // ---- data loading ----------------------------------------------------
 
   function loadHistory() {
+    state.historyError = null;
     return fetchJson(HISTORY_URL)
       .then(function (data) {
         state.history = data;
       })
       .catch(function (err) {
+        // Don't swallow this silently -- an unreachable/missing
+        // rumbles_history.json is the #1 reason the page would ever look
+        // empty, and the person looking at it needs to know that's what
+        // happened rather than just seeing a blank table.
         console.warn("[rumbles] couldn't load rumbles_history.json:", err);
-        state.history = {
+        state.historyError = err;
+        state.history = state.history || {
           season: null,
           weeks_completed: [],
           max_rumbles_per_week: MAX_RUMBLES_PER_WEEK,
@@ -431,34 +438,54 @@
     return fetchJson(API_V1 + "/state/nfl")
       .then(function (nflState) {
         var season = nflState.season;
-        var week = nflState.week;
+        var reportedWeek = nflState.week;
         var seasonType = nflState.season_type; // "pre" | "regular" | "post" | "off"
         var historyWeeksDone = (state.history && state.history.weeks_completed) || [];
-        var weekAlreadyFinal = historyWeeksDone.indexOf(week) !== -1;
-        var eligible = seasonType !== "pre" && seasonType !== "off" && week && !weekAlreadyFinal;
+        var maxCompleted = historyWeeksDone.length ? Math.max.apply(null, historyWeeksDone) : 0;
+
+        // Sleeper's own "current week" pointer (state.week) doesn't always
+        // roll over the instant the last game of a week ends -- there can
+        // be a gap between Monday night's final whistle and whenever
+        // Sleeper flips it forward, sometimes not until close to Thursday
+        // kickoff of the next week. Rather than trust that pointer's exact
+        // timing, always target the next week AFTER whatever's already
+        // finalized in rumbles_history.json, so a fully-completed week
+        // never gets mistaken for "not live yet" while we wait for
+        // Sleeper's pointer to catch up.
+        var targetWeek = Math.max(reportedWeek || 0, maxCompleted + 1);
+        var weekAlreadyFinal = historyWeeksDone.indexOf(targetWeek) !== -1;
+        var eligible = seasonType !== "pre" && seasonType !== "off" && targetWeek && !weekAlreadyFinal;
 
         if (!eligible) {
-          state.live = { week: week, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
           return null;
         }
 
         var leagueId = (state.history && state.history.league_id) || null;
         if (!leagueId) {
-          state.live = { week: week, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
           return null;
         }
 
         return Promise.all([
           fetchJson(API_V1 + "/league/" + leagueId),
-          fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + week),
-          fetchJson(STATS_BASE + "/" + season + "/" + week).catch(function () { return {}; }),
-          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + week).catch(function () { return {}; })
+          fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + targetWeek),
+          fetchJson(STATS_BASE + "/" + season + "/" + targetWeek).catch(function () { return {}; }),
+          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek).catch(function () { return {}; })
         ]).then(function (results) {
           var league = results[0];
           var matchups = results[1] || [];
           var statsMap = results[2] || {};
           var projMap = results[3] || {};
           var scoringSettings = league.scoring_settings || {};
+
+          if (!matchups.length) {
+            // Sleeper hasn't posted matchups for this week yet (too early
+            // in the week) -- nothing to overlay, fall back to cumulative-
+            // only rather than erroring out.
+            state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+            return null;
+          }
 
           var scoresPpr = {};
           var scoresCustom = {};
@@ -483,7 +510,7 @@
             byRoster[rid] = { ppr: rumblesPpr[rid], custom: rumblesCustom[rid] };
           });
 
-          state.live = { week: week, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
         });
       })
       .catch(function (err) {
@@ -547,7 +574,13 @@
     var rows = buildCombinedStandings();
 
     if (!rows.length) {
-      els.body.innerHTML = '<tr><td colspan="9"><div class="empty-state">No standings yet — check back once Week 1 wraps up.</div></td></tr>';
+      var emptyMsg;
+      if (state.historyError) {
+        emptyMsg = "Couldn't load rumbles_history.json (" + state.historyError.message + "). Make sure it's published next to this page and that the workflow has run at least once.";
+      } else {
+        emptyMsg = "No completed weeks yet this season — check back once Week 1 wraps up.";
+      }
+      els.body.innerHTML = '<tr><td colspan="9"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
       els.body.innerHTML = rows.map(function (r) {
         return "<tr>" +
@@ -585,7 +618,13 @@
 
     els.updatedPill.textContent = "Last updated " + new Date().toLocaleTimeString();
 
-    if (state.liveError) {
+    if (state.historyError && rows.length) {
+      // We have rows (from a prior successful load) but the most recent
+      // attempt to refresh rumbles_history.json failed -- say so without
+      // blanking out what we've already got.
+      els.errorBanner.textContent = "Couldn't refresh season standings (" + state.historyError.message + ") — showing the last known data.";
+      els.errorBanner.classList.add("show");
+    } else if (state.liveError) {
       els.errorBanner.textContent = "Couldn't reach Sleeper for a live update — showing the last known standings. Retrying every 30s.";
       els.errorBanner.classList.add("show");
     } else {

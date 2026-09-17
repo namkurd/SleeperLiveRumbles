@@ -36,6 +36,14 @@ backend involved.
 Rank, cumulative Rumbles, Rumble % (Rumbles earned / max possible so far),
 This Week, PF, PA, H2H W-L, and Vs. Field W-L.
 
+The standings table always shows the season's cumulative numbers -- it's
+never blank. Outside of a live window (off game days, or the gap between
+one week ending and the next one's games starting) it's just
+`rumbles_history.json` as-is, no LIVE badge. Once a week goes live, that
+week's projected Rumbles/PF/PA/records are added on top of the cumulative
+totals and refresh every 30 seconds, with a LIVE badge on the affected
+row's "This Week" cell.
+
 ### Live scoring, including in-game projections
 
 While a week is in progress, `rumbles.html` fetches every starter's stats
@@ -96,15 +104,23 @@ toggle -- it only changes how the live, in-progress week is scored.
 
 ## Testing without live Sleeper access
 
-`test/make_fixtures.py` builds mock Sleeper API responses (league,
-matchups, bulk stats, bulk projections, plus a fake `rumbles_history.json`
-with Week 1 "complete" and Week 2 "live"), and `test/run_test.py` runs a
-headless-browser end-to-end test of the real `rumbles.html` against those
-mocks -- including hand-verified checks that the actual-vs-live-projection
-blending picks the right one in both directions (a low-actual/high-live-
-projection player, and a blowout-actual player). Useful if you ever touch
-the scoring logic and want to check it without waiting for a live NFL
-window:
+`test/make_fixtures.py` builds mock Sleeper API responses, and
+`test/run_test.py` runs a headless-browser end-to-end test of the real
+`rumbles.html` against those mocks, across three scenarios:
+
+1. **A week genuinely live** -- hand-verified checks that the
+   actual-vs-live-projection blending picks the right one in both
+   directions (a low-actual/high-live-projection player, and a
+   blowout-actual player), in both scoring modes.
+2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
+   Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
+   matchups aren't posted. The page must show Week 1's cumulative
+   standings, never a blank table.
+3. **`rumbles_history.json` fails to load** -- the page must show a clear,
+   diagnosable message instead of a silent blank table.
+
+Useful if you ever touch the scoring or live-detection logic and want to
+check it without waiting for a live NFL window:
 
 ```bash
 pip install playwright
