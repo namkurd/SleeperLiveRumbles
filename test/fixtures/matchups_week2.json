@@ -1,0 +1,110 @@
+[
+  {
+    "roster_id": 1,
+    "matchup_id": 1,
+    "starters": [
+      "P1",
+      "P2"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 2,
+    "matchup_id": 1,
+    "starters": [
+      "P3",
+      "P4"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 3,
+    "matchup_id": 2,
+    "starters": [
+      "P5",
+      "P6"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 4,
+    "matchup_id": 2,
+    "starters": [
+      "P7",
+      "P8"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 5,
+    "matchup_id": 3,
+    "starters": [
+      "P9",
+      "P10"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 6,
+    "matchup_id": 3,
+    "starters": [
+      "P11",
+      "P12"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 7,
+    "matchup_id": 4,
+    "starters": [
+      "P13",
+      "P14"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 8,
+    "matchup_id": 4,
+    "starters": [
+      "P15",
+      "P16"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 9,
+    "matchup_id": 5,
+    "starters": [
+      "P17",
+      "P18"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 10,
+    "matchup_id": 5,
+    "starters": [
+      "P19",
+      "P20"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 11,
+    "matchup_id": 6,
+    "starters": [
+      "P21",
+      "P22"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 12,
+    "matchup_id": 6,
+    "starters": [
+      "P23",
+      "P24"
+    ],
+    "points": 0
+  }
+]
