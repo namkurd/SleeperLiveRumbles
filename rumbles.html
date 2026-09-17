@@ -221,8 +221,9 @@
       <p class="subtitle" id="subtitle">DTF Club · loading…</p>
     </div>
     <div class="controls">
-      <div class="toggle-group" role="group" aria-label="Projection source">
-        <button type="button" id="mode-ppr" class="active">Generic PPR</button>
+      <div class="toggle-group" role="group" aria-label="Scoring source">
+        <button type="button" id="mode-actual" class="active">Actual</button>
+        <button type="button" id="mode-ppr">Generic PPR</button>
         <button type="button" id="mode-custom">Our Custom Scoring</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
@@ -276,7 +277,7 @@
   var RUMBLES_PER_WIN = 9;
 
   var state = {
-    mode: "ppr", // "ppr" | "custom"
+    mode: "actual", // "actual" | "ppr" | "custom"
     history: null, // parsed rumbles_history.json
     historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
@@ -285,6 +286,8 @@
     pollTimer: null
   };
 
+  var MODE_LABELS = { actual: "Actual", ppr: "Generic PPR", custom: "Our Custom Scoring" };
+
   var els = {
     subtitle: document.getElementById("subtitle"),
     statusDot: document.getElementById("status-dot"),
@@ -292,6 +295,7 @@
     updatedPill: document.getElementById("updated-pill"),
     errorBanner: document.getElementById("error-banner"),
     body: document.getElementById("standings-body"),
+    modeActual: document.getElementById("mode-actual"),
     modePpr: document.getElementById("mode-ppr"),
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
@@ -323,32 +327,27 @@
     return total;
   }
 
+  // Three separate, non-blended lenses on a player's week -- pick ONE
+  // source (actual stats or Sleeper's projection) and ONE scoring system,
+  // never mixed:
+  //   "actual" -- what they've actually banked so far this week, scored
+  //     with the league's real custom scoring_settings (that's what
+  //     actually determines Rumbles). Legitimately 0 for anyone who
+  //     hasn't played yet, or whose box score is genuinely empty.
+  //   "ppr"    -- Sleeper's own projected team score, generic PPR scoring.
+  //     Pure projection, never blended with actual -- as long as Sleeper
+  //     has a projection for a starter, this is never 0.
+  //   "custom" -- that same Sleeper projection, recomputed against the
+  //     league's real scoring_settings instead of generic PPR.
   function scoreFrom(source, scoringSettings, mode) {
     if (!source) return 0;
-    if (mode === "custom") return dotProduct(source, scoringSettings);
+    if (mode === "actual" || mode === "custom") return dotProduct(source, scoringSettings);
     return num(source.pts_ppr);
   }
 
-  // Sleeper keeps refreshing its OWN projection for a player throughout
-  // their game, not just before kickoff -- it's a live, rest-of-game-aware
-  // estimate, not a number that gets frozen at kickoff. So on every poll we
-  // score both what the player has actually banked so far (statsMap) and
-  // Sleeper's current live projection (projMap), and take whichever is
-  // higher:
-  //   - before kickoff: statsMap has no row for the player yet, so this is
-  //     just the (pregame) projection.
-  //   - mid-game: the live projection is usually still the better estimate
-  //     of where the player finishes, so it wins early even after they've
-  //     recorded a stat or two.
-  //   - after a big game: actual can overtake the projection, and since
-  //     already-banked points can only go up, never down, we never want to
-  //     show less than what's already on the board.
-  //   - once the game is final, actual stops moving and simply wins from
-  //     then on, so the total settles at the real final score.
   function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
-    var actualPts = scoreFrom(statsMap[playerId], scoringSettings, mode);
-    var liveProjPts = scoreFrom(projMap[playerId], scoringSettings, mode);
-    return Math.max(actualPts, liveProjPts);
+    var source = mode === "actual" ? statsMap[playerId] : projMap[playerId];
+    return scoreFrom(source, scoringSettings, mode);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
@@ -487,12 +486,14 @@
             return null;
           }
 
+          var scoresActual = {};
           var scoresPpr = {};
           var scoresCustom = {};
           var pairsByMatchupId = {};
 
           matchups.forEach(function (m) {
             var rid = m.roster_id;
+            scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual");
             scoresPpr[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "ppr");
             scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom");
             var mid = m.matchup_id;
@@ -502,12 +503,13 @@
             }
           });
 
+          var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
           var rumblesPpr = computeRumblesForWeek(scoresPpr, pairsByMatchupId);
           var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
 
           var byRoster = {};
-          Object.keys(scoresPpr).forEach(function (rid) {
-            byRoster[rid] = { ppr: rumblesPpr[rid], custom: rumblesCustom[rid] };
+          Object.keys(scoresActual).forEach(function (rid) {
+            byRoster[rid] = { actual: rumblesActual[rid], ppr: rumblesPpr[rid], custom: rumblesCustom[rid] };
           });
 
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
@@ -604,7 +606,7 @@
     els.statusDot.className = "dot" + (isLive ? " live" : "");
     if (isLive) {
       els.statusText.textContent = "Live — Week " + state.live.week + " in progress";
-      els.liveWeekLabel.textContent = "Showing live Week " + state.live.week + " (" + (state.mode === "ppr" ? "Generic PPR" : "Custom Scoring") + " projections)";
+      els.liveWeekLabel.textContent = "Showing live Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ")";
     } else if (state.live && state.live.seasonType === "off") {
       els.statusText.textContent = "Offseason";
       els.liveWeekLabel.textContent = "";
@@ -642,6 +644,7 @@
 
   function setMode(mode) {
     state.mode = mode;
+    els.modeActual.classList.toggle("active", mode === "actual");
     els.modePpr.classList.toggle("active", mode === "ppr");
     els.modeCustom.classList.toggle("active", mode === "custom");
     render();
@@ -661,6 +664,7 @@
       });
   }
 
+  els.modeActual.addEventListener("click", function () { setMode("actual"); });
   els.modePpr.addEventListener("click", function () { setMode("ppr"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
