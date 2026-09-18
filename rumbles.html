@@ -173,6 +173,7 @@
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   td.thisweek { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+  td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; }
   td { font-variant-numeric: tabular-nums; }
   .badge-live {
     display: inline-block;
@@ -244,8 +245,9 @@
           <th>#</th>
           <th>Manager</th>
           <th>Rumbles</th>
-          <th>Rumble %</th>
           <th>This Week</th>
+          <th>Points This Week</th>
+          <th>Rumble %</th>
           <th>PF</th>
           <th>PA</th>
           <th>H2H W-L</th>
@@ -572,6 +574,7 @@
       var pct = weeksForPct ? (combinedRumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
 
       var thisWeekRumbles = liveInfo ? liveInfo.rumbles : num(s.last_completed_week_rumbles);
+      var thisWeekPoints = liveInfo ? liveInfo.points : num(s.last_completed_week_points);
 
       return {
         roster_id: rid,
@@ -579,6 +582,7 @@
         rumbles: combinedRumbles,
         rumble_pct: pct,
         this_week: thisWeekRumbles,
+        this_week_points: thisWeekPoints,
         this_week_live: !!liveInfo,
         pf: combinedPf,
         pa: combinedPa,
@@ -607,15 +611,16 @@
       } else {
         emptyMsg = "No completed weeks yet this season — check back once Week 1 wraps up.";
       }
-      els.body.innerHTML = '<tr><td colspan="9"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
+      els.body.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
       els.body.innerHTML = rows.map(function (r) {
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + escapeHtml(r.manager) + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
-          "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          '<td class="thisweek-pts">' + r.this_week_points.toFixed(1) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(1) + "</td>" +
           "<td>" + r.pa.toFixed(1) + "</td>" +
           "<td>" + formatRecord(r.h2h_w, r.h2h_l) + "</td>" +

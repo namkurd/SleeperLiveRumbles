@@ -105,6 +105,13 @@ def scenario_live_blending(browser):
         "ppr": {"Aidan": 124.5, "Jake": 120.5, "Joe": 129.25},
         "custom": {"Aidan": 122.0, "Jake": 108.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
+    # "Points This Week" is the raw score for just this week (not the
+    # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
+    expected_points_this_week = {
+        "actual": {"Aidan": 2.5, "Jake": 30.0, "Joe": 0.0},
+        "ppr": {"Aidan": 32.0, "Jake": 23.0, "Joe": 26.75},
+        "custom": {"Aidan": 29.5, "Jake": 11.0, "Joe": None},
+    }
 
     mode_buttons = {"actual": None, "ppr": "#mode-ppr", "custom": "#mode-custom"}
     rows_by_mode = {}
@@ -119,7 +126,9 @@ def scenario_live_blending(browser):
             print(r)
         assert len(rows) == 12, f"[{mode}] expected 12 rows, got {len(rows)}"
 
-        pf_by_manager = {r[1]: float(r[5]) for r in rows}
+        # Column order: 0=#, 1=Manager, 2=Rumbles, 3=This Week, 4=Points
+        # This Week, 5=Rumble %, 6=PF, 7=PA, 8=H2H W-L, 9=Vs. Field W-L.
+        pf_by_manager = {r[1]: float(r[6]) for r in rows}
         for manager, expected_pf in expected[mode].items():
             if expected_pf is None:
                 continue
@@ -131,6 +140,18 @@ def scenario_live_blending(browser):
                 f"[{mode}] {manager}: expected PF {expected_pf}, got {got}"
             )
         print(f"Hand-verified PF checks passed for {mode} mode:", {k: v for k, v in expected[mode].items() if v is not None})
+
+        # Cell text is e.g. "35.0LIVE" when the LIVE badge is present --
+        # strip the badge suffix before parsing.
+        pts_by_manager = {r[1]: float(r[4].replace("LIVE", "")) for r in rows}
+        for manager, expected_pts in expected_points_this_week[mode].items():
+            if expected_pts is None:
+                continue
+            got = pts_by_manager[manager]
+            assert abs(got - expected_pts) < 0.1, (
+                f"[{mode}] {manager}: expected Points This Week {expected_pts}, got {got}"
+            )
+        print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
 
         # Joe's roster has ZERO actual stats recorded for anyone (still
         # pregame) -- Actual mode must show exactly the history PF with no
@@ -145,16 +166,18 @@ def scenario_live_blending(browser):
     # Confirm "Actual" really is its own default on load, distinct from a
     # blend, and that switching produces genuinely different PF for every
     # manager across all three modes (proving they're not secretly aliased).
-    actual_pf = {r[1]: r[5] for r in rows_by_mode["actual"]}
-    ppr_pf = {r[1]: r[5] for r in rows_by_mode["ppr"]}
-    custom_pf = {r[1]: r[5] for r in rows_by_mode["custom"]}
+    actual_pf = {r[1]: r[6] for r in rows_by_mode["actual"]}
+    ppr_pf = {r[1]: r[6] for r in rows_by_mode["ppr"]}
+    custom_pf = {r[1]: r[6] for r in rows_by_mode["custom"]}
     for manager in actual_pf:
         vals = {actual_pf[manager], ppr_pf[manager], custom_pf[manager]}
         assert len(vals) == 3, f"{manager}: expected 3 distinct PF values across Actual/PPR/Custom, got {vals}"
     print("\nConfirmed all 12 managers have 3 genuinely distinct PF values across modes.")
 
     live_badges = page.locator(".badge-live").count()
-    assert live_badges == 12, f"expected 12 LIVE badges (one per roster), got {live_badges}"
+    # Both the "This Week" and "Points This Week" cells carry a LIVE badge
+    # now, so it's 2 per roster.
+    assert live_badges == 24, f"expected 24 LIVE badges (2 per roster x 12 rosters), got {live_badges}"
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)

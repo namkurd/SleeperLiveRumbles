@@ -33,6 +33,7 @@ for i, name in enumerate(MANAGERS, start=1):
         "roster_id": i, "manager": name, "rumbles": rumbles,
         "rumble_pct": round(rumbles / 20 * 100, 1),
         "last_completed_week_rumbles": rumbles,
+        "last_completed_week_points": pf,  # only 1 week done so far, so this == pf
         "pf": pf, "pa": pa,
         "h2h_w": 1 if win else 0, "h2h_l": 0 if win else 1,
         "vs_field_w": outscored, "vs_field_l": 11 - outscored,

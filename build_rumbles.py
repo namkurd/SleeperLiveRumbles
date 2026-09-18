@@ -233,7 +233,9 @@ def build_history(league_id: str, season: str, completed_weeks: list[int], manag
     standings = []
     for rid, c in cumulative.items():
         last_week_key = str(completed_weeks[-1]) if completed_weeks else None
-        this_week_rumbles = weekly.get(last_week_key, {}).get(rid, {}).get("rumbles", 0) if last_week_key else 0
+        last_week_info = weekly.get(last_week_key, {}).get(rid, {}) if last_week_key else {}
+        this_week_rumbles = last_week_info.get("rumbles", 0)
+        this_week_points = last_week_info.get("points", 0.0)
         standings.append(
             {
                 "roster_id": rid,
@@ -241,6 +243,7 @@ def build_history(league_id: str, season: str, completed_weeks: list[int], manag
                 "rumbles": c["rumbles"],
                 "rumble_pct": round((c["rumbles"] / max_possible) * 100, 1) if max_possible else 0.0,
                 "last_completed_week_rumbles": this_week_rumbles,
+                "last_completed_week_points": round(this_week_points, 2),
                 "pf": round(c["pf"], 2),
                 "pa": round(c["pa"], 2),
                 "h2h_w": c["h2h_w"],
@@ -292,6 +295,7 @@ def main() -> None:
                     "rumbles": 0,
                     "rumble_pct": 0.0,
                     "last_completed_week_rumbles": 0,
+                    "last_completed_week_points": 0.0,
                     "pf": 0.0,
                     "pa": 0.0,
                     "h2h_w": 0,

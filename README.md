@@ -33,8 +33,10 @@ backend involved.
 
 ### Columns
 
-Rank, cumulative Rumbles, Rumble % (Rumbles earned / max possible so far),
-This Week, PF, PA, H2H W-L, and Vs. Field W-L.
+Rank, Manager, cumulative Rumbles, This Week (Rumbles earned so far this
+week), Points This Week (the raw score for this week in whichever scoring
+mode is selected -- Actual / Generic PPR / Our Custom Scoring), Rumble %
+(Rumbles earned / max possible so far), PF, PA, H2H W-L, and Vs. Field W-L.
 
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
