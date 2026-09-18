@@ -100,6 +100,14 @@ def scenario_live_blending(browser):
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone.
     #     Actual=0.0 -> PF 102.5 (flat, no addition) | PPR=26.75 -> PF 129.25
+    # The frozen/actualized baseline is exactly what's already in
+    # rumbles_history.json (only Week 1 is final in this fixture) -- pull
+    # it straight from there rather than re-deriving the formula, so this
+    # stays correct if the fixture's week-1 pattern ever changes.
+    hist_standings = load("rumbles_history.json")["standings"]
+    BASELINE_RUMBLES = {s["manager"]: s["rumbles"] for s in hist_standings}
+    BASELINE_H2H = {s["manager"]: (s["h2h_w"], s["h2h_l"]) for s in hist_standings}
+
     expected = {
         "actual": {"Aidan": 95.0, "Jake": 127.5, "Joe": 102.5},
         "ppr": {"Aidan": 124.5, "Jake": 120.5, "Joe": 129.25},
@@ -125,6 +133,16 @@ def scenario_live_blending(browser):
         for r in rows:
             print(r)
         assert len(rows) == 12, f"[{mode}] expected 12 rows, got {len(rows)}"
+
+        th_rumbles = page.text_content("#th-rumbles")
+        th_h2h = page.text_content("#th-h2h")
+        expected_th = (
+            ("Actualized Rumbles", "Actualized H2H W-L") if mode == "actual"
+            else ("Projected Rumbles", "Projected H2H W-L")
+        )
+        assert (th_rumbles, th_h2h) == expected_th, (
+            f"[{mode}] expected headers {expected_th}, got {(th_rumbles, th_h2h)}"
+        )
 
         # Column order: 0=#, 1=Manager, 2=Rumbles, 3=This Week, 4=Points
         # This Week, 5=Rumble %, 6=PF, 7=PA, 8=H2H W-L, 9=Vs. Field W-L.
@@ -152,6 +170,37 @@ def scenario_live_blending(browser):
                 f"[{mode}] {manager}: expected Points This Week {expected_pts}, got {got}"
             )
         print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
+
+        # Actual mode's Rumbles/H2H must be frozen to what's already final
+        # in rumbles_history.json -- the in-progress week's actual-score
+        # rumbles/H2H must NOT be folded in (only "This Week" shows it).
+        # PPR/Custom DO fold the in-progress week's projected rumbles/H2H
+        # on top, same as before.
+        for r in rows:
+            manager = r[1]
+            rumbles_val = int(r[2])
+            h2h_w, h2h_l = (int(x) for x in r[8].split("-"))
+            if mode == "actual":
+                assert rumbles_val == BASELINE_RUMBLES[manager], (
+                    f"[actual] {manager}: Actualized Rumbles must equal the frozen history value "
+                    f"{BASELINE_RUMBLES[manager]} (not folding in this week's live rumbles), got {rumbles_val}"
+                )
+                assert (h2h_w, h2h_l) == BASELINE_H2H[manager], (
+                    f"[actual] {manager}: Actualized H2H W-L must equal the frozen history record "
+                    f"{BASELINE_H2H[manager]}, got {(h2h_w, h2h_l)}"
+                )
+            else:
+                this_week_rumbles = int(r[3].replace("LIVE", ""))
+                expected_total = BASELINE_RUMBLES[manager] + this_week_rumbles
+                assert rumbles_val == expected_total, (
+                    f"[{mode}] {manager}: Projected Rumbles must be history ({BASELINE_RUMBLES[manager]}) "
+                    f"+ this week's live rumbles ({this_week_rumbles}) = {expected_total}, got {rumbles_val}"
+                )
+                assert h2h_w + h2h_l == 2, (
+                    f"[{mode}] {manager}: Projected H2H W-L must include this week's live matchup "
+                    f"on top of the 1 already-final game (total 2 decisions), got {(h2h_w, h2h_l)}"
+                )
+        print(f"Verified actualized-vs-projected Rumbles/H2H split for {mode} mode.")
 
         # Joe's roster has ZERO actual stats recorded for anyone (still
         # pregame) -- Actual mode must show exactly the history PF with no
