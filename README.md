@@ -44,35 +44,29 @@ week's projected Rumbles/PF/PA/records are added on top of the cumulative
 totals and refresh every 30 seconds, with a LIVE badge on the affected
 row's "This Week" cell.
 
-### Live scoring, including in-game projections
+### Live scoring: three independent modes
 
-While a week is in progress, `rumbles.html` fetches every starter's stats
-and Sleeper's own projection for them directly in the browser, on every
-30-second poll, and scores each player as **whichever is higher**:
+While a week is in progress, `rumbles.html` fetches every starter's actual
+stats and Sleeper's projection for them directly in the browser, on every
+30-second poll. There's a three-way toggle, and each mode is a clean,
+separate lens -- none of them blend actual and projected together:
 
-- the points they've actually banked so far this week, and
-- Sleeper's *current* projection for them -- which Sleeper keeps updating
-  throughout the game, not just before kickoff.
-
-That means: before a player's game starts, this is just their (pregame)
-projection. Once they're playing, Sleeper's live, rest-of-game-aware
-projection is usually still the better estimate of where they'll finish,
-so it keeps winning even after they've recorded a stat or two. If a player
-has a huge game, their actual points overtake the projection and take
-over -- so the total never shows less than what's already locked in. Once
-their game ends, actual stats stop moving and simply win from then on, so
-the total settles at the real final score.
-
-There's a toggle for how those points (actual and projected) get scored:
-
-- **Generic Sleeper PPR** (default on page load) -- Sleeper's standard PPR
-  point value for each player.
-- **Our Custom Scoring** -- recomputed from the league's real
-  `scoring_settings` (non-PPR, with first-down bonuses and defensive
-  scoring tiers that the generic PPR number doesn't capture).
+- **Actual** (default on page load) -- what each team has actually banked
+  so far this week, scored with the league's real `scoring_settings`.
+  This is legitimately **0** for a team that hasn't kicked off yet, or
+  whose whole roster is still pregame -- that's correct, not a bug.
+- **Generic PPR** -- Sleeper's own projected team score, standard PPR
+  scoring. Pure projection, never touches actual stats, so it's never 0 as
+  long as Sleeper has projections for the starters (which it does,
+  pregame through the final whistle).
+- **Our Custom Scoring** -- that same Sleeper projection, recomputed
+  against the league's real `scoring_settings` (non-PPR, with first-down
+  bonuses and defensive scoring tiers the generic PPR number doesn't
+  capture) instead of generic PPR.
 
 Completed weeks (from `rumbles_history.json`) aren't affected by the
-toggle -- it only changes how the live, in-progress week is scored.
+toggle -- it only changes how the live, in-progress week is scored, and
+that live figure is added on top of the season's cumulative totals.
 
 ## Files
 
@@ -108,10 +102,12 @@ toggle -- it only changes how the live, in-progress week is scored.
 `test/run_test.py` runs a headless-browser end-to-end test of the real
 `rumbles.html` against those mocks, across three scenarios:
 
-1. **A week genuinely live** -- hand-verified checks that the
-   actual-vs-live-projection blending picks the right one in both
-   directions (a low-actual/high-live-projection player, and a
-   blowout-actual player), in both scoring modes.
+1. **A week genuinely live** -- hand-verified PF checks across all three
+   scoring modes (Actual / Generic PPR / Our Custom Scoring), including a
+   fully-pregame roster to confirm Actual correctly shows 0 while the two
+   projection modes still show a real, nonzero number, and a check that
+   every manager gets three genuinely distinct totals (proving the modes
+   never bleed into each other).
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative

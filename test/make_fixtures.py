@@ -97,32 +97,41 @@ with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
 
 # ---- bulk actual stats for week 2 : only the FIRST player on each roster has played ----
 #
-# Rosters 1 and 3 are hand-crafted (round numbers, hand-verifiable totals)
-# specifically to exercise the "live projection vs. actual" blending logic
-# in rumbles.html (it takes whichever is higher):
-#   - Roster 1's played player is early in their game: a small actual stat
-#     line so far, but Sleeper's live projection is still much higher ->
-#     the LIVE PROJECTION should win.
-#   - Roster 3's played player is having a blowout game: actual stats
-#     already exceed their pregame projection -> ACTUAL should win.
-# All other rosters use the original generic pattern (actual > projection),
-# just to produce plausible, varied scores.
+# rumbles.html now has three separate, non-blended scoring lenses ("Actual",
+# "Generic PPR", "Our Custom Scoring") rather than one blended number, so
+# these fixtures are hand-crafted (round numbers, hand-verifiable totals)
+# to make actual and projected deliberately far apart -- proving the three
+# modes are truly independent (Actual never touches projections; PPR/Custom
+# never touch actual stats):
+#   - Roster 1's played player: small actual stat line, much bigger
+#     projection. Roster 5: nobody has ANY actual stats yet (full pregame
+#     roster) -- Actual mode must show a flat 0 for it while PPR/Custom
+#     still show a real, nonzero projected total.
+#   - Roster 3's played player is having a blowout: actual stats far
+#     exceed the pregame projection.
+# All other rosters use the original generic pattern, just to produce
+# plausible, varied scores.
 HAND_CRAFTED_ACTUAL = {
     1: {"rec": 2, "rec_yd": 20, "rec_fd": 1, "pts_ppr": 3.0},  # low actual so far
     3: {"rec": 10, "rec_yd": 150, "rec_td": 2, "rec_fd": 6, "pts_ppr": 35.0},  # blowout actual
+    # roster 5 deliberately has NO actual-stats entry at all for anyone --
+    # see ZERO_ACTUAL_ROSTERS below.
 }
 HAND_CRAFTED_PROJ_PLAYED = {
-    1: {"rec": 6, "rec_yd": 90, "rec_td": 1, "rec_fd": 4, "pts_ppr": 22.0},  # high live projection
-    3: {"rec_yd": 60, "rec_td": 0, "rec_fd": 2, "pts_ppr": 15.0},  # modest pregame projection
+    1: {"rec": 6, "rec_yd": 90, "rec_td": 1, "rec_fd": 4, "pts_ppr": 22.0},
+    3: {"rec_yd": 60, "rec_td": 0, "rec_fd": 2, "pts_ppr": 15.0},
 }
 HAND_CRAFTED_PROJ_UNPLAYED = {
     1: {"rush_yd": 50, "rush_td": 1, "rush_fd": 3, "pts_ppr": 10.0},
     3: {"rush_yd": 30, "rush_fd": 2, "pts_ppr": 8.0},
 }
+ZERO_ACTUAL_ROSTERS = {5}  # entire roster is still pregame -- no stats rows for anyone on it
 
 stats = {}
 for rid, players in roster_players.items():
     played_pid = players[0]
+    if rid in ZERO_ACTUAL_ROSTERS:
+        continue  # no stats entry for this roster's players at all
     if rid in HAND_CRAFTED_ACTUAL:
         stats[played_pid] = HAND_CRAFTED_ACTUAL[rid]
         continue
@@ -140,8 +149,23 @@ for rid, players in roster_players.items():
     # second player (not yet played) has no stats entry at all -> {} would also
     # count as "not played" per hasPlayed check, so simply omit it.
 
+# Sleeper's REAL bulk stats/projections endpoints do NOT return a simple
+# {player_id: statsObj} map -- they return a JSON ARRAY of entries shaped
+# like {player_id, stats: {...}, week, season, category, ...}, and 400
+# without a ?season_type= query param. Confirmed against the live API
+# (see rumbles.html's arrayToPlayerMap). Wrap the convenient intermediate
+# dicts above into that real shape so this fixture actually matches what
+# the browser will really receive -- a flat-map fixture here is exactly
+# how the original bug shipped without a test catching it.
+def to_sleeper_array(player_stats, category):
+    return [
+        {"player_id": pid, "stats": s, "week": 2, "season": "2026", "season_type": "regular", "category": category}
+        for pid, s in player_stats.items()
+    ]
+
+
 with open(os.path.join(OUT, "stats_week2.json"), "w") as f:
-    json.dump(stats, f, indent=2)
+    json.dump(to_sleeper_array(stats, "stat"), f, indent=2)
 
 # ---- bulk projections for week 2 : every rostered player has a projection ----
 projections = {}
@@ -163,7 +187,7 @@ for rid, players in roster_players.items():
         }
 
 with open(os.path.join(OUT, "projections_week2.json"), "w") as f:
-    json.dump(projections, f, indent=2)
+    json.dump(to_sleeper_array(projections, "proj"), f, indent=2)
 
 print("Fixtures written to", OUT)
 print("Managers:", MANAGERS)

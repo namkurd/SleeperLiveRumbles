@@ -311,6 +311,24 @@
     });
   }
 
+  // Sleeper's bulk stats/projections endpoints return a JSON ARRAY of
+  // per-player entries shaped like:
+  //   { player_id: "12596", stats: { pts_ppr: 0.25, rec_yd: ..., ... }, week, team, opponent, ... }
+  // rather than a simple {player_id: statsObj} map. This converts that
+  // array into the player_id-keyed lookup the rest of this file expects,
+  // pulling the actual scoring categories out of each entry's nested
+  // "stats" object.
+  function arrayToPlayerMap(arr) {
+    var map = {};
+    if (!arr || !arr.length) return map;
+    arr.forEach(function (entry) {
+      if (entry && entry.player_id) {
+        map[entry.player_id] = entry.stats || {};
+      }
+    });
+    return map;
+  }
+
   // ---- scoring helpers -----------------------------------------------
 
   function dotProduct(statsObj, scoringSettings) {
@@ -466,16 +484,23 @@
           return null;
         }
 
+        // The bulk stats/projections endpoints 400 without a season_type
+        // query param, and -- unlike a simple {player_id: stats} map --
+        // they return a JSON ARRAY of objects shaped like
+        // {player_id, stats: {...}, week, team, opponent, ...}. See
+        // arrayToPlayerMap below for the conversion into the lookup map
+        // the rest of this code expects.
+        var seasonTypeParam = "?season_type=" + encodeURIComponent(seasonType);
         return Promise.all([
           fetchJson(API_V1 + "/league/" + leagueId),
           fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + targetWeek),
-          fetchJson(STATS_BASE + "/" + season + "/" + targetWeek).catch(function () { return {}; }),
-          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek).catch(function () { return {}; })
+          fetchJson(STATS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
+          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; })
         ]).then(function (results) {
           var league = results[0];
           var matchups = results[1] || [];
-          var statsMap = results[2] || {};
-          var projMap = results[3] || {};
+          var statsMap = arrayToPlayerMap(results[2]);
+          var projMap = arrayToPlayerMap(results[3]);
           var scoringSettings = league.scoring_settings || {};
 
           if (!matchups.length) {
