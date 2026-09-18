@@ -1,4 +1,10 @@
 {
+  "P1": {
+    "position": "WR",
+    "team": "DET",
+    "full_name": "Amon-Ra St. Brown",
+    "injury_status": null
+  },
   "P11": {
     "position": "QB",
     "team": "MIN",

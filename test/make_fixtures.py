@@ -265,12 +265,25 @@ with open(os.path.join(OUT, "stats_week2.json"), "w") as f:
     json.dump(to_sleeper_array(stats, "stat"), f, indent=2)
 
 # ---- /v1/players/nfl : player metadata (position/team/injury_status) ----
-# Deliberately small -- only the players the QB-adjustment scenario above
-# actually needs. Every other player_id used elsewhere in these fixtures
-# (P1, P3, etc) is intentionally left OUT of this map: with no metadata,
-# detectQbAdjustmentsForWeek's `meta.position !== "QB"` check skips them
-# immediately, so they can never accidentally be swept into this feature.
+# Deliberately small -- only the players that actually need metadata for
+# some scenario below. Every OTHER player_id used elsewhere in these
+# fixtures (P3 onward, P2, etc) is intentionally left OUT of this map: with
+# no metadata, detectQbAdjustmentsForWeek's `meta.position !== "QB"` check
+# skips them immediately (so they can never accidentally be swept into that
+# feature), and the "Pts This Week" tooltip's game-status lookup falls back
+# to "unknown" for them (see thisWeekTooltip -- "unknown" is deliberately
+# treated as NOT complete, so a player is never wrongly hidden just because
+# their team/game status couldn't be resolved).
+#
+# P1 (roster 1 / Aidan's played starter) gets real metadata here --
+# non-QB, so it's still excluded from the QB-adjustment feature exactly as
+# before -- specifically so a real NFL team ("DET") can be marked
+# "complete" in scores_week2.json below, reproducing the real reported
+# scenario (Amon-Ra St. Brown's already-finished game): Actual mode must
+# still show a fully-finished player, but Projected mode must now exclude
+# them entirely once their real game has gone final.
 players = {
+    "P1": {"position": "WR", "team": "DET", "full_name": "Amon-Ra St. Brown", "injury_status": None},
     QB_INJURED_PID: {"position": "QB", "team": "MIN", "full_name": "Kyler Murray", "injury_status": "Out"},
     QB_BACKUP_PID: {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": None},
     QB_THIRDSTRING_PID: {"position": "QB", "team": "MIN", "full_name": "JJ McCarthy", "injury_status": None},
@@ -278,6 +291,28 @@ players = {
 }
 with open(os.path.join(OUT, "players.json"), "w") as f:
     json.dump(players, f, indent=2)
+
+# ---- /v1/scores/nfl/{season_type}/{season}/{week} : per-game live status ----
+# Sleeper's own live-scoreboard feed -- what the "Pts This Week" tooltip
+# uses (see buildTeamGameStatus in rumbles.html) to tell a fully-final game
+# apart from one that's still being played, which the stats/projections
+# payloads alone can't distinguish (a player who's already played has a
+# real stats entry in both cases).
+#   - DET (P1/Amon-Ra St. Brown, roster 1): "complete" -- his game is fully
+#     over. Projected mode's tooltip must exclude him entirely even though
+#     Actual mode still shows him.
+#   - MIN (Kyler Murray / Carson Wentz, roster 6): "in_progress" -- still
+#     being played. Projected mode's tooltip must still include Kyler
+#     Murray (in-progress is NOT "complete").
+#   - Every other team: no entry at all here, exercising the "unknown"
+#     fallback (P2/roster 1's unplayed starter has no metadata at all, so
+#     it's "unknown" regardless).
+scores = [
+    {"status": "complete", "game_id": "TESTGAME1", "week": 2, "away_team": "DET", "home_team": "GB", "quarter": "F"},
+    {"status": "in_progress", "game_id": "TESTGAME2", "week": 2, "away_team": "MIN", "home_team": "CHI", "quarter": "3"},
+]
+with open(os.path.join(OUT, "scores_week2.json"), "w") as f:
+    json.dump(scores, f, indent=2)
 
 # ---- bulk projections for week 2 : every rostered player has a projection ----
 projections = {}

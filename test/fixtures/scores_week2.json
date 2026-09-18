@@ -1,0 +1,18 @@
+[
+  {
+    "status": "complete",
+    "game_id": "TESTGAME1",
+    "week": 2,
+    "away_team": "DET",
+    "home_team": "GB",
+    "quarter": "F"
+  },
+  {
+    "status": "in_progress",
+    "game_id": "TESTGAME2",
+    "week": 2,
+    "away_team": "MIN",
+    "home_team": "CHI",
+    "quarter": "3"
+  }
+]

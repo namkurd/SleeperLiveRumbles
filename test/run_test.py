@@ -111,23 +111,45 @@ def get_matchup_colors(page):
     return dict(pairs)
 
 
-def get_thisweek_pts_titles(page):
-    """manager -> the 'Pts This Week' cell's title attribute (the native
-    hover tooltip text), split into lines, or None if no tooltip is set."""
-    pairs = page.eval_on_selector_all(
-        "#standings-body tr",
-        """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim();
-            var cell = r.querySelector('td.thisweek-pts');
-            var title = cell ? cell.getAttribute('title') : null;
-            return [name, title];
-        })""",
-    )
-    return {name: (title.split("\n") if title else None) for name, title in pairs}
+def get_thisweek_pts_tooltip(page, manager):
+    """Hovers the given manager's 'Pts This Week' cell (real mouse hover,
+    exercising the actual show/position logic, not just the underlying
+    state) and returns the custom #pts-tooltip's visible text split into
+    lines, or None if that cell has no tooltip to show. Moves the mouse
+    away afterward so the next check starts clean."""
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim())",
+    ).index(manager)
+    cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+    classes = cell.get_attribute("class") or ""
+    if "has-tooltip" not in classes:
+        return None
+    cell.hover()
+    page.wait_for_timeout(150)
+    tip = page.locator("#pts-tooltip")
+    is_visible = tip.evaluate("el => el.classList.contains('visible')")
+    text = tip.inner_text() if is_visible else None
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    return text.split("\n") if text else None
 
 
 def new_page(browser, console_errors, page_errors):
     page = browser.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    return page
+
+
+def new_mobile_page(browser, console_errors, page_errors):
+    """A touch-primary context (no mouse) -- Chromium reports (hover: none)
+    and (pointer: coarse) for this, exactly like a real phone, which is
+    what makes rumbles.html pick the tap-to-toggle code path for the
+    'Pts This Week' tooltip instead of the hover path (see
+    supportsHoverPtsTooltip in rumbles.html)."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = context.new_page()
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     page.on("pageerror", lambda exc: page_errors.append(str(exc)))
     return page
@@ -150,6 +172,7 @@ def scenario_live_blending(browser):
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
     }
     install_routes(page, routes)
     page.goto(PAGE_URL, wait_until="load")
@@ -273,24 +296,43 @@ def scenario_live_blending(browser):
 
         # ---- "Pts This Week" hover tooltip: per-starter actual/projected
         # breakdown -- content depends on the Actual/Projected toggle.
-        # Aidan (roster 1) is hand-verified above: played starter "P1"
-        # (actual 2.5, pregame projection 17.0 -- no metadata for P1 in
-        # players.json, so it falls back to the raw player_id as the
-        # display name) and unplayed starter "P2" (actual 0, projection
-        # 12.5, per HAND_CRAFTED_PROJ_UNPLAYED[1]).
-        titles = get_thisweek_pts_titles(page)
-        aidan_lines = titles.get("Aidan")
+        # Aidan (roster 1) is hand-verified above: played starter "P1" (now
+        # given real metadata -- "Amon-Ra St. Brown" on team DET, actual
+        # 2.5, pregame projection 17.0) and unplayed starter "P2" (no
+        # metadata -- falls back to the raw player_id, actual 0, projection
+        # 12.5 per HAND_CRAFTED_PROJ_UNPLAYED[1]). scores_week2.json marks
+        # DET as "complete" -- Amon-Ra's real game is fully over, exactly
+        # the reported scenario -- so Projected mode must exclude him
+        # entirely even though Actual mode still shows him.
+        aidan_lines = get_thisweek_pts_tooltip(page, "Aidan")
         assert aidan_lines, f"[{mode}] Aidan's Pts This Week cell should have a hover tooltip, got {aidan_lines!r}"
         if mode == "actual":
             # Only played-or-live starters -- P2 hasn't played, so it must
             # NOT appear at all (a flat "0.00" line here would be noise in
-            # a view that's explicitly about banked, real production).
-            assert aidan_lines == ["P1: 2.50"], f"[actual] expected Aidan's tooltip to list only the played starter, got {aidan_lines}"
-        else:
-            assert aidan_lines == ["P1 — Actual 2.50, Proj 17.00", "P2 — Actual 0.00, Proj 12.50"], (
-                f"[{mode}] expected Aidan's tooltip to show both starters with actual+projected, got {aidan_lines}"
+            # a view that's explicitly about banked, real production). A
+            # completed game does NOT get excluded in Actual mode -- that
+            # exclusion is Projected-mode-only (see below).
+            assert aidan_lines == ["Amon-Ra St. Brown: 2.50"], (
+                f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_lines}"
             )
-        print(f"Verified Pts This Week tooltip content for {mode} mode:", aidan_lines)
+        else:
+            # Amon-Ra St. Brown's game (DET) is marked "complete" -- must
+            # be excluded from Projected entirely, leaving only P2.
+            assert aidan_lines == ["P2 — Actual 0.00, Proj 12.50"], (
+                f"[{mode}] expected Aidan's tooltip to exclude the finished starter (Amon-Ra St. Brown / DET, complete) "
+                f"and show only the still-pregame one, got {aidan_lines}"
+            )
+        print(f"Verified Pts This Week tooltip content for {mode} mode (Aidan):", aidan_lines)
+
+        # Alex (roster 6): Kyler Murray's team (MIN) is "in_progress", NOT
+        # "complete" -- Projected mode must still include him (only a fully
+        # finished game gets excluded, not one that's still being played).
+        if mode != "actual":
+            alex_lines = get_thisweek_pts_tooltip(page, "Alex")
+            assert alex_lines and any(line.startswith("Kyler Murray") for line in alex_lines), (
+                f"[{mode}] expected Alex's Projected tooltip to still include Kyler Murray (MIN, in_progress -- not complete), got {alex_lines}"
+            )
+            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, in-progress game kept):", alex_lines)
 
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress
@@ -357,7 +399,7 @@ def scenario_live_blending(browser):
         # live yet), so there must be NO tooltip at all rather than an empty
         # or all-zero one. In Projected mode his starters are still shown
         # (with actual 0.00 alongside a real projection).
-        joe_title = titles.get("Joe")
+        joe_title = get_thisweek_pts_tooltip(page, "Joe")
         if mode == "actual":
             assert joe_title is None, f"[actual] Joe (fully pregame roster) should have no Pts This Week tooltip, got {joe_title}"
         else:
@@ -565,6 +607,77 @@ def scenario_live_blending(browser):
     print("\nSCENARIO 1 PASSED")
 
 
+def scenario_mobile_tap_tooltip(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO 1b: same live week, but a touch-primary (mobile) context --")
+    print("'Pts This Week' tooltip must be tap-to-toggle, not hover-only")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_mobile_page(browser, console_errors, page_errors)
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/state/nfl": load("state.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    # Sanity check the premise: this context genuinely looks like a phone
+    # to the page's own hover-capability check, so it's actually exercising
+    # the tap-to-toggle branch and not silently falling back to hover.
+    supports_hover = page.evaluate("window.matchMedia('(hover: hover) and (pointer: fine)').matches")
+    assert not supports_hover, "this context should NOT report itself as hover-capable -- the mobile emulation isn't taking effect"
+
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim())",
+    ).index("Aidan")
+    cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+    assert "has-tooltip" in (cell.get_attribute("class") or ""), "Aidan's Pts This Week cell should be tappable (has-tooltip)"
+
+    tip = page.locator("#pts-tooltip")
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "tooltip should start out hidden"
+
+    # A plain hover (mouse-only event) must NOT show it in this context --
+    # only a real tap should, since supportsHoverPtsTooltip is false here.
+    cell.hover(force=True)
+    page.wait_for_timeout(200)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "a hover-only event must not show the tooltip on a touch-primary device"
+
+    # Tap #1: shows it.
+    cell.tap()
+    page.wait_for_timeout(200)
+    assert tip.evaluate("el => el.classList.contains('visible')"), "tapping the cell should show the tooltip"
+    assert "Amon-Ra St. Brown" in tip.inner_text(), f"expected Aidan's tooltip content, got: {tip.inner_text()!r}"
+    print("Tap #1 correctly showed the tooltip.")
+
+    # Tap #2 on the SAME cell: toggles it back off.
+    cell.tap()
+    page.wait_for_timeout(200)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "tapping the same cell again should toggle the tooltip closed"
+    print("Tap #2 on the same cell correctly toggled it closed.")
+
+    # Tap it open again, then tap somewhere else entirely -- must dismiss.
+    cell.tap()
+    page.wait_for_timeout(200)
+    assert tip.evaluate("el => el.classList.contains('visible')"), "tooltip should be showing again after re-tapping"
+    page.locator("#subtitle").tap()
+    page.wait_for_timeout(200)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "tapping elsewhere on the page should dismiss an open tooltip"
+    print("Tapping elsewhere on the page correctly dismissed the open tooltip.")
+
+    page.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIO 1b PASSED")
+
+
 def scenario_cumulative_only(browser):
     print("\n" + "=" * 70)
     print("SCENARIO 2: Week 1 final, Sleeper's pointer lagging, Week 2 not posted")
@@ -579,6 +692,7 @@ def scenario_cumulative_only(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),  # not posted yet
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
+        "**/scores/nfl/regular/2026/2": [],
     }
     install_routes(page, routes)
     page.goto(PAGE_URL, wait_until="load")
@@ -666,6 +780,7 @@ def main():
             ],
         )
         scenario_live_blending(browser)
+        scenario_mobile_tap_tooltip(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
         browser.close()

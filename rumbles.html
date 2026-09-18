@@ -205,7 +205,43 @@
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   td.thisweek { color: var(--accent-2); font-variant-numeric: tabular-nums; }
   td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+  /* Only added to a "Pts This Week" cell that actually has a per-player
+     breakdown to show (see render()/thisWeekTooltip) -- the dotted
+     underline is the only visual hint that it's interactive, since there's
+     no hover cursor to discover it on a touch device. */
+  td.thisweek-pts.has-tooltip {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--panel-border);
+    text-underline-offset: 3px;
+  }
   td { font-variant-numeric: tabular-nums; }
+  /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
+     a native title-attribute tooltip works fine on desktop hover, but
+     never appears at all on tap on mobile, so this single reusable,
+     JS-positioned element replaces it and is driven by both hover (desktop)
+     and tap (any device) -- see the pts-tooltip show/hide/toggle functions.
+     position: fixed (not absolute) deliberately -- .table-panel above has
+     overflow:hidden, which would otherwise clip an absolutely-positioned
+     tooltip anchored inside it. */
+  .pts-tooltip {
+    position: fixed;
+    z-index: 50;
+    max-width: 280px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    white-space: pre-line;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .pts-tooltip.visible { opacity: 1; visibility: visible; }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -390,6 +426,8 @@
   <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current).</p>
 </div>
 
+<div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
+
 <script>
 (function () {
   "use strict";
@@ -398,6 +436,16 @@
   var API_V1 = "https://api.sleeper.app/v1";
   var STATS_BASE = "https://api.sleeper.app/stats/nfl";
   var PROJECTIONS_BASE = "https://api.sleeper.app/projections/nfl";
+  // Sleeper's own live-scoreboard endpoint -- /scores/nfl/{season_type}/{season}/{week}
+  // -- returns one entry per NFL game with a "status" field ("pre_game" /
+  // "in_progress" / "complete") and the two teams playing. This is what
+  // lets the "Points This Week" tooltip tell a genuinely-finished game
+  // apart from a still-in-progress one (both look identical from the bulk
+  // stats/projections payloads alone -- a player who's already played has
+  // a real stats entry either way, whether their game just ended or is
+  // still in the 4th quarter). A small, single-week payload (~16 games),
+  // nothing like the size of the bulk stats/players endpoints.
+  var SCORES_BASE = "https://api.sleeper.app/scores/nfl";
   var PLAYERS_URL = API_V1 + "/players/nfl";
   var POLL_MS = 30000;
   var MAX_RUMBLES_PER_WEEK = 20;
@@ -419,6 +467,8 @@
     teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
     playersMetaFetchedAt: 0,
     matchupColorByRosterId: {}, // roster_id -> this week's matchup name color (set by buildCombinedStandings), reused by the QB Injury Backup Adjustments log so a manager's name color is the same everywhere on the page
+    thisWeekTooltipLines: {}, // roster_id -> "Pts This Week" tooltip text (set by render(), read by the pts-tooltip show/toggle handlers)
+    activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
     sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
@@ -456,6 +506,7 @@
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
+    ptsTooltip: document.getElementById("pts-tooltip"),
     headerCells: {} // filled in by attachSortHandlers(): column key -> <th>
   };
 
@@ -644,7 +695,13 @@
   //     their game has kicked off (matches the isActual check playerPoints
   //     already uses to decide whether to trust actual stats over a
   //     projection).
-  function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta) {
+  //   - "game_status" -- "pre_game" / "in_progress" / "complete" / "unknown"
+  //     (the last when their NFL team isn't in this week's schedule at
+  //     all, e.g. a bye, or the scores fetch failed) -- from Sleeper's own
+  //     live-scoreboard endpoint (see buildTeamGameStatus below), used to
+  //     tell a fully-final game apart from one still being played, which
+  //     the stats/projections payloads alone can't distinguish.
+  function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta, teamGameStatus) {
     var starters = roster.starters || [];
     var out = [];
     for (var i = 0; i < starters.length; i++) {
@@ -653,15 +710,48 @@
       var actualSource = statsMap[pid];
       var played = !!actualSource;
       var meta = playersMeta ? playersMeta[pid] : null;
+      var team = meta ? meta.team : null;
+      var gameStatus = (team && teamGameStatus && teamGameStatus[team]) || "unknown";
       out.push({
         player_id: pid,
         name: meta ? playerName(meta) : pid,
         actual: round2(played ? scoreFrom(actualSource, scoringSettings, true) : 0),
         proj: round2(scoreFrom(projMap[pid], scoringSettings, false)),
-        played: played
+        played: played,
+        game_status: gameStatus
       });
     }
     return out;
+  }
+
+  // Normalizes one entry from Sleeper's /scores/nfl/{season_type}/{season}/{week}
+  // feed down to "pre_game" | "in_progress" | "complete". Deliberately
+  // tolerant of the couple of shapes that endpoint (and similar live-score
+  // feeds generally) are known to use for "this game is over" -- matched
+  // by "status" text OR a "quarter": "F" ("final") fallback -- rather than
+  // requiring an exact literal match, since getting this wrong in the
+  // "still counts as complete" direction would silently hide a player
+  // from the Projected tooltip whose game hasn't actually ended yet.
+  function normalizeGameStatus(game) {
+    var status = ((game && game.status) || "").toLowerCase();
+    if (status.indexOf("final") !== -1 || status === "complete" || status === "post_game" || (game && game.quarter === "F")) {
+      return "complete";
+    }
+    if (status.indexOf("progress") !== -1 || status === "halftime" || status === "live") {
+      return "in_progress";
+    }
+    return "pre_game";
+  }
+
+  function buildTeamGameStatus(games) {
+    var map = {};
+    (games || []).forEach(function (g) {
+      if (!g) return;
+      var status = normalizeGameStatus(g);
+      if (g.away_team) map[g.away_team] = status;
+      if (g.home_team) map[g.home_team] = status;
+    });
+    return map;
   }
 
   // ---- QB injury-backup adjustment detection ---------------------------
@@ -936,12 +1026,19 @@
           fetchJson(API_V1 + "/league/" + leagueId),
           fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + targetWeek),
           fetchJson(STATS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
-          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; })
+          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
+          // Best-effort -- see SCORES_BASE's comment. Never allowed to
+          // block the rest of live scoring if it 404s/errors; the
+          // tooltip just falls back to "unknown" game status for
+          // everyone (still shown, never wrongly hidden) if this fails.
+          fetchJson(SCORES_BASE + "/" + seasonType + "/" + season + "/" + targetWeek).catch(function () { return []; })
         ]).then(function (results) {
           var league = results[0];
           var matchups = results[1] || [];
           var statsMap = arrayToPlayerMap(results[2]);
           var projMap = arrayToPlayerMap(results[3]);
+          var games = results[4] || [];
+          var teamGameStatus = buildTeamGameStatus(games);
           var scoringSettings = league.scoring_settings || {};
 
           if (!matchups.length) {
@@ -996,7 +1093,7 @@
               matchups.forEach(function (m) {
                 var rid = m.roster_id;
                 if (state.live.byRoster[rid]) {
-                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta);
+                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameStatus);
                 }
               });
 
@@ -1035,19 +1132,28 @@
 
   function formatRecord(w, l) { return w + "-" + l; }
 
-  // Builds the native title-attribute tooltip text for the "Pts This Week"
-  // cell: one line per starter. What each line shows depends on the
-  // Actual/Projected toggle, matching what that toggle already means
-  // everywhere else on this page:
-  //   - Projected ("custom") -- every starter, actual AND projected side by
-  //     side, so a currently-playing starter's live actual can be compared
-  //     against what was expected, and a not-yet-played starter shows an
-  //     honest actual of 0.00 alongside their projection.
+  // Builds the "Points This Week" hover/tap tooltip text: one line per
+  // starter. What each line shows -- and which starters are even included
+  // -- depends on the Actual/Projected toggle, matching what that toggle
+  // already means everywhere else on this page:
   //   - Actual ("actual") -- only starters who've completed or are
   //     currently in a live game (i.e. statsMap actually has an entry for
   //     them), showing just their actual score -- a bench-quality "0.00"
   //     line for someone who simply hasn't kicked off yet would be noise in
   //     a view that's explicitly about banked, real production.
+  //   - Projected ("custom") -- only starters whose game is STILL
+  //     developing: not yet started, or currently in progress. A starter
+  //     whose real game has already gone final is deliberately left OUT
+  //     here (even though Actual mode still shows them) -- once a game is
+  //     over their score is fully locked in and already baked into the
+  //     roster total, so re-showing "Actual X, Proj Y" for them in a
+  //     forward-looking Projected tooltip is just clutter; the tooltip's
+  //     whole point in this mode is to show what's still live or still to
+  //     come. Uses game_status from buildPlayerBreakdown (Sleeper's own
+  //     live-scoreboard feed, see SCORES_BASE) -- "unknown" (bye week, or
+  //     that feed failed) is treated as NOT complete, so a player is never
+  //     wrongly hidden just because their game status couldn't be
+  //     confirmed.
   function thisWeekTooltip(mode, breakdown) {
     if (!breakdown || !breakdown.length) return "";
     var lines;
@@ -1056,9 +1162,9 @@
         .filter(function (p) { return p.played; })
         .map(function (p) { return p.name + ": " + p.actual.toFixed(2); });
     } else {
-      lines = breakdown.map(function (p) {
-        return p.name + " — Actual " + p.actual.toFixed(2) + ", Proj " + p.proj.toFixed(2);
-      });
+      lines = breakdown
+        .filter(function (p) { return p.game_status !== "complete"; })
+        .map(function (p) { return p.name + " — Actual " + p.actual.toFixed(2) + ", Proj " + p.proj.toFixed(2); });
     }
     return lines.join("\n");
   }
@@ -1214,6 +1320,7 @@
     }
     updateHeaderSortIndicators();
 
+    state.thisWeekTooltipLines = {};
     if (!rows.length) {
       var emptyMsg;
       if (state.historyError) {
@@ -1231,14 +1338,26 @@
         } else {
           nameHtml = escapeHtml(r.manager);
         }
+        // The tooltip itself is a custom element (see pts-tooltip show/
+        // hide/toggle below), not a native title attribute -- a native
+        // title tooltip never appears on tap on mobile at all, so this
+        // cell just carries a data-roster-id for the delegated hover/tap
+        // handlers to look up pre-built tooltip text from
+        // state.thisWeekTooltipLines with.
         var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
-        var ptsTitleAttr = ptsTooltip ? ' title="' + escapeHtml(ptsTooltip) + '"' : "";
+        var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
+        if (ptsTooltip) {
+          state.thisWeekTooltipLines[r.roster_id] = ptsTooltip;
+          ptsCellAttrs += ' class="thisweek-pts has-tooltip"';
+        } else {
+          ptsCellAttrs += ' class="thisweek-pts"';
+        }
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
-          '<td class="thisweek-pts"' + ptsTitleAttr + '>' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +
           "<td>" + r.pa.toFixed(2) + "</td>" +
@@ -1247,6 +1366,7 @@
           "</tr>";
       }).join("");
     }
+    refreshOrHidePtsTooltip();
 
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
     els.subtitle.textContent = "DTF Club · " + season + " season";
@@ -1284,6 +1404,120 @@
 
     renderQbAdjustments();
   }
+
+  // ---- "Pts This Week" hover/tap tooltip ---------------------------------
+  // A single reusable element (see the #pts-tooltip div and .pts-tooltip
+  // CSS) rather than a native title attribute -- title tooltips never
+  // appear on tap on mobile at all, so this is shown/hidden/positioned by
+  // hand and driven by real hover on devices that have one, or tap on
+  // devices that don't (see the delegated listeners below).
+
+  function positionPtsTooltip(cell) {
+    var tip = els.ptsTooltip;
+    var cellRect = cell.getBoundingClientRect();
+    var margin = 6;
+    var tipRect = tip.getBoundingClientRect();
+    var left = cellRect.left;
+    var maxLeft = window.innerWidth - tipRect.width - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    var top = cellRect.bottom + margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      // Not enough room below (e.g. a short mobile screen) -- flip above.
+      top = cellRect.top - tipRect.height - margin;
+      if (top < margin) top = margin;
+    }
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function showPtsTooltip(cell) {
+    var rid = cell.getAttribute("data-roster-id");
+    var lines = state.thisWeekTooltipLines[rid];
+    if (!lines) return;
+    state.activePtsTooltipRosterId = rid;
+    els.ptsTooltip.textContent = lines;
+    els.ptsTooltip.setAttribute("aria-hidden", "false");
+    els.ptsTooltip.classList.add("visible");
+    positionPtsTooltip(cell);
+  }
+
+  function hidePtsTooltip() {
+    if (state.activePtsTooltipRosterId == null) return;
+    state.activePtsTooltipRosterId = null;
+    els.ptsTooltip.classList.remove("visible");
+    els.ptsTooltip.setAttribute("aria-hidden", "true");
+  }
+
+  // Called at the end of every render() (including each 30s poll). A tap-
+  // triggered tooltip (unlike hover) has no natural "pointer left the
+  // cell" moment to close it on its own, so if one's open when fresh
+  // numbers come in, keep it open with updated content/position for the
+  // same roster -- or close it if that roster no longer has anything to
+  // show (e.g. their last starter's game just finished in Projected mode).
+  function refreshOrHidePtsTooltip() {
+    var rid = state.activePtsTooltipRosterId;
+    if (rid == null) return;
+    var lines = state.thisWeekTooltipLines[rid];
+    var cell = els.body.querySelector('td.thisweek-pts[data-roster-id="' + rid + '"]');
+    if (!lines || !cell) {
+      hidePtsTooltip();
+      return;
+    }
+    els.ptsTooltip.textContent = lines;
+    positionPtsTooltip(cell);
+  }
+
+  function ptsCellFromEvent(e) {
+    return e.target && e.target.closest ? e.target.closest("td.thisweek-pts.has-tooltip") : null;
+  }
+
+  // Real hover (mouse/trackpad) gets real hover behavior; anything without
+  // a fine hover-capable pointer (phones, tablets) gets tap-to-toggle
+  // instead, dismissed by tapping anywhere else. Picking exactly one of
+  // the two (rather than wiring up both everywhere) avoids the classic
+  // mobile double-fire bug where a tap's synthetic mouseover shows the
+  // tooltip and the click that immediately follows it then reads as "already
+  // open" and instantly toggles it back off.
+  var supportsHoverPtsTooltip = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+
+  if (supportsHoverPtsTooltip) {
+    els.body.addEventListener("mouseover", function (e) {
+      var cell = ptsCellFromEvent(e);
+      if (cell) showPtsTooltip(cell);
+    });
+    els.body.addEventListener("mouseout", function (e) {
+      var cell = ptsCellFromEvent(e);
+      if (cell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) hidePtsTooltip();
+    });
+  } else {
+    els.body.addEventListener("click", function (e) {
+      var cell = ptsCellFromEvent(e);
+      if (!cell) return;
+      e.stopPropagation();
+      var rid = cell.getAttribute("data-roster-id");
+      if (state.activePtsTooltipRosterId === rid) {
+        hidePtsTooltip();
+      } else {
+        showPtsTooltip(cell);
+      }
+    });
+    document.addEventListener("click", function (e) {
+      if (state.activePtsTooltipRosterId != null && (!e.target.closest || !e.target.closest("td.thisweek-pts"))) {
+        hidePtsTooltip();
+      }
+    });
+  }
+
+  // A position: fixed tooltip is anchored to viewport coordinates captured
+  // at show-time -- if the page (or the table's own horizontal scroller)
+  // scrolls afterward without re-showing it, it would be left floating
+  // over whatever's now under those old coordinates rather than the cell
+  // it's actually about. Simplest correct fix: just dismiss it on scroll.
+  // `capture: true` here is what catches a scroll inside .table-scroll --
+  // scroll events don't bubble, but they do propagate in the capture phase.
+  window.addEventListener("scroll", hidePtsTooltip, true);
+  window.addEventListener("resize", hidePtsTooltip);
 
   var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely" };
 
