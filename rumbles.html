@@ -741,14 +741,20 @@
   }
 
   // Normalizes one entry from Sleeper's /scores/nfl/{season_type}/{season}/{week}
-  // feed down to "pre_game" | "in_progress" | "complete". Deliberately
-  // tolerant of the couple of shapes that endpoint (and similar live-score
-  // feeds generally) are known to use for "this game is over" -- matched
-  // by "status" text OR a "quarter": "F" ("final") fallback -- rather than
-  // requiring an exact literal match, since getting this wrong in the
-  // "still counts as complete" direction would silently hide a player
-  // from the Projected tooltip whose game hasn't actually ended yet.
+  // feed down to "pre_game" | "in_progress" | "complete". The real payload
+  // (confirmed live, Sep 2026) nests the authoritative booleans under
+  // "metadata": is_over === true means the game has gone final, and
+  // is_in_progress === true means it's live -- those are checked first.
+  // A top-level "status" string (e.g. "pre_game") and a legacy
+  // "quarter": "F" shape are kept as fallbacks in case a future payload
+  // omits metadata, since getting this wrong in the "still counts as
+  // complete" direction would silently hide a player from the Projected
+  // tooltip whose game hasn't actually ended yet.
   function normalizeGameStatus(game) {
+    var meta = (game && game.metadata) || {};
+    if (meta.is_over === true) return "complete";
+    if (meta.is_in_progress === true) return "in_progress";
+
     var status = ((game && game.status) || "").toLowerCase();
     if (status.indexOf("final") !== -1 || status === "complete" || status === "post_game" || (game && game.quarter === "F")) {
       return "complete";
@@ -763,9 +769,12 @@
     var map = {};
     (games || []).forEach(function (g) {
       if (!g) return;
+      var meta = g.metadata || {};
       var status = normalizeGameStatus(g);
-      if (g.away_team) map[g.away_team] = status;
-      if (g.home_team) map[g.home_team] = status;
+      var away = meta.away_team || g.away_team;
+      var home = meta.home_team || g.home_team;
+      if (away) map[away] = status;
+      if (home) map[home] = status;
     });
     return map;
   }
@@ -1059,17 +1068,6 @@
           var games = results[4] || [];
           var teamGameStatus = buildTeamGameStatus(games);
           var scoringSettings = league.scoring_settings || {};
-
-          // TEMPORARY diagnostic -- the Projected-mode "Pts This Week"
-          // tooltip is supposed to exclude a starter once their real NFL
-          // game is fully final, but that's not happening for a real
-          // finished game yet. No fetch error is being thrown (nothing
-          // shows up in the console for the fetch itself), so the shape
-          // this actually returns must not match what buildTeamGameStatus
-          // expects. Logging it raw here to see the real shape and fix
-          // the parsing -- safe to remove once that's sorted out.
-          console.log("[rumbles] live scores payload -- length:", games.length, "first entry:", games[0], "teamGameStatus:", teamGameStatus);
-          console.log("[rumbles] live scores first entry, full JSON:", JSON.stringify(games[0], null, 2));
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early

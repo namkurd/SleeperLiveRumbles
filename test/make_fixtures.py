@@ -298,18 +298,32 @@ with open(os.path.join(OUT, "players.json"), "w") as f:
 # apart from one that's still being played, which the stats/projections
 # payloads alone can't distinguish (a player who's already played has a
 # real stats entry in both cases).
-#   - DET (P1/Amon-Ra St. Brown, roster 1): "complete" -- his game is fully
-#     over. Projected mode's tooltip must exclude him entirely even though
-#     Actual mode still shows him.
-#   - MIN (Kyler Murray / Carson Wentz, roster 6): "in_progress" -- still
-#     being played. Projected mode's tooltip must still include Kyler
-#     Murray (in-progress is NOT "complete").
+#
+# Shape confirmed live against the real endpoint (Sep 2026): team
+# abbreviations and the authoritative "is this game over" booleans live
+# under "metadata", not at the top level -- top-level only has a coarse
+# "status" string (e.g. "pre_game"). buildTeamGameStatus checks
+# metadata.is_over / metadata.is_in_progress first and falls back to the
+# top-level fields, so these fixtures exercise the metadata path since
+# that's what production traffic actually returns.
+#   - DET (P1/Amon-Ra St. Brown, roster 1): is_over=true -- his game is
+#     fully final. Projected mode's tooltip must exclude him entirely even
+#     though Actual mode still shows him.
+#   - MIN (Kyler Murray / Carson Wentz, roster 6): is_in_progress=true --
+#     still being played. Projected mode's tooltip must still include
+#     Kyler Murray (in-progress is NOT "complete").
 #   - Every other team: no entry at all here, exercising the "unknown"
 #     fallback (P2/roster 1's unplayed starter has no metadata at all, so
 #     it's "unknown" regardless).
 scores = [
-    {"status": "complete", "game_id": "TESTGAME1", "week": 2, "away_team": "DET", "home_team": "GB", "quarter": "F"},
-    {"status": "in_progress", "game_id": "TESTGAME2", "week": 2, "away_team": "MIN", "home_team": "CHI", "quarter": "3"},
+    {
+        "status": "post_game",
+        "metadata": {"away_team": "DET", "home_team": "GB", "is_over": True, "is_in_progress": False},
+    },
+    {
+        "status": "in_progress",
+        "metadata": {"away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": True},
+    },
 ]
 with open(os.path.join(OUT, "scores_week2.json"), "w") as f:
     json.dump(scores, f, indent=2)
