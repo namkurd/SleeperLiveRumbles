@@ -98,18 +98,23 @@ with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
 
 # ---- bulk actual stats for week 2 : only the FIRST player on each roster has played ----
 #
-# rumbles.html now has three separate, non-blended scoring lenses ("Actual",
-# "Generic PPR", "Our Custom Scoring") rather than one blended number, so
-# these fixtures are hand-crafted (round numbers, hand-verifiable totals)
-# to make actual and projected deliberately far apart -- proving the three
-# modes are truly independent (Actual never touches projections; PPR/Custom
-# never touch actual stats):
+# rumbles.html has three scoring lenses: "Actual" (only ever uses real
+# stats), and "Sleeper Projection" / "Our Custom Scoring" (both reproduce
+# Sleeper's own live "projected" total -- a played player's REAL stat line
+# replaces their frozen pregame projection; an unplayed player still uses
+# the projection). These fixtures are hand-crafted (round numbers,
+# hand-verifiable totals) to make actual and projected deliberately far
+# apart, so a test can tell at a glance which source got used:
 #   - Roster 1's played player: small actual stat line, much bigger
-#     projection. Roster 5: nobody has ANY actual stats yet (full pregame
-#     roster) -- Actual mode must show a flat 0 for it while PPR/Custom
-#     still show a real, nonzero projected total.
+#     pregame projection -- Sleeper Projection/Custom must use the SMALL
+#     actual number, not the bigger projection, once that player has
+#     played. Roster 5: nobody has ANY actual stats yet (full pregame
+#     roster) -- Actual mode must show a flat 0 for it while Sleeper
+#     Projection/Custom still show a real, nonzero projected total (the
+#     fallback path when nobody's played).
 #   - Roster 3's played player is having a blowout: actual stats far
-#     exceed the pregame projection.
+#     exceed the pregame projection -- Sleeper Projection/Custom must use
+#     the BIG actual number here, not the smaller pregame projection.
 # All other rosters use the original generic pattern, just to produce
 # plausible, varied scores.
 HAND_CRAFTED_ACTUAL = {

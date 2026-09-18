@@ -144,8 +144,17 @@
     border-radius: 12px;
     overflow: hidden;
   }
+  /* The standings table is wide (10 columns) -- rather than let columns
+     get squeezed or silently clipped on a narrow screen, this scrolls
+     horizontally and keeps Rank + Manager pinned so you always know which
+     row you're looking at while you scroll through the stats. */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   table {
     width: 100%;
+    min-width: 760px;
     border-collapse: collapse;
     font-size: 0.85rem;
   }
@@ -169,12 +178,36 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:nth-child(even) { background: var(--row-alt); }
   td.rank, td.manager { text-align: left; }
-  td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 34px; }
+  td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 40px; min-width: 40px; }
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   td.thisweek { color: var(--accent-2); font-variant-numeric: tabular-nums; }
   td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; }
   td { font-variant-numeric: tabular-nums; }
+  /* Rank + Manager stay visible while the rest of the row scrolls under them. */
+  thead th:first-child, td.rank {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--panel);
+  }
+  thead th:nth-child(2), td.manager {
+    position: sticky; left: 40px; z-index: 2;
+    background: var(--panel);
+    box-shadow: 1px 0 0 var(--panel-border);
+  }
+  tbody tr:nth-child(even) td.rank, tbody tr:nth-child(even) td.manager {
+    background: var(--row-alt);
+  }
+  .scroll-hint {
+    display: none;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    padding: 6px 12px 0;
+  }
+  @media (max-width: 640px) {
+    .scroll-hint { display: block; }
+    thead th, tbody td { padding: 8px 8px; font-size: 0.78rem; }
+    h1 { font-size: 1.15rem; }
+  }
   .badge-live {
     display: inline-block;
     font-size: 0.62rem;
@@ -224,7 +257,7 @@
     <div class="controls">
       <div class="toggle-group" role="group" aria-label="Scoring source">
         <button type="button" id="mode-actual" class="active">Actual</button>
-        <button type="button" id="mode-ppr">Generic PPR</button>
+        <button type="button" id="mode-ppr">Sleeper Projection</button>
         <button type="button" id="mode-custom">Our Custom Scoring</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
@@ -239,6 +272,8 @@
   <div class="error-banner" id="error-banner"></div>
 
   <div class="table-panel">
+    <div class="scroll-hint">Swipe to see more stats →</div>
+    <div class="table-scroll">
     <table id="standings-table">
       <thead>
         <tr>
@@ -255,9 +290,10 @@
         </tr>
       </thead>
       <tbody id="standings-body">
-        <tr><td colspan="9"><div class="empty-state">Loading standings…</div></td></tr>
+        <tr><td colspan="10"><div class="empty-state">Loading standings…</div></td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <footer>
@@ -288,7 +324,7 @@
     pollTimer: null
   };
 
-  var MODE_LABELS = { actual: "Actual", ppr: "Generic PPR", custom: "Our Custom Scoring" };
+  var MODE_LABELS = { actual: "Actual", ppr: "Sleeper Projection", custom: "Our Custom Scoring" };
 
   var els = {
     subtitle: document.getElementById("subtitle"),
@@ -349,27 +385,42 @@
     return total;
   }
 
-  // Three separate, non-blended lenses on a player's week -- pick ONE
-  // source (actual stats or Sleeper's projection) and ONE scoring system,
-  // never mixed:
-  //   "actual" -- what they've actually banked so far this week, scored
-  //     with the league's real custom scoring_settings (that's what
-  //     actually determines Rumbles). Legitimately 0 for anyone who
-  //     hasn't played yet, or whose box score is genuinely empty.
-  //   "ppr"    -- Sleeper's own projected team score, generic PPR scoring.
-  //     Pure projection, never blended with actual -- as long as Sleeper
-  //     has a projection for a starter, this is never 0.
-  //   "custom" -- that same Sleeper projection, recomputed against the
-  //     league's real scoring_settings instead of generic PPR.
-  function scoreFrom(source, scoringSettings, mode) {
+  // scoringSystem picks how a stats object gets turned into a number --
+  // completely separate from which stats object we picked (see
+  // playerPoints below):
+  //   "genericPpr" -- Sleeper's own precomputed generic-PPR fantasy score
+  //     for that stat line (its "pts_ppr" field).
+  //   "custom"     -- dot-product that same stat line against the
+  //     league's real scoring_settings.
+  function scoreFrom(source, scoringSettings, scoringSystem) {
     if (!source) return 0;
-    if (mode === "actual" || mode === "custom") return dotProduct(source, scoringSettings);
+    if (scoringSystem === "custom") return dotProduct(source, scoringSettings);
     return num(source.pts_ppr);
   }
 
+  // Three lenses on a player's week:
+  //   "actual" -- ONLY their actual banked stats, scored with the
+  //     league's real custom scoring_settings. Never touches projections
+  //     -- legitimately 0 for anyone who hasn't played, or whose box
+  //     score is genuinely empty.
+  //   "ppr"    -- "Sleeper Projection": matches the live number Sleeper
+  //     itself shows on its matchup page. That number is not a frozen
+  //     pregame projection -- once a player's game is underway, Sleeper
+  //     swaps in their actual performance so far and only keeps
+  //     projecting the players who haven't started yet. So here: if the
+  //     player has an actual-stats entry this week (their game has
+  //     started), use their REAL stat line's generic-PPR score; otherwise
+  //     fall back to Sleeper's pregame projection's generic-PPR score.
+  //   "custom" -- the same actual-so-far-else-projected stat line as
+  //     "ppr", just scored against the league's real scoring_settings
+  //     instead of generic PPR.
   function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
-    var source = mode === "actual" ? statsMap[playerId] : projMap[playerId];
-    return scoreFrom(source, scoringSettings, mode);
+    if (mode === "actual") {
+      return scoreFrom(statsMap[playerId], scoringSettings, "custom");
+    }
+    var source = statsMap[playerId] || projMap[playerId];
+    var scoringSystem = mode === "custom" ? "custom" : "genericPpr";
+    return scoreFrom(source, scoringSettings, scoringSystem);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
@@ -566,7 +617,7 @@
     // (it can still flip as the games play out, right up to the final
     // whistle). "This Week" keeps showing that in-progress figure on its
     // own, just never added into the ranked totals.
-    // "Generic PPR" and "Our Custom Scoring" are projection views: those
+    // "Sleeper Projection" and "Our Custom Scoring" are projection views: those
     // DO fold the in-progress week's (projected) rumbles/H2H on top of the
     // cumulative totals, same as before, since the whole point there is a
     // gameday preview of where things are trending.

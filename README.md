@@ -36,10 +36,12 @@ backend involved.
 Rank, Manager, Rumbles (labeled **Actualized Rumbles** or **Projected
 Rumbles** depending on the mode toggle -- see below), This Week (Rumbles
 earned so far this week), Points This Week (the raw score for this week in
-whichever scoring mode is selected -- Actual / Generic PPR / Our Custom
-Scoring), Rumble % (Rumbles earned / max possible so far), PF, PA, H2H W-L
-(labeled **Actualized H2H W-L** or **Projected H2H W-L**, same as
-Rumbles), and Vs. Field W-L.
+whichever scoring mode is selected -- Actual / Sleeper Projection / Our
+Custom Scoring), Rumble % (Rumbles earned / max possible so far), PF, PA,
+H2H W-L (labeled **Actualized H2H W-L** or **Projected H2H W-L**, same as
+Rumbles), and Vs. Field W-L. On a narrow screen the table scrolls
+horizontally (Rank and Manager stay pinned) rather than squeezing or
+clipping any column.
 
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
@@ -51,35 +53,37 @@ away in every mode, since those are just running season counts. Whether
 the in-progress week's Rumbles/H2H outcome gets folded into the ranked
 Rumbles/H2H columns depends on the mode -- see below.
 
-### Live scoring: three independent modes
+### Live scoring: three modes
 
 While a week is in progress, `rumbles.html` fetches every starter's actual
 stats and Sleeper's projection for them directly in the browser, on every
-30-second poll. There's a three-way toggle, and each mode is a clean,
-separate lens -- none of them blend actual and projected together:
+30-second poll. There's a three-way toggle:
 
-- **Actual** (default on page load) -- what each team has actually banked
-  so far this week, scored with the league's real `scoring_settings`.
-  This is legitimately **0** for a team that hasn't kicked off yet, or
-  whose whole roster is still pregame -- that's correct, not a bug. This is
-  the "solidified" view: **Actualized Rumbles** and **Actualized H2H W-L**
-  stay locked to whatever's already final in `rumbles_history.json` -- the
-  in-progress week's actual-score Rumbles/H2H outcome is deliberately
-  *not* folded in yet, since it can still flip right up to the final
-  whistle. "This Week" keeps showing that in-progress figure live, it just
-  never gets added into the ranked totals until the week is actually over
-  and the workflow finalizes it.
-- **Generic PPR** -- Sleeper's own projected team score, standard PPR
-  scoring. Pure projection, never touches actual stats, so it's never 0 as
-  long as Sleeper has projections for the starters (which it does,
-  pregame through the final whistle). This is a projection/preview view:
-  **Projected Rumbles** and **Projected H2H W-L** DO fold the in-progress
-  week's projected Rumbles/H2H on top of the cumulative totals, so you can
-  see where things are trending.
-- **Our Custom Scoring** -- that same Sleeper projection, recomputed
-  against the league's real `scoring_settings` (non-PPR, with first-down
-  bonuses and defensive scoring tiers the generic PPR number doesn't
-  capture) instead of generic PPR. Same folding behavior as Generic PPR.
+- **Actual** (default on page load) -- ONLY real, actually-banked stats,
+  scored with the league's real `scoring_settings`. Never touches
+  projections. This is legitimately **0** for a team that hasn't kicked
+  off yet, or whose whole roster is still pregame -- that's correct, not a
+  bug. This is the "solidified" view: **Actualized Rumbles** and
+  **Actualized H2H W-L** stay locked to whatever's already final in
+  `rumbles_history.json` -- the in-progress week's actual-score Rumbles/H2H
+  outcome is deliberately *not* folded in yet, since it can still flip
+  right up to the final whistle. "This Week" keeps showing that
+  in-progress figure live, it just never gets added into the ranked totals
+  until the week is actually over and the workflow finalizes it.
+- **Sleeper Projection** -- matches the live number Sleeper itself shows
+  on its own matchup page: once a player's game is underway, their actual
+  performance so far replaces their frozen pregame projection; anyone who
+  hasn't started yet still uses Sleeper's projection. That's why this is
+  never 0 during a live week, and why it climbs to match Sleeper's own
+  displayed projected score rather than staying flat at the pregame
+  number. This is a projection/preview view: **Projected Rumbles** and
+  **Projected H2H W-L** DO fold the in-progress week's Rumbles/H2H on top
+  of the cumulative totals, so you can see where things are trending.
+- **Our Custom Scoring** -- the same actual-so-far-else-projected source as
+  Sleeper Projection, just scored against the league's real
+  `scoring_settings` (non-PPR, with first-down bonuses and defensive
+  scoring tiers generic PPR doesn't capture) instead of generic PPR. Same
+  folding behavior as Sleeper Projection.
 
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
