@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-09-18T13:32:52.237175+00:00",
+  "generated_at": "2026-09-18T14:45:49.916815+00:00",
   "weeks_completed": [
     1
   ],
@@ -10,7 +10,7 @@
   "standings": [
     {
       "roster_id": 7,
-      "manager": "Stevster77",
+      "manager": "Steven",
       "rumbles": 20,
       "rumble_pct": 100.0,
       "last_completed_week_rumbles": 20,
@@ -40,7 +40,7 @@
     },
     {
       "roster_id": 11,
-      "manager": "kohagan18",
+      "manager": "Kaitlyn",
       "rumbles": 18,
       "rumble_pct": 90.0,
       "last_completed_week_rumbles": 18,
@@ -55,7 +55,7 @@
     },
     {
       "roster_id": 8,
-      "manager": "lalu101",
+      "manager": "Ankit",
       "rumbles": 15,
       "rumble_pct": 75.0,
       "last_completed_week_rumbles": 15,
@@ -70,7 +70,7 @@
     },
     {
       "roster_id": 5,
-      "manager": "GreenBayBlay",
+      "manager": "Joe",
       "rumbles": 14,
       "rumble_pct": 70.0,
       "last_completed_week_rumbles": 14,
@@ -85,7 +85,7 @@
     },
     {
       "roster_id": 10,
-      "manager": "rrakower",
+      "manager": "Ryan",
       "rumbles": 13,
       "rumble_pct": 65.0,
       "last_completed_week_rumbles": 13,
@@ -100,7 +100,7 @@
     },
     {
       "roster_id": 4,
-      "manager": "HaanRolo",
+      "manager": "Haan",
       "rumbles": 8,
       "rumble_pct": 40.0,
       "last_completed_week_rumbles": 8,
@@ -115,7 +115,7 @@
     },
     {
       "roster_id": 3,
-      "manager": "thehebrewhammer24",
+      "manager": "Jake",
       "rumbles": 7,
       "rumble_pct": 35.0,
       "last_completed_week_rumbles": 7,
@@ -130,7 +130,7 @@
     },
     {
       "roster_id": 1,
-      "manager": "Legendaly",
+      "manager": "Aidan",
       "rumbles": 3,
       "rumble_pct": 15.0,
       "last_completed_week_rumbles": 3,
@@ -145,7 +145,7 @@
     },
     {
       "roster_id": 6,
-      "manager": "ilovelamp917",
+      "manager": "Alex",
       "rumbles": 2,
       "rumble_pct": 10.0,
       "last_completed_week_rumbles": 2,
@@ -160,7 +160,7 @@
     },
     {
       "roster_id": 9,
-      "manager": "Hellerch",
+      "manager": "Christian",
       "rumbles": 1,
       "rumble_pct": 5.0,
       "last_completed_week_rumbles": 1,
@@ -175,7 +175,7 @@
     },
     {
       "roster_id": 12,
-      "manager": "slondon1",
+      "manager": "Stephanie",
       "rumbles": 0,
       "rumble_pct": 0.0,
       "last_completed_week_rumbles": 0,
