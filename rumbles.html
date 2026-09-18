@@ -1069,6 +1069,7 @@
           // expects. Logging it raw here to see the real shape and fix
           // the parsing -- safe to remove once that's sorted out.
           console.log("[rumbles] live scores payload -- length:", games.length, "first entry:", games[0], "teamGameStatus:", teamGameStatus);
+          console.log("[rumbles] live scores first entry, full JSON:", JSON.stringify(games[0], null, 2));
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early
