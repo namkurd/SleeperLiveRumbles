@@ -309,7 +309,6 @@
   }
   .confidence-confirmed { background: rgba(53, 194, 107, 0.15); color: var(--good); }
   .confidence-likely { background: rgba(77, 159, 255, 0.15); color: var(--accent-2); }
-  .confidence-detected { background: rgba(154, 161, 176, 0.18); color: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -388,7 +387,7 @@
     </table>
     </div>
   </div>
-  <p class="footnote">Status reflects how confident this detection is, not just whether it happened: <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means the started QB's Sleeper injury status read "Out"/"IR" at the moment this was caught. <strong>Detected</strong> means a same-team backup QB clearly played and scored, but neither of those could be confirmed in time -- Sleeper doesn't keep a historical record of in-game injury designations, so this is the best available signal, not certainty. It can't distinguish an injury from a coach simply benching a QB.</p>
+  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out"/"IR" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current).</p>
 </div>
 
 <script>
@@ -628,8 +627,14 @@
   // ---- QB injury-backup adjustment detection ---------------------------
   // Mirrors build_rumbles.py's compute_qb_adjustments_for_week -- see the
   // long comment above that function for the full rationale and the
-  // confidence-tier design. This is the LIVE half: it only ever evaluates
-  // the CURRENT in-progress week (historical weeks come pre-computed from
+  // two-tier ("confirmed" / "likely") design: this is meant to be a
+  // running LOG of every time the rule actually went into effect, not a
+  // speculative feed, so a same-team backup QB playing is only ever
+  // logged when it's either commissioner-confirmed (custom_points is set
+  // -- ALWAYS logged, independent of whether a specific backup can be
+  // identified) or freshly corroborated by a live "Out"/"IR"/"PUP"
+  // injury_status. This is the LIVE half: it only ever evaluates the
+  // CURRENT in-progress week (historical weeks come pre-computed from
   // rumbles_history.json), so "isFresh" is simply "did we just fetch
   // playersMeta recently enough to trust its injury_status snapshot" --
   // there's no carry-forward concept needed client-side since nothing
@@ -664,56 +669,89 @@
     return index;
   }
 
+  function findStartedQb(m, playersMeta) {
+    var starters = m.starters || [];
+    for (var i = 0; i < starters.length; i++) {
+      var pid = starters[i];
+      if (!pid || pid === "0") continue;
+      var meta = playersMeta[pid];
+      if (meta && meta.position === "QB") return { pid: pid, meta: meta };
+    }
+    return null;
+  }
+
+  function findBackupQbs(startedPid, meta, playersMeta, teamQbIndex, statsMap, scoringSettings) {
+    var team = meta.team;
+    if (!team) return [];
+    var candidates = (teamQbIndex[team] || []).filter(function (cid) {
+      return cid !== startedPid && isPlayed(statsMap[cid]);
+    });
+    return candidates
+      .map(function (cid) {
+        return { player_id: cid, name: playerName(playersMeta[cid]), points: round2(qbScore(statsMap[cid], scoringSettings)) };
+      })
+      .sort(function (a, b) { return b.points - a.points; });
+  }
+
   function detectQbAdjustmentsForWeek(week, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, isFresh) {
     var entries = [];
     matchups.forEach(function (m) {
       var rosterId = m.roster_id;
-      var starters = m.starters || [];
-      starters.forEach(function (pid) {
-        if (!pid || pid === "0") return;
-        var meta = playersMeta[pid];
-        if (!meta || meta.position !== "QB") return;
-        var team = meta.team;
-        if (!team) return;
-        var candidates = teamQbIndex[team] || [];
-        var playedIds = candidates.filter(function (cid) { return isPlayed(statsMap[cid]); });
-        var backups = playedIds.filter(function (cid) { return cid !== pid; });
-        if (!backups.length) return;
+      var manager = managerByRosterId[rosterId] || "Roster " + rosterId;
+      var hasCustom = m.custom_points !== null && m.custom_points !== undefined;
 
-        var injuredPoints = round2(qbScore(statsMap[pid], scoringSettings));
-        var backupEntries = backups
-          .map(function (cid) {
-            return { player_id: cid, name: playerName(playersMeta[cid]), points: round2(qbScore(statsMap[cid], scoringSettings)) };
-          })
-          .sort(function (a, b) { return b.points - a.points; });
-        var backupTotal = round2(backupEntries.reduce(function (s, b) { return s + b.points; }, 0));
-
-        var hasCustom = m.custom_points !== null && m.custom_points !== undefined;
-        var customDelta = hasCustom ? round2(m.custom_points - (m.points || 0)) : null;
-
-        var confidence, injuryStatusAtCapture = null;
-        if (hasCustom) {
-          confidence = "confirmed";
-        } else if (isFresh) {
-          var status = (meta.injury_status || "").toLowerCase();
-          confidence = status === "out" || status === "ir" || status === "pup" ? "likely" : "detected";
-          injuryStatusAtCapture = meta.injury_status || null;
-        } else {
-          confidence = "detected";
+      if (hasCustom) {
+        // A commissioner override ALWAYS produces a log entry -- this is a
+        // running log of confirmed rule applications, not a speculative
+        // feed. Identifying the specific backup QB(s) is best-effort on
+        // top of that, never a gate on logging the override itself.
+        var started = findStartedQb(m, playersMeta);
+        var overrideDelta = round2(m.custom_points - (m.points || 0));
+        var injuredPoints = 0, injuredName = "Unknown", backupEntries = [];
+        if (started) {
+          injuredPoints = round2(qbScore(statsMap[started.pid], scoringSettings));
+          injuredName = playerName(started.meta);
+          backupEntries = findBackupQbs(started.pid, started.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
         }
-
+        var backupTotal = backupEntries.length
+          ? round2(backupEntries.reduce(function (s, b) { return s + b.points; }, 0))
+          : overrideDelta;
         entries.push({
           week: week,
           roster_id: rosterId,
-          manager: managerByRosterId[rosterId] || "Roster " + rosterId,
-          injured_qb: { player_id: pid, name: playerName(meta), points: injuredPoints },
+          manager: manager,
+          injured_qb: { player_id: started ? started.pid : null, name: injuredName, points: injuredPoints },
           backup_qbs: backupEntries,
           backup_points_total: backupTotal,
-          confidence: confidence,
-          injury_status_at_capture: injuryStatusAtCapture,
-          custom_points_delta: customDelta,
+          confidence: "confirmed",
+          injury_status_at_capture: null,
+          custom_points_delta: overrideDelta,
           live: true
         });
+        return;
+      }
+
+      // No override -- only ever log via the fresh, injury-status
+      // corroborated "likely" tier.
+      if (!isFresh) return;
+      var startedNoOverride = findStartedQb(m, playersMeta);
+      if (!startedNoOverride) return;
+      var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
+      if (!backups.length) return;
+      var status = (startedNoOverride.meta.injury_status || "").toLowerCase();
+      if (status !== "out" && status !== "ir" && status !== "pup") return;
+
+      entries.push({
+        week: week,
+        roster_id: rosterId,
+        manager: manager,
+        injured_qb: { player_id: startedNoOverride.pid, name: playerName(startedNoOverride.meta), points: round2(qbScore(statsMap[startedNoOverride.pid], scoringSettings)) },
+        backup_qbs: backups,
+        backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
+        confidence: "likely",
+        injury_status_at_capture: startedNoOverride.meta.injury_status || null,
+        custom_points_delta: null,
+        live: true
       });
     });
     return entries;
@@ -1134,7 +1172,7 @@
     renderQbAdjustments();
   }
 
-  var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely", detected: "Detected" };
+  var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely" };
 
   function renderQbAdjustments() {
     var body = document.getElementById("qb-adj-body");

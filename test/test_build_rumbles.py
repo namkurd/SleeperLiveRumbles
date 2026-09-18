@@ -181,10 +181,22 @@ def test_build_team_qb_index_scopes_by_team():
     print("PASS: build_team_qb_index groups QBs by NFL team")
 
 
-def test_compute_qb_adjustments_detected_tier_and_team_scoping():
+def test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing():
+    # The "detected" tier has been removed -- this log only ever shows
+    # commissioner-confirmed or freshly-corroborated entries, never a bare
+    # "a backup QB played" observation on its own.
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
         QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+    )
+    assert entries == [], f"no override + not fresh + no carry-forward must log NOTHING (no more 'detected' tier), got {entries}"
+    print("PASS: with no override and no fresh/carried corroboration, nothing is logged")
+
+
+def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
     )
     assert len(entries) == 1, f"expected exactly 1 adjustment (roster 2 has no started QB), got {len(entries)}"
     e = entries[0]
@@ -194,18 +206,9 @@ def test_compute_qb_adjustments_detected_tier_and_team_scoping():
     # QB (despite playing) is on the wrong team entirely.
     assert e["backup_qbs"] == [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}]
     assert approx(e["backup_points_total"], 21.9)
-    assert e["confidence"] == "detected", f"no override + not fresh + no carry-forward should be 'detected', got {e['confidence']}"
-    print("PASS: compute_qb_adjustments_for_week finds the right backup, excludes the 3rd-stringer and the other team's QB, 'detected' tier")
-
-
-def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
-    entries = compute_qb_adjustments_for_week(
-        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
-    )
-    assert entries[0]["confidence"] == "likely", f"fresh + injury_status 'Out' should be 'likely', got {entries[0]['confidence']}"
-    assert entries[0]["injury_status_at_capture"] == "Out"
-    print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out'")
+    assert e["confidence"] == "likely", f"fresh + injury_status 'Out' should be 'likely', got {e['confidence']}"
+    assert e["injury_status_at_capture"] == "Out"
+    print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out', with correct team-scoped backup detection")
 
 
 def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
@@ -217,6 +220,31 @@ def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
     assert entries[0]["confidence"] == "confirmed", f"a set custom_points should always mean 'confirmed', got {entries[0]['confidence']}"
     assert approx(entries[0]["custom_points_delta"], 29.1)  # 129.1 - 100.0
     print("PASS: 'confirmed' tier fires whenever custom_points is set, regardless of freshness")
+
+
+def test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup():
+    # This is exactly the bug being fixed: a commissioner override must
+    # ALWAYS show up as a "Confirmed" log entry, even when the stats-based
+    # backup-detection heuristic can't independently corroborate it (no
+    # other team QB shows up as having played). The override itself is the
+    # primary signal -- backup identification is best-effort detail on top,
+    # never a gate on whether the event gets logged at all.
+    matchups_override_no_backup = [
+        {"roster_id": 1, "matchup_id": 1, "starters": ["QB_STARTER"], "points": 100.0, "custom_points": 119.47},
+        {"roster_id": 2, "matchup_id": 1, "starters": ["WR2"], "points": 90.0},
+    ]
+    stats_no_backup = {"QB_STARTER": QB_STATS_MAP["QB_STARTER"]}  # nobody else on MIN played
+    entries = compute_qb_adjustments_for_week(
+        1, matchups_override_no_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_no_backup,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+    )
+    assert len(entries) == 1, f"a commissioner override must ALWAYS produce a log entry, got {len(entries)}"
+    e = entries[0]
+    assert e["confidence"] == "confirmed"
+    assert e["backup_qbs"] == [], "no backup could be identified -- the list should be empty, not fabricated"
+    assert approx(e["backup_points_total"], 19.47), f"should fall back to the override delta (19.47) when no backup identified, got {e['backup_points_total']}"
+    assert approx(e["injured_qb"]["points"], 7.2)
+    print("PASS: a commissioner override ALWAYS logs a 'confirmed' entry, even when no backup QB can be independently identified")
 
 
 def test_compute_qb_adjustments_carries_forward_stale_likely_tier():
@@ -262,9 +290,10 @@ def main():
     test_dot_product_matches_hand_computed_totals()
     test_is_played()
     test_build_team_qb_index_scopes_by_team()
-    test_compute_qb_adjustments_detected_tier_and_team_scoping()
+    test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing()
     test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
     test_compute_qb_adjustments_confirmed_tier_beats_everything_else()
+    test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
     test_compute_qb_adjustments_no_entry_without_a_backup()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")

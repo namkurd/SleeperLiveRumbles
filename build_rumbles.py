@@ -250,26 +250,30 @@ def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, d
 # -- the commissioner's +19.47 `custom_points` override is exactly explained
 # by a backup QB's individual score that game.
 #
-# Detection is necessarily a heuristic (see dotProduct's isActual note
-# above for the general spirit of this codebase's "only trust what's
-# checkable" approach): Sleeper has no historical "this player was ruled
-# out during this specific past game" field -- `injury_status` is a live,
-# current-only snapshot. So this uses a tiered confidence system instead of
-# pretending to certainty the API can't provide:
+# This is meant to be a running, permanent LOG of every time this rule has
+# actually gone into effect -- not a speculative "might this have
+# happened" feed -- so it only ever logs an entry under one of two tiers:
 #   "confirmed" -- the commissioner has already keyed in a `custom_points`
-#     override for that roster/week. The strongest possible signal -- a
-#     human confirmed it -- and works for any week, indefinitely.
-#   "likely"    -- no override yet, but at the moment this was detected
+#     override for that roster/week. The strongest possible signal (a
+#     human confirmed it), and this ALWAYS produces a log entry once an
+#     override exists -- independent of whether the stats-based backup
+#     detection below can identify exactly which backup(s) account for it
+#     (it's best-effort for the display details, never a gate on whether
+#     the event gets logged at all).
+#   "likely"    -- no override yet, but at the moment this was checked
 #     (live, mid-week -- or the first time the nightly job finalizes that
 #     week, before the next week's practice reports reset the field) the
-#     started QB's live `injury_status` was "Out"/"IR"/"PUP". This is only
-#     ever captured FRESH (see is_fresh below) and then carried forward
-#     permanently once captured -- never re-derived from a now-stale
-#     current snapshot for an old week.
-#   "detected"  -- the stats show a same-team backup QB recording real
-#     action that game (the actual trigger condition), but neither of the
-#     above corroborations lined up in time. Still shown, just labeled
-#     honestly as unconfirmed.
+#     started QB's live `injury_status` read "Out"/"IR"/"PUP" AND a
+#     same-team backup QB was found to have recorded real action that
+#     game. `injury_status` is a live, current-only snapshot with no
+#     historical record, so this is only ever captured FRESH (see
+#     is_fresh below) and then carried forward permanently once captured
+#     -- never re-derived from a now-stale current snapshot for an old
+#     week.
+# A same-team backup QB recording action with NEITHER of those two signals
+# (no override, and not fresh / not ruled Out) is NOT logged at all -- it's
+# exactly as likely to be a garbage-time benching as a real injury, and
+# this log is meant to only contain confirmed-or-well-corroborated cases.
 KEY_ALIASES = {"kr_yd": "def_kr_yd"}
 TIER_SUM_KEYS = {"fgmiss": True}
 
@@ -359,6 +363,36 @@ def build_team_qb_index(players_meta: dict[str, dict]) -> dict[str, list[str]]:
     return index
 
 
+def find_started_qb(m: dict, players_meta: dict[str, dict]) -> tuple[str, dict] | tuple[None, None]:
+    """The first player in this roster's `starters` whose position is QB
+    (per Sleeper's player metadata) -- identifying WHO was started doesn't
+    depend at all on whether a backup can also be found, so this is kept
+    separate from the backup-detection below."""
+    for pid in m.get("starters") or []:
+        if not pid or pid == "0":
+            continue
+        meta = players_meta.get(pid)
+        if meta and meta.get("position") == "QB":
+            return pid, meta
+    return None, None
+
+
+def find_backup_qbs(started_pid: str, meta: dict, players_meta: dict[str, dict], team_qb_index: dict[str, list[str]], stats_map: dict[str, dict], scoring_settings: dict) -> list[dict]:
+    """Every OTHER quarterback on the started QB's NFL team who recorded
+    real action (per is_played) in this week's actual stats -- sorted
+    highest-scoring first. Empty if nobody else on that team played."""
+    team = meta.get("team")
+    if not team:
+        return []
+    played_ids = [cid for cid in team_qb_index.get(team, []) if cid != started_pid and is_played(stats_map.get(cid))]
+    backup_entries = [
+        {"player_id": cid, "name": player_name(players_meta.get(cid)), "points": round(dot_product(stats_map.get(cid), scoring_settings), 2)}
+        for cid in played_ids
+    ]
+    backup_entries.sort(key=lambda b: -b["points"])
+    return backup_entries
+
+
 def compute_qb_adjustments_for_week(
     week: int,
     matchups: list[dict],
@@ -373,62 +407,73 @@ def compute_qb_adjustments_for_week(
     entries: list[dict] = []
     for m in matchups:
         roster_id = m["roster_id"]
-        starters = m.get("starters") or []
-        for pid in starters:
-            if not pid or pid == "0":
-                continue
-            meta = players_meta.get(pid)
-            if not meta or meta.get("position") != "QB":
-                continue
-            team = meta.get("team")
-            if not team:
-                continue
-            played_ids = [cid for cid in team_qb_index.get(team, []) if is_played(stats_map.get(cid))]
-            backups = [cid for cid in played_ids if cid != pid]
-            if not backups:
-                continue
+        manager = manager_map.get(roster_id, f"Roster {roster_id}")
+        custom_points = m.get("custom_points")
+        has_override = custom_points is not None
 
-            injured_points = round(dot_product(stats_map.get(pid), scoring_settings), 2)
-            backup_entries = []
-            for cid in backups:
-                pts = round(dot_product(stats_map.get(cid), scoring_settings), 2)
-                backup_entries.append({"player_id": cid, "name": player_name(players_meta.get(cid)), "points": pts})
-            backup_entries.sort(key=lambda b: -b["points"])
-            backup_total = round(sum(b["points"] for b in backup_entries), 2)
-
-            custom_points = m.get("custom_points")
-            custom_delta = round(official_points(m) - (m.get("points") or 0.0), 2) if custom_points is not None else None
-
-            carried = carried_by_roster.get(roster_id)
-            carried_matches = bool(carried) and carried.get("injured_qb", {}).get("player_id") == pid
-
-            if custom_points is not None:
-                confidence = "confirmed"
-                injury_status_at_capture = carried.get("injury_status_at_capture") if carried_matches else None
-            elif is_fresh:
-                status = (meta.get("injury_status") or "").strip().lower()
-                confidence = "likely" if status in ("out", "ir", "pup") else "detected"
-                injury_status_at_capture = meta.get("injury_status")
-            elif carried_matches:
-                confidence = carried.get("confidence", "detected")
-                injury_status_at_capture = carried.get("injury_status_at_capture")
+        if has_override:
+            # A commissioner override ALWAYS produces a log entry -- that's
+            # the whole point of this being a running log, not a
+            # speculative feed. Identifying the specific injured/backup
+            # QBs via the stats heuristic is best-effort on top of that,
+            # never a gate on whether the override itself gets logged.
+            pid, meta = find_started_qb(m, players_meta)
+            override_delta = round(official_points(m) - (m.get("points") or 0.0), 2)
+            if pid:
+                injured_points = round(dot_product(stats_map.get(pid), scoring_settings), 2)
+                injured_name = player_name(meta)
+                backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings)
             else:
-                confidence = "detected"
-                injury_status_at_capture = None
-
+                # Couldn't even identify a started QB (unexpected, but
+                # don't let that swallow a real commissioner override) --
+                # log it with the override amount as the best-available
+                # number and no names.
+                injured_points = 0.0
+                injured_name = "Unknown"
+                backup_entries = []
+            backup_total = round(sum(b["points"] for b in backup_entries), 2) if backup_entries else override_delta
             entries.append(
                 {
                     "week": week,
                     "roster_id": roster_id,
-                    "manager": manager_map.get(roster_id, f"Roster {roster_id}"),
-                    "injured_qb": {"player_id": pid, "name": player_name(meta), "points": injured_points},
+                    "manager": manager,
+                    "injured_qb": {"player_id": pid, "name": injured_name, "points": injured_points},
                     "backup_qbs": backup_entries,
                     "backup_points_total": backup_total,
-                    "confidence": confidence,
-                    "injury_status_at_capture": injury_status_at_capture,
-                    "custom_points_delta": custom_delta,
+                    "confidence": "confirmed",
+                    "injury_status_at_capture": None,
+                    "custom_points_delta": override_delta,
                 }
             )
+            continue
+
+        # No override -- only ever log via the fresh, injury-status
+        # corroborated "likely" tier (or by carrying forward a "likely"
+        # entry captured in an earlier run, before this week's window to
+        # check injury_status fresh had already passed).
+        pid, meta = find_started_qb(m, players_meta)
+        if is_fresh and pid:
+            backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings)
+            status = (meta.get("injury_status") or "").strip().lower()
+            if backup_entries and status in ("out", "ir", "pup"):
+                entries.append(
+                    {
+                        "week": week,
+                        "roster_id": roster_id,
+                        "manager": manager,
+                        "injured_qb": {"player_id": pid, "name": player_name(meta), "points": round(dot_product(stats_map.get(pid), scoring_settings), 2)},
+                        "backup_qbs": backup_entries,
+                        "backup_points_total": round(sum(b["points"] for b in backup_entries), 2),
+                        "confidence": "likely",
+                        "injury_status_at_capture": meta.get("injury_status"),
+                        "custom_points_delta": None,
+                    }
+                )
+            continue
+
+        carried = carried_by_roster.get(roster_id)
+        if carried and carried.get("confidence") == "likely" and (not pid or carried.get("injured_qb", {}).get("player_id") == pid):
+            entries.append(dict(carried, week=week, manager=manager))
     return entries
 
 

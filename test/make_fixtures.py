@@ -120,6 +120,18 @@ for i in range(1, 13, 2):
     matchups.append({"roster_id": b, "matchup_id": matchup_id, "starters": pb_players, "points": 0})
     matchup_id += 1
 
+# Roster 8 (Ankit): a commissioner override with NO identifiable backup QB
+# at all -- roster 8's players have no metadata in players.json (they're
+# not part of the QB scenario below), so the stats-based backup-detection
+# heuristic will find nothing. This is exactly the class of bug being
+# regression-tested: the override must STILL produce a "Confirmed" log
+# entry (falling back to the override amount as "Backup QB Points" with no
+# names), never silently disappear just because the heuristic came up
+# empty.
+for m in matchups:
+    if m["roster_id"] == 8:
+        m["custom_points"] = 15.0  # points is 0 above -> delta is +15.0
+
 with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
     json.dump(matchups, f, indent=2)
 

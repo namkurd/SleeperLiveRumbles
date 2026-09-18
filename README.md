@@ -61,8 +61,10 @@ mid-game and a backup QB from the same NFL team comes in and scores, the
 manager is credited with the COMBINED points of every QB from that NFL
 team who played in that game -- not just their own starter's. This
 cascades (a 3rd-string QB coming in after the backup also goes down adds
-their points too). `rumbles.html` shows a table for this below the main
-standings, and it runs live, the same way the rest of the page does.
+their points too). `rumbles.html` shows this as a **permanent, running
+log** below the main standings -- every time this rule has ever gone into
+effect, not just this week -- and it keeps growing live, the same way the
+rest of the page does.
 
 Detection works off Sleeper's real data: for each manager's started QB,
 look at every OTHER quarterback on that same NFL team (from Sleeper's
@@ -74,33 +76,44 @@ team QB played, that's the trigger -- the started QB's own individual
 score is "Injured QB Points", and the sum of every OTHER team QB's score
 that week is "Backup QB Points".
 
-Sleeper has no historical "was this player ruled out during this specific
-past game" field -- `injury_status` is a live, current-only snapshot, not
-a record. So rather than pretend to certainty the API can't provide, this
-uses a tiered confidence system:
+This log only ever shows an entry under one of two tiers -- deliberately
+no vague "might have happened" middle ground:
 
 - **Confirmed** -- the commissioner has already keyed in a matching
   `custom_points` override for that roster/week. The strongest possible
-  signal (a human confirmed it), and works indefinitely, for any week.
-- **Likely** -- no override yet, but at the moment this was caught (live,
-  mid-week -- or the very first time the nightly `build_rumbles.py` run
-  finalizes that week, before the next week's practice reports reset the
-  field) the started QB's live `injury_status` read "Out"/"IR"/"PUP".
-  This is captured fresh, once, and then permanently carried forward in
-  `rumbles_history.json` -- never re-derived later from what's by then a
+  signal (a human confirmed it), and this **always** produces a log entry
+  once an override exists on Sleeper's side -- independent of whether the
+  stats-based backup-detection above can actually identify which QB(s)
+  account for it. Identifying names/points is best-effort on top of the
+  override, never a gate on whether the event gets logged at all -- if no
+  backup can be pinned down, the row still shows up with the override
+  amount as "Backup QB Points" and no names.
+- **Likely** -- no override yet, but a same-team backup QB clearly played
+  and scored, AND at the moment this was checked (live, mid-week -- or the
+  very first time the nightly `build_rumbles.py` run finalizes that week,
+  before the next week's practice reports reset the field) the started
+  QB's live `injury_status` read "Out"/"IR"/"PUP". Sleeper has no
+  historical "was this player ruled out during this specific past game"
+  field -- `injury_status` is a live, current-only snapshot -- so this is
+  captured fresh, once, and then permanently carried forward in
+  `rumbles_history.json`, never re-derived later from what's by then a
   stale, unrelated snapshot. (`build_rumbles.py` reads its own previous
   output each run specifically to preserve this.)
-- **Detected** -- a same-team backup QB clearly played and scored, but
-  neither of the above could be confirmed in time. Still shown, just
-  labeled honestly as unconfirmed -- this can't distinguish a real injury
-  from a coach simply benching a QB in a blowout.
+
+A same-team backup QB playing with *neither* signal present (no override,
+and injury_status wasn't caught as "Out" while it was still fresh) is not
+logged at all -- there's no way to tell that apart from an ordinary
+blowout benching, and this log is meant to only ever contain confirmed or
+well-corroborated cases, not speculation.
 
 Confirmed against the real example that prompted this: league roster_id
 6 ("Alex"), Week 1 -- Kyler Murray left hurt, Carson Wentz (a free agent
 from Alex's own roster's perspective) came in and scored 19.47 points
 under this league's scoring, and the commissioner's `custom_points`
 override matches that number exactly. Covered by
-`test/test_build_rumbles.py` (the Python/server-side detector) and
+`test/test_build_rumbles.py` (the Python/server-side detector -- including
+a dedicated regression test for a confirmed override with NO identifiable
+backup, proving it still logs rather than silently vanishing) and
 `test/run_test.py` (the live, client-side detector in the browser,
 including the team-scoping: a same-team QB who didn't play, and a
 same-position QB on a *different* team who did, must both be excluded).
@@ -301,11 +314,13 @@ displayed -- it was just a different scoring system. What's now called
    directions while each team's own `#` value never changes, a check
    that this week's H2H matchup pairs share a name color (and every pair
    gets a distinct one), and a check of the live QB Injury Backup
-   Adjustments table -- correctly finds the right backup QB, excludes a
+   Adjustments log -- correctly finds the right backup QB, excludes a
    same-team QB who didn't play and a same-position QB on a different
-   team who did, shows the "Likely" confidence tier, and correctly merges
-   with a synthetic historical "Confirmed" row from `rumbles_history.json`
-   in the right sort order.
+   team who did, shows the "Likely" confidence tier, confirms a
+   commissioner override with NO identifiable backup still logs as
+   "Confirmed" (falling back to the override amount) rather than silently
+   vanishing, and correctly merges with a synthetic historical "Confirmed"
+   row from `rumbles_history.json` in the right sort order.
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative
@@ -321,8 +336,10 @@ correctly flows through to PF, the opponent's PA, H2H result, and the
 vs.-the-field outscored/outscored-by counts. It also covers the QB
 injury-backup detector: the dot-product QB scoring, team-scoping (same
 scenario as above -- excludes a non-playing same-team QB and a playing
-different-team QB), and all three confidence tiers including the
-carry-forward-when-stale behavior.
+different-team QB), both confidence tiers including the
+carry-forward-when-stale behavior, and -- the exact bug this log design
+fixes -- that a commissioner override always produces a log entry even
+when no backup QB can be independently identified from the stats.
 
 Useful if you ever touch the scoring or live-detection logic and want to
 check it without waiting for a live NFL window:

@@ -418,7 +418,19 @@ def scenario_live_blending(browser):
     print("\n== QB Injury Backup Adjustments ==")
     for r in qb_rows:
         print(r)
-    assert len(qb_rows) == 2, f"expected exactly 2 QB-adjustment rows (1 historical + 1 live), got {len(qb_rows)}"
+    assert len(qb_rows) == 3, f"expected exactly 3 QB-adjustment rows (1 historical + 2 live), got {len(qb_rows)}"
+
+    # Roster 8 (Ankit) has a commissioner override but no identifiable
+    # backup QB in the fixtures at all -- the override must STILL log a
+    # "Confirmed" row, falling back to the override delta as the backup
+    # total rather than silently vanishing because the stats-based
+    # heuristic found nothing. This is the exact bug class being
+    # regression-tested (a real override not showing up in the log).
+    override_only_row = next((r for r in qb_rows if r["manager"] == "Ankit"), None)
+    assert override_only_row is not None, f"expected a 'Confirmed' row for Ankit's override even with no identifiable backup, got: {qb_rows}"
+    assert override_only_row["confidence"] == "Confirmed", f"expected 'Confirmed', got: {override_only_row['confidence']}"
+    assert override_only_row["backups"] == [], f"no backup could be identified -- expected an empty backup list, got: {override_only_row['backups']}"
+    assert override_only_row["backup_points"] == "15.00", f"expected the backup total to fall back to the override delta (15.00), got: {override_only_row['backup_points']}"
 
     live_row = next((r for r in qb_rows if r["manager"] == "Alex"), None)
     assert live_row is not None, f"expected a live QB-adjustment row for Alex (roster 6), got: {qb_rows}"
@@ -436,7 +448,8 @@ def scenario_live_blending(browser):
     assert hist_row["confidence"] == "Confirmed", f"expected 'Confirmed' confidence for the historical override row, got: {hist_row['confidence']}"
     assert not hist_row["live"], "the historical (already-finalized) row must NOT carry a LIVE badge"
 
-    assert qb_rows[0]["week"] == "2" and qb_rows[1]["week"] == "1", f"expected rows sorted week descending (2 then 1), got weeks: {[r['week'] for r in qb_rows]}"
+    assert [r["week"] for r in qb_rows] == ["2", "2", "1"], f"expected rows sorted week descending (both week-2 rows, then week-1), got weeks: {[r['week'] for r in qb_rows]}"
+    assert [r["manager"] for r in qb_rows[:2]] == ["Alex", "Ankit"], f"expected the two week-2 rows sorted by manager A-Z, got: {[r['manager'] for r in qb_rows[:2]]}"
 
     print("\nConfirmed QB Injury Backup Adjustments table: live detection (team-scoped, injury-status-corroborated) + historical merge + correct sort order.")
 
