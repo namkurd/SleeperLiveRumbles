@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-09-18T15:37:06.536652+00:00",
+  "generated_at": "2026-09-18T17:56:26.488329+00:00",
   "weeks_completed": [
     1
   ],
@@ -300,5 +300,28 @@
         "rumbles": 12
       }
     }
-  }
+  },
+  "qb_adjustments": [
+    {
+      "week": 1,
+      "roster_id": 6,
+      "manager": "Alex",
+      "injured_qb": {
+        "player_id": "5849",
+        "name": "Kyler Murray",
+        "points": -0.18
+      },
+      "backup_qbs": [
+        {
+          "player_id": "3161",
+          "name": "Carson Wentz",
+          "points": 19.47
+        }
+      ],
+      "backup_points_total": 19.47,
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": 19.47
+    }
+  ]
 }
