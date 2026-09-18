@@ -227,7 +227,12 @@
   .pts-tooltip {
     position: fixed;
     z-index: 50;
-    width: min(92vw, 340px);
+    /* Shrinks to fit whichever player line is actually longest (never
+       wider than that), capped so it can't overflow a narrow viewport or
+       balloon absurdly wide -- see .pts-tooltip-line below for how a line
+       longer than that cap degrades (ellipsis, not wrap). */
+    width: max-content;
+    max-width: min(92vw, 340px);
     background: var(--panel);
     color: var(--text);
     border: 1px solid var(--panel-border);
@@ -1054,6 +1059,16 @@
           var games = results[4] || [];
           var teamGameStatus = buildTeamGameStatus(games);
           var scoringSettings = league.scoring_settings || {};
+
+          // TEMPORARY diagnostic -- the Projected-mode "Pts This Week"
+          // tooltip is supposed to exclude a starter once their real NFL
+          // game is fully final, but that's not happening for a real
+          // finished game yet. No fetch error is being thrown (nothing
+          // shows up in the console for the fetch itself), so the shape
+          // this actually returns must not match what buildTeamGameStatus
+          // expects. Logging it raw here to see the real shape and fix
+          // the parsing -- safe to remove once that's sorted out.
+          console.log("[rumbles] live scores payload -- length:", games.length, "first entry:", games[0], "teamGameStatus:", teamGameStatus);
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early
