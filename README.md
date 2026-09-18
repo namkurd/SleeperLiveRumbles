@@ -35,24 +35,25 @@ backend involved.
 
 Rank (`#`), Manager, Rumbles, This Week (Rumbles earned so far this week),
 Points This Week (the raw score for this week, to 2 decimal places),
-Rumble % (Rumbles earned / max possible so far), PF, PA, H2H W-L, and Vs.
-Field W-L. On a narrow screen the table scrolls horizontally (Rank and
+Rumble % (Rumbles earned / max possible so far), PF, PA, H2H, and Vs.
+Field. On a narrow screen the table scrolls horizontally (Rank and
 Manager stay pinned) rather than squeezing or clipping any column.
 
-Every column except `#` is **sortable** -- click a header to sort by it
-(numbers/records default to biggest-first, Manager defaults to A-Z; click
-again to flip direction; an arrow on the header shows the active sort and
-direction). `#` itself is never a sort control -- it's always each team's
-fixed season standing (by cumulative Rumbles, then PF), so it stays the
-same for a given manager no matter which column the table is currently
-sorted by.
+Every column, including `#`, is **sortable** -- click a header to sort by
+it (numbers/records default to biggest-first, Manager defaults to A-Z;
+click `#` to restore/reverse natural standings order; click again on any
+column to flip direction; an arrow on the header shows the active sort
+and direction). What never changes, no matter which column the table is
+currently sorted by, is the actual VALUE in each team's own `#` cell --
+that's always their fixed season standing (by cumulative Rumbles, then
+PF), assigned once before any sort is applied.
 
-During a live week, each manager's name also gets a small colored dot
-whenever they're one of this week's scheduled H2H matchups -- both sides
-of a matchup share the same color (e.g. hover the dot to see who they're
-playing), so you can tell who's playing whom at a glance even after
-sorting the table by something else. No live matchup yet (offseason, or
-between weeks before matchups post) just means no dots.
+During a live week, each manager's name is also colored whenever they're
+one of this week's scheduled H2H matchups -- both sides of a matchup get
+the same color text (hover a name to see who they're playing), so you
+can tell who's playing whom at a glance even after sorting the table by
+something else. No live matchup yet (offseason, or between weeks before
+matchups post) just means plain, uncolored names.
 
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
@@ -87,14 +88,30 @@ against Sleeper's real per-player payloads (both now fixed, see
 `KEY_ALIASES` / `TIER_SUM_KEYS` in `rumbles.html`):
 
 - `kr_yd` (kick-return yardage) never had a literal match -- Sleeper's
-  real stat/projection payloads name that field `def_kr_yd`, not `kr_yd`,
-  so every defense's return-yardage credit was being silently dropped.
-  Fixed via an explicit key alias.
+  real ACTUAL (post-game) stat payloads name that field `def_kr_yd`, not
+  `kr_yd`, so every defense's return-yardage credit was being silently
+  dropped once they'd played. Fixed via an explicit key alias.
 - `fgmiss` is a single flat weight in `scoring_settings`, but Sleeper's
-  real payloads only expose missed field goals pre-split by distance tier
-  (`fgmiss_30_39`, `fgmiss_40_49`, ...) -- there's never a bare `fgmiss`
-  field to match. Fixed by summing every `fgmiss_*` tier present and
-  applying the flat weight to that sum.
+  real ACTUAL payloads only expose missed field goals pre-split by
+  distance tier (`fgmiss_30_39`, `fgmiss_40_49`, ...) -- there's never a
+  bare `fgmiss` field to match. Fixed by summing every `fgmiss_*` tier
+  present and applying the flat weight to that sum.
+
+**Both of those fixes are deliberately gated to real, already-played
+stat lines only -- never applied to a pregame projection.** The first
+version of this fix applied the `kr_yd` alias everywhere, which
+introduced a NEW, worse bug: a still-100%-pregame roster (with a defense
+projected to return kicks) started overshooting Sleeper's own number by
+~5 points, because a projection's `def_kr_yd` field turned out not to be
+a plausible single-week number at all (one real example: `130.97`, when
+a real single-game team return total tops out around 60 without a
+return TD) -- it's scaled or sourced completely differently than the
+same field name in a real post-game box score. So `KEY_ALIASES` and
+`TIER_SUM_KEYS` in `rumbles.html` only ever apply when scoring a
+player's REAL actual stats, determined per-player (not per-mode) --
+even in Projected mode, a player who's already played gets the alias
+treatment, while a teammate who hasn't gets none of it, still-frozen
+projection and all.
 
 One category is still a **known, unfixed gap**: `fgm_yds_over_30` (bonus
 yardage on made field goals past 30) has no reliable source in either
@@ -156,7 +173,11 @@ displayed -- it was just a different scoring system. What's now called
    `dtf-club-rumbles`).
 2. **Check the league settings at the top of `build_rumbles.py`:**
    `FALLBACK_LEAGUE_ID`, `FALLBACK_USERNAME`, and `DISPLAY_NAME_OVERRIDES`
-   (for anyone whose Sleeper display name isn't what you want shown).
+   (for anyone whose Sleeper display name isn't what you want shown --
+   key it on their REAL Sleeper display_name, exactly, since Sleeper often
+   appends digits to a taken username, e.g. "kohagan18" rather than
+   "kohagan"; check the league's real `/users` response rather than
+   guessing, or the override will silently never match).
 3. **Enable GitHub Pages:** repo Settings -> Pages -> Deploy from branch ->
    `main` / root.
 4. **Trigger the workflow once manually** (Actions tab -> "Update Rumbles
@@ -179,10 +200,13 @@ displayed -- it was just a different scoring system. What's now called
    Projected still shows a real, nonzero folded number, a check that
    every manager gets two genuinely distinct totals (proving the modes
    never bleed into each other), a regression check for the `kr_yd`/
-   `fgmiss` key-matching fixes, a check that every column sorts correctly
-   in both directions while `#` stays pinned to each team's fixed
-   standing, and a check that this week's H2H matchup pairs share a
-   matchup-dot color (and every pair gets a distinct one).
+   `fgmiss` key-matching fixes on an already-played stat line (a
+   "poison-pill" fixture also plants the same fields on a still-pregame
+   projection to prove those fixes correctly do NOT fire there), a check
+   that every column -- `#` included -- sorts correctly in both
+   directions while each team's own `#` value never changes, and a check
+   that this week's H2H matchup pairs share a name color (and every pair
+   gets a distinct one).
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative

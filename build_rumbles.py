@@ -50,17 +50,25 @@ DISPLAY_NAME_OVERRIDES = {
     # Sleeper display_name (lowercase) -> preferred display name. Add an
     # entry here for anyone whose Sleeper display name isn't what you want
     # shown on the standings page.
+    #
+    # NOTE: these keys must match each person's REAL Sleeper display_name
+    # exactly (case-insensitively) -- Sleeper usernames often carry extra
+    # digits/suffixes (e.g. a taken short name becomes "kohagan18"), so a
+    # shortened guess silently fails to match and that manager's raw
+    # Sleeper username leaks through onto the page instead. Confirmed
+    # against the live league's real /users response -- if anyone's
+    # Sleeper username ever changes, update the key here to match.
     "namkurd": "Ben",
-    "kohagan": "Kaitlyn",
-    "stevster": "Steven",
+    "kohagan18": "Kaitlyn",
+    "stevster77": "Steven",
     "haanrolo": "Haan",
-    "lalu": "Ankit",
+    "lalu101": "Ankit",
     "hellerch": "Christian",
-    "slondon": "Stephanie",
+    "slondon1": "Stephanie",
     "rrakower": "Ryan",
     "greenbayblay": "Joe",
-    "hebrewhammer": "Jake",
-    "ilovelamp": "Alex",
+    "thehebrewhammer24": "Jake",
+    "ilovelamp917": "Alex",
     "legendaly": "Aidan",
 }
 

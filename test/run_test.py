@@ -56,15 +56,15 @@ def get_table_rows(page):
 
 
 def get_matchup_colors(page):
-    """manager name -> inline matchup-dot background (e.g. 'var(--matchup-2)'),
-    or None if that row has no dot (not in a live matchup this week)."""
+    """manager name -> inline matchup-name text color (e.g. 'var(--matchup-2)'),
+    or None if that row's name isn't colored (not in a live matchup this week)."""
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
             var name = r.querySelector('td.manager').innerText.trim();
-            var dot = r.querySelector('td.manager .matchup-dot');
-            var bg = dot ? dot.style.background : null;
-            return [name, (bg && bg !== 'transparent') ? bg : null];
+            var span = r.querySelector('td.manager .matchup-name');
+            var color = span ? span.style.color : null;
+            return [name, color || null];
         })""",
     )
     return dict(pairs)
@@ -173,18 +173,22 @@ def scenario_live_blending(browser):
             print(r)
         assert len(rows) == 12, f"[{mode}] expected 12 rows, got {len(rows)}"
 
-        # Both the Rumbles and H2H W-L headers are now static text -- no
-        # more "Actualized"/"Projected" prefix on either, since the mode
-        # toggle itself already covers that distinction. Confirm neither
-        # changes with mode (only a sort-arrow suffix would ever change
-        # this text, and no column is sorted here).
+        # Both the Rumbles and H2H headers are now static text -- no more
+        # "Actualized"/"Projected" prefix on either, since the mode toggle
+        # itself already covers that distinction. Confirm neither changes
+        # with mode (only a sort-arrow suffix would ever change this text,
+        # and no column is sorted here). H2H/Vs. Field also dropped the
+        # trailing "W-L" from their header labels (the cells themselves
+        # still show "W-L" records like "2-0").
         th_rumbles = page.text_content("#th-rumbles")
         assert th_rumbles == "Rumbles", f"[{mode}] expected static 'Rumbles' header, got {th_rumbles!r}"
         th_h2h = page.text_content("#th-h2h")
-        assert th_h2h == "H2H W-L", f"[{mode}] expected static 'H2H W-L' header, got {th_h2h!r}"
+        assert th_h2h == "H2H", f"[{mode}] expected static 'H2H' header, got {th_h2h!r}"
+        th_vsfield = page.text_content("#th-vsfield")
+        assert th_vsfield == "Vs. Field", f"[{mode}] expected static 'Vs. Field' header, got {th_vsfield!r}"
 
         # Column order: 0=#, 1=Manager, 2=Rumbles, 3=This Week, 4=Points
-        # This Week, 5=Rumble %, 6=PF, 7=PA, 8=H2H W-L, 9=Vs. Field W-L.
+        # This Week, 5=Rumble %, 6=PF, 7=PA, 8=H2H, 9=Vs. Field.
         pf_by_manager = {r[1]: float(r[6]) for r in rows}
         for manager, expected_pf in expected[mode].items():
             if expected_pf is None:
@@ -291,16 +295,16 @@ def scenario_live_blending(browser):
         ("Steven", "Ankit"), ("Christian", "Ryan"), ("Kaitlyn", "Stephanie"),
     ]
     for a, b in expected_pairs:
-        assert colors.get(a) is not None, f"{a} should have a matchup-dot color (live week in progress)"
+        assert colors.get(a) is not None, f"{a}'s name should be colored (live week in progress)"
         assert colors[a] == colors[b], (
-            f"{a} and {b} are this week's H2H opponents and should share a dot color, "
+            f"{a} and {b} are this week's H2H opponents and their names should share a color, "
             f"got {colors[a]!r} vs {colors[b]!r}"
         )
     distinct_colors = {colors[a] for a, _ in expected_pairs}
     assert len(distinct_colors) == 6, (
         f"expected 6 distinct matchup colors (one per pair), got {len(distinct_colors)}: {distinct_colors}"
     )
-    print("\nConfirmed matchup color-coding: each H2H pair shares a color, all 6 pairs distinct.")
+    print("\nConfirmed matchup color-coding: each H2H pair shares a name color, all 6 pairs distinct.")
 
     # ---- Column sorting: "#" must stay pinned to season standing ----
     baseline_rank = {r[1]: r[0] for r in get_table_rows(page)}  # manager -> "#" before any sort
@@ -344,12 +348,33 @@ def scenario_live_blending(browser):
     assert managers == sorted(managers), f"Manager column not sorted A-Z: {managers}"
     assert_rank_unchanged(rows, "sort by Manager asc")
 
-    # "#" header itself must never become sortable/clickable.
-    assert "sortable" not in (page.get_attribute("#th-rank", "class") or ""), (
-        "the '#' header must not be sortable -- it's a fixed standing, not a sort control"
+    # "#" itself IS sortable now too -- clicking it should restore/reverse
+    # natural standings order. It must still never take on a DIFFERENT
+    # value for a given manager just because some other column was sorted
+    # (already exhaustively checked above); here just confirm clicking it
+    # actually sorts and the values themselves are the untouched baseline.
+    assert "sortable" in (page.get_attribute("#th-rank", "class") or ""), (
+        "the '#' header should be sortable like any other column"
     )
+    # Numeric columns (rank included) default to descending on first click,
+    # same convention as PF/Rumbles/etc above -- worst standing first.
+    page.click("#th-rank")
+    page.wait_for_timeout(150)
+    rows = current_rows()
+    ranks = [int(r[0]) for r in rows]
+    assert ranks == sorted(ranks, reverse=True), f"'#' column not sorted descending after first click: {ranks}"
+    for r in rows:
+        assert r[0] == baseline_rank[r[1]], f"sorting by '#' changed {r[1]}'s own rank value, got {r[0]}"
 
-    print("\nConfirmed column sorting works and '#' stays pinned to each team's fixed season standing.")
+    # Second click flips to ascending -- natural standings order, i.e.
+    # exactly the baseline order captured before any sorting happened.
+    page.click("#th-rank")
+    page.wait_for_timeout(150)
+    rows = current_rows()
+    ranks = [int(r[0]) for r in rows]
+    assert ranks == sorted(ranks), f"'#' column not sorted ascending after second click: {ranks}"
+
+    print("\nConfirmed column sorting works (including '#' itself) and every team's '#' value never changes.")
 
     live_badges = page.locator(".badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge

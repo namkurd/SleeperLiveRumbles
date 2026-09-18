@@ -190,16 +190,7 @@
   thead th.sortable { cursor: pointer; user-select: none; }
   thead th.sortable:hover { color: var(--text); }
   thead th.sort-active { color: var(--text); }
-  .matchup-dot {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    margin-right: 7px;
-    vertical-align: middle;
-    box-shadow: 0 0 0 1px var(--panel-border) inset;
-    flex-shrink: 0;
-  }
+  .matchup-name { font-weight: 700; }
   tbody td {
     padding: 9px 12px;
     text-align: right;
@@ -307,7 +298,7 @@
     <table id="standings-table">
       <thead>
         <tr>
-          <th id="th-rank" title="Season standing -- always reflects the Rumbles/PF ranking, unaffected by sorting the other columns">#</th>
+          <th id="th-rank" data-key="rank" title="Season standing (by Rumbles, then PF) -- sortable like any other column, but each team's own # never changes just because a different column is sorted">#</th>
           <th id="th-manager" data-key="manager">Manager</th>
           <th id="th-rumbles" data-key="rumbles">Rumbles</th>
           <th id="th-thisweek" data-key="this_week">This Week</th>
@@ -315,8 +306,8 @@
           <th id="th-pct" data-key="rumble_pct">Rumble %</th>
           <th id="th-pf" data-key="pf">PF</th>
           <th id="th-pa" data-key="pa">PA</th>
-          <th id="th-h2h" data-key="h2h">H2H W-L</th>
-          <th id="th-vsfield" data-key="vs_field">Vs. Field W-L</th>
+          <th id="th-h2h" data-key="h2h">H2H</th>
+          <th id="th-vsfield" data-key="vs_field">Vs. Field</th>
         </tr>
       </thead>
       <tbody id="standings-body">
@@ -357,11 +348,14 @@
 
   var MODE_LABELS = { actual: "Actual", custom: "Projected" };
 
-  // Column metadata for sorting. "#" (rank) is deliberately not in here --
-  // it's not sortable, it always shows each team's fixed season standing
-  // (see buildCombinedStandings' rank assignment) regardless of how the
-  // rest of the table is currently sorted.
+  // Column metadata for sorting. "#" (rank) IS sortable like any other
+  // column -- clicking it just sorts by each team's fixed season standing
+  // (ascending = natural standings order, descending = reversed). What it
+  // never does is change based on some OTHER column being sorted -- see
+  // buildCombinedStandings' rank assignment, which happens once, before
+  // any user-triggered re-sort.
   var COLUMNS = {
+    rank: { type: "number", label: "#" },
     manager: { type: "string", label: "Manager" },
     rumbles: { type: "number", label: "Rumbles" },
     this_week: { type: "number", label: "This Week" },
@@ -369,8 +363,8 @@
     rumble_pct: { type: "number", label: "Rumble %" },
     pf: { type: "number", label: "PF" },
     pa: { type: "number", label: "PA" },
-    h2h: { type: "record", label: "H2H W-L", wKey: "h2h_w", lKey: "h2h_l" },
-    vs_field: { type: "record", label: "Vs. Field W-L", wKey: "vs_field_w", lKey: "vs_field_l" }
+    h2h: { type: "record", label: "H2H", wKey: "h2h_w", lKey: "h2h_l" },
+    vs_field: { type: "record", label: "Vs. Field", wKey: "vs_field_w", lKey: "vs_field_l" }
   };
 
   var els = {
@@ -419,26 +413,46 @@
   // Confirmed by directly cross-checking real Week 2 Sleeper API payloads
   // against a manual per-key recomputation (see the investigation this
   // was added for): a handful of scoring_settings keys don't literally
-  // match the field name Sleeper's stat/projection payloads use for the
-  // same category, so a naive key-by-key match silently drops them.
+  // match the field name Sleeper's REAL POST-GAME stat payloads use for
+  // the same category, so a naive key-by-key match silently drops them.
   //   - scoring_settings "kr_yd" (kick-return yardage, no def_ prefix) --
-  //     the payload only ever carries this under "def_kr_yd". Confirmed
-  //     against both a real defense's actual AND projected Week 2 stat
-  //     lines. Without this alias, every defense's kick-return credit is
-  //     silently zeroed.
+  //     a real, already-played defense's actual-stats payload only ever
+  //     carries this under "def_kr_yd". Without this alias, every
+  //     defense's kick-return credit is silently zeroed once they've
+  //     played.
+  //
+  // IMPORTANT: both this alias map and TIER_SUM_KEYS below are only ever
+  // applied to REAL ACTUAL stat lines (see the `isActual` flag threaded
+  // through dotProduct/scoreFrom/playerPoints) -- never to a pregame
+  // PROJECTION. A follow-up investigation found that a projection's
+  // "def_kr_yd" field is NOT a plausible single-week kick-return total
+  // (one roster's projected value was 130.97 -- a real single-game team
+  // total tops out around 60 without a return TD), so applying this same
+  // alias to a projection was adding ~5 phantom points to any
+  // still-pregame team with a defense projected to return kicks. That
+  // field means something different (season-aggregate, multi-source-
+  // blended, or otherwise off-scale) in Rotowire's projections schema
+  // than it does in Sleeper's real post-game box score, so it's only
+  // trustworthy once the real actual-stats payload exists.
   var KEY_ALIASES = {
     kr_yd: "def_kr_yd"
   };
 
   // A few scoring_settings keys are a single flat weight for a category
-  // that Sleeper's stat payloads only expose pre-split into distance-tier
-  // fields (e.g. scoring_settings has a flat "fgmiss": -1, but a kicker's
-  // stat line never has a bare "fgmiss" field -- only "fgmiss_30_39",
-  // "fgmiss_40_49", etc). For these, sum every "<key>_..." tiered field
-  // present and apply the flat weight to that sum -- that's what a single
-  // flat weight across every tier means. Deliberately a short, explicit
-  // safelist (not "try this for every unmatched key") so it can never
-  // accidentally sum an unrelated field that happens to share a prefix.
+  // that Sleeper's REAL ACTUAL stat payloads only expose pre-split into
+  // distance-tier fields (e.g. scoring_settings has a flat "fgmiss": -1,
+  // but a kicker's real post-game stat line never has a bare "fgmiss"
+  // field -- only "fgmiss_30_39", "fgmiss_40_49", etc). For these, sum
+  // every "<key>_..." tiered field present and apply the flat weight to
+  // that sum -- that's what a single flat weight across every tier means.
+  // Same isActual-only restriction as KEY_ALIASES above, for the same
+  // reason (unverified against real projection payloads -- and in
+  // practice no projection so far has ever carried any fgmiss_* field at
+  // all, so this has never actually fired on a projection, but the gate
+  // stays as a matter of not trusting what hasn't been checked).
+  // Deliberately a short, explicit safelist (not "try this for every
+  // unmatched key") so it can never accidentally sum an unrelated field
+  // that happens to share a prefix.
   var TIER_SUM_KEYS = { fgmiss: true };
 
   // NOTE (known, currently-unfixed gap): scoring_settings' kicker
@@ -450,7 +464,7 @@
   // silently scored as 0 for now. In practice this only shifts a kicker's
   // total by a small fraction of a point (worth revisiting if kicker
   // scores start looking consistently light once real games are in).
-  function dotProduct(statsObj, scoringSettings) {
+  function dotProduct(statsObj, scoringSettings, isActual) {
     if (!statsObj || !scoringSettings) return 0;
     var total = 0;
     for (var key in scoringSettings) {
@@ -458,7 +472,7 @@
       var weight = scoringSettings[key];
       if (typeof weight !== "number") continue;
       var val = statsObj[key];
-      if (typeof val !== "number") {
+      if (typeof val !== "number" && isActual) {
         var aliasKey = KEY_ALIASES[key];
         if (aliasKey && typeof statsObj[aliasKey] === "number") {
           val = statsObj[aliasKey];
@@ -491,9 +505,9 @@
   // through this exact formula reproduced Sleeper's own number to the
   // penny. Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic
   // scoring system and will not match a league with custom scoring_settings.)
-  function scoreFrom(source, scoringSettings) {
+  function scoreFrom(source, scoringSettings, isActual) {
     if (!source) return 0;
-    return dotProduct(source, scoringSettings);
+    return dotProduct(source, scoringSettings, isActual);
   }
 
   // Two lenses on a player's week:
@@ -507,9 +521,19 @@
   //     haven't started yet. So here: if the player has an actual-stats
   //     entry this week (their game has started), use their real stat
   //     line; otherwise fall back to Sleeper's pregame projection.
+  // Note this determines `isActual` from whether a REAL actual-stats
+  // entry exists for this player (statsMap), not from which mode is
+  // selected -- a player who's already played gets the actual-only
+  // KEY_ALIASES/TIER_SUM_KEYS treatment in EITHER mode, while a
+  // still-pregame player never does, even in "custom" mode.
   function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
-    var source = mode === "actual" ? statsMap[playerId] : (statsMap[playerId] || projMap[playerId]);
-    return scoreFrom(source, scoringSettings);
+    var actualSource = statsMap[playerId];
+    if (mode === "actual") {
+      return scoreFrom(actualSource, scoringSettings, true);
+    }
+    var isActual = !!actualSource;
+    var source = actualSource || projMap[playerId];
+    return scoreFrom(source, scoringSettings, isActual);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
@@ -821,11 +845,16 @@
       els.body.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
       els.body.innerHTML = displayRows.map(function (r) {
-        var dotTitle = r.matchup_color ? ' title="This week\'s matchup: ' + escapeHtml(r.manager) + ' vs ' + escapeHtml(r.matchup_opponent) + '"' : "";
-        var dot = '<span class="matchup-dot" style="background:' + (r.matchup_color || "transparent") + '"' + dotTitle + "></span>";
+        var nameHtml;
+        if (r.matchup_color) {
+          var title = 'This week\'s matchup: ' + escapeHtml(r.manager) + ' vs ' + escapeHtml(r.matchup_opponent);
+          nameHtml = '<span class="matchup-name" style="color:' + r.matchup_color + '" title="' + title + '">' + escapeHtml(r.manager) + "</span>";
+        } else {
+          nameHtml = escapeHtml(r.manager);
+        }
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
-          '<td class="manager">' + dot + escapeHtml(r.manager) + "</td>" +
+          '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           '<td class="thisweek-pts">' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +

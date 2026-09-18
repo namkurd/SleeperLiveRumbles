@@ -150,7 +150,19 @@ HAND_CRAFTED_PROJ_PLAYED = {
     3: {"rec_yd": 60, "rec_td": 0, "rec_fd": 2, "pts_ppr": 15.0},
 }
 HAND_CRAFTED_PROJ_UNPLAYED = {
-    1: {"rush_yd": 50, "rush_td": 1, "rush_fd": 3, "pts_ppr": 10.0},
+    # Roster 1's unplayed player also carries a poison-pill regression
+    # check: "def_kr_yd"/"fgmiss_30_39" on a PROJECTION (never a real
+    # actual-stats line) should NEVER trigger the KEY_ALIASES/
+    # TIER_SUM_KEYS fallbacks -- those are gated to real actual stats only
+    # (see rumbles.html's `isActual` flag; a real investigation found a
+    # projection's "def_kr_yd" isn't a trustworthy single-week number the
+    # way a real post-game "def_kr_yd" is). If that gating ever regresses,
+    # this would silently add 500*0.04 - 1*1.0 = +19.0 phantom points to
+    # Aidan's "custom" total (107.5 -> 126.5), which the existing PF/
+    # Points-This-Week assertions below already catch without any extra
+    # test code.
+    1: {"rush_yd": 50, "rush_td": 1, "rush_fd": 3, "pts_ppr": 10.0,
+        "def_kr_yd": 500, "fgmiss_30_39": 1},
     3: {"rush_yd": 30, "rush_fd": 2, "pts_ppr": 8.0},
 }
 ZERO_ACTUAL_ROSTERS = {5}  # entire roster is still pregame -- no stats rows for anyone on it
