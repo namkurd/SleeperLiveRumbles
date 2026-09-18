@@ -227,21 +227,32 @@
   .pts-tooltip {
     position: fixed;
     z-index: 50;
-    max-width: 280px;
+    width: min(92vw, 340px);
     background: var(--panel);
     color: var(--text);
     border: 1px solid var(--panel-border);
     border-radius: 8px;
     padding: 8px 10px;
     font-size: 0.78rem;
-    line-height: 1.55;
-    white-space: pre-line;
+    line-height: 1.6;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
   }
   .pts-tooltip.visible { opacity: 1; visibility: visible; }
+  /* Each player is one <div>, not just one \n-separated span of running
+     text -- a fixed pixel width plus plain line-wrapping (or a single
+     giant unbroken line) both eventually make some player's row spill
+     onto a second visual line. Giving each row its own block with
+     nowrap + ellipsis instead means every player is guaranteed exactly
+     one visual line, gracefully truncating only the rare outlier that's
+     still too long for the box rather than ever wrapping it. */
+  .pts-tooltip-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -1031,7 +1042,10 @@
           // block the rest of live scoring if it 404s/errors; the
           // tooltip just falls back to "unknown" game status for
           // everyone (still shown, never wrongly hidden) if this fails.
-          fetchJson(SCORES_BASE + "/" + seasonType + "/" + season + "/" + targetWeek).catch(function () { return []; })
+          fetchJson(SCORES_BASE + "/" + seasonType + "/" + season + "/" + targetWeek).catch(function (err) {
+            console.warn("[rumbles] couldn't load live game status (Pts This Week tooltip will treat every game as \"unknown\", so it won't hide any finished players in Projected mode):", err);
+            return [];
+          })
         ]).then(function (results) {
           var league = results[0];
           var matchups = results[1] || [];
@@ -1431,12 +1445,23 @@
     tip.style.top = top + "px";
   }
 
+  // One <div class="pts-tooltip-line"> per player rather than a single
+  // text blob with embedded \n's -- see the .pts-tooltip-line CSS comment
+  // for why (guarantees exactly one visual line per player, ellipsis-
+  // truncated instead of wrapped for the rare outlier that's too long).
+  function renderPtsTooltipContent(lines) {
+    els.ptsTooltip.innerHTML = lines
+      .split("\n")
+      .map(function (line) { return '<div class="pts-tooltip-line">' + escapeHtml(line) + "</div>"; })
+      .join("");
+  }
+
   function showPtsTooltip(cell) {
     var rid = cell.getAttribute("data-roster-id");
     var lines = state.thisWeekTooltipLines[rid];
     if (!lines) return;
     state.activePtsTooltipRosterId = rid;
-    els.ptsTooltip.textContent = lines;
+    renderPtsTooltipContent(lines);
     els.ptsTooltip.setAttribute("aria-hidden", "false");
     els.ptsTooltip.classList.add("visible");
     positionPtsTooltip(cell);
@@ -1464,7 +1489,7 @@
       hidePtsTooltip();
       return;
     }
-    els.ptsTooltip.textContent = lines;
+    renderPtsTooltipContent(lines);
     positionPtsTooltip(cell);
   }
 
