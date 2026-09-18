@@ -64,7 +64,7 @@ def new_page(browser, console_errors, page_errors):
 
 def scenario_live_blending(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO 1: a week is genuinely live -- Actual / Sleeper Projection / Our Custom Scoring")
+    print("SCENARIO 1: a week is genuinely live -- Actual / Our Custom Scoring")
     print("=" * 70)
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
@@ -88,28 +88,33 @@ def scenario_live_blending(browser):
     assert "Live" in status_text and "Week 2" in status_text, f"expected live week 2 status, got: {status_text}"
 
     # Hand-verified expected totals (see make_fixtures.py's HAND_CRAFTED_*
-    # and ZERO_ACTUAL_ROSTERS). "Actual" only ever uses real stats. "Sleeper
-    # Projection" and "Our Custom Scoring" now reproduce how Sleeper itself
-    # computes its live "projected" total: a player who has an actual-stats
-    # entry (their game has started) contributes their REAL performance,
-    # not their frozen pregame projection -- only still-pregame players use
-    # the projection. This matches what Sleeper's own matchup page shows.
+    # and ZERO_ACTUAL_ROSTERS). "Actual" only ever uses real stats. "Our
+    # Custom Scoring" reproduces how Sleeper itself computes its live
+    # "projected" total: a player who has an actual-stats entry (their
+    # game has started) contributes their REAL performance, not their
+    # frozen pregame projection -- only still-pregame players use the
+    # projection. This matches what Sleeper's own matchup page shows
+    # (verified directly against a real live matchup: reproduced Sleeper's
+    # own displayed number to the penny -- see rumbles.html's scoreFrom
+    # comment). Both lenses dot-product against the league's real
+    # scoring_settings -- never Sleeper's generic pts_ppr/pts_std fields,
+    # which are a different scoring system entirely for a non-PPR league
+    # like this fixture's (rec weight is 0.0, rec_fd/rush_fd/pass_fd carry
+    # the real weight instead).
     #   Aidan (roster 1, history PF 92.5): played player has a small actual
-    #     stat line (2.5 custom / 3.0 ppr) and a much bigger pregame
-    #     projection (17.0 custom / 22.0 ppr) that's now ignored in favor
-    #     of the real performance; unplayed player only has a projection
-    #     (12.5 custom / 10.0 ppr).
-    #     Actual=2.5 -> PF 95.0 | Sleeper Proj=3.0+10.0=13.0 -> PF 105.5 | Custom=2.5+12.5=15.0 -> PF 107.5
+    #     stat line (2.5) and a much bigger pregame projection (17.0)
+    #     that's now ignored in favor of the real performance; unplayed
+    #     player only has a projection (12.5).
+    #     Actual=2.5 -> PF 95.0 | Custom=2.5+12.5=15.0 -> PF 107.5
     #   Jake (roster 3, history PF 97.5): played player is having a
-    #     blowout (30.0 custom / 35.0 ppr actual) that now replaces the much
-    #     smaller pregame projection (7.0 custom / 15.0 ppr); unplayed
-    #     player only has a projection (4.0 custom / 8.0 ppr).
-    #     Actual=30.0 -> PF 127.5 | Sleeper Proj=35.0+8.0=43.0 -> PF 140.5 | Custom=30.0+4.0=34.0 -> PF 131.5
+    #     blowout (30.0 actual) that now replaces the much smaller pregame
+    #     projection (7.0); unplayed player only has a projection (4.0).
+    #     Actual=30.0 -> PF 127.5 | Custom=30.0+4.0=34.0 -> PF 131.5
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     this is unchanged from a pure-projection total (proves the
     #     fallback path still works when nobody's played yet).
-    #     Actual=0.0 -> PF 102.5 (flat, no addition) | Sleeper Proj=26.75 -> PF 129.25
+    #     Actual=0.0 -> PF 102.5 (flat, no addition)
     # The frozen/actualized baseline is exactly what's already in
     # rumbles_history.json (only Week 1 is final in this fixture) -- pull
     # it straight from there rather than re-deriving the formula, so this
@@ -120,18 +125,17 @@ def scenario_live_blending(browser):
 
     expected = {
         "actual": {"Aidan": 95.0, "Jake": 127.5, "Joe": 102.5},
-        "ppr": {"Aidan": 105.5, "Jake": 140.5, "Joe": 129.25},
         "custom": {"Aidan": 107.5, "Jake": 131.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
+    # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
         "actual": {"Aidan": 2.5, "Jake": 30.0, "Joe": 0.0},
-        "ppr": {"Aidan": 13.0, "Jake": 43.0, "Joe": 26.75},
         "custom": {"Aidan": 15.0, "Jake": 34.0, "Joe": None},
     }
 
-    mode_buttons = {"actual": None, "ppr": "#mode-ppr", "custom": "#mode-custom"}
+    mode_buttons = {"actual": None, "custom": "#mode-custom"}
     rows_by_mode = {}
     for mode, selector in mode_buttons.items():
         if selector:
@@ -161,10 +165,8 @@ def scenario_live_blending(browser):
             if expected_pf is None:
                 continue
             got = pf_by_manager[manager]
-            # 0.1 tolerance, not 0.05 -- the table only displays one decimal
-            # place (toFixed(1)), so a true value ending in .x5 can render
-            # either way depending on float rounding (e.g. 129.25 -> "129.3").
-            assert abs(got - expected_pf) < 0.1, (
+            # PF now displays to 2 decimal places (toFixed(2)).
+            assert abs(got - expected_pf) < 0.01, (
                 f"[{mode}] {manager}: expected PF {expected_pf}, got {got}"
             )
         print(f"Hand-verified PF checks passed for {mode} mode:", {k: v for k, v in expected[mode].items() if v is not None})
@@ -176,7 +178,7 @@ def scenario_live_blending(browser):
             if expected_pts is None:
                 continue
             got = pts_by_manager[manager]
-            assert abs(got - expected_pts) < 0.1, (
+            assert abs(got - expected_pts) < 0.01, (
                 f"[{mode}] {manager}: expected Points This Week {expected_pts}, got {got}"
             )
         print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
@@ -184,8 +186,8 @@ def scenario_live_blending(browser):
         # Actual mode's Rumbles/H2H must be frozen to what's already final
         # in rumbles_history.json -- the in-progress week's actual-score
         # rumbles/H2H must NOT be folded in (only "This Week" shows it).
-        # PPR/Custom DO fold the in-progress week's projected rumbles/H2H
-        # on top, same as before.
+        # Custom Scoring DOES fold the in-progress week's projected
+        # rumbles/H2H on top, same as before.
         for r in rows:
             manager = r[1]
             rumbles_val = int(r[2])
@@ -214,7 +216,7 @@ def scenario_live_blending(browser):
 
         # Joe's roster has ZERO actual stats recorded for anyone (still
         # pregame) -- Actual mode must show exactly the history PF with no
-        # addition, while PPR/Custom must still show a real, nonzero
+        # addition, while Custom Scoring must still show a real, nonzero
         # projected total (never just falling back to 0).
         joe_pf = pf_by_manager["Joe"]
         if mode == "actual":
@@ -222,23 +224,17 @@ def scenario_live_blending(browser):
         else:
             assert joe_pf > 102.5 + 1.0, f"Joe (fully pregame roster) should show a real nonzero projection in {mode} mode, got {joe_pf}"
 
-    # Confirm the three modes aren't secretly aliased to each other. We
-    # don't require all 3 displayed (1-decimal, rounded) PF values to
-    # differ for every single manager -- with arbitrary generic-pattern
-    # test data, two modes can land within 0.1 of each other by sheer
-    # coincidence and round to the same displayed string (verified: Alex's
-    # Actual=139.14 vs Sleeper Projection=139.05, both display "139.1" --
-    # genuinely different underlying numbers). What actually matters is
-    # that they don't ALL THREE collapse to one value for anybody.
+    # Confirm the two modes aren't secretly aliased to each other. Now that
+    # PF displays to 2 decimal places, an arbitrary generic-pattern
+    # coincidence is astronomically unlikely, so this can be a strict
+    # distinctness check.
     actual_pf = {r[1]: r[6] for r in rows_by_mode["actual"]}
-    ppr_pf = {r[1]: r[6] for r in rows_by_mode["ppr"]}
     custom_pf = {r[1]: r[6] for r in rows_by_mode["custom"]}
     for manager in actual_pf:
-        vals = {actual_pf[manager], ppr_pf[manager], custom_pf[manager]}
-        assert len(vals) >= 2, (
-            f"{manager}: Actual/Sleeper Projection/Custom PF must not all collapse to the same value, got {vals}"
+        assert actual_pf[manager] != custom_pf[manager], (
+            f"{manager}: Actual and Custom PF must differ, got {actual_pf[manager]} for both"
         )
-    print("\nConfirmed no manager's PF collapses to a single value across all three modes.")
+    print("\nConfirmed every manager's PF differs between Actual and Custom Scoring.")
 
     live_badges = page.locator(".badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge

@@ -257,7 +257,6 @@
     <div class="controls">
       <div class="toggle-group" role="group" aria-label="Scoring source">
         <button type="button" id="mode-actual" class="active">Actual</button>
-        <button type="button" id="mode-ppr">Sleeper Projection</button>
         <button type="button" id="mode-custom">Our Custom Scoring</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
@@ -315,7 +314,7 @@
   var RUMBLES_PER_WIN = 9;
 
   var state = {
-    mode: "actual", // "actual" | "ppr" | "custom"
+    mode: "actual", // "actual" | "custom"
     history: null, // parsed rumbles_history.json
     historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
@@ -324,7 +323,7 @@
     pollTimer: null
   };
 
-  var MODE_LABELS = { actual: "Actual", ppr: "Sleeper Projection", custom: "Our Custom Scoring" };
+  var MODE_LABELS = { actual: "Actual", custom: "Our Custom Scoring" };
 
   var els = {
     subtitle: document.getElementById("subtitle"),
@@ -334,7 +333,6 @@
     errorBanner: document.getElementById("error-banner"),
     body: document.getElementById("standings-body"),
     modeActual: document.getElementById("mode-actual"),
-    modePpr: document.getElementById("mode-ppr"),
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
@@ -385,42 +383,35 @@
     return total;
   }
 
-  // scoringSystem picks how a stats object gets turned into a number --
-  // completely separate from which stats object we picked (see
-  // playerPoints below):
-  //   "genericPpr" -- Sleeper's own precomputed generic-PPR fantasy score
-  //     for that stat line (its "pts_ppr" field).
-  //   "custom"     -- dot-product that same stat line against the
-  //     league's real scoring_settings.
-  function scoreFrom(source, scoringSettings, scoringSystem) {
+  // A player's week is always scored by dot-producting a stat line
+  // against the league's real scoring_settings -- never Sleeper's generic
+  // "pts_ppr" field. (This league, like most leagues with custom rules,
+  // isn't standard PPR -- it uses first-down bonuses, tiered
+  // points-allowed/yards-allowed defense scoring, kicker distance
+  // bonuses, etc. Verified directly against Sleeper's own displayed
+  // matchup projection: summing each starter's projected stat line
+  // through this exact formula reproduced Sleeper's own number to the
+  // penny. Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic
+  // scoring system and will not match a league with custom scoring_settings.)
+  function scoreFrom(source, scoringSettings) {
     if (!source) return 0;
-    if (scoringSystem === "custom") return dotProduct(source, scoringSettings);
-    return num(source.pts_ppr);
+    return dotProduct(source, scoringSettings);
   }
 
-  // Three lenses on a player's week:
-  //   "actual" -- ONLY their actual banked stats, scored with the
-  //     league's real custom scoring_settings. Never touches projections
-  //     -- legitimately 0 for anyone who hasn't played, or whose box
-  //     score is genuinely empty.
-  //   "ppr"    -- "Sleeper Projection": matches the live number Sleeper
-  //     itself shows on its matchup page. That number is not a frozen
-  //     pregame projection -- once a player's game is underway, Sleeper
-  //     swaps in their actual performance so far and only keeps
-  //     projecting the players who haven't started yet. So here: if the
-  //     player has an actual-stats entry this week (their game has
-  //     started), use their REAL stat line's generic-PPR score; otherwise
-  //     fall back to Sleeper's pregame projection's generic-PPR score.
-  //   "custom" -- the same actual-so-far-else-projected stat line as
-  //     "ppr", just scored against the league's real scoring_settings
-  //     instead of generic PPR.
+  // Two lenses on a player's week:
+  //   "actual" -- ONLY their actual banked stats. Never touches
+  //     projections -- legitimately 0 for anyone who hasn't played, or
+  //     whose box score is genuinely empty.
+  //   "custom" -- matches the live number Sleeper itself shows on its
+  //     matchup page. That's not a frozen pregame projection -- once a
+  //     player's game is underway, Sleeper swaps in their actual
+  //     performance so far and only keeps projecting the players who
+  //     haven't started yet. So here: if the player has an actual-stats
+  //     entry this week (their game has started), use their real stat
+  //     line; otherwise fall back to Sleeper's pregame projection.
   function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
-    if (mode === "actual") {
-      return scoreFrom(statsMap[playerId], scoringSettings, "custom");
-    }
-    var source = statsMap[playerId] || projMap[playerId];
-    var scoringSystem = mode === "custom" ? "custom" : "genericPpr";
-    return scoreFrom(source, scoringSettings, scoringSystem);
+    var source = mode === "actual" ? statsMap[playerId] : (statsMap[playerId] || projMap[playerId]);
+    return scoreFrom(source, scoringSettings);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
@@ -567,14 +558,12 @@
           }
 
           var scoresActual = {};
-          var scoresPpr = {};
           var scoresCustom = {};
           var pairsByMatchupId = {};
 
           matchups.forEach(function (m) {
             var rid = m.roster_id;
             scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual");
-            scoresPpr[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "ppr");
             scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom");
             var mid = m.matchup_id;
             if (mid !== undefined && mid !== null) {
@@ -584,12 +573,11 @@
           });
 
           var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
-          var rumblesPpr = computeRumblesForWeek(scoresPpr, pairsByMatchupId);
           var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
 
           var byRoster = {};
           Object.keys(scoresActual).forEach(function (rid) {
-            byRoster[rid] = { actual: rumblesActual[rid], ppr: rumblesPpr[rid], custom: rumblesCustom[rid] };
+            byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
           });
 
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
@@ -617,10 +605,10 @@
     // (it can still flip as the games play out, right up to the final
     // whistle). "This Week" keeps showing that in-progress figure on its
     // own, just never added into the ranked totals.
-    // "Sleeper Projection" and "Our Custom Scoring" are projection views: those
-    // DO fold the in-progress week's (projected) rumbles/H2H on top of the
-    // cumulative totals, same as before, since the whole point there is a
-    // gameday preview of where things are trending.
+    // "Our Custom Scoring" is the projection view: it DOES fold the
+    // in-progress week's (projected) rumbles/H2H on top of the cumulative
+    // totals, since the whole point there is a gameday preview of where
+    // things are trending.
     var foldCurrentWeekIntoTotals = state.mode !== "actual";
 
     var rows = histStandings.map(function (s) {
@@ -693,10 +681,10 @@
           '<td class="manager">' + escapeHtml(r.manager) + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
-          '<td class="thisweek-pts">' + r.this_week_points.toFixed(1) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          '<td class="thisweek-pts">' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
-          "<td>" + r.pf.toFixed(1) + "</td>" +
-          "<td>" + r.pa.toFixed(1) + "</td>" +
+          "<td>" + r.pf.toFixed(2) + "</td>" +
+          "<td>" + r.pa.toFixed(2) + "</td>" +
           "<td>" + formatRecord(r.h2h_w, r.h2h_l) + "</td>" +
           "<td>" + formatRecord(r.vs_field_w, r.vs_field_l) + "</td>" +
           "</tr>";
@@ -749,7 +737,6 @@
   function setMode(mode) {
     state.mode = mode;
     els.modeActual.classList.toggle("active", mode === "actual");
-    els.modePpr.classList.toggle("active", mode === "ppr");
     els.modeCustom.classList.toggle("active", mode === "custom");
     render();
   }
@@ -769,7 +756,6 @@
   }
 
   els.modeActual.addEventListener("click", function () { setMode("actual"); });
-  els.modePpr.addEventListener("click", function () { setMode("ppr"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
 
