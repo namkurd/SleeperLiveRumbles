@@ -142,6 +142,14 @@ can tell who's playing whom at a glance even after sorting the table by
 something else. No live matchup yet (offseason, or between weeks before
 matchups post) just means plain, uncolored names.
 
+These colors are assigned by roster_id pairing, not by table rank --
+deliberately, so a manager's color stays exactly the same whether the
+Actual or Projected mode is selected (those two modes can produce
+different scores and therefore a different rank order, which used to
+reshuffle the colors too) and reused as-is by the QB Injury Backup
+Adjustments log below, so a given manager's name is the same color
+everywhere on the page, not just in the standings table.
+
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
 one week ending and the next one's games starting) it's just
@@ -312,15 +320,18 @@ displayed -- it was just a different scoring system. What's now called
    projection to prove those fixes correctly do NOT fire there), a check
    that every column -- `#` included -- sorts correctly in both
    directions while each team's own `#` value never changes, a check
-   that this week's H2H matchup pairs share a name color (and every pair
-   gets a distinct one), and a check of the live QB Injury Backup
+   that this week's H2H matchup pairs share a name color (every pair gets
+   a distinct one, and the colors stay identical between Actual and
+   Projected mode), and a check of the live QB Injury Backup
    Adjustments log -- correctly finds the right backup QB, excludes a
    same-team QB who didn't play and a same-position QB on a different
    team who did, shows the "Likely" confidence tier, confirms a
    commissioner override with NO identifiable backup still logs as
    "Confirmed" (falling back to the override amount) rather than silently
-   vanishing, and correctly merges with a synthetic historical "Confirmed"
-   row from `rumbles_history.json` in the right sort order.
+   vanishing, correctly merges with a synthetic historical "Confirmed"
+   row from `rumbles_history.json` in the right sort order, and reuses the
+   standings table's exact matchup colors for the same managers (by their
+   current-week matchup, even for a log row about an older week).
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative

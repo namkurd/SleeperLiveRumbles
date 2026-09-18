@@ -365,7 +365,7 @@
   </footer>
 
   <h2 class="section-title">QB Injury Backup Adjustments</h2>
-  <p class="section-subtitle">If a started QB is ruled out mid-game and a backup from the same NFL team scores, that manager is credited with both QBs' combined points. <span id="qb-adj-live-label"></span></p>
+  <p class="section-subtitle">If a started QB is ruled out mid-game and one or more backups from the same NFL team score, that manager is credited with all QBs' combined points. <span id="qb-adj-live-label"></span></p>
 
   <div class="table-panel">
     <div class="table-scroll">
@@ -387,7 +387,7 @@
     </table>
     </div>
   </div>
-  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out"/"IR" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current).</p>
+  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current).</p>
 </div>
 
 <script>
@@ -418,6 +418,7 @@
     playersMeta: null, // player_id -> Sleeper player object, fetched once (see ensurePlayersMeta)
     teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
     playersMetaFetchedAt: 0,
+    matchupColorByRosterId: {}, // roster_id -> this week's matchup name color (set by buildCombinedStandings), reused by the QB Injury Backup Adjustments log so a manager's name color is the same everywhere on the page
     refreshing: false,
     pollTimer: null,
     sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
@@ -1055,25 +1056,51 @@
     rows.forEach(function (r, i) { r.rank = i + 1; });
 
     // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
-    // opponent get the same dot color) so it's visible at a glance who's
+    // opponent get the same name color) so it's visible at a glance who's
     // playing whom, even once the table's been re-sorted by some other
-    // column and the two teams are no longer adjacent rows. Colors are
-    // assigned in rank order the first time each pair is seen, so they
-    // stay stable across re-renders/polls within the same live week.
-    var colorForPair = {};
+    // column and the two teams are no longer adjacent rows.
+    //
+    // Colors are assigned by ascending roster_id pair order -- NOT by
+    // iterating `rows` in whatever order they're currently sorted in.
+    // That matters because `rows` was just sorted by rumbles/pf just
+    // above, and those values differ between Actual and Projected mode
+    // (the in-progress week's numbers only fold into the total in
+    // Projected mode) -- so the rank order, and therefore which pair got
+    // "seen first", used to differ between modes, which meant a manager
+    // could show up teal in Actual and violet in Projected. Sorting by
+    // roster_id pair instead is completely mode-independent, so a given
+    // matchup keeps the exact same color no matter which mode is
+    // selected, and stays stable across re-renders/polls within the same
+    // live week too. `state.matchupColorByRosterId` (set below) lets
+    // other sections of the page -- the QB Injury Backup Adjustments log
+    // -- reuse these same colors for the same managers.
     var matchupPalette = ["var(--matchup-1)", "var(--matchup-2)", "var(--matchup-3)", "var(--matchup-4)", "var(--matchup-5)", "var(--matchup-6)"];
-    var nextColorIdx = 0;
     var byRosterId = {};
     rows.forEach(function (r) { byRosterId[r.roster_id] = r; });
+    var pairKeys = [];
+    var seenPairs = {};
     rows.forEach(function (r) {
       if (r.opponent_roster_id == null || !byRosterId[r.opponent_roster_id]) return;
       var pairKey = [r.roster_id, r.opponent_roster_id].sort(function (a, b) { return a - b; }).join("-");
-      if (!Object.prototype.hasOwnProperty.call(colorForPair, pairKey)) {
-        colorForPair[pairKey] = matchupPalette[nextColorIdx % matchupPalette.length];
-        nextColorIdx++;
+      if (!seenPairs[pairKey]) {
+        seenPairs[pairKey] = true;
+        pairKeys.push(pairKey);
       }
+    });
+    pairKeys.sort(function (a, b) {
+      var aParts = a.split("-").map(Number), bParts = b.split("-").map(Number);
+      return aParts[0] !== bParts[0] ? aParts[0] - bParts[0] : aParts[1] - bParts[1];
+    });
+    var colorForPair = {};
+    pairKeys.forEach(function (pairKey, idx) { colorForPair[pairKey] = matchupPalette[idx % matchupPalette.length]; });
+
+    state.matchupColorByRosterId = {};
+    rows.forEach(function (r) {
+      if (r.opponent_roster_id == null || !byRosterId[r.opponent_roster_id]) return;
+      var pairKey = [r.roster_id, r.opponent_roster_id].sort(function (a, b) { return a - b; }).join("-");
       r.matchup_color = colorForPair[pairKey];
       r.matchup_opponent = byRosterId[r.opponent_roster_id].manager;
+      state.matchupColorByRosterId[r.roster_id] = r.matchup_color;
     });
 
     return rows;
@@ -1195,9 +1222,17 @@
         var confidenceLabel = CONFIDENCE_LABELS[r.confidence] || r.confidence;
         var pill = '<span class="confidence-pill confidence-' + r.confidence + '">' + confidenceLabel + "</span>" +
           (r.live ? '<span class="badge-live">LIVE</span>' : "");
+        // Same per-manager matchup color as the standings table above (see
+        // state.matchupColorByRosterId), so a manager's name is the same
+        // color everywhere on the page -- not just when this log row
+        // happens to be about the current live week.
+        var matchupColor = state.matchupColorByRosterId[r.roster_id];
+        var managerHtml = matchupColor
+          ? '<span class="matchup-name" style="color:' + matchupColor + '">' + escapeHtml(r.manager) + "</span>"
+          : escapeHtml(r.manager);
         return "<tr>" +
           "<td>" + r.week + "</td>" +
-          '<td class="manager-cell">' + escapeHtml(r.manager) + "</td>" +
+          '<td class="manager-cell">' + managerHtml + "</td>" +
           '<td class="qb-name-cell">' + escapeHtml(r.injured_qb.name) + "</td>" +
           '<td class="qb-name-cell">' + backupsHtml + "</td>" +
           "<td>" + r.injured_qb.points.toFixed(2) + "</td>" +

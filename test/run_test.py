@@ -78,6 +78,24 @@ def get_qb_adjustment_rows(page):
     )
 
 
+def get_qb_adjustment_manager_colors(page):
+    """manager name -> inline matchup-name text color in the QB Injury
+    Backup Adjustments table, or None if uncolored (see get_matchup_colors
+    -- same idea, different table)."""
+    pairs = page.eval_on_selector_all(
+        "#qb-adj-body tr",
+        """rows => rows.map(r => {
+            var cell = r.querySelector('td.manager-cell');
+            if (!cell) return null;
+            var name = cell.innerText.trim();
+            var span = cell.querySelector('.matchup-name');
+            var color = span ? span.style.color : null;
+            return [name, color || null];
+        }).filter(p => p !== null)""",
+    )
+    return dict(pairs)
+
+
 def get_matchup_colors(page):
     """manager name -> inline matchup-name text color (e.g. 'var(--matchup-2)'),
     or None if that row's name isn't colored (not in a live matchup this week)."""
@@ -186,12 +204,14 @@ def scenario_live_blending(browser):
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
     rows_by_mode = {}
+    colors_by_mode = {}
     for mode, selector in mode_buttons.items():
         if selector:
             page.click(selector)
             page.wait_for_timeout(200)
         rows = get_table_rows(page)
         rows_by_mode[mode] = rows
+        colors_by_mode[mode] = get_matchup_colors(page)
         print(f"\n== {mode} mode ==")
         for r in rows:
             print(r)
@@ -329,6 +349,35 @@ def scenario_live_blending(browser):
         f"expected 6 distinct matchup colors (one per pair), got {len(distinct_colors)}: {distinct_colors}"
     )
     print("\nConfirmed matchup color-coding: each H2H pair shares a name color, all 6 pairs distinct.")
+
+    # A manager's matchup color must be the SAME regardless of which mode
+    # (Actual/Projected) is selected -- the color is assigned by roster_id
+    # pairing, not by rank, specifically so it can't shuffle when the two
+    # modes produce different scores (and therefore different rank order).
+    for manager in colors_by_mode["actual"]:
+        assert colors_by_mode["actual"][manager] == colors_by_mode["custom"][manager], (
+            f"{manager}'s matchup color changed between Actual ({colors_by_mode['actual'][manager]}) "
+            f"and Projected ({colors_by_mode['custom'][manager]}) mode -- it must stay the same in both"
+        )
+    print("Confirmed matchup colors are IDENTICAL between Actual and Projected mode (not rank-dependent).")
+
+    # The QB Injury Backup Adjustments table's Manager column must reuse
+    # these exact same colors for the same managers -- keyed by the
+    # manager's CURRENT week's matchup, not by which week that particular
+    # log row happens to be about. Alex's row IS this week's (week 2);
+    # Ben's row is the historical week-1 entry, but Ben is STILL part of
+    # this week's live matchup (paired with Aidan) so his name should be
+    # colored too -- proving the color follows "who's playing whom right
+    # now", not just "rows about the live week".
+    qb_colors = get_qb_adjustment_manager_colors(page)
+    assert qb_colors.get("Alex") == colors["Alex"], (
+        f"expected Alex's QB-log manager color ({qb_colors.get('Alex')}) to match the standings table's ({colors['Alex']})"
+    )
+    assert qb_colors.get("Ben") == colors["Ben"], (
+        f"expected Ben's QB-log manager color ({qb_colors.get('Ben')}) to match the standings table's ({colors['Ben']}) "
+        f"even though his log row is about week 1, not the current live week"
+    )
+    print("Confirmed the QB Injury Backup Adjustments table reuses the standings table's matchup colors for the same managers (by current matchup, not by the log row's own week).")
 
     # ---- Column sorting: "#" must stay pinned to season standing ----
     baseline_rank = {r[1]: r[0] for r in get_table_rows(page)}  # manager -> "#" before any sort
