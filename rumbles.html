@@ -227,18 +227,31 @@
   }
   @media (max-width: 640px) {
     .scroll-hint { display: block; }
-    thead th, tbody td { padding: 8px 8px; font-size: 0.78rem; }
+    thead th { padding: 8px 8px; font-size: 0.68rem; }
+    tbody td { padding: 8px 8px; font-size: 0.78rem; }
     h1 { font-size: 1.15rem; }
+  }
+  /* Landscape phones are wide enough (often 700-950px) to miss the
+     max-width breakpoint above but short enough that the table still
+     needs to scroll to see every column -- catch those by height +
+     orientation instead of width. */
+  @media (max-height: 500px) and (orientation: landscape) {
+    .scroll-hint { display: block; }
+    table { min-width: 640px; }
+    thead th { padding: 6px 7px; font-size: 0.64rem; }
+    tbody td { padding: 6px 7px; font-size: 0.76rem; }
+    h1 { font-size: 1.1rem; }
+    header { margin-bottom: 8px; }
   }
   .badge-live {
     display: inline-block;
-    font-size: 0.62rem;
+    font-size: 0.54rem;
     font-weight: 700;
     color: var(--live);
     border: 1px solid var(--live);
-    border-radius: 5px;
-    padding: 1px 4px;
-    margin-left: 5px;
+    border-radius: 4px;
+    padding: 0px 3px;
+    margin-left: 4px;
     vertical-align: middle;
   }
   footer {
@@ -302,7 +315,7 @@
           <th id="th-manager" data-key="manager">Manager</th>
           <th id="th-rumbles" data-key="rumbles">Rumbles</th>
           <th id="th-thisweek" data-key="this_week">This Week</th>
-          <th id="th-points" data-key="this_week_points">Points This Week</th>
+          <th id="th-points" data-key="this_week_points">Pts This Week</th>
           <th id="th-pct" data-key="rumble_pct">Rumble %</th>
           <th id="th-pf" data-key="pf">PF</th>
           <th id="th-pa" data-key="pa">PA</th>
@@ -359,7 +372,7 @@
     manager: { type: "string", label: "Manager" },
     rumbles: { type: "number", label: "Rumbles" },
     this_week: { type: "number", label: "This Week" },
-    this_week_points: { type: "number", label: "Points This Week" },
+    this_week_points: { type: "number", label: "Pts This Week" },
     rumble_pct: { type: "number", label: "Rumble %" },
     pf: { type: "number", label: "PF" },
     pa: { type: "number", label: "PA" },
