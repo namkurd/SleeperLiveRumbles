@@ -625,6 +625,45 @@
     return total;
   }
 
+  // Per-starter breakdown for the "Points This Week" hover tooltip. Unlike
+  // rosterScore (which only needs a single summed total), the tooltip needs
+  // each starter's actual AND projected score side by side, plus whether
+  // they've actually taken the field yet -- so this is computed once,
+  // independent of the Actual/Projected toggle, and the toggle only changes
+  // how render() formats/filters these rows at display time.
+  //   - "actual" -- their real banked stats this week, exactly like
+  //     playerPoints(mode="actual"): 0 if their game hasn't started.
+  //   - "proj" -- Sleeper's pregame projection, ALWAYS from projMap
+  //     regardless of whether they've already played (so a bench-quality
+  //     stat line from a hobbled starter can still be compared against what
+  //     was expected of them). Note this deliberately does NOT apply the
+  //     isActual-only KEY_ALIASES/TIER_SUM_KEYS treatment (scoreFrom's
+  //     3rd arg is false), matching how projections are scored everywhere
+  //     else in this file.
+  //   - "played" -- true once statsMap has a real entry for them, i.e.
+  //     their game has kicked off (matches the isActual check playerPoints
+  //     already uses to decide whether to trust actual stats over a
+  //     projection).
+  function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta) {
+    var starters = roster.starters || [];
+    var out = [];
+    for (var i = 0; i < starters.length; i++) {
+      var pid = starters[i];
+      if (!pid || pid === "0") continue;
+      var actualSource = statsMap[pid];
+      var played = !!actualSource;
+      var meta = playersMeta ? playersMeta[pid] : null;
+      out.push({
+        player_id: pid,
+        name: meta ? playerName(meta) : pid,
+        actual: round2(played ? scoreFrom(actualSource, scoringSettings, true) : 0),
+        proj: round2(scoreFrom(projMap[pid], scoringSettings, false)),
+        played: played
+      });
+    }
+    return out;
+  }
+
   // ---- QB injury-backup adjustment detection ---------------------------
   // Mirrors build_rumbles.py's compute_qb_adjustments_for_week -- see the
   // long comment above that function for the full rationale and the
@@ -949,6 +988,18 @@
           return ensurePlayersMeta()
             .then(function (playersMeta) {
               var teamQbIndex = state.teamQbIndex || {};
+
+              // Attach each roster's per-starter actual/projected breakdown
+              // for the "Points This Week" hover tooltip. Independent of
+              // the QB-adjustment detection below -- best-effort, and never
+              // allowed to block or break it if player names are missing.
+              matchups.forEach(function (m) {
+                var rid = m.roster_id;
+                if (state.live.byRoster[rid]) {
+                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta);
+                }
+              });
+
               var prelim = detectQbAdjustmentsForWeek(
                 targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
               );
@@ -983,6 +1034,34 @@
   // ---- rendering ---------------------------------------------------------
 
   function formatRecord(w, l) { return w + "-" + l; }
+
+  // Builds the native title-attribute tooltip text for the "Pts This Week"
+  // cell: one line per starter. What each line shows depends on the
+  // Actual/Projected toggle, matching what that toggle already means
+  // everywhere else on this page:
+  //   - Projected ("custom") -- every starter, actual AND projected side by
+  //     side, so a currently-playing starter's live actual can be compared
+  //     against what was expected, and a not-yet-played starter shows an
+  //     honest actual of 0.00 alongside their projection.
+  //   - Actual ("actual") -- only starters who've completed or are
+  //     currently in a live game (i.e. statsMap actually has an entry for
+  //     them), showing just their actual score -- a bench-quality "0.00"
+  //     line for someone who simply hasn't kicked off yet would be noise in
+  //     a view that's explicitly about banked, real production.
+  function thisWeekTooltip(mode, breakdown) {
+    if (!breakdown || !breakdown.length) return "";
+    var lines;
+    if (mode === "actual") {
+      lines = breakdown
+        .filter(function (p) { return p.played; })
+        .map(function (p) { return p.name + ": " + p.actual.toFixed(2); });
+    } else {
+      lines = breakdown.map(function (p) {
+        return p.name + " — Actual " + p.actual.toFixed(2) + ", Proj " + p.proj.toFixed(2);
+      });
+    }
+    return lines.join("\n");
+  }
 
   function buildCombinedStandings() {
     var histStandings = (state.history && state.history.standings) || [];
@@ -1040,7 +1119,12 @@
         // doesn't change between Actual/Projected, only the scores do) --
         // used only for the matchup color-coding below, never for the
         // freeze/fold math above.
-        opponent_roster_id: liveInfo ? liveInfo.opponentRosterId : null
+        opponent_roster_id: liveInfo ? liveInfo.opponentRosterId : null,
+        // Per-starter actual/projected breakdown for the "Points This Week"
+        // hover tooltip -- independent of state.mode (the same underlying
+        // per-player numbers back both the Actual and Projected toggle);
+        // render() decides how to format/filter them for display.
+        this_week_player_breakdown: liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null
       };
     });
 
@@ -1147,12 +1231,14 @@
         } else {
           nameHtml = escapeHtml(r.manager);
         }
+        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
+        var ptsTitleAttr = ptsTooltip ? ' title="' + escapeHtml(ptsTooltip) + '"' : "";
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
-          '<td class="thisweek-pts">' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          '<td class="thisweek-pts"' + ptsTitleAttr + '>' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +
           "<td>" + r.pa.toFixed(2) + "</td>" +
@@ -1163,7 +1249,7 @@
     }
 
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
-    els.subtitle.textContent = "DTF Club · " + season + " season" + (season ? " · Rumbles reset each year" : "");
+    els.subtitle.textContent = "DTF Club · " + season + " season";
 
     var isLive = state.live && state.live.isLive;
     els.statusDot.className = "dot" + (isLive ? " live" : "");

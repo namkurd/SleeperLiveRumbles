@@ -111,6 +111,21 @@ def get_matchup_colors(page):
     return dict(pairs)
 
 
+def get_thisweek_pts_titles(page):
+    """manager -> the 'Pts This Week' cell's title attribute (the native
+    hover tooltip text), split into lines, or None if no tooltip is set."""
+    pairs = page.eval_on_selector_all(
+        "#standings-body tr",
+        """rows => rows.map(r => {
+            var name = r.querySelector('td.manager').innerText.trim();
+            var cell = r.querySelector('td.thisweek-pts');
+            var title = cell ? cell.getAttribute('title') : null;
+            return [name, title];
+        })""",
+    )
+    return {name: (title.split("\n") if title else None) for name, title in pairs}
+
+
 def new_page(browser, console_errors, page_errors):
     page = browser.new_page()
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -256,6 +271,27 @@ def scenario_live_blending(browser):
             )
         print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
 
+        # ---- "Pts This Week" hover tooltip: per-starter actual/projected
+        # breakdown -- content depends on the Actual/Projected toggle.
+        # Aidan (roster 1) is hand-verified above: played starter "P1"
+        # (actual 2.5, pregame projection 17.0 -- no metadata for P1 in
+        # players.json, so it falls back to the raw player_id as the
+        # display name) and unplayed starter "P2" (actual 0, projection
+        # 12.5, per HAND_CRAFTED_PROJ_UNPLAYED[1]).
+        titles = get_thisweek_pts_titles(page)
+        aidan_lines = titles.get("Aidan")
+        assert aidan_lines, f"[{mode}] Aidan's Pts This Week cell should have a hover tooltip, got {aidan_lines!r}"
+        if mode == "actual":
+            # Only played-or-live starters -- P2 hasn't played, so it must
+            # NOT appear at all (a flat "0.00" line here would be noise in
+            # a view that's explicitly about banked, real production).
+            assert aidan_lines == ["P1: 2.50"], f"[actual] expected Aidan's tooltip to list only the played starter, got {aidan_lines}"
+        else:
+            assert aidan_lines == ["P1 — Actual 2.50, Proj 17.00", "P2 — Actual 0.00, Proj 12.50"], (
+                f"[{mode}] expected Aidan's tooltip to show both starters with actual+projected, got {aidan_lines}"
+            )
+        print(f"Verified Pts This Week tooltip content for {mode} mode:", aidan_lines)
+
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress
         # week's actual-score outcome must NOT be folded into any of the
@@ -315,6 +351,20 @@ def scenario_live_blending(browser):
             assert abs(joe_pf - 102.5) < 0.05, f"Joe (fully pregame roster) should show flat history PF in Actual mode, got {joe_pf}"
         else:
             assert joe_pf > 102.5 + 1.0, f"Joe (fully pregame roster) should show a real nonzero projection in {mode} mode, got {joe_pf}"
+
+        # Joe's whole roster is still pregame -- in Actual mode every one of
+        # his starters gets filtered out of the tooltip (nobody's played or
+        # live yet), so there must be NO tooltip at all rather than an empty
+        # or all-zero one. In Projected mode his starters are still shown
+        # (with actual 0.00 alongside a real projection).
+        joe_title = titles.get("Joe")
+        if mode == "actual":
+            assert joe_title is None, f"[actual] Joe (fully pregame roster) should have no Pts This Week tooltip, got {joe_title}"
+        else:
+            assert joe_title, f"[{mode}] Joe should still have a tooltip showing his pregame projections, got {joe_title}"
+            assert all("Actual 0.00" in line for line in joe_title), (
+                f"[{mode}] Joe's tooltip lines should all show Actual 0.00 (nobody on his roster has played), got {joe_title}"
+            )
 
     # Confirm the two modes aren't secretly aliased to each other. Now that
     # PF displays to 2 decimal places, an arbitrary generic-pattern

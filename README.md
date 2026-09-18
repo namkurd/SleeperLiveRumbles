@@ -150,6 +150,23 @@ reshuffle the colors too) and reused as-is by the QB Injury Backup
 Adjustments log below, so a given manager's name is the same color
 everywhere on the page, not just in the standings table.
 
+Hovering a team's "Points This Week" cell during a live week shows a
+native tooltip with a per-starter breakdown, one line per player. What it
+shows depends on which scoring mode is currently selected, matching what
+that toggle already means everywhere else on the page:
+
+- **Projected** -- every starter, one line each, actual score alongside
+  their (pregame) projected score -- e.g. `Justin Jefferson — Actual
+  14.20, Proj 17.50` for someone already playing, or `Actual 0.00, Proj
+  12.30` for someone who hasn't kicked off yet.
+- **Actual** -- only starters who've completed or are currently in a live
+  game; anyone who hasn't started yet is left off entirely (a flat "0.00"
+  line for them would just be noise in a view that's explicitly about
+  banked, real production) -- e.g. `Justin Jefferson: 14.20`.
+
+If nobody on a team's roster has played yet, the Actual-mode tooltip is
+simply absent rather than showing an empty or all-zero list.
+
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
 one week ending and the next one's games starting) it's just
@@ -331,7 +348,13 @@ displayed -- it was just a different scoring system. What's now called
    vanishing, correctly merges with a synthetic historical "Confirmed"
    row from `rumbles_history.json` in the right sort order, and reuses the
    standings table's exact matchup colors for the same managers (by their
-   current-week matchup, even for a log row about an older week).
+   current-week matchup, even for a log row about an older week). Also
+   hand-verifies the "Points This Week" hover tooltip content in both
+   modes for a hand-crafted roster (Projected: both a played and an
+   unplayed starter, each showing actual-vs-projected side by side;
+   Actual: only the played starter, with the unplayed one filtered out
+   entirely) and confirms a fully-pregame roster gets no tooltip at all in
+   Actual mode rather than an empty or all-zero one.
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative

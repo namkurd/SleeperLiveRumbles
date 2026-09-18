@@ -191,5 +191,28 @@
   ],
   "weekly": {
     "1": {}
-  }
+  },
+  "qb_adjustments": [
+    {
+      "week": 1,
+      "roster_id": 2,
+      "manager": "Ben",
+      "injured_qb": {
+        "player_id": "P_HIST_INJURED",
+        "name": "Test Injured QB",
+        "points": 10.0
+      },
+      "backup_qbs": [
+        {
+          "player_id": "P_HIST_BACKUP",
+          "name": "Test Backup QB",
+          "points": 12.34
+        }
+      ],
+      "backup_points_total": 12.34,
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": 12.34
+    }
+  ]
 }

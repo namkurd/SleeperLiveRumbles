@@ -75,19 +75,11 @@
   {
     "player_id": "P11",
     "stats": {
-      "pass_yd": 226,
-      "pass_td": 2,
-      "pass_int": 0,
-      "rush_yd": 10,
-      "rush_td": 0,
-      "rec": 4,
-      "rec_yd": 61,
-      "rec_td": 1,
-      "rec_fd": 3,
-      "rush_fd": 1,
-      "pass_fd": 8,
-      "fum_lost": 0,
-      "pts_ppr": 20.3
+      "pass_att": 10,
+      "pass_cmp": 7,
+      "pass_yd": 80,
+      "pass_td": 1,
+      "pass_int": 0
     },
     "week": 2,
     "season": "2026",
@@ -220,6 +212,36 @@
       "pass_fd": 8,
       "fum_lost": 0,
       "pts_ppr": 22.1
+    },
+    "week": 2,
+    "season": "2026",
+    "season_type": "regular",
+    "category": "stat"
+  },
+  {
+    "player_id": "P_QB6_BACKUP",
+    "stats": {
+      "pass_att": 25,
+      "pass_cmp": 18,
+      "pass_yd": 210,
+      "pass_td": 2,
+      "pass_int": 1,
+      "rush_yd": 15,
+      "rush_td": 1
+    },
+    "week": 2,
+    "season": "2026",
+    "season_type": "regular",
+    "category": "stat"
+  },
+  {
+    "player_id": "P_QB_OTHER_TEAM",
+    "stats": {
+      "pass_att": 20,
+      "pass_cmp": 12,
+      "pass_yd": 150,
+      "pass_td": 1,
+      "pass_int": 0
     },
     "week": 2,
     "season": "2026",

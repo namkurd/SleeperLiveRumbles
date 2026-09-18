@@ -1,0 +1,26 @@
+{
+  "P11": {
+    "position": "QB",
+    "team": "MIN",
+    "full_name": "Kyler Murray",
+    "injury_status": "Out"
+  },
+  "P_QB6_BACKUP": {
+    "position": "QB",
+    "team": "MIN",
+    "full_name": "Carson Wentz",
+    "injury_status": null
+  },
+  "P_QB6_THIRDSTRING": {
+    "position": "QB",
+    "team": "MIN",
+    "full_name": "JJ McCarthy",
+    "injury_status": null
+  },
+  "P_QB_OTHER_TEAM": {
+    "position": "QB",
+    "team": "KC",
+    "full_name": "Some Other QB",
+    "injury_status": null
+  }
+}
