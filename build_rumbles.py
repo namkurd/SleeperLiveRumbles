@@ -51,6 +51,17 @@ DISPLAY_NAME_OVERRIDES = {
     # entry here for anyone whose Sleeper display name isn't what you want
     # shown on the standings page.
     "namkurd": "Ben",
+    "kohagan": "Kaitlyn",
+    "stevster": "Steven",
+    "haanrolo": "Haan",
+    "lalu": "Ankit",
+    "hellerch": "Christian",
+    "slondon": "Stephanie",
+    "rrakower": "Ryan",
+    "greenbayblay": "Joe",
+    "hebrewhammer": "Jake",
+    "ilovelamp": "Alex",
+    "legendaly": "Aidan",
 }
 
 RUMBLES_PER_WIN = 9

@@ -17,6 +17,18 @@
     --bad: #e5484d;
     --live: #35c26b;
     --row-alt: #1c202a;
+    /* Matchup-pair tagging dots -- 6 slots covers every matchup in a
+       12-team league. Drawn from the validated dark-mode categorical
+       steps (slots 3,4,5,6,7,8 of the standard 8-hue order: aqua, yellow,
+       magenta, green, violet, red), skipping slots 1-2 (blue/orange)
+       since those are already this page's --accent-2/--accent colors
+       used for Rumbles/live figures, to avoid visual collision. */
+    --matchup-1: #199e70;
+    --matchup-2: #c98500;
+    --matchup-3: #d55181;
+    --matchup-4: #008300;
+    --matchup-5: #9085e9;
+    --matchup-6: #e66767;
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -31,6 +43,12 @@
       --bad: #d43b40;
       --live: #1f9d52;
       --row-alt: #f8f9fc;
+      --matchup-1: #1baf7a;
+      --matchup-2: #eda100;
+      --matchup-3: #e87ba4;
+      --matchup-4: #008300;
+      --matchup-5: #4a3aa7;
+      --matchup-6: #e34948;
     }
   }
   * { box-sizing: border-box; }
@@ -169,6 +187,19 @@
     white-space: nowrap;
   }
   thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--text); }
+  thead th.sort-active { color: var(--text); }
+  .matchup-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 7px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 1px var(--panel-border) inset;
+    flex-shrink: 0;
+  }
   tbody td {
     padding: 9px 12px;
     text-align: right;
@@ -276,16 +307,16 @@
     <table id="standings-table">
       <thead>
         <tr>
-          <th>#</th>
-          <th>Manager</th>
-          <th id="th-rumbles">Actualized Rumbles</th>
-          <th>This Week</th>
-          <th>Points This Week</th>
-          <th>Rumble %</th>
-          <th>PF</th>
-          <th>PA</th>
-          <th>H2H W-L</th>
-          <th>Vs. Field W-L</th>
+          <th id="th-rank" title="Season standing -- always reflects the Rumbles/PF ranking, unaffected by sorting the other columns">#</th>
+          <th id="th-manager" data-key="manager">Manager</th>
+          <th id="th-rumbles" data-key="rumbles">Rumbles</th>
+          <th id="th-thisweek" data-key="this_week">This Week</th>
+          <th id="th-points" data-key="this_week_points">Points This Week</th>
+          <th id="th-pct" data-key="rumble_pct">Rumble %</th>
+          <th id="th-pf" data-key="pf">PF</th>
+          <th id="th-pa" data-key="pa">PA</th>
+          <th id="th-h2h" data-key="h2h">H2H W-L</th>
+          <th id="th-vsfield" data-key="vs_field">Vs. Field W-L</th>
         </tr>
       </thead>
       <tbody id="standings-body">
@@ -320,10 +351,27 @@
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
     liveError: null,
     refreshing: false,
-    pollTimer: null
+    pollTimer: null,
+    sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
   };
 
   var MODE_LABELS = { actual: "Actual", custom: "Projected" };
+
+  // Column metadata for sorting. "#" (rank) is deliberately not in here --
+  // it's not sortable, it always shows each team's fixed season standing
+  // (see buildCombinedStandings' rank assignment) regardless of how the
+  // rest of the table is currently sorted.
+  var COLUMNS = {
+    manager: { type: "string", label: "Manager" },
+    rumbles: { type: "number", label: "Rumbles" },
+    this_week: { type: "number", label: "This Week" },
+    this_week_points: { type: "number", label: "Points This Week" },
+    rumble_pct: { type: "number", label: "Rumble %" },
+    pf: { type: "number", label: "PF" },
+    pa: { type: "number", label: "PA" },
+    h2h: { type: "record", label: "H2H W-L", wKey: "h2h_w", lKey: "h2h_l" },
+    vs_field: { type: "record", label: "Vs. Field W-L", wKey: "vs_field_w", lKey: "vs_field_l" }
+  };
 
   var els = {
     subtitle: document.getElementById("subtitle"),
@@ -336,7 +384,7 @@
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
-    thRumbles: document.getElementById("th-rumbles")
+    headerCells: {} // filled in by attachSortHandlers(): column key -> <th>
   };
 
   function num(v) { return typeof v === "number" && !isNaN(v) ? v : 0; }
@@ -368,14 +416,65 @@
 
   // ---- scoring helpers -----------------------------------------------
 
+  // Confirmed by directly cross-checking real Week 2 Sleeper API payloads
+  // against a manual per-key recomputation (see the investigation this
+  // was added for): a handful of scoring_settings keys don't literally
+  // match the field name Sleeper's stat/projection payloads use for the
+  // same category, so a naive key-by-key match silently drops them.
+  //   - scoring_settings "kr_yd" (kick-return yardage, no def_ prefix) --
+  //     the payload only ever carries this under "def_kr_yd". Confirmed
+  //     against both a real defense's actual AND projected Week 2 stat
+  //     lines. Without this alias, every defense's kick-return credit is
+  //     silently zeroed.
+  var KEY_ALIASES = {
+    kr_yd: "def_kr_yd"
+  };
+
+  // A few scoring_settings keys are a single flat weight for a category
+  // that Sleeper's stat payloads only expose pre-split into distance-tier
+  // fields (e.g. scoring_settings has a flat "fgmiss": -1, but a kicker's
+  // stat line never has a bare "fgmiss" field -- only "fgmiss_30_39",
+  // "fgmiss_40_49", etc). For these, sum every "<key>_..." tiered field
+  // present and apply the flat weight to that sum -- that's what a single
+  // flat weight across every tier means. Deliberately a short, explicit
+  // safelist (not "try this for every unmatched key") so it can never
+  // accidentally sum an unrelated field that happens to share a prefix.
+  var TIER_SUM_KEYS = { fgmiss: true };
+
+  // NOTE (known, currently-unfixed gap): scoring_settings' kicker
+  // "fgm_yds_over_30" bonus (extra credit per yard past 30 on a made FG)
+  // has no reliable source in either the actual-stats or projections
+  // payload -- they only expose a kicker's total made-FG yardage
+  // ("fgm_yds"), not the per-kick distance breakdown "yards over 30"
+  // needs, so it can't be derived without guessing. This category is
+  // silently scored as 0 for now. In practice this only shifts a kicker's
+  // total by a small fraction of a point (worth revisiting if kicker
+  // scores start looking consistently light once real games are in).
   function dotProduct(statsObj, scoringSettings) {
     if (!statsObj || !scoringSettings) return 0;
     var total = 0;
     for (var key in scoringSettings) {
       if (!Object.prototype.hasOwnProperty.call(scoringSettings, key)) continue;
       var weight = scoringSettings[key];
+      if (typeof weight !== "number") continue;
       var val = statsObj[key];
-      if (typeof weight === "number" && typeof val === "number") {
+      if (typeof val !== "number") {
+        var aliasKey = KEY_ALIASES[key];
+        if (aliasKey && typeof statsObj[aliasKey] === "number") {
+          val = statsObj[aliasKey];
+        } else if (TIER_SUM_KEYS[key]) {
+          var tierTotal = 0, sawTier = false;
+          var prefix = key + "_";
+          for (var sKey in statsObj) {
+            if (sKey.indexOf(prefix) === 0 && typeof statsObj[sKey] === "number") {
+              tierTotal += statsObj[sKey];
+              sawTier = true;
+            }
+          }
+          if (sawTier) val = tierTotal;
+        }
+      }
+      if (typeof val === "number") {
         total += weight * val;
       }
     }
@@ -643,22 +742,74 @@
         h2h_w: h2hW,
         h2h_l: h2hL,
         vs_field_w: vfW,
-        vs_field_l: vfL
+        vs_field_l: vfL,
+        // This week's H2H opponent, independent of scoring mode (pairing
+        // doesn't change between Actual/Projected, only the scores do) --
+        // used only for the matchup color-coding below, never for the
+        // freeze/fold math above.
+        opponent_roster_id: liveInfo ? liveInfo.opponentRosterId : null
       };
     });
 
+    // "#" is each team's fixed SEASON STANDING (by cumulative Rumbles,
+    // then PF) -- assigned here, once, before any column-sort reordering
+    // happens in render(). Clicking a column header only changes what
+    // order rows are DISPLAYED in; it must never change what "#" says,
+    // so nothing downstream may touch r.rank again.
     rows.sort(function (a, b) {
       if (b.rumbles !== a.rumbles) return b.rumbles - a.rumbles;
       return b.pf - a.pf;
     });
     rows.forEach(function (r, i) { r.rank = i + 1; });
+
+    // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
+    // opponent get the same dot color) so it's visible at a glance who's
+    // playing whom, even once the table's been re-sorted by some other
+    // column and the two teams are no longer adjacent rows. Colors are
+    // assigned in rank order the first time each pair is seen, so they
+    // stay stable across re-renders/polls within the same live week.
+    var colorForPair = {};
+    var matchupPalette = ["var(--matchup-1)", "var(--matchup-2)", "var(--matchup-3)", "var(--matchup-4)", "var(--matchup-5)", "var(--matchup-6)"];
+    var nextColorIdx = 0;
+    var byRosterId = {};
+    rows.forEach(function (r) { byRosterId[r.roster_id] = r; });
+    rows.forEach(function (r) {
+      if (r.opponent_roster_id == null || !byRosterId[r.opponent_roster_id]) return;
+      var pairKey = [r.roster_id, r.opponent_roster_id].sort(function (a, b) { return a - b; }).join("-");
+      if (!Object.prototype.hasOwnProperty.call(colorForPair, pairKey)) {
+        colorForPair[pairKey] = matchupPalette[nextColorIdx % matchupPalette.length];
+        nextColorIdx++;
+      }
+      r.matchup_color = colorForPair[pairKey];
+      r.matchup_opponent = byRosterId[r.opponent_roster_id].manager;
+    });
+
     return rows;
+  }
+
+  function getSortValue(row, col, colKey) {
+    if (col.type === "string") return row.manager;
+    if (col.type === "record") return row[col.wKey] * 1000 - row[col.lKey];
+    return num(row[colKey]);
+  }
+
+  function compareRows(a, b, colKey, dir) {
+    var col = COLUMNS[colKey];
+    var av = getSortValue(a, col, colKey), bv = getSortValue(b, col, colKey);
+    var cmp = col.type === "string" ? String(av).localeCompare(String(bv)) : av - bv;
+    return dir === "asc" ? cmp : -cmp;
   }
 
   function render() {
     var rows = buildCombinedStandings();
 
-    els.thRumbles.textContent = state.mode === "actual" ? "Actualized Rumbles" : "Projected Rumbles";
+    var displayRows = rows;
+    if (state.sort.key && COLUMNS[state.sort.key]) {
+      displayRows = rows.slice().sort(function (a, b) {
+        return compareRows(a, b, state.sort.key, state.sort.dir);
+      });
+    }
+    updateHeaderSortIndicators();
 
     if (!rows.length) {
       var emptyMsg;
@@ -669,10 +820,12 @@
       }
       els.body.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
-      els.body.innerHTML = rows.map(function (r) {
+      els.body.innerHTML = displayRows.map(function (r) {
+        var dotTitle = r.matchup_color ? ' title="This week\'s matchup: ' + escapeHtml(r.manager) + ' vs ' + escapeHtml(r.matchup_opponent) + '"' : "";
+        var dot = '<span class="matchup-dot" style="background:' + (r.matchup_color || "transparent") + '"' + dotTitle + "></span>";
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
-          '<td class="manager">' + escapeHtml(r.manager) + "</td>" +
+          '<td class="manager">' + dot + escapeHtml(r.manager) + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           '<td class="thisweek-pts">' + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
@@ -748,6 +901,47 @@
         els.refreshBtn.textContent = "Refresh now";
       });
   }
+
+  // ---- column sorting --------------------------------------------------
+
+  function setSort(key) {
+    var col = COLUMNS[key];
+    if (!col) return;
+    if (state.sort.key === key) {
+      state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+    } else {
+      state.sort.key = key;
+      // Numbers/records default to descending (biggest first, usually
+      // what you want for a stat); text defaults to ascending (A-Z).
+      state.sort.dir = col.type === "string" ? "asc" : "desc";
+    }
+    render();
+  }
+
+  function updateHeaderSortIndicators() {
+    Object.keys(COLUMNS).forEach(function (key) {
+      var th = els.headerCells[key];
+      if (!th) return;
+      var col = COLUMNS[key];
+      var active = state.sort.key === key;
+      var arrow = active ? (state.sort.dir === "asc" ? " ▲" : " ▼") : "";
+      th.textContent = col.label + arrow;
+      th.classList.toggle("sort-active", active);
+    });
+  }
+
+  function attachSortHandlers() {
+    var ths = document.querySelectorAll("#standings-table thead th[data-key]");
+    for (var i = 0; i < ths.length; i++) {
+      (function (th) {
+        var key = th.getAttribute("data-key");
+        els.headerCells[key] = th;
+        th.classList.add("sortable");
+        th.addEventListener("click", function () { setSort(key); });
+      })(ths[i]);
+    }
+  }
+  attachSortHandlers();
 
   els.modeActual.addEventListener("click", function () { setMode("actual"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });

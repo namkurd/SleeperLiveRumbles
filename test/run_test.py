@@ -55,6 +55,21 @@ def get_table_rows(page):
     )
 
 
+def get_matchup_colors(page):
+    """manager name -> inline matchup-dot background (e.g. 'var(--matchup-2)'),
+    or None if that row has no dot (not in a live matchup this week)."""
+    pairs = page.eval_on_selector_all(
+        "#standings-body tr",
+        """rows => rows.map(r => {
+            var name = r.querySelector('td.manager').innerText.trim();
+            var dot = r.querySelector('td.manager .matchup-dot');
+            var bg = dot ? dot.style.background : null;
+            return [name, (bg && bg !== 'transparent') ? bg : null];
+        })""",
+    )
+    return dict(pairs)
+
+
 def new_page(browser, console_errors, page_errors):
     page = browser.new_page()
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -111,10 +126,12 @@ def scenario_live_blending(browser):
     #     "Points This Week" shows the live 2.5 figure.
     #     Custom=2.5+12.5=15.0 folded on top of history -> PF 92.5+15.0=107.5
     #   Jake (roster 3, history PF 97.5): played player is having a
-    #     blowout (30.0 actual) that now replaces the much smaller pregame
-    #     projection (7.0); unplayed player only has a projection (4.0).
+    #     blowout (33.0 actual -- 30.0 base plus the kr_yd-alias (+4.0) and
+    #     fgmiss-tier-sum (-1.0) regression checks, see make_fixtures.py)
+    #     that now replaces the much smaller pregame projection (7.0);
+    #     unplayed player only has a projection (4.0).
     #     Actual PF stays frozen at history (97.5).
-    #     Custom=30.0+4.0=34.0 folded on top of history -> PF 97.5+34.0=131.5
+    #     Custom=33.0+4.0=37.0 folded on top of history -> PF 97.5+37.0=134.5
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
@@ -133,14 +150,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 131.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 134.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
-        "actual": {"Aidan": 2.5, "Jake": 30.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 34.0, "Joe": None},
+        "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
+        "custom": {"Aidan": 15.0, "Jake": 37.0, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -156,14 +173,14 @@ def scenario_live_blending(browser):
             print(r)
         assert len(rows) == 12, f"[{mode}] expected 12 rows, got {len(rows)}"
 
+        # Both the Rumbles and H2H W-L headers are now static text -- no
+        # more "Actualized"/"Projected" prefix on either, since the mode
+        # toggle itself already covers that distinction. Confirm neither
+        # changes with mode (only a sort-arrow suffix would ever change
+        # this text, and no column is sorted here).
         th_rumbles = page.text_content("#th-rumbles")
-        expected_th_rumbles = "Actualized Rumbles" if mode == "actual" else "Projected Rumbles"
-        assert th_rumbles == expected_th_rumbles, (
-            f"[{mode}] expected Rumbles header {expected_th_rumbles!r}, got {th_rumbles!r}"
-        )
-        # H2H W-L header is now static text (no Actualized/Projected prefix,
-        # covered by the mode toggle itself) -- confirm it never changes.
-        th_h2h = page.text_content("#standings-table thead th:nth-child(9)")
+        assert th_rumbles == "Rumbles", f"[{mode}] expected static 'Rumbles' header, got {th_rumbles!r}"
+        th_h2h = page.text_content("#th-h2h")
         assert th_h2h == "H2H W-L", f"[{mode}] expected static 'H2H W-L' header, got {th_h2h!r}"
 
         # Column order: 0=#, 1=Manager, 2=Rumbles, 3=This Week, 4=Points
@@ -262,6 +279,77 @@ def scenario_live_blending(browser):
             f"{manager}: Actual and Custom PF must differ, got {actual_pf[manager]} for both"
         )
     print("\nConfirmed every manager's PF differs between Actual and Projected.")
+
+    # ---- Matchup color-coding: this week's H2H pairs share a dot color ----
+    # Pairing in the fixture is (1,2) (3,4) (5,6) (7,8) (9,10) (11,12) by
+    # roster_id -- i.e. (Aidan,Ben) (Jake,Rohaan) (Joe,Alex) (Steven,Ankit)
+    # (Christian,Ryan) (Kaitlyn,Stephanie). Check via the manager NAMES
+    # (not roster_id, which isn't exposed in the table) using that mapping.
+    colors = get_matchup_colors(page)
+    expected_pairs = [
+        ("Aidan", "Ben"), ("Jake", "Rohaan"), ("Joe", "Alex"),
+        ("Steven", "Ankit"), ("Christian", "Ryan"), ("Kaitlyn", "Stephanie"),
+    ]
+    for a, b in expected_pairs:
+        assert colors.get(a) is not None, f"{a} should have a matchup-dot color (live week in progress)"
+        assert colors[a] == colors[b], (
+            f"{a} and {b} are this week's H2H opponents and should share a dot color, "
+            f"got {colors[a]!r} vs {colors[b]!r}"
+        )
+    distinct_colors = {colors[a] for a, _ in expected_pairs}
+    assert len(distinct_colors) == 6, (
+        f"expected 6 distinct matchup colors (one per pair), got {len(distinct_colors)}: {distinct_colors}"
+    )
+    print("\nConfirmed matchup color-coding: each H2H pair shares a color, all 6 pairs distinct.")
+
+    # ---- Column sorting: "#" must stay pinned to season standing ----
+    baseline_rank = {r[1]: r[0] for r in get_table_rows(page)}  # manager -> "#" before any sort
+
+    def current_rows():
+        return get_table_rows(page)
+
+    def assert_rank_unchanged(rows, label):
+        for r in rows:
+            manager = r[1]
+            assert r[0] == baseline_rank[manager], (
+                f"[{label}] {manager}'s '#' changed from {baseline_rank[manager]} to {r[0]} after "
+                f"sorting by a different column -- '#' must always reflect the fixed season standing"
+            )
+
+    # Sort by PF: first click defaults to descending (highest first).
+    page.click("#th-pf")
+    page.wait_for_timeout(150)
+    rows = current_rows()
+    pf_values = [float(r[6]) for r in rows]
+    assert pf_values == sorted(pf_values, reverse=True), f"PF column not sorted descending: {pf_values}"
+    assert_rank_unchanged(rows, "sort by PF desc")
+    th_pf_text = page.text_content("#th-pf")
+    assert "▼" in th_pf_text, f"expected a descending-sort arrow on the PF header, got {th_pf_text!r}"
+
+    # Click PF again: toggles to ascending.
+    page.click("#th-pf")
+    page.wait_for_timeout(150)
+    rows = current_rows()
+    pf_values = [float(r[6]) for r in rows]
+    assert pf_values == sorted(pf_values), f"PF column not sorted ascending after second click: {pf_values}"
+    assert_rank_unchanged(rows, "sort by PF asc")
+    th_pf_text = page.text_content("#th-pf")
+    assert "▲" in th_pf_text, f"expected an ascending-sort arrow on the PF header, got {th_pf_text!r}"
+
+    # Sort by Manager: text column, first click defaults to ascending A-Z.
+    page.click("#th-manager")
+    page.wait_for_timeout(150)
+    rows = current_rows()
+    managers = [r[1] for r in rows]
+    assert managers == sorted(managers), f"Manager column not sorted A-Z: {managers}"
+    assert_rank_unchanged(rows, "sort by Manager asc")
+
+    # "#" header itself must never become sortable/clickable.
+    assert "sortable" not in (page.get_attribute("#th-rank", "class") or ""), (
+        "the '#' header must not be sortable -- it's a fixed standing, not a sort control"
+    )
+
+    print("\nConfirmed column sorting works and '#' stays pinned to each team's fixed season standing.")
 
     live_badges = page.locator(".badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge

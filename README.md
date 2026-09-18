@@ -33,13 +33,26 @@ backend involved.
 
 ### Columns
 
-Rank, Manager, Rumbles (labeled **Actualized Rumbles** or **Projected
-Rumbles** depending on the mode toggle -- see below), This Week (Rumbles
-earned so far this week), Points This Week (the raw score for this week,
-to 2 decimal places), Rumble % (Rumbles earned / max possible so far), PF,
-PA, H2H W-L, and Vs. Field W-L. On a narrow screen the table scrolls
-horizontally (Rank and Manager stay pinned) rather than squeezing or
-clipping any column.
+Rank (`#`), Manager, Rumbles, This Week (Rumbles earned so far this week),
+Points This Week (the raw score for this week, to 2 decimal places),
+Rumble % (Rumbles earned / max possible so far), PF, PA, H2H W-L, and Vs.
+Field W-L. On a narrow screen the table scrolls horizontally (Rank and
+Manager stay pinned) rather than squeezing or clipping any column.
+
+Every column except `#` is **sortable** -- click a header to sort by it
+(numbers/records default to biggest-first, Manager defaults to A-Z; click
+again to flip direction; an arrow on the header shows the active sort and
+direction). `#` itself is never a sort control -- it's always each team's
+fixed season standing (by cumulative Rumbles, then PF), so it stays the
+same for a given manager no matter which column the table is currently
+sorted by.
+
+During a live week, each manager's name also gets a small colored dot
+whenever they're one of this week's scheduled H2H matchups -- both sides
+of a matchup share the same color (e.g. hover the dot to see who they're
+playing), so you can tell who's playing whom at a glance even after
+sorting the table by something else. No live matchup yet (offseason, or
+between weeks before matchups post) just means no dots.
 
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
@@ -61,11 +74,40 @@ against the league's real `scoring_settings` -- never Sleeper's generic
 rules like this one's first-down bonuses and tiered defense scoring. This
 was verified directly against Sleeper's own displayed matchup projection:
 summing a team's starters through this exact formula reproduced Sleeper's
-own number to the penny. (Sleeper's own projections update continuously
-throughout the week as its model reruns, sometimes by a lot in a short
-window -- so a snapshot comparison against Sleeper's site will only match
-exactly at the instant both are captured; drift a few minutes later is
-expected, not a bug.)
+own PRE-GAME number to the penny for every roster tested.
+
+**Once a player has actually played**, the blended total can still be off
+by a point or two from what Sleeper's site shows, even hours after the
+game with zero live drift happening. A real Week 2 investigation (pulling
+that exact roster's real stat/projection payloads and hand-recomputing
+the dot product) found the formula itself matches -- it reproduced the
+page's own displayed number exactly, key by key -- but it also turned up
+two genuine bugs in how a couple of `scoring_settings` keys get matched
+against Sleeper's real per-player payloads (both now fixed, see
+`KEY_ALIASES` / `TIER_SUM_KEYS` in `rumbles.html`):
+
+- `kr_yd` (kick-return yardage) never had a literal match -- Sleeper's
+  real stat/projection payloads name that field `def_kr_yd`, not `kr_yd`,
+  so every defense's return-yardage credit was being silently dropped.
+  Fixed via an explicit key alias.
+- `fgmiss` is a single flat weight in `scoring_settings`, but Sleeper's
+  real payloads only expose missed field goals pre-split by distance tier
+  (`fgmiss_30_39`, `fgmiss_40_49`, ...) -- there's never a bare `fgmiss`
+  field to match. Fixed by summing every `fgmiss_*` tier present and
+  applying the flat weight to that sum.
+
+One category is still a **known, unfixed gap**: `fgm_yds_over_30` (bonus
+yardage on made field goals past 30) has no reliable source in either
+payload -- they only expose a kicker's *total* made-FG yardage, not the
+per-kick distance breakdown needed to compute "yards past 30" -- so it's
+currently scored as 0. In practice this only shifts a kicker's total by a
+small fraction of a point; worth revisiting if kicker scores start
+looking consistently light once real games are in.
+
+(Sleeper's own projections for players who *haven't* played yet also get
+revised by its providers through the week, independent of any of the
+above -- so a snapshot comparison against Sleeper's site for a still-
+pregame player will only match exactly at the instant both are captured.)
 
 - **Actual** (default on page load) -- ONLY real, actually-banked stats.
   Never touches projections. This is the fully "solidified" view: Rumbles,
@@ -134,9 +176,13 @@ displayed -- it was just a different scoring system. What's now called
 1. **A week genuinely live** -- hand-verified PF checks across both
    scoring modes (Actual / Projected), including a fully-pregame
    roster to confirm Actual correctly shows the frozen history PF while
-   Projected still shows a real, nonzero folded number, and a check that
+   Projected still shows a real, nonzero folded number, a check that
    every manager gets two genuinely distinct totals (proving the modes
-   never bleed into each other).
+   never bleed into each other), a regression check for the `kr_yd`/
+   `fgmiss` key-matching fixes, a check that every column sorts correctly
+   in both directions while `#` stays pinned to each team's fixed
+   standing, and a check that this week's H2H matchup pairs share a
+   matchup-dot color (and every pair gets a distinct one).
 2. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative

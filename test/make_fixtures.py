@@ -63,12 +63,19 @@ with open(os.path.join(OUT, "matchups_week2_empty.json"), "w") as f:
     json.dump([], f)
 
 # ---- /v1/league/{id} : scoring_settings with non-PPR + first-down bonus ----
+# Also includes kr_yd and fgmiss -- both discovered (via a real live-data
+# investigation) to have no literal key-name match in Sleeper's real stat/
+# projection payloads (payloads use "def_kr_yd" and tiered "fgmiss_XX_YY"
+# fields instead). See rumbles.html's KEY_ALIASES/TIER_SUM_KEYS and the
+# roster-3 fixture stats below, which exercise both fixes.
 scoring_settings = {
     "pass_yd": 0.04, "pass_td": 4, "pass_int": -2,
     "rush_yd": 0.1, "rush_td": 6,
     "rec": 0.0, "rec_yd": 0.1, "rec_td": 6,
     "rec_fd": 0.5, "rush_fd": 0.5, "pass_fd": 0.25,
     "fum_lost": -2,
+    "kr_yd": 0.04,
+    "fgmiss": -1.0,
 }
 with open(os.path.join(OUT, "league.json"), "w") as f:
     json.dump({"league_id": LEAGUE_ID, "season": "2026", "scoring_settings": scoring_settings}, f)
@@ -121,7 +128,20 @@ with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
 # plausible, varied scores.
 HAND_CRAFTED_ACTUAL = {
     1: {"rec": 2, "rec_yd": 20, "rec_fd": 1, "pts_ppr": 3.0},  # low actual so far
-    3: {"rec": 10, "rec_yd": 150, "rec_td": 2, "rec_fd": 6, "pts_ppr": 35.0},  # blowout actual
+    # Roster 3's played player: blowout actual (30.0 from the base
+    # rec/rec_yd/rec_td/rec_fd line below) PLUS two deliberately
+    # misnamed-key categories that regression-test the real-data fixes:
+    #   - "def_kr_yd": 100 -- Sleeper's real field name for kick-return
+    #     yardage (scoring_settings' matching key is the bare "kr_yd") --
+    #     worth 100 * 0.04 = +4.0 if the KEY_ALIASES fix is working,
+    #     silently 0 if it regresses.
+    #   - "fgmiss_30_39": 1 -- one of Sleeper's real tiered missed-FG
+    #     fields (scoring_settings only has one flat "fgmiss": -1 weight
+    #     covering every tier) -- worth 1 * -1.0 = -1.0 if the
+    #     TIER_SUM_KEYS fix is working, silently 0 if it regresses.
+    # Net: 30.0 (base) + 4.0 (kr_yd alias) - 1.0 (fgmiss tier-sum) = 33.0.
+    3: {"rec": 10, "rec_yd": 150, "rec_td": 2, "rec_fd": 6, "pts_ppr": 35.0,
+        "def_kr_yd": 100, "fgmiss_30_39": 1},
     # roster 5 deliberately has NO actual-stats entry at all for anyone --
     # see ZERO_ACTUAL_ROSTERS below.
 }
