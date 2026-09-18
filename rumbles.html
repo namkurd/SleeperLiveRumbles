@@ -257,7 +257,7 @@
     <div class="controls">
       <div class="toggle-group" role="group" aria-label="Scoring source">
         <button type="button" id="mode-actual" class="active">Actual</button>
-        <button type="button" id="mode-custom">Our Custom Scoring</button>
+        <button type="button" id="mode-custom">Projected</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
     </div>
@@ -284,7 +284,7 @@
           <th>Rumble %</th>
           <th>PF</th>
           <th>PA</th>
-          <th id="th-h2h">Actualized H2H W-L</th>
+          <th>H2H W-L</th>
           <th>Vs. Field W-L</th>
         </tr>
       </thead>
@@ -323,7 +323,7 @@
     pollTimer: null
   };
 
-  var MODE_LABELS = { actual: "Actual", custom: "Our Custom Scoring" };
+  var MODE_LABELS = { actual: "Actual", custom: "Projected" };
 
   var els = {
     subtitle: document.getElementById("subtitle"),
@@ -336,8 +336,7 @@
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
-    thRumbles: document.getElementById("th-rumbles"),
-    thH2h: document.getElementById("th-h2h")
+    thRumbles: document.getElementById("th-rumbles")
   };
 
   function num(v) { return typeof v === "number" && !isNaN(v) ? v : 0; }
@@ -599,16 +598,17 @@
     var live = state.live;
     var liveActive = live && live.isLive;
 
-    // "Actual" is the solidified/actualized view: Rumbles and H2H W-L are
-    // locked to whatever's already final in rumbles_history.json -- the
-    // in-progress week's actual-score rumbles/H2H outcome is NOT folded in
-    // (it can still flip as the games play out, right up to the final
-    // whistle). "This Week" keeps showing that in-progress figure on its
-    // own, just never added into the ranked totals.
-    // "Our Custom Scoring" is the projection view: it DOES fold the
-    // in-progress week's (projected) rumbles/H2H on top of the cumulative
-    // totals, since the whole point there is a gameday preview of where
-    // things are trending.
+    // "Actual" is the solidified/actualized view: Rumbles, H2H W-L, PF,
+    // PA, and Vs. Field W-L are ALL locked to whatever's already final in
+    // rumbles_history.json -- the in-progress week's actual-score outcome
+    // is NOT folded into any of them (it can still flip as the games play
+    // out, right up to the final whistle). "This Week" and "Points This
+    // Week" keep showing that in-progress figure live on their own, just
+    // never added into the ranked/season totals.
+    // "Projected" is the projection view: it DOES fold the in-progress
+    // week's (projected) numbers on top of the cumulative totals for all
+    // five of those columns, since the whole point there is a gameday
+    // preview of where the season stands if the week ended right now.
     var foldCurrentWeekIntoTotals = state.mode !== "actual";
 
     var rows = histStandings.map(function (s) {
@@ -617,12 +617,12 @@
       var foldInfo = foldCurrentWeekIntoTotals ? liveInfo : null;
 
       var combinedRumbles = num(s.rumbles) + (foldInfo ? num(foldInfo.rumbles) : 0);
-      var combinedPf = num(s.pf) + (liveInfo ? num(liveInfo.points) : 0);
-      var combinedPa = num(s.pa) + (liveInfo ? num(liveInfo.opponentPoints) : 0);
+      var combinedPf = num(s.pf) + (foldInfo ? num(foldInfo.points) : 0);
+      var combinedPa = num(s.pa) + (foldInfo ? num(foldInfo.opponentPoints) : 0);
       var h2hW = num(s.h2h_w) + (foldInfo && foldInfo.h2hWin === true ? 1 : 0);
       var h2hL = num(s.h2h_l) + (foldInfo && foldInfo.h2hWin === false ? 1 : 0);
-      var vfW = num(s.vs_field_w) + (liveInfo ? num(liveInfo.teamsOutscored) : 0);
-      var vfL = num(s.vs_field_l) + (liveInfo ? num(liveInfo.teamsOutscoredBy) : 0);
+      var vfW = num(s.vs_field_w) + (foldInfo ? num(foldInfo.teamsOutscored) : 0);
+      var vfL = num(s.vs_field_l) + (foldInfo ? num(foldInfo.teamsOutscoredBy) : 0);
 
       var weeksForPct = weeksCompleted.length + (foldInfo ? 1 : 0);
       var pct = weeksForPct ? (combinedRumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
@@ -658,13 +658,7 @@
   function render() {
     var rows = buildCombinedStandings();
 
-    if (state.mode === "actual") {
-      els.thRumbles.textContent = "Actualized Rumbles";
-      els.thH2h.textContent = "Actualized H2H W-L";
-    } else {
-      els.thRumbles.textContent = "Projected Rumbles";
-      els.thH2h.textContent = "Projected H2H W-L";
-    }
+    els.thRumbles.textContent = state.mode === "actual" ? "Actualized Rumbles" : "Projected Rumbles";
 
     if (!rows.length) {
       var emptyMsg;

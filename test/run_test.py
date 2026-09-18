@@ -64,7 +64,7 @@ def new_page(browser, console_errors, page_errors):
 
 def scenario_live_blending(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO 1: a week is genuinely live -- Actual / Our Custom Scoring")
+    print("SCENARIO 1: a week is genuinely live -- Actual / Projected")
     print("=" * 70)
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
@@ -88,9 +88,10 @@ def scenario_live_blending(browser):
     assert "Live" in status_text and "Week 2" in status_text, f"expected live week 2 status, got: {status_text}"
 
     # Hand-verified expected totals (see make_fixtures.py's HAND_CRAFTED_*
-    # and ZERO_ACTUAL_ROSTERS). "Actual" only ever uses real stats. "Our
-    # Custom Scoring" reproduces how Sleeper itself computes its live
-    # "projected" total: a player who has an actual-stats entry (their
+    # and ZERO_ACTUAL_ROSTERS). "Actual" only ever uses real stats.
+    # "Projected" (formerly "Our Custom Scoring") reproduces how Sleeper
+    # itself computes its live "projected" total: a player who has an
+    # actual-stats entry (their
     # game has started) contributes their REAL performance, not their
     # frozen pregame projection -- only still-pregame players use the
     # projection. This matches what Sleeper's own matchup page shows
@@ -105,16 +106,19 @@ def scenario_live_blending(browser):
     #     stat line (2.5) and a much bigger pregame projection (17.0)
     #     that's now ignored in favor of the real performance; unplayed
     #     player only has a projection (12.5).
-    #     Actual=2.5 -> PF 95.0 | Custom=2.5+12.5=15.0 -> PF 107.5
+    #     Actual PF stays frozen at history (92.5) -- Actual mode no longer
+    #     folds the in-progress week into PF/PA/Vs.Field at all, only
+    #     "Points This Week" shows the live 2.5 figure.
+    #     Custom=2.5+12.5=15.0 folded on top of history -> PF 92.5+15.0=107.5
     #   Jake (roster 3, history PF 97.5): played player is having a
     #     blowout (30.0 actual) that now replaces the much smaller pregame
     #     projection (7.0); unplayed player only has a projection (4.0).
-    #     Actual=30.0 -> PF 127.5 | Custom=30.0+4.0=34.0 -> PF 131.5
+    #     Actual PF stays frozen at history (97.5).
+    #     Custom=30.0+4.0=34.0 folded on top of history -> PF 97.5+34.0=131.5
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
-    #     this is unchanged from a pure-projection total (proves the
-    #     fallback path still works when nobody's played yet).
-    #     Actual=0.0 -> PF 102.5 (flat, no addition)
+    #     Actual PF stays frozen at 102.5 (same number Custom's fallback
+    #     path also happens to start from, before folding its projection).
     # The frozen/actualized baseline is exactly what's already in
     # rumbles_history.json (only Week 1 is final in this fixture) -- pull
     # it straight from there rather than re-deriving the formula, so this
@@ -122,9 +126,13 @@ def scenario_live_blending(browser):
     hist_standings = load("rumbles_history.json")["standings"]
     BASELINE_RUMBLES = {s["manager"]: s["rumbles"] for s in hist_standings}
     BASELINE_H2H = {s["manager"]: (s["h2h_w"], s["h2h_l"]) for s in hist_standings}
+    BASELINE_PA = {s["manager"]: s["pa"] for s in hist_standings}
+    BASELINE_VS_FIELD = {s["manager"]: (s["vs_field_w"], s["vs_field_l"]) for s in hist_standings}
 
+    # Actual mode: PF is frozen to history, full stop (no more history + this
+    # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
-        "actual": {"Aidan": 95.0, "Jake": 127.5, "Joe": 102.5},
+        "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
         "custom": {"Aidan": 107.5, "Jake": 131.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
@@ -149,14 +157,14 @@ def scenario_live_blending(browser):
         assert len(rows) == 12, f"[{mode}] expected 12 rows, got {len(rows)}"
 
         th_rumbles = page.text_content("#th-rumbles")
-        th_h2h = page.text_content("#th-h2h")
-        expected_th = (
-            ("Actualized Rumbles", "Actualized H2H W-L") if mode == "actual"
-            else ("Projected Rumbles", "Projected H2H W-L")
+        expected_th_rumbles = "Actualized Rumbles" if mode == "actual" else "Projected Rumbles"
+        assert th_rumbles == expected_th_rumbles, (
+            f"[{mode}] expected Rumbles header {expected_th_rumbles!r}, got {th_rumbles!r}"
         )
-        assert (th_rumbles, th_h2h) == expected_th, (
-            f"[{mode}] expected headers {expected_th}, got {(th_rumbles, th_h2h)}"
-        )
+        # H2H W-L header is now static text (no Actualized/Projected prefix,
+        # covered by the mode toggle itself) -- confirm it never changes.
+        th_h2h = page.text_content("#standings-table thead th:nth-child(9)")
+        assert th_h2h == "H2H W-L", f"[{mode}] expected static 'H2H W-L' header, got {th_h2h!r}"
 
         # Column order: 0=#, 1=Manager, 2=Rumbles, 3=This Week, 4=Points
         # This Week, 5=Rumble %, 6=PF, 7=PA, 8=H2H W-L, 9=Vs. Field W-L.
@@ -183,23 +191,34 @@ def scenario_live_blending(browser):
             )
         print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
 
-        # Actual mode's Rumbles/H2H must be frozen to what's already final
-        # in rumbles_history.json -- the in-progress week's actual-score
-        # rumbles/H2H must NOT be folded in (only "This Week" shows it).
-        # Custom Scoring DOES fold the in-progress week's projected
-        # rumbles/H2H on top, same as before.
+        # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
+        # what's already final in rumbles_history.json -- the in-progress
+        # week's actual-score outcome must NOT be folded into any of the
+        # five season-cumulative columns (only "This Week"/"Points This
+        # Week" show it live). Projected mode DOES fold the in-progress
+        # week's numbers into all five, same as before.
         for r in rows:
             manager = r[1]
             rumbles_val = int(r[2])
+            pa_val = float(r[7])
             h2h_w, h2h_l = (int(x) for x in r[8].split("-"))
+            vf_w, vf_l = (int(x) for x in r[9].split("-"))
             if mode == "actual":
                 assert rumbles_val == BASELINE_RUMBLES[manager], (
                     f"[actual] {manager}: Actualized Rumbles must equal the frozen history value "
                     f"{BASELINE_RUMBLES[manager]} (not folding in this week's live rumbles), got {rumbles_val}"
                 )
                 assert (h2h_w, h2h_l) == BASELINE_H2H[manager], (
-                    f"[actual] {manager}: Actualized H2H W-L must equal the frozen history record "
+                    f"[actual] {manager}: H2H W-L must equal the frozen history record "
                     f"{BASELINE_H2H[manager]}, got {(h2h_w, h2h_l)}"
+                )
+                assert abs(pa_val - BASELINE_PA[manager]) < 0.01, (
+                    f"[actual] {manager}: PA must equal the frozen history value "
+                    f"{BASELINE_PA[manager]} (not folding in this week's live PA), got {pa_val}"
+                )
+                assert (vf_w, vf_l) == BASELINE_VS_FIELD[manager], (
+                    f"[actual] {manager}: Vs. Field W-L must equal the frozen history record "
+                    f"{BASELINE_VS_FIELD[manager]}, got {(vf_w, vf_l)}"
                 )
             else:
                 this_week_rumbles = int(r[3].replace("LIVE", ""))
@@ -209,14 +228,22 @@ def scenario_live_blending(browser):
                     f"+ this week's live rumbles ({this_week_rumbles}) = {expected_total}, got {rumbles_val}"
                 )
                 assert h2h_w + h2h_l == 2, (
-                    f"[{mode}] {manager}: Projected H2H W-L must include this week's live matchup "
+                    f"[{mode}] {manager}: H2H W-L must include this week's live matchup "
                     f"on top of the 1 already-final game (total 2 decisions), got {(h2h_w, h2h_l)}"
                 )
-        print(f"Verified actualized-vs-projected Rumbles/H2H split for {mode} mode.")
+                assert pa_val > BASELINE_PA[manager] + 0.01, (
+                    f"[{mode}] {manager}: Projected PA must fold in this week's live opponent score "
+                    f"on top of the frozen history value {BASELINE_PA[manager]}, got {pa_val}"
+                )
+                assert vf_w + vf_l == 22, (
+                    f"[{mode}] {manager}: Projected Vs. Field W-L must include this week's 11 live "
+                    f"decisions on top of the 11 already-final ones (total 22), got {(vf_w, vf_l)}"
+                )
+        print(f"Verified actualized-vs-projected Rumbles/H2H/PA/Vs.Field split for {mode} mode.")
 
         # Joe's roster has ZERO actual stats recorded for anyone (still
         # pregame) -- Actual mode must show exactly the history PF with no
-        # addition, while Custom Scoring must still show a real, nonzero
+        # addition, while Projected must still show a real, nonzero
         # projected total (never just falling back to 0).
         joe_pf = pf_by_manager["Joe"]
         if mode == "actual":
@@ -234,7 +261,7 @@ def scenario_live_blending(browser):
         assert actual_pf[manager] != custom_pf[manager], (
             f"{manager}: Actual and Custom PF must differ, got {actual_pf[manager]} for both"
         )
-    print("\nConfirmed every manager's PF differs between Actual and Custom Scoring.")
+    print("\nConfirmed every manager's PF differs between Actual and Projected.")
 
     live_badges = page.locator(".badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge

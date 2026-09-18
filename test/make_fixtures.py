@@ -99,7 +99,7 @@ with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
 # ---- bulk actual stats for week 2 : only the FIRST player on each roster has played ----
 #
 # rumbles.html has two scoring lenses: "Actual" (only ever uses real
-# stats), and "Our Custom Scoring" (reproduces Sleeper's own live
+# stats), and "Projected" (reproduces Sleeper's own live
 # "projected" total -- a played player's REAL stat line replaces their
 # frozen pregame projection; an unplayed player still uses the
 # projection). Both dot-product against the league's real
@@ -108,14 +108,14 @@ with open(os.path.join(OUT, "matchups_week2.json"), "w") as f:
 # make actual and projected deliberately far apart, so a test can tell at
 # a glance which source got used:
 #   - Roster 1's played player: small actual stat line, much bigger
-#     pregame projection -- Custom Scoring must use the SMALL actual
+#     pregame projection -- Projected must use the SMALL actual
 #     number, not the bigger projection, once that player has played.
 #     Roster 5: nobody has ANY actual stats yet (full pregame roster) --
-#     Actual mode must show a flat 0 for it while Custom Scoring still
+#     Actual mode must show a flat 0 for it while Projected still
 #     shows a real, nonzero projected total (the fallback path when
 #     nobody's played).
 #   - Roster 3's played player is having a blowout: actual stats far
-#     exceed the pregame projection -- Custom Scoring must use the BIG
+#     exceed the pregame projection -- Projected must use the BIG
 #     actual number here, not the smaller pregame projection.
 # All other rosters use the original generic pattern, just to produce
 # plausible, varied scores.
