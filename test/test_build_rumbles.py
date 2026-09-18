@@ -21,7 +21,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from build_rumbles import official_points, score_week  # noqa: E402
+from build_rumbles import (  # noqa: E402
+    build_team_qb_index,
+    compute_qb_adjustments_for_week,
+    dot_product,
+    is_played,
+    official_points,
+    score_week,
+)
 
 MANAGER_MAP = {1: "Alpha", 2: "Bravo", 3: "Charlie", 4: "Delta"}
 
@@ -116,12 +123,150 @@ def test_score_week_vs_field_outscored_uses_official_score():
     print("PASS: vs.-the-field outscored/outscored-by counts use the official (override-aware) score")
 
 
+# ---------------------------------------------------------------------------
+# QB injury-backup-points adjustment (compute_qb_adjustments_for_week etc)
+#
+# Same scenario as test/make_fixtures.py's roster-6/"Alex" fixture (real
+# numbers mirror the real reported example: a started QB with a modest
+# stat line, ruled "Out", and a same-team backup who came in and outscored
+# him) -- exercises the tiered confidence system (confirmed / likely /
+# detected) and the team-scoping (a same-team QB who didn't play, and a
+# same-POSITION QB on a DIFFERENT team who did play, must both be excluded).
+# ---------------------------------------------------------------------------
+
+QB_SCORING_SETTINGS = {"pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "rush_yd": 0.1, "rush_td": 6}
+
+QB_PLAYERS_META = {
+    "QB_STARTER": {"position": "QB", "team": "MIN", "full_name": "Kyler Murray", "injury_status": "Out"},
+    "QB_BACKUP": {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": None},
+    "QB_THIRD": {"position": "QB", "team": "MIN", "full_name": "JJ McCarthy", "injury_status": None},
+    "QB_OTHER_TEAM": {"position": "QB", "team": "KC", "full_name": "Other Team's QB", "injury_status": None},
+}
+
+QB_STATS_MAP = {
+    "QB_STARTER": {"pass_att": 10, "pass_yd": 80, "pass_td": 1, "pass_int": 0},  # 80*.04 + 1*4 = 7.2
+    "QB_BACKUP": {"pass_att": 25, "pass_yd": 210, "pass_td": 2, "pass_int": 1, "rush_yd": 15, "rush_td": 1},  # 8.4+8-2+1.5+6 = 21.9
+    "QB_OTHER_TEAM": {"pass_att": 20, "pass_yd": 150, "pass_td": 1, "pass_int": 0},  # played, but a different team
+    # "QB_THIRD" deliberately has NO stats entry -- did not play this week.
+}
+
+QB_MATCHUPS = [
+    {"roster_id": 1, "matchup_id": 1, "starters": ["QB_STARTER", "WR1"], "points": 100.0},
+    {"roster_id": 2, "matchup_id": 1, "starters": ["WR2"], "points": 90.0},
+]
+
+QB_MANAGER_MAP = {1: "Alex", 2: "Ben"}
+
+
+def test_dot_product_matches_hand_computed_totals():
+    assert approx(dot_product(QB_STATS_MAP["QB_STARTER"], QB_SCORING_SETTINGS), 7.2)
+    assert approx(dot_product(QB_STATS_MAP["QB_BACKUP"], QB_SCORING_SETTINGS), 21.9)
+    print("PASS: dot_product reproduces the hand-computed QB totals (7.2 / 21.9)")
+
+
+def test_is_played():
+    assert is_played({"pass_att": 1}) is True
+    assert is_played({"gp": 1.0}) is True
+    assert is_played({"rush_att": 3}) is True
+    assert is_played({}) is False
+    assert is_played(None) is False
+    assert is_played({"pass_att": 0}) is False
+    print("PASS: is_played correctly reads gp/pass_att/rush_att")
+
+
+def test_build_team_qb_index_scopes_by_team():
+    index = build_team_qb_index(QB_PLAYERS_META)
+    assert set(index["MIN"]) == {"QB_STARTER", "QB_BACKUP", "QB_THIRD"}
+    assert set(index["KC"]) == {"QB_OTHER_TEAM"}
+    print("PASS: build_team_qb_index groups QBs by NFL team")
+
+
+def test_compute_qb_adjustments_detected_tier_and_team_scoping():
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+    )
+    assert len(entries) == 1, f"expected exactly 1 adjustment (roster 2 has no started QB), got {len(entries)}"
+    e = entries[0]
+    assert e["roster_id"] == 1 and e["manager"] == "Alex"
+    assert e["injured_qb"] == {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2}
+    # Only Carson Wentz -- the 3rd-stringer didn't play, and the other-team
+    # QB (despite playing) is on the wrong team entirely.
+    assert e["backup_qbs"] == [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}]
+    assert approx(e["backup_points_total"], 21.9)
+    assert e["confidence"] == "detected", f"no override + not fresh + no carry-forward should be 'detected', got {e['confidence']}"
+    print("PASS: compute_qb_adjustments_for_week finds the right backup, excludes the 3rd-stringer and the other team's QB, 'detected' tier")
+
+
+def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert entries[0]["confidence"] == "likely", f"fresh + injury_status 'Out' should be 'likely', got {entries[0]['confidence']}"
+    assert entries[0]["injury_status_at_capture"] == "Out"
+    print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out'")
+
+
+def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
+    matchups_with_override = [dict(QB_MATCHUPS[0], custom_points=129.1), QB_MATCHUPS[1]]
+    entries = compute_qb_adjustments_for_week(
+        2, matchups_with_override, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+    )
+    assert entries[0]["confidence"] == "confirmed", f"a set custom_points should always mean 'confirmed', got {entries[0]['confidence']}"
+    assert approx(entries[0]["custom_points_delta"], 29.1)  # 129.1 - 100.0
+    print("PASS: 'confirmed' tier fires whenever custom_points is set, regardless of freshness")
+
+
+def test_compute_qb_adjustments_carries_forward_stale_likely_tier():
+    # Simulates a week that's no longer the freshest one (is_fresh=False)
+    # but had already captured "likely" (injury_status "Out") back when it
+    # WAS fresh, in a previous script run -- that captured tier must be
+    # reused, not silently downgraded to "detected" just because today's
+    # current injury_status snapshot (which has since moved on) can't
+    # corroborate it anymore.
+    carried = {
+        1: {
+            "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+            "confidence": "likely",
+            "injury_status_at_capture": "Out",
+        }
+    }
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster=carried,
+    )
+    assert entries[0]["confidence"] == "likely", f"expected the carried-forward 'likely' tier to be reused, got {entries[0]['confidence']}"
+    assert entries[0]["injury_status_at_capture"] == "Out"
+    print("PASS: a previously-captured 'likely' tier is carried forward for an old (no-longer-fresh) week")
+
+
+def test_compute_qb_adjustments_no_entry_without_a_backup():
+    matchups_no_backup = [{"roster_id": 1, "matchup_id": 1, "starters": ["QB_STARTER"], "points": 100.0}]
+    stats_no_backup = {"QB_STARTER": QB_STATS_MAP["QB_STARTER"]}  # nobody else on MIN played
+    entries = compute_qb_adjustments_for_week(
+        2, matchups_no_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_no_backup,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert entries == [], f"no other team QB played -- there must be no adjustment entry at all, got {entries}"
+    print("PASS: no adjustment entry when no same-team backup QB recorded any action")
+
+
 def main():
     test_official_points_prefers_custom_points_when_set()
     test_score_week_applies_override_to_pf()
     test_score_week_applies_override_to_opponent_pa()
     test_score_week_h2h_result_unaffected_here()
     test_score_week_vs_field_outscored_uses_official_score()
+    test_dot_product_matches_hand_computed_totals()
+    test_is_played()
+    test_build_team_qb_index_scopes_by_team()
+    test_compute_qb_adjustments_detected_tier_and_team_scoping()
+    test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
+    test_compute_qb_adjustments_confirmed_tier_beats_everything_else()
+    test_compute_qb_adjustments_carries_forward_stale_likely_tier()
+    test_compute_qb_adjustments_no_entry_without_a_backup()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 

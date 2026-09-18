@@ -280,6 +280,36 @@
     margin-bottom: 12px;
   }
   .error-banner.show { display: block; }
+  .section-title {
+    font-size: 1rem;
+    margin: 22px 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .section-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin: 0 0 10px;
+  }
+  .footnote {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin: 10px 2px 0;
+    line-height: 1.5;
+  }
+  #qb-adj-table td.qb-name-cell, #qb-adj-table td.manager-cell { text-align: left; }
+  .backup-list { display: flex; flex-direction: column; gap: 2px; }
+  .backup-list span { white-space: nowrap; }
+  .confidence-pill {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .confidence-confirmed { background: rgba(53, 194, 107, 0.15); color: var(--good); }
+  .confidence-likely { background: rgba(77, 159, 255, 0.15); color: var(--accent-2); }
+  .confidence-detected { background: rgba(154, 161, 176, 0.18); color: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -334,6 +364,31 @@
     <span>9 Rumbles for the H2H win, +1 per team outscored that week (up to 20/week).</span>
     <span id="live-week-label"></span>
   </footer>
+
+  <h2 class="section-title">QB Injury Backup Adjustments</h2>
+  <p class="section-subtitle">If a started QB is ruled out mid-game and a backup from the same NFL team scores, that manager is credited with both QBs' combined points. <span id="qb-adj-live-label"></span></p>
+
+  <div class="table-panel">
+    <div class="table-scroll">
+    <table id="qb-adj-table">
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th style="text-align:left">Manager</th>
+          <th style="text-align:left">Injured QB</th>
+          <th style="text-align:left">Backup QB(s)</th>
+          <th>Injured QB Points</th>
+          <th>Backup QB Points</th>
+          <th style="text-align:left">Status</th>
+        </tr>
+      </thead>
+      <tbody id="qb-adj-body">
+        <tr><td colspan="7"><div class="empty-state">Loading…</div></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <p class="footnote">Status reflects how confident this detection is, not just whether it happened: <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means the started QB's Sleeper injury status read "Out"/"IR" at the moment this was caught. <strong>Detected</strong> means a same-team backup QB clearly played and scored, but neither of those could be confirmed in time -- Sleeper doesn't keep a historical record of in-game injury designations, so this is the best available signal, not certainty. It can't distinguish an injury from a coach simply benching a QB.</p>
 </div>
 
 <script>
@@ -344,9 +399,15 @@
   var API_V1 = "https://api.sleeper.app/v1";
   var STATS_BASE = "https://api.sleeper.app/stats/nfl";
   var PROJECTIONS_BASE = "https://api.sleeper.app/projections/nfl";
+  var PLAYERS_URL = API_V1 + "/players/nfl";
   var POLL_MS = 30000;
   var MAX_RUMBLES_PER_WEEK = 20;
   var RUMBLES_PER_WIN = 9;
+  // Player metadata (position/team/injury_status) is a multi-MB payload
+  // that rarely changes mid-session -- fetched once on load, then only
+  // re-fetched (at most this often) when a live QB-adjustment trigger is
+  // actually found and worth re-checking for a fresher injury_status.
+  var PLAYERS_REFRESH_COOLDOWN_MS = 90000;
 
   var state = {
     mode: "actual", // "actual" | "custom"
@@ -354,6 +415,10 @@
     historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
     liveError: null,
+    liveQbAdjustments: [], // this week's live-detected QB-injury-backup adjustments (see detectQbAdjustmentsForWeek)
+    playersMeta: null, // player_id -> Sleeper player object, fetched once (see ensurePlayersMeta)
+    teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
+    playersMetaFetchedAt: 0,
     refreshing: false,
     pollTimer: null,
     sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
@@ -560,6 +625,121 @@
     return total;
   }
 
+  // ---- QB injury-backup adjustment detection ---------------------------
+  // Mirrors build_rumbles.py's compute_qb_adjustments_for_week -- see the
+  // long comment above that function for the full rationale and the
+  // confidence-tier design. This is the LIVE half: it only ever evaluates
+  // the CURRENT in-progress week (historical weeks come pre-computed from
+  // rumbles_history.json), so "isFresh" is simply "did we just fetch
+  // playersMeta recently enough to trust its injury_status snapshot" --
+  // there's no carry-forward concept needed client-side since nothing
+  // here persists between page loads.
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function qbScore(stats, scoringSettings) { return dotProduct(stats, scoringSettings, true); }
+
+  function isPlayed(stats) {
+    if (!stats) return false;
+    return ["gp", "pass_att", "rush_att"].some(function (k) {
+      return typeof stats[k] === "number" && stats[k] >= 1;
+    });
+  }
+
+  function playerName(meta) {
+    if (!meta) return "Unknown";
+    if (meta.full_name) return meta.full_name;
+    var name = ((meta.first_name || "") + " " + (meta.last_name || "")).trim();
+    return name || "Unknown";
+  }
+
+  function buildTeamQbIndex(playersMeta) {
+    var index = {};
+    Object.keys(playersMeta).forEach(function (pid) {
+      var meta = playersMeta[pid];
+      if (!meta || meta.position !== "QB" || !meta.team) return;
+      if (!index[meta.team]) index[meta.team] = [];
+      index[meta.team].push(pid);
+    });
+    return index;
+  }
+
+  function detectQbAdjustmentsForWeek(week, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, isFresh) {
+    var entries = [];
+    matchups.forEach(function (m) {
+      var rosterId = m.roster_id;
+      var starters = m.starters || [];
+      starters.forEach(function (pid) {
+        if (!pid || pid === "0") return;
+        var meta = playersMeta[pid];
+        if (!meta || meta.position !== "QB") return;
+        var team = meta.team;
+        if (!team) return;
+        var candidates = teamQbIndex[team] || [];
+        var playedIds = candidates.filter(function (cid) { return isPlayed(statsMap[cid]); });
+        var backups = playedIds.filter(function (cid) { return cid !== pid; });
+        if (!backups.length) return;
+
+        var injuredPoints = round2(qbScore(statsMap[pid], scoringSettings));
+        var backupEntries = backups
+          .map(function (cid) {
+            return { player_id: cid, name: playerName(playersMeta[cid]), points: round2(qbScore(statsMap[cid], scoringSettings)) };
+          })
+          .sort(function (a, b) { return b.points - a.points; });
+        var backupTotal = round2(backupEntries.reduce(function (s, b) { return s + b.points; }, 0));
+
+        var hasCustom = m.custom_points !== null && m.custom_points !== undefined;
+        var customDelta = hasCustom ? round2(m.custom_points - (m.points || 0)) : null;
+
+        var confidence, injuryStatusAtCapture = null;
+        if (hasCustom) {
+          confidence = "confirmed";
+        } else if (isFresh) {
+          var status = (meta.injury_status || "").toLowerCase();
+          confidence = status === "out" || status === "ir" || status === "pup" ? "likely" : "detected";
+          injuryStatusAtCapture = meta.injury_status || null;
+        } else {
+          confidence = "detected";
+        }
+
+        entries.push({
+          week: week,
+          roster_id: rosterId,
+          manager: managerByRosterId[rosterId] || "Roster " + rosterId,
+          injured_qb: { player_id: pid, name: playerName(meta), points: injuredPoints },
+          backup_qbs: backupEntries,
+          backup_points_total: backupTotal,
+          confidence: confidence,
+          injury_status_at_capture: injuryStatusAtCapture,
+          custom_points_delta: customDelta,
+          live: true
+        });
+      });
+    });
+    return entries;
+  }
+
+  function fetchPlayersMeta() {
+    return fetchJson(PLAYERS_URL).then(function (data) {
+      state.playersMeta = data || {};
+      state.teamQbIndex = buildTeamQbIndex(state.playersMeta);
+      state.playersMetaFetchedAt = Date.now();
+      return state.playersMeta;
+    });
+  }
+
+  // Fetch once if we've never fetched at all; otherwise reuse the cached
+  // copy unless the caller explicitly wants a fresh one (see loadLive,
+  // which only pays for a refetch once it's found something actually
+  // worth re-checking for a current injury_status).
+  function ensurePlayersMeta() {
+    if (state.playersMeta) return Promise.resolve(state.playersMeta);
+    return fetchPlayersMeta().catch(function (err) {
+      console.warn("[rumbles] couldn't load player metadata for QB-adjustment detection:", err);
+      return state.playersMeta || {};
+    });
+  }
+
   // Same "9 for the H2H win, +1 per team outscored" math as build_rumbles.py,
   // applied to whatever scores we have (live or final).
   function computeRumblesForWeek(scoresByRoster, pairsByMatchupId) {
@@ -656,12 +836,14 @@
 
         if (!eligible) {
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.liveQbAdjustments = [];
           return null;
         }
 
         var leagueId = (state.history && state.history.league_id) || null;
         if (!leagueId) {
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.liveQbAdjustments = [];
           return null;
         }
 
@@ -689,6 +871,7 @@
             // in the week) -- nothing to overlay, fall back to cumulative-
             // only rather than erroring out.
             state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+            state.liveQbAdjustments = [];
             return null;
           }
 
@@ -716,6 +899,40 @@
           });
 
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+
+          // Best-effort: also try to detect this week's QB-injury-backup
+          // adjustments live (see detectQbAdjustmentsForWeek above).
+          // Never allowed to break the main standings if it fails.
+          var managerByRosterId = {};
+          ((state.history && state.history.standings) || []).forEach(function (s) {
+            managerByRosterId[s.roster_id] = s.manager;
+          });
+          return ensurePlayersMeta()
+            .then(function (playersMeta) {
+              var teamQbIndex = state.teamQbIndex || {};
+              var prelim = detectQbAdjustmentsForWeek(
+                targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+              );
+              var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
+              var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
+              if (needsFreshCheck && stale) {
+                return fetchPlayersMeta()
+                  .then(function (freshMeta) {
+                    return detectQbAdjustmentsForWeek(
+                      targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+                    );
+                  })
+                  .catch(function () { return prelim; });
+              }
+              return prelim;
+            })
+            .then(function (qbAdjustments) {
+              state.liveQbAdjustments = qbAdjustments;
+            })
+            .catch(function (err) {
+              console.warn("[rumbles] live QB-adjustment detection failed:", err);
+              state.liveQbAdjustments = state.liveQbAdjustments || [];
+            });
         });
       })
       .catch(function (err) {
@@ -912,6 +1129,50 @@
       els.errorBanner.classList.add("show");
     } else {
       els.errorBanner.classList.remove("show");
+    }
+
+    renderQbAdjustments();
+  }
+
+  var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely", detected: "Detected" };
+
+  function renderQbAdjustments() {
+    var body = document.getElementById("qb-adj-body");
+    if (!body) return; // defensive -- shouldn't happen, but render() must never throw
+
+    var histAdjustments = (state.history && state.history.qb_adjustments) || [];
+    var rows = histAdjustments.concat(state.liveQbAdjustments || []);
+    rows = rows.slice().sort(function (a, b) {
+      if (b.week !== a.week) return b.week - a.week;
+      return String(a.manager).localeCompare(String(b.manager));
+    });
+
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
+    } else {
+      body.innerHTML = rows.map(function (r) {
+        var backupsHtml = '<div class="backup-list">' + r.backup_qbs.map(function (b) {
+          return "<span>" + escapeHtml(b.name) + " (" + b.points.toFixed(2) + ")</span>";
+        }).join("") + "</div>";
+        var confidenceLabel = CONFIDENCE_LABELS[r.confidence] || r.confidence;
+        var pill = '<span class="confidence-pill confidence-' + r.confidence + '">' + confidenceLabel + "</span>" +
+          (r.live ? '<span class="badge-live">LIVE</span>' : "");
+        return "<tr>" +
+          "<td>" + r.week + "</td>" +
+          '<td class="manager-cell">' + escapeHtml(r.manager) + "</td>" +
+          '<td class="qb-name-cell">' + escapeHtml(r.injured_qb.name) + "</td>" +
+          '<td class="qb-name-cell">' + backupsHtml + "</td>" +
+          "<td>" + r.injured_qb.points.toFixed(2) + "</td>" +
+          "<td>" + r.backup_points_total.toFixed(2) + "</td>" +
+          '<td class="qb-name-cell">' + pill + "</td>" +
+          "</tr>";
+      }).join("");
+    }
+
+    var liveLabelEl = document.getElementById("qb-adj-live-label");
+    if (liveLabelEl) {
+      var isLive = state.live && state.live.isLive;
+      liveLabelEl.textContent = isLive ? "Checking Week " + state.live.week + " live." : "";
     }
   }
 

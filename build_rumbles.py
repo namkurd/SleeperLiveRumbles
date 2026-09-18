@@ -40,6 +40,7 @@ from typing import Any
 import requests
 
 API_BASE = "https://api.sleeper.app/v1"
+STATS_BASE = "https://api.sleeper.app/stats/nfl"
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rumbles_history.json")
 
 # Used if auto-discovery can't find the league by name (see
@@ -237,12 +238,220 @@ def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, d
     return result
 
 
-def build_history(league_id: str, season: str, completed_weeks: list[int], manager_map: dict[int, str]) -> dict:
+# ---------------------------------------------------------------------------
+# Custom rule: QB-injury backup-points adjustment
+#
+# House rule: if a manager's STARTED quarterback is ruled out mid-game and a
+# backup QB from the same NFL team comes in and scores, the manager is
+# credited with the COMBINED points of every QB from that NFL team who
+# played in that game -- not just their own starter's. This cascades (a
+# 3rd-string QB coming in after the backup also goes down adds their points
+# too). Confirmed against a real example: league roster_id 6 (Alex), Week 1
+# -- the commissioner's +19.47 `custom_points` override is exactly explained
+# by a backup QB's individual score that game.
+#
+# Detection is necessarily a heuristic (see dotProduct's isActual note
+# above for the general spirit of this codebase's "only trust what's
+# checkable" approach): Sleeper has no historical "this player was ruled
+# out during this specific past game" field -- `injury_status` is a live,
+# current-only snapshot. So this uses a tiered confidence system instead of
+# pretending to certainty the API can't provide:
+#   "confirmed" -- the commissioner has already keyed in a `custom_points`
+#     override for that roster/week. The strongest possible signal -- a
+#     human confirmed it -- and works for any week, indefinitely.
+#   "likely"    -- no override yet, but at the moment this was detected
+#     (live, mid-week -- or the first time the nightly job finalizes that
+#     week, before the next week's practice reports reset the field) the
+#     started QB's live `injury_status` was "Out"/"IR"/"PUP". This is only
+#     ever captured FRESH (see is_fresh below) and then carried forward
+#     permanently once captured -- never re-derived from a now-stale
+#     current snapshot for an old week.
+#   "detected"  -- the stats show a same-team backup QB recording real
+#     action that game (the actual trigger condition), but neither of the
+#     above corroborations lined up in time. Still shown, just labeled
+#     honestly as unconfirmed.
+KEY_ALIASES = {"kr_yd": "def_kr_yd"}
+TIER_SUM_KEYS = {"fgmiss": True}
+
+
+def dot_product(stats_obj: dict | None, scoring_settings: dict) -> float:
+    """Mirrors rumbles.html's dotProduct() -- always in "actual" mode here,
+    since this feature only ever scores real post-game stat lines, never
+    projections."""
+    if not stats_obj or not scoring_settings:
+        return 0.0
+    total = 0.0
+    for key, weight in scoring_settings.items():
+        if not isinstance(weight, (int, float)):
+            continue
+        val = stats_obj.get(key)
+        if not isinstance(val, (int, float)):
+            alias_key = KEY_ALIASES.get(key)
+            if alias_key and isinstance(stats_obj.get(alias_key), (int, float)):
+                val = stats_obj[alias_key]
+            elif TIER_SUM_KEYS.get(key):
+                prefix = key + "_"
+                tier_total = 0.0
+                saw_tier = False
+                for sk, sv in stats_obj.items():
+                    if sk.startswith(prefix) and isinstance(sv, (int, float)):
+                        tier_total += sv
+                        saw_tier = True
+                if saw_tier:
+                    val = tier_total
+        if isinstance(val, (int, float)):
+            total += weight * val
+    return total
+
+
+def array_to_player_map(arr: list | None) -> dict[str, dict]:
+    """Sleeper's bulk stats endpoint returns a JSON array of per-player
+    entries ({player_id, stats: {...}, ...}) -- convert to a player_id-keyed
+    lookup, same shape rumbles.html's arrayToPlayerMap() produces."""
+    out: dict[str, dict] = {}
+    if not arr:
+        return out
+    for entry in arr:
+        pid = entry.get("player_id") if isinstance(entry, dict) else None
+        if pid:
+            out[pid] = entry.get("stats") or {}
+    return out
+
+
+def is_played(stats: dict | None) -> bool:
+    """Did this player record real on-field action in this specific game's
+    stat line? Used to detect "this backup QB actually came in and played",
+    not just "is rostered somewhere"."""
+    if not stats:
+        return False
+    for k in ("gp", "pass_att", "rush_att"):
+        v = stats.get(k)
+        if isinstance(v, (int, float)) and v >= 1:
+            return True
+    return False
+
+
+def player_name(meta: dict | None) -> str:
+    if not meta:
+        return "Unknown"
+    full = meta.get("full_name")
+    if full:
+        return full
+    name = f"{meta.get('first_name') or ''} {meta.get('last_name') or ''}".strip()
+    return name or str(meta.get("player_id") or "Unknown")
+
+
+def build_team_qb_index(players_meta: dict[str, dict]) -> dict[str, list[str]]:
+    """NFL team abbreviation -> every player_id on that team with
+    position == "QB" (per Sleeper's current player metadata), regardless of
+    whether they're rostered in this fantasy league -- the backup credited
+    under this rule is very often a free agent from the affected manager's
+    perspective (confirmed on the real Alex example: the backup's points
+    don't appear anywhere in his own roster's players_points map)."""
+    index: dict[str, list[str]] = {}
+    for pid, meta in players_meta.items():
+        if not isinstance(meta, dict) or meta.get("position") != "QB":
+            continue
+        team = meta.get("team")
+        if not team:
+            continue
+        index.setdefault(team, []).append(pid)
+    return index
+
+
+def compute_qb_adjustments_for_week(
+    week: int,
+    matchups: list[dict],
+    players_meta: dict[str, dict],
+    team_qb_index: dict[str, list[str]],
+    stats_map: dict[str, dict],
+    scoring_settings: dict,
+    manager_map: dict[int, str],
+    is_fresh: bool,
+    carried_by_roster: dict[int, dict],
+) -> list[dict]:
+    entries: list[dict] = []
+    for m in matchups:
+        roster_id = m["roster_id"]
+        starters = m.get("starters") or []
+        for pid in starters:
+            if not pid or pid == "0":
+                continue
+            meta = players_meta.get(pid)
+            if not meta or meta.get("position") != "QB":
+                continue
+            team = meta.get("team")
+            if not team:
+                continue
+            played_ids = [cid for cid in team_qb_index.get(team, []) if is_played(stats_map.get(cid))]
+            backups = [cid for cid in played_ids if cid != pid]
+            if not backups:
+                continue
+
+            injured_points = round(dot_product(stats_map.get(pid), scoring_settings), 2)
+            backup_entries = []
+            for cid in backups:
+                pts = round(dot_product(stats_map.get(cid), scoring_settings), 2)
+                backup_entries.append({"player_id": cid, "name": player_name(players_meta.get(cid)), "points": pts})
+            backup_entries.sort(key=lambda b: -b["points"])
+            backup_total = round(sum(b["points"] for b in backup_entries), 2)
+
+            custom_points = m.get("custom_points")
+            custom_delta = round(official_points(m) - (m.get("points") or 0.0), 2) if custom_points is not None else None
+
+            carried = carried_by_roster.get(roster_id)
+            carried_matches = bool(carried) and carried.get("injured_qb", {}).get("player_id") == pid
+
+            if custom_points is not None:
+                confidence = "confirmed"
+                injury_status_at_capture = carried.get("injury_status_at_capture") if carried_matches else None
+            elif is_fresh:
+                status = (meta.get("injury_status") or "").strip().lower()
+                confidence = "likely" if status in ("out", "ir", "pup") else "detected"
+                injury_status_at_capture = meta.get("injury_status")
+            elif carried_matches:
+                confidence = carried.get("confidence", "detected")
+                injury_status_at_capture = carried.get("injury_status_at_capture")
+            else:
+                confidence = "detected"
+                injury_status_at_capture = None
+
+            entries.append(
+                {
+                    "week": week,
+                    "roster_id": roster_id,
+                    "manager": manager_map.get(roster_id, f"Roster {roster_id}"),
+                    "injured_qb": {"player_id": pid, "name": player_name(meta), "points": injured_points},
+                    "backup_qbs": backup_entries,
+                    "backup_points_total": backup_total,
+                    "confidence": confidence,
+                    "injury_status_at_capture": injury_status_at_capture,
+                    "custom_points_delta": custom_delta,
+                }
+            )
+    return entries
+
+
+def build_history(
+    league_id: str,
+    season: str,
+    season_type: str,
+    completed_weeks: list[int],
+    manager_map: dict[int, str],
+    players_meta: dict[str, dict] | None = None,
+    team_qb_index: dict[str, list[str]] | None = None,
+    scoring_settings: dict | None = None,
+    old_qb_by_week: dict[int, dict[int, dict]] | None = None,
+) -> dict:
     weekly: dict[str, dict] = {}
+    qb_adjustments: list[dict] = []
     cumulative: dict[int, dict] = {
         rid: {"rumbles": 0, "pf": 0.0, "pa": 0.0, "h2h_w": 0, "h2h_l": 0, "vs_field_w": 0, "vs_field_l": 0}
         for rid in manager_map
     }
+    old_qb_by_week = old_qb_by_week or {}
+    freshest_week = max(completed_weeks) if completed_weeks else None
+    can_detect_qb_adjustments = bool(players_meta and team_qb_index and scoring_settings)
 
     for week in completed_weeks:
         matchups = get_json(f"{API_BASE}/league/{league_id}/matchups/{week}")
@@ -250,6 +459,26 @@ def build_history(league_id: str, season: str, completed_weeks: list[int], manag
             continue
         week_result = score_week(matchups, manager_map)
         weekly[str(week)] = week_result
+
+        if can_detect_qb_adjustments:
+            try:
+                stats_arr = get_json(f"{STATS_BASE}/{season}/{week}?season_type={season_type}")
+                stats_map = array_to_player_map(stats_arr)
+                qb_adjustments.extend(
+                    compute_qb_adjustments_for_week(
+                        week,
+                        matchups,
+                        players_meta,
+                        team_qb_index,
+                        stats_map,
+                        scoring_settings,
+                        manager_map,
+                        is_fresh=(week == freshest_week),
+                        carried_by_roster=old_qb_by_week.get(week, {}),
+                    )
+                )
+            except Exception as e:  # noqa: BLE001 - this is a nice-to-have overlay, never fatal to the main standings
+                print(f"[warn] QB-adjustment detection failed for week {week} ({e}); skipping", file=sys.stderr)
 
         for rid, info in week_result.items():
             if rid not in cumulative:
@@ -305,12 +534,35 @@ def build_history(league_id: str, season: str, completed_weeks: list[int], manag
         "rumbles_per_h2h_win": RUMBLES_PER_WIN,
         "standings": standings,
         "weekly": weekly,
+        "qb_adjustments": qb_adjustments,
     }
+
+
+def load_previous_qb_adjustments() -> dict[int, dict[int, dict]]:
+    """roster_id-by-week lookup of whatever this script wrote for
+    qb_adjustments LAST run (if any) -- used to carry forward a "likely"
+    confidence tier captured while a week's injury_status snapshot was
+    still fresh, rather than re-deriving it later from a now-stale one.
+    Never fatal: a missing/corrupt previous file just means no carry-forward
+    data, same as this feature's very first run."""
+    if not os.path.exists(OUTPUT_PATH):
+        return {}
+    try:
+        with open(OUTPUT_PATH) as f:
+            old = json.load(f)
+        out: dict[int, dict[int, dict]] = {}
+        for entry in old.get("qb_adjustments") or []:
+            out.setdefault(entry["week"], {})[entry["roster_id"]] = entry
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't read previous {OUTPUT_PATH} for QB-adjustment carry-forward ({e})", file=sys.stderr)
+        return {}
 
 
 def main() -> None:
     state = get_json(f"{API_BASE}/state/nfl")
     season = state["season"]
+    season_type = state.get("season_type") or "regular"
     league_id = discover_current_league_id(season)
     manager_map = build_manager_map(league_id)
     completed_weeks = get_completed_weeks(state)
@@ -327,6 +579,7 @@ def main() -> None:
             "weeks_completed": [],
             "max_rumbles_per_week": MAX_RUMBLES_PER_WEEK,
             "rumbles_per_h2h_win": RUMBLES_PER_WIN,
+            "qb_adjustments": [],
             "standings": [
                 {
                     "roster_id": rid,
@@ -348,7 +601,30 @@ def main() -> None:
             "weekly": {},
         }
     else:
-        history = build_history(league_id, season, completed_weeks, manager_map)
+        players_meta: dict[str, dict] = {}
+        team_qb_index: dict[str, list[str]] = {}
+        scoring_settings: dict = {}
+        try:
+            league = get_json(f"{API_BASE}/league/{league_id}")
+            scoring_settings = league.get("scoring_settings") or {}
+            players_meta = get_json(f"{API_BASE}/players/nfl") or {}
+            team_qb_index = build_team_qb_index(players_meta)
+            print(f"[info] loaded {len(players_meta)} players, {sum(len(v) for v in team_qb_index.values())} QBs across {len(team_qb_index)} teams")
+        except Exception as e:  # noqa: BLE001 - the QB-adjustments table is a nice-to-have overlay, never fatal to the main standings
+            print(f"[warn] couldn't load player metadata/scoring_settings for QB-adjustment detection ({e}); standings will build without it", file=sys.stderr)
+
+        old_qb_by_week = load_previous_qb_adjustments()
+        history = build_history(
+            league_id,
+            season,
+            season_type,
+            completed_weeks,
+            manager_map,
+            players_meta,
+            team_qb_index,
+            scoring_settings,
+            old_qb_by_week,
+        )
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(history, f, indent=2)

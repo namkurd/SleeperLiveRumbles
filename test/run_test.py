@@ -55,6 +55,29 @@ def get_table_rows(page):
     )
 
 
+def get_qb_adjustment_rows(page):
+    """One dict per row of the QB Injury Backup Adjustments table."""
+    return page.eval_on_selector_all(
+        "#qb-adj-body tr",
+        """rows => rows.map(r => {
+            var tds = Array.from(r.querySelectorAll('td'));
+            if (tds.length < 7) return null; // the empty-state placeholder row
+            var backups = Array.from(tds[3].querySelectorAll('.backup-list span')).map(s => s.innerText.trim());
+            var pill = tds[6].querySelector('.confidence-pill');
+            return {
+                week: tds[0].innerText.trim(),
+                manager: tds[1].innerText.trim(),
+                injured_qb: tds[2].innerText.trim(),
+                backups: backups,
+                injured_points: tds[4].innerText.trim(),
+                backup_points: tds[5].innerText.trim(),
+                confidence: pill ? pill.innerText.trim() : null,
+                live: !!tds[6].querySelector('.badge-live'),
+            };
+        }).filter(r => r !== null)""",
+    )
+
+
 def get_matchup_colors(page):
     """manager name -> inline matchup-name text color (e.g. 'var(--matchup-2)'),
     or None if that row's name isn't colored (not in a live matchup this week)."""
@@ -93,6 +116,7 @@ def scenario_live_blending(browser):
         # glob patterns treat "?" as "any one character", not literally).
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
     }
     install_routes(page, routes)
     page.goto(PAGE_URL, wait_until="load")
@@ -376,10 +400,45 @@ def scenario_live_blending(browser):
 
     print("\nConfirmed column sorting works (including '#' itself) and every team's '#' value never changes.")
 
-    live_badges = page.locator(".badge-live").count()
+    live_badges = page.locator("#standings-body .badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge
     # now, so it's 2 per roster.
     assert live_badges == 24, f"expected 24 LIVE badges (2 per roster x 12 rosters), got {live_badges}"
+
+    # ---- QB Injury Backup Adjustments table --------------------------
+    # Roster 6 (Alex)'s started QB ("Kyler Murray", stats/players fixtures
+    # above) has a same-team backup ("Carson Wentz") who recorded real
+    # action this week -- must show up as a live "Likely" row (his
+    # injury_status is "Out" in the fixture, no custom_points override
+    # exists yet). The same-team 3rd-stringer who didn't play, and the
+    # same-position QB on a DIFFERENT team who did, must both be excluded.
+    # The synthetic week-1 "Confirmed" row from rumbles_history.json must
+    # also be present, sorted below week 2 (weeks sort descending).
+    qb_rows = get_qb_adjustment_rows(page)
+    print("\n== QB Injury Backup Adjustments ==")
+    for r in qb_rows:
+        print(r)
+    assert len(qb_rows) == 2, f"expected exactly 2 QB-adjustment rows (1 historical + 1 live), got {len(qb_rows)}"
+
+    live_row = next((r for r in qb_rows if r["manager"] == "Alex"), None)
+    assert live_row is not None, f"expected a live QB-adjustment row for Alex (roster 6), got: {qb_rows}"
+    assert live_row["week"] == "2", f"expected the live row to be week 2, got: {live_row['week']}"
+    assert live_row["injured_qb"] == "Kyler Murray", f"expected injured QB 'Kyler Murray', got: {live_row['injured_qb']}"
+    assert live_row["backups"] == ["Carson Wentz (21.90)"], f"expected only Carson Wentz as backup (21.90 pts) -- 3rd-stringer and other-team QB must be excluded, got: {live_row['backups']}"
+    assert live_row["injured_points"] == "7.20", f"expected Kyler Murray's own points to be 7.20, got: {live_row['injured_points']}"
+    assert live_row["backup_points"] == "21.90", f"expected backup total 21.90, got: {live_row['backup_points']}"
+    assert live_row["confidence"] == "Likely", f"expected 'Likely' confidence (injury_status 'Out', no override yet), got: {live_row['confidence']}"
+    assert live_row["live"], "expected the live-detected row to carry a LIVE badge"
+
+    hist_row = next((r for r in qb_rows if r["manager"] == "Ben"), None)
+    assert hist_row is not None, f"expected the historical week-1 row for Ben, got: {qb_rows}"
+    assert hist_row["week"] == "1", f"expected the historical row to be week 1, got: {hist_row['week']}"
+    assert hist_row["confidence"] == "Confirmed", f"expected 'Confirmed' confidence for the historical override row, got: {hist_row['confidence']}"
+    assert not hist_row["live"], "the historical (already-finalized) row must NOT carry a LIVE badge"
+
+    assert qb_rows[0]["week"] == "2" and qb_rows[1]["week"] == "1", f"expected rows sorted week descending (2 then 1), got weeks: {[r['week'] for r in qb_rows]}"
+
+    print("\nConfirmed QB Injury Backup Adjustments table: live detection (team-scoped, injury-status-corroborated) + historical merge + correct sort order.")
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
@@ -461,10 +520,13 @@ def scenario_history_load_failure(browser):
     page.goto(PAGE_URL, wait_until="load")
     page.wait_for_timeout(1000)
 
-    empty_state_count = page.locator(".empty-state").count()
+    # Both tables show their own empty-state now (the QB-adjustments table
+    # has nothing to show either, since it also reads from the same failed
+    # rumbles_history.json) -- scope this to the standings table specifically.
+    empty_state_count = page.locator("#standings-body .empty-state").count()
     assert empty_state_count == 1, "expected the empty-state placeholder row, not real standings rows"
 
-    empty_text = page.text_content(".empty-state")
+    empty_text = page.text_content("#standings-body .empty-state")
     print("Empty-state text:", empty_text)
     assert "Couldn't load rumbles_history.json" in empty_text, f"expected a clear load-failure message, got: {empty_text}"
 

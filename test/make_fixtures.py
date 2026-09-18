@@ -20,6 +20,26 @@ history = {
     "rumbles_per_h2h_win": 9,
     "standings": [],
     "weekly": {"1": {}},
+    # One synthetic HISTORICAL (already-finalized, week 1) QB-adjustment
+    # entry, "confirmed" tier -- exercises the code path that reads
+    # qb_adjustments straight out of rumbles_history.json (as opposed to
+    # the live-detected week-2 entry built further down, which exercises
+    # detectQbAdjustmentsForWeek in the browser). Together these two also
+    # test that the table correctly MERGES historical + live rows and
+    # sorts them by week (descending).
+    "qb_adjustments": [
+        {
+            "week": 1,
+            "roster_id": 2,
+            "manager": "Ben",
+            "injured_qb": {"player_id": "P_HIST_INJURED", "name": "Test Injured QB", "points": 10.0},
+            "backup_qbs": [{"player_id": "P_HIST_BACKUP", "name": "Test Backup QB", "points": 12.34}],
+            "backup_points_total": 12.34,
+            "confidence": "confirmed",
+            "injury_status_at_capture": None,
+            "custom_points_delta": 12.34,
+        }
+    ],
 }
 # Week 1: roster i beat roster i+1 within each pair (1v2, 3v4, ...), and
 # scores increase with roster_id so higher roster_id = more teams outscored.
@@ -204,8 +224,48 @@ def to_sleeper_array(player_stats, category):
     ]
 
 
+# ---- QB-injury-backup-adjustment scenario (roster 6 / "Alex", matching
+# the real reported example) -----------------------------------------
+#
+# Roster 6's played starter (already assigned a generic stat line above)
+# is overridden here to be a QB, "ruled out" (injury_status "Out") after a
+# modest stat line -- with a same-team backup who came in and outscored
+# him, a same-team 3rd-stringer who did NOT play (must be excluded), and
+# a same-position QB on a DIFFERENT team who DID play (must also be
+# excluded -- proves the detector is scoped by team, not just position).
+QB_INJURED_PID = roster_players[6][0]
+QB_BACKUP_PID = "P_QB6_BACKUP"
+QB_THIRDSTRING_PID = "P_QB6_THIRDSTRING"  # same team, did NOT play -- must be excluded
+QB_OTHER_TEAM_PID = "P_QB_OTHER_TEAM"  # different team, DID play -- must be excluded
+
+stats[QB_INJURED_PID] = {
+    "pass_att": 10, "pass_cmp": 7, "pass_yd": 80, "pass_td": 1, "pass_int": 0,
+}  # 80*0.04 + 1*4 = 7.2 points -- a short outing, consistent with leaving hurt early
+stats[QB_BACKUP_PID] = {
+    "pass_att": 25, "pass_cmp": 18, "pass_yd": 210, "pass_td": 2, "pass_int": 1,
+    "rush_yd": 15, "rush_td": 1,
+}  # 210*0.04 + 2*4 - 1*2 + 15*0.1 + 1*6 = 21.9 points
+stats[QB_OTHER_TEAM_PID] = {
+    "pass_att": 20, "pass_cmp": 12, "pass_yd": 150, "pass_td": 1, "pass_int": 0,
+}  # played, but a different NFL team -- must never be attributed to roster 6
+
 with open(os.path.join(OUT, "stats_week2.json"), "w") as f:
     json.dump(to_sleeper_array(stats, "stat"), f, indent=2)
+
+# ---- /v1/players/nfl : player metadata (position/team/injury_status) ----
+# Deliberately small -- only the players the QB-adjustment scenario above
+# actually needs. Every other player_id used elsewhere in these fixtures
+# (P1, P3, etc) is intentionally left OUT of this map: with no metadata,
+# detectQbAdjustmentsForWeek's `meta.position !== "QB"` check skips them
+# immediately, so they can never accidentally be swept into this feature.
+players = {
+    QB_INJURED_PID: {"position": "QB", "team": "MIN", "full_name": "Kyler Murray", "injury_status": "Out"},
+    QB_BACKUP_PID: {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": None},
+    QB_THIRDSTRING_PID: {"position": "QB", "team": "MIN", "full_name": "JJ McCarthy", "injury_status": None},
+    QB_OTHER_TEAM_PID: {"position": "QB", "team": "KC", "full_name": "Some Other QB", "injury_status": None},
+}
+with open(os.path.join(OUT, "players.json"), "w") as f:
+    json.dump(players, f, indent=2)
 
 # ---- bulk projections for week 2 : every rostered player has a projection ----
 projections = {}
