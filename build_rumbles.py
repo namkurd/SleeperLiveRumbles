@@ -159,6 +159,26 @@ def get_completed_weeks(state: dict) -> list[int]:
     return list(range(1, current_week))
 
 
+def official_points(m: dict) -> float:
+    """A roster's OFFICIAL final score for a matchup entry.
+
+    Sleeper's matchup objects carry a `custom_points` field, null unless
+    the commissioner manually overrode that roster's score for that week
+    (a house-rule bonus/penalty, a corrected stat, etc) -- when set, it's
+    the number Sleeper itself treats as final and displays, superseding
+    the plain stat-calculated `points` field. Confirmed directly against
+    a real override in this league (Week 1: `points` 140.61, `custom_points`
+    160.08 -- a +19.47 commissioner adjustment) -- silently using `points`
+    alone would understate that roster's PF, understate their opponent's
+    PA by the same amount, and could even misstate how many other teams
+    they outscored that week (the vs.-field "all play" comparison).
+    """
+    custom = m.get("custom_points")
+    if custom is not None:
+        return custom
+    return m.get("points") or 0.0
+
+
 def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, dict]:
     """Given raw /matchups/{week} data, compute each roster's Rumbles etc.
 
@@ -172,21 +192,21 @@ def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, d
         pairs.setdefault(m["matchup_id"], []).append(m)
 
     result: dict[int, dict] = {}
-    all_scores = {rid: (by_roster[rid].get("points") or 0.0) for rid in by_roster}
+    all_scores = {rid: official_points(by_roster[rid]) for rid in by_roster}
 
     for _, pair in pairs.items():
         if len(pair) != 2:
             # Bye week or malformed data -- no H2H opponent to score against.
             for m in pair:
                 result[m["roster_id"]] = {
-                    "points": m.get("points") or 0.0,
+                    "points": official_points(m),
                     "opponent_roster_id": None,
                     "opponent_points": None,
                     "h2h_win": None,
                 }
             continue
         a, b = pair
-        pa, pb = a.get("points") or 0.0, b.get("points") or 0.0
+        pa, pb = official_points(a), official_points(b)
         a_win = pa > pb
         b_win = pb > pa
         result[a["roster_id"]] = {
