@@ -151,23 +151,26 @@ Adjustments log below, so a given manager's name is the same color
 everywhere on the page, not just in the standings table.
 
 A team's "Points This Week" cell shows a per-starter breakdown, rendered as
-a small table (blank corner cell, then "Actual"/"Proj" column headers, then
-one row per player -- name left-aligned, both score columns centered under
-their headers) during a live week -- hover it on desktop, or tap it on
-mobile (a native `title`-attribute tooltip never appears on tap at all, so
-this is a custom element instead -- see `#pts-tooltip`/`.pts-tooltip` in
-`rumbles.html` -- driven by real hover where a device has one, and
-tap-to-toggle (tap again, or tap elsewhere, to dismiss) where it doesn't;
-which one a given device gets is decided once via
-`matchMedia("(hover: hover) and (pointer: fine)")`). Every row always shows
-both a player's actual AND projected score, regardless of mode -- what
-differs by mode is which starters even qualify to be shown, matching what
-the Actual/Projected toggle already means everywhere else on the page:
+a small table (blank header cells over the kickoff-time/name columns, then
+"Actual"/"Proj" labels over the two score columns, then one row per player)
+during a live week -- hover it on desktop, or tap it on mobile (a native
+`title`-attribute tooltip never appears on tap at all, so this is a custom
+element instead -- see `#pts-tooltip`/`.pts-tooltip` in `rumbles.html` --
+driven by real hover where a device has one, and tap-to-toggle (tap again,
+or tap elsewhere, to dismiss) where it doesn't; which one a given device
+gets is decided once via `matchMedia("(hover: hover) and (pointer: fine)")`).
+The tooltip's box always shrinks/grows to fit whatever it's showing (never
+wider than it needs to be), and no player's name is ever ellipsis-truncated
+to make it fit. Every row always shows both a player's actual AND projected
+score, regardless of mode -- what differs by mode is which starters even
+qualify to be shown, matching what the Actual/Projected toggle already
+means everywhere else on the page:
 
 - **Actual** -- only starters who've completed or are currently in a live
   game; anyone who hasn't started yet is left off entirely (a flat "0.00"
   row for them would just be noise in a view that's explicitly about
-  banked, real production).
+  banked, real production). Just a 3-column table here (name, Actual,
+  Proj) -- no kickoff-time column at all (see Projected, next).
 - **Projected** -- only starters whose game is still developing: not yet
   started, or currently in progress. A starter whose real game has already
   gone FINAL is deliberately left out here (even though Actual mode still
@@ -182,11 +185,13 @@ the Actual/Projected toggle already means everywhere else on the page:
   each starter's game status (and kickoff time) by their NFL team. If that
   fetch fails, or a player's team isn't in it for some reason (a bye week,
   say), they're treated as NOT complete and kept in the tooltip rather than
-  risking hiding someone whose game might still be going. Each row in this
-  mode is also prefixed with a compact "Mon 8pm" / "Sun 1pm" / "Thu 8:15pm"
-  kickoff-time label (day + local time, minutes only shown when the game
-  doesn't start exactly on the hour) ahead of the player's name, so an
-  upcoming or in-progress player's game window is visible at a glance.
+  risking hiding someone whose game might still be going. This mode's table
+  gains a 4th column, a compact "Mon 1pm"-style kickoff-time label (day +
+  local hour, no minutes -- e.g. "1pm", never "1:00pm") -- right-aligned and
+  in a smaller/dimmer font, sitting immediately to the left of (and tight
+  against) the player's name, so an upcoming or in-progress player's game
+  window is visible at a glance without competing with the name for
+  attention.
 
 Every row, in either mode, is ordered by the player's roster SLOT (Sleeper
 Superflex, Superflex, RB, RB, WR/TE flex, WR/TE flex, FLEX, TE, K, DEF), not
@@ -393,8 +398,8 @@ displayed -- it was just a different scoring system. What's now called
    confirms a fully-pregame roster gets no tooltip at all in Actual mode
    rather than an empty table, and confirms a starter whose team is
    "in_progress" (not "complete") is still kept in the Projected tooltip,
-   rendered with a green "live" row and a "Mon 8pm"-style kickoff-time
-   label ahead of their name (both read back from `league.json`'s
+   rendered with a green "live" row and a "Mon 1pm"-style kickoff-time
+   label in its own separate column (both read back from `league.json`'s
    deliberately-reversed `roster_positions` and `scores_week2.json`'s
    `start_time`, which also proves the slot-order re-sort actually ran --
    the roster-mate in the other slot must display FIRST despite being

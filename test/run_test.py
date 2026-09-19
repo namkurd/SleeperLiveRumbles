@@ -130,25 +130,26 @@ def format_game_start_label(dt_utc):
     timezone-aware UTC datetime -- valid as a mirror only because every
     test page/context is pinned to timezone_id="UTC" (see new_page/
     new_mobile_page below), so the browser's local Date methods and this
-    function's UTC fields agree."""
-    hour, minute = dt_utc.hour, dt_utc.minute
+    function's UTC fields agree. Minutes are deliberately never shown
+    ("1pm", not "1:00pm")."""
+    hour = dt_utc.hour
     hour12 = hour % 12 or 12
-    minute_part = f":{minute:02d}" if minute else ""
     ampm = "pm" if hour >= 12 else "am"
     js_weekday = (dt_utc.weekday() + 1) % 7  # Python: Mon=0 -> JS: Sun=0
-    return f"{DAY_NAMES[js_weekday]} {hour12}{minute_part}{ampm}"
+    return f"{DAY_NAMES[js_weekday]} {hour12}{ampm}"
 
 
 def get_thisweek_pts_tooltip(page, manager):
     """Hovers the given manager's 'Pts This Week' cell (real mouse hover,
     exercising the actual show/position logic, not just the underlying
     state) and returns the custom #pts-tooltip's visible table content as a
-    list of {name, actual, proj, live} dicts (one per body row, in DOM/
-    display order), or None if that cell has no tooltip to show. `name`
-    includes the "Mon 8pm"-style kickoff prefix when the row has one (see
-    formatGameStartLabel in rumbles.html) since that's rendered into the
-    same cell. Moves the mouse away afterward so the next check starts
-    clean."""
+    list of {time, name, actual, proj, live} dicts (one per body row, in
+    DOM/display order), or None if that cell has no tooltip to show. `time`
+    is the row's own separate kickoff-time column ("Mon 1pm", Projected
+    mode only) -- "" for a row without a resolvable game, and "" for every
+    row in Actual mode (that column doesn't exist there at all -- see
+    showStartTime in rumbles.html). Moves the mouse away afterward so the
+    next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
         "cells => cells.map(c => c.innerText.trim())",
@@ -167,10 +168,13 @@ def get_thisweek_pts_tooltip(page, manager):
             "#pts-tooltip tbody tr",
             """trs => trs.map(tr => {
                 var tds = tr.querySelectorAll('td');
+                var hasTime = tds.length === 4;
+                var i = hasTime ? 1 : 0;
                 return {
-                    name: tds[0].innerText.trim(),
-                    actual: tds[1].innerText.trim(),
-                    proj: tds[2].innerText.trim(),
+                    time: hasTime ? tds[0].innerText.trim() : "",
+                    name: tds[i].innerText.trim(),
+                    actual: tds[i + 1].innerText.trim(),
+                    proj: tds[i + 2].innerText.trim(),
                     live: tr.classList.contains('pts-tooltip-live'),
                 };
             })""",
@@ -363,17 +367,18 @@ def scenario_live_blending(browser):
             # NOT appear at all (a flat "0.00" row here would be noise in
             # a view that's explicitly about banked, real production). A
             # completed game does NOT get excluded in Actual mode -- that
-            # exclusion is Projected-mode-only (see below). No startLabel
-            # in Actual mode (kickoff time is a Projected-only concept),
-            # and "complete" isn't "in_progress" so this row isn't live.
-            assert aidan_rows == [{"name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "17.00", "live": False}], (
+            # exclusion is Projected-mode-only (see below). No time column
+            # at all in Actual mode (kickoff time is a Projected-only
+            # concept), and "complete" isn't "in_progress" so this row
+            # isn't live.
+            assert aidan_rows == [{"time": "", "name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "17.00", "live": False}], (
                 f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_rows}"
             )
         else:
             # Amon-Ra St. Brown's game (DET) is marked "complete" -- must
             # be excluded from Projected entirely, leaving only P2 (whose
-            # team/game is unresolvable -- no startLabel, not live).
-            assert aidan_rows == [{"name": "P2", "actual": "0.00", "proj": "12.50", "live": False}], (
+            # team/game is unresolvable -- blank time cell, not live).
+            assert aidan_rows == [{"time": "", "name": "P2", "actual": "0.00", "proj": "12.50", "live": False}], (
                 f"[{mode}] expected Aidan's tooltip to exclude the finished starter (Amon-Ra St. Brown / DET, complete) "
                 f"and show only the still-pregame one, got {aidan_rows}"
             )
@@ -382,23 +387,24 @@ def scenario_live_blending(browser):
         # Alex (roster 6): Kyler Murray's team (MIN) is "in_progress", NOT
         # "complete" -- Projected mode must still include him (only a fully
         # finished game gets excluded, not one that's still being played),
-        # colored live (green), and prefixed with his game's "Mon 8pm"
-        # kickoff label (from scores_week2.json's MNF_START_MS). His
-        # roster-mate P12 (unresolvable game -- no label, not live) must
-        # come FIRST despite being starters[1] -- league.json's
-        # roster_positions is deliberately reversed (see make_fixtures.py)
-        # so this only passes if the slot-order re-sort actually ran.
+        # colored live (green), with his game's "Mon 1pm"-style kickoff
+        # label (from scores_week2.json's MNF_START_MS) in its OWN column,
+        # separate from his name. His roster-mate P12 (unresolvable game --
+        # blank time cell, not live) must come FIRST despite being
+        # starters[1] -- league.json's roster_positions is deliberately
+        # reversed (see make_fixtures.py) so this only passes if the
+        # slot-order re-sort actually ran.
         if mode != "actual":
             alex_rows = get_thisweek_pts_tooltip(page, "Alex")
             expected_kickoff = format_game_start_label(MNF_START_UTC)
             assert alex_rows == [
-                {"name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
-                {"name": f"{expected_kickoff} Kyler Murray", "actual": "7.20", "proj": "21.09", "live": True},
+                {"time": "", "name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
+                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "21.09", "live": True},
             ], (
-                f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live, "
-                f"kickoff-labeled Kyler Murray (MIN, in_progress -- not complete), got {alex_rows}"
+                f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live "
+                f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
             )
-            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff label):", alex_rows)
+            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff column):", alex_rows)
 
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress

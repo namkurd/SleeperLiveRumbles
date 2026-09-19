@@ -233,12 +233,13 @@
   .pts-tooltip {
     position: fixed;
     z-index: 50;
-    /* Shrinks to fit the table's own intrinsic width (never wider than
-       that), capped so it can't overflow a narrow viewport or balloon
-       absurdly wide -- see td.pts-tooltip-name below for how a single
-       outlier-long name degrades (ellipsis, not wrap, not a wider box). */
+    /* Shrinks to fit the table's own intrinsic width (minimized -- see
+       .pts-tooltip table below), never wider than it needs to be to show
+       every player's full name with no ellipsis truncation. Capped only
+       as an absolute last-resort safety valve against a genuinely tiny
+       viewport, not as a normal operating constraint. */
     width: max-content;
-    max-width: min(92vw, 340px);
+    max-width: 92vw;
     background: var(--panel);
     color: var(--text);
     border: 1px solid var(--panel-border);
@@ -252,21 +253,18 @@
     visibility: hidden;
   }
   .pts-tooltip.visible { opacity: 1; visibility: visible; }
-  /* Rendered as a real <table> (see renderPtsTooltipContent) -- a header
-     row labels the Actual/Proj columns, one row per player. Player name
-     stays left-aligned (it's a name, not a number); the two score columns
-     are centered under their headers. */
-  /* width/min-width explicitly reset -- the page's global `table` rule
-     (min-width: 760px, meant for the standings table) would otherwise
-     force this tiny tooltip table just as wide, blowing right through
-     the container's max-width cap. */
+  /* Rendered as a real <table> (see renderPtsTooltipContent), columns
+     [kickoff time?, name, Actual, Proj] -- the kickoff-time column only
+     exists at all in Projected mode. width/min-width explicitly reset --
+     the page's global `table` rule (min-width: 760px, meant for the
+     standings table) would otherwise force this tiny tooltip table just
+     as wide, blowing right through the container's shrink-to-fit sizing. */
   .pts-tooltip table { border-collapse: collapse; width: auto; min-width: 0; }
   .pts-tooltip th, .pts-tooltip td {
-    padding: 1px 10px 1px 0;
+    padding: 1px 10px 1px 10px;
     text-align: center;
     white-space: nowrap;
   }
-  .pts-tooltip th:first-child, .pts-tooltip td:first-child { text-align: left; }
   .pts-tooltip th:last-child, .pts-tooltip td:last-child { padding-right: 0; }
   .pts-tooltip th {
     font-size: 0.66rem;
@@ -276,18 +274,32 @@
     font-weight: 600;
     padding-bottom: 3px;
   }
-  /* One absurdly long player name shouldn't balloon the whole tooltip's
-     width -- capped and truncated with an ellipsis instead of wrapping,
-     same reasoning the old single-line-per-player layout used. */
-  .pts-tooltip td.pts-tooltip-name {
-    max-width: 170px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  /* Kickoff-time column ("Mon 1pm") -- right-aligned and pulled in tight
+     (minimal padding on both sides) so it sits close against the
+     left-aligned name column right next to it, smaller font since it's a
+     compact secondary detail, not one of the two headline numbers. */
+  .pts-tooltip td.pts-tooltip-time, .pts-tooltip th.pts-tooltip-time {
+    text-align: right;
+    padding-left: 0;
+    padding-right: 4px;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+  }
+  /* Player name -- left-aligned, no truncation: every name is shown in
+     full (the container shrinks/grows to fit -- see .pts-tooltip above),
+     so there's deliberately no max-width/ellipsis here. Tight left
+     padding keeps it close against the kickoff-time column when present. */
+  .pts-tooltip td.pts-tooltip-name, .pts-tooltip th.pts-tooltip-name {
+    text-align: left;
+    padding-left: 4px;
   }
   /* A player currently in a live (in-progress) game -- colored with one of
      the existing manager matchup-pair colors (not a new color introduced
-     just for this) so "live" reads as this page's own established green. */
+     just for this) so "live" reads as this page's own established green.
+     The kickoff-time cell stays dimmed even on a live row (it's already
+     started, so the time is now just informational, not the focus). */
   .pts-tooltip tr.pts-tooltip-live td { color: var(--matchup-4); }
+  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-time { color: var(--text-dim); }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -513,7 +525,7 @@
     teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
     playersMetaFetchedAt: 0,
     matchupColorByRosterId: {}, // roster_id -> this week's matchup name color (set by buildCombinedStandings), reused by the QB Injury Backup Adjustments log so a manager's name color is the same everywhere on the page
-    thisWeekTooltipRows: {}, // roster_id -> array of "Pts This Week" tooltip row objects (set by render(), read by the pts-tooltip show/toggle handlers)
+    thisWeekTooltipData: {}, // roster_id -> {showStartTime, rows} "Pts This Week" tooltip data (set by render(), read by the pts-tooltip show/toggle handlers)
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
@@ -1229,22 +1241,21 @@
 
   function formatRecord(w, l) { return w + "-" + l; }
 
-  // "Mon 8pm" / "Sun 1pm" / "Thu 8:15pm" -- a compact day+time label for a
-  // game's kickoff, shown in the Projected tooltip so an upcoming or
-  // in-progress player's game window is visible at a glance. Always
-  // rendered in the viewer's own local time zone (Date's getDay/getHours
-  // are local-time by construction). Minutes are only shown when the
-  // kickoff isn't exactly on the hour, to keep the common case terse.
+  // "Mon 8pm" / "Sun 1pm" / "Thu 8pm" -- a compact day+time label for a
+  // game's kickoff, shown in its own column in the Projected tooltip (see
+  // renderPtsTooltipContent) so an upcoming or in-progress player's game
+  // window is visible at a glance. Always rendered in the viewer's own
+  // local time zone (Date's getDay/getHours are local-time by
+  // construction). Minutes are deliberately never shown -- "1pm", not
+  // "1:00pm" -- to keep this column as compact as possible.
   var TOOLTIP_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   function formatGameStartLabel(ms) {
     if (typeof ms !== "number" || isNaN(ms)) return "";
     var d = new Date(ms);
     var hours = d.getHours();
-    var minutes = d.getMinutes();
     var hour12 = hours % 12;
     if (hour12 === 0) hour12 = 12;
-    var minutePart = minutes ? ":" + (minutes < 10 ? "0" : "") + minutes : "";
-    return TOOLTIP_DAY_NAMES[d.getDay()] + " " + hour12 + minutePart + (hours >= 12 ? "pm" : "am");
+    return TOOLTIP_DAY_NAMES[d.getDay()] + " " + hour12 + (hours >= 12 ? "pm" : "am");
   }
 
   // Builds the "Points This Week" hover/tap tooltip's row data: one row per
@@ -1270,11 +1281,14 @@
   //     treated as NOT complete, so a player is never wrongly hidden just
   //     because their game status couldn't be confirmed.
   // Every row always carries both actual AND projected values (rendered as
-  // a 2-column table -- see renderPtsTooltipContent); only Projected mode's
-  // rows also carry a startLabel (Actual mode is about banked production,
-  // where a kickoff time isn't relevant). `live: true` (a game currently
-  // in progress) is what render's row-coloring uses to highlight that
-  // player in green.
+  // a table -- see renderPtsTooltipContent). `showStartTime` (true only in
+  // Projected mode -- Actual mode is about banked production, where a
+  // kickoff time isn't relevant) tells the renderer whether to include the
+  // kickoff-time column at all; when it's true, each row's `startLabel` is
+  // its own separate column value (possibly "" for a player whose game
+  // couldn't be resolved), not text folded into the name. `live: true` (a
+  // game currently in progress) is what render's row-coloring uses to
+  // highlight that player in green.
   function thisWeekTooltip(mode, breakdown) {
     if (!breakdown || !breakdown.length) return null;
     var showStartTime = mode !== "actual";
@@ -1282,7 +1296,7 @@
       ? breakdown.filter(function (p) { return p.played; })
       : breakdown.filter(function (p) { return p.game_status !== "complete"; });
     if (!players.length) return null;
-    return players.map(function (p) {
+    var rows = players.map(function (p) {
       return {
         name: p.name,
         startLabel: showStartTime ? formatGameStartLabel(p.game_start_ms) : "",
@@ -1291,6 +1305,7 @@
         live: p.game_status === "in_progress"
       };
     });
+    return { showStartTime: showStartTime, rows: rows };
   }
 
   function buildCombinedStandings() {
@@ -1444,7 +1459,7 @@
     }
     updateHeaderSortIndicators();
 
-    state.thisWeekTooltipRows = {};
+    state.thisWeekTooltipData = {};
     if (!rows.length) {
       var emptyMsg;
       if (state.historyError) {
@@ -1466,12 +1481,12 @@
         // hide/toggle below), not a native title attribute -- a native
         // title tooltip never appears on tap on mobile at all, so this
         // cell just carries a data-roster-id for the delegated hover/tap
-        // handlers to look up pre-built tooltip rows from
-        // state.thisWeekTooltipRows with.
-        var ptsTooltipRows = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
+        // handlers to look up pre-built tooltip data from
+        // state.thisWeekTooltipData with.
+        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
-        if (ptsTooltipRows) {
-          state.thisWeekTooltipRows[r.roster_id] = ptsTooltipRows;
+        if (ptsTooltip) {
+          state.thisWeekTooltipData[r.roster_id] = ptsTooltip;
           ptsCellAttrs += ' class="thisweek-pts has-tooltip"';
         } else {
           ptsCellAttrs += ' class="thisweek-pts"';
@@ -1555,33 +1570,38 @@
     tip.style.top = top + "px";
   }
 
-  // Renders the tooltip's row data (see thisWeekTooltip) as a real table:
-  // a header row labeling the Actual/Proj columns, then one row per player
-  // -- name first (prefixed with its "Mon 8pm"-style kickoff label when
-  // the row has one, i.e. Projected mode only), then its actual and
-  // projected scores. A row for a player whose game is currently live gets
-  // the .pts-tooltip-live class (green text -- see that CSS rule).
-  function renderPtsTooltipContent(rows) {
-    var bodyHtml = rows.map(function (r) {
-      var nameText = (r.startLabel ? r.startLabel + " " : "") + r.name;
+  // Renders the tooltip's data (see thisWeekTooltip) as a real table: an
+  // optional kickoff-time column (Projected mode only, per `showStartTime`
+  // -- see the .pts-tooltip-time CSS for why it's a separate right-aligned
+  // column rather than text folded into the name), then name, then a
+  // header row labeling the Actual/Proj columns, then one row per player.
+  // A row for a player whose game is currently live gets the
+  // .pts-tooltip-live class (green text -- see that CSS rule).
+  function renderPtsTooltipContent(tooltip) {
+    var showStartTime = tooltip.showStartTime;
+    var timeHeaderHtml = showStartTime ? '<th class="pts-tooltip-time"></th>' : "";
+    var bodyHtml = tooltip.rows.map(function (r) {
+      var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time">' + escapeHtml(r.startLabel) + "</td>" : "";
       return '<tr class="' + (r.live ? "pts-tooltip-live" : "") + '">' +
-        '<td class="pts-tooltip-name">' + escapeHtml(nameText) + "</td>" +
+        timeCellHtml +
+        '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
         "<td>" + r.actual.toFixed(2) + "</td>" +
         "<td>" + r.proj.toFixed(2) + "</td>" +
         "</tr>";
     }).join("");
     els.ptsTooltip.innerHTML =
-      "<table><thead><tr><th></th><th>Actual</th><th>Proj</th></tr></thead><tbody>" +
+      "<table><thead><tr>" + timeHeaderHtml + '<th class="pts-tooltip-name"></th><th>Actual</th><th>Proj</th>' +
+      "</tr></thead><tbody>" +
       bodyHtml +
       "</tbody></table>";
   }
 
   function showPtsTooltip(cell) {
     var rid = cell.getAttribute("data-roster-id");
-    var rows = state.thisWeekTooltipRows[rid];
-    if (!rows) return;
+    var tooltip = state.thisWeekTooltipData[rid];
+    if (!tooltip) return;
     state.activePtsTooltipRosterId = rid;
-    renderPtsTooltipContent(rows);
+    renderPtsTooltipContent(tooltip);
     els.ptsTooltip.setAttribute("aria-hidden", "false");
     els.ptsTooltip.classList.add("visible");
     positionPtsTooltip(cell);
@@ -1603,13 +1623,13 @@
   function refreshOrHidePtsTooltip() {
     var rid = state.activePtsTooltipRosterId;
     if (rid == null) return;
-    var rows = state.thisWeekTooltipRows[rid];
+    var tooltip = state.thisWeekTooltipData[rid];
     var cell = els.body.querySelector('td.thisweek-pts[data-roster-id="' + rid + '"]');
-    if (!rows || !cell) {
+    if (!tooltip || !cell) {
       hidePtsTooltip();
       return;
     }
-    renderPtsTooltipContent(rows);
+    renderPtsTooltipContent(tooltip);
     positionPtsTooltip(cell);
   }
 
