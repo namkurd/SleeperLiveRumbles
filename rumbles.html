@@ -166,6 +166,50 @@
   }
   .refresh-btn:active { transform: scale(0.97); }
   .refresh-btn[disabled] { opacity: 0.5; cursor: default; }
+  /* "How to Use" button reuses .refresh-btn's exact pill styling; the
+     dotted underline is the same "this is interactive/has more info"
+     affordance used elsewhere on the page (see td.thisweek-pts.has-tooltip
+     above), since there's no hover cursor to discover it on a touch device. */
+  .howto-btn {
+    text-decoration: underline dotted;
+    text-decoration-color: var(--panel-border);
+    text-underline-offset: 3px;
+  }
+  /* Static explainer tooltip for the "How to Use" button -- unlike
+     .pts-tooltip (a per-row, JS-rendered table of nowrap cells), this is
+     fixed, hand-written paragraph content that WRAPS at a comfortable
+     reading width, so it gets its own width/white-space treatment rather
+     than sharing .pts-tooltip's rules. pointer-events stays enabled (the
+     Pts tooltip disables it) so the text can be selected/read at leisure
+     while it's pinned open by a click. */
+  .howto-tooltip {
+    position: fixed;
+    z-index: 50;
+    width: 320px;
+    max-width: 90vw;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+  }
+  .howto-tooltip.visible { opacity: 1; visibility: visible; }
+  .howto-tooltip p { margin: 0 0 10px; }
+  .howto-tooltip p:last-child { margin-bottom: 0; }
+  .howto-tooltip .howto-heading {
+    margin: 0 0 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+  }
+  .howto-tooltip .howto-note { color: var(--text-dim); font-size: 0.76rem; }
   .table-panel {
     background: var(--panel);
     border: 1px solid var(--panel-border);
@@ -431,6 +475,7 @@
         <button type="button" id="mode-custom">Projected</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
+      <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
     </div>
   </header>
 
@@ -498,6 +543,15 @@
 </div>
 
 <div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
+
+<div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
+  <p class="howto-heading">Actual</p>
+  <p>Shows the most recently completed week's real standings: Rumbles, Rumble %, PF, PA, H2H, and Vs. Field are all locked in from that finished week. Once a new week kicks off, it tracks the actual points scored so far and shows what this week's Rumbles would be if the week ended right now, without adding them to the season Rumbles total yet. Hover or tap a team's Pts This Week to see exactly which players have contributed to that score.</p>
+  <p class="howto-heading">Projected</p>
+  <p>The tab to watch during a live week. It scores the week using projected points (swapping in real production once a player has started) and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
+  <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
+  <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
+</div>
 
 <script>
 (function () {
@@ -579,6 +633,8 @@
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
     ptsTooltip: document.getElementById("pts-tooltip"),
+    howtoBtn: document.getElementById("howto-btn"),
+    howtoTooltip: document.getElementById("howto-tooltip"),
     headerCells: {} // filled in by attachSortHandlers(): column key -> <th>
   };
 
@@ -1727,10 +1783,11 @@
   // the two (rather than wiring up both everywhere) avoids the classic
   // mobile double-fire bug where a tap's synthetic mouseover shows the
   // tooltip and the click that immediately follows it then reads as "already
-  // open" and instantly toggles it back off.
-  var supportsHoverPtsTooltip = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+  // open" and instantly toggles it back off. Shared with the "How to Use"
+  // tooltip below, which is the same capability check.
+  var supportsHover = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
 
-  if (supportsHoverPtsTooltip) {
+  if (supportsHover) {
     els.body.addEventListener("mouseover", function (e) {
       var cell = ptsCellFromEvent(e);
       if (cell) showPtsTooltip(cell);
@@ -1767,6 +1824,91 @@
   // scroll events don't bubble, but they do propagate in the capture phase.
   window.addEventListener("scroll", hidePtsTooltip, true);
   window.addEventListener("resize", hidePtsTooltip);
+
+  // ---- "How to Use" hover/click tooltip ----------------------------------
+  // Static explainer content (not per-row data, unlike the Pts tooltip
+  // above), anchored to a single fixed button in the header instead of a
+  // table cell. Hovering shows it on a device with real hover (same
+  // capability check as the Pts tooltip, supportsHover); clicking/tapping
+  // the button also works on any device. On a hover-capable device a real
+  // click is always preceded by a real mouseenter (the cursor has to
+  // arrive at the button before the click fires), so a plain show/hide
+  // toggle on click would immediately re-close what hover had just opened
+  // -- instead, click there PINS it open (stays open even once the mouse
+  // leaves) and a second click un-pins it. On a device with no hover at
+  // all, there's no such race, so click is just a plain open/closed toggle
+  // there, matching the Pts tooltip's own tap-to-toggle behavior.
+  var howtoPinned = false;
+
+  function positionHowToTooltip() {
+    var margin = 6;
+    var btnRect = els.howtoBtn.getBoundingClientRect();
+    var tipRect = els.howtoTooltip.getBoundingClientRect();
+    // Right-align to the button by default -- the button sits near the
+    // right edge of the header, so opening from its left edge would run
+    // the tooltip off the right side of the viewport on most screens.
+    var left = btnRect.right - tipRect.width;
+    var maxLeft = window.innerWidth - tipRect.width - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    var top = btnRect.bottom + margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = btnRect.top - tipRect.height - margin;
+      if (top < margin) top = margin;
+    }
+    els.howtoTooltip.style.left = left + "px";
+    els.howtoTooltip.style.top = top + "px";
+  }
+
+  function showHowTo() {
+    els.howtoTooltip.classList.add("visible");
+    els.howtoTooltip.setAttribute("aria-hidden", "false");
+    positionHowToTooltip();
+  }
+
+  function hideHowTo() {
+    els.howtoTooltip.classList.remove("visible");
+    els.howtoTooltip.setAttribute("aria-hidden", "true");
+    howtoPinned = false;
+  }
+
+  function isHowToVisible() {
+    return els.howtoTooltip.classList.contains("visible");
+  }
+
+  if (supportsHover) {
+    els.howtoBtn.addEventListener("mouseenter", showHowTo);
+    els.howtoBtn.addEventListener("mouseleave", function () {
+      if (!howtoPinned) hideHowTo();
+    });
+    els.howtoBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      howtoPinned = !howtoPinned;
+      if (howtoPinned) {
+        showHowTo();
+      } else {
+        hideHowTo();
+      }
+    });
+  } else {
+    els.howtoBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (isHowToVisible()) {
+        hideHowTo();
+      } else {
+        showHowTo();
+      }
+    });
+  }
+  // Dismiss on an outside click/tap -- but not one landing on the tooltip
+  // itself, so its text stays selectable while it's pinned open.
+  document.addEventListener("click", function (e) {
+    if (isHowToVisible() && (!e.target.closest || !e.target.closest("#howto-btn, .howto-tooltip"))) {
+      hideHowTo();
+    }
+  });
+  window.addEventListener("scroll", hideHowTo, true);
+  window.addEventListener("resize", hideHowTo);
 
   var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely" };
 

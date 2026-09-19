@@ -293,7 +293,7 @@ def new_mobile_page(browser, console_errors, page_errors):
     and (pointer: coarse) for this, exactly like a real phone, which is
     what makes rumbles.html pick the tap-to-toggle code path for the
     'Pts This Week' tooltip instead of the hover path (see
-    supportsHoverPtsTooltip in rumbles.html). timezone_id="UTC" for the
+    supportsHover in rumbles.html). timezone_id="UTC" for the
     same determinism reason as new_page above."""
     context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
     page = context.new_page()
@@ -887,7 +887,7 @@ def scenario_mobile_tap_tooltip(browser):
     assert not tip.evaluate("el => el.classList.contains('visible')"), "tooltip should start out hidden"
 
     # A plain hover (mouse-only event) must NOT show it in this context --
-    # only a real tap should, since supportsHoverPtsTooltip is false here.
+    # only a real tap should, since supportsHover is false here.
     cell.hover(force=True)
     page.wait_for_timeout(200)
     assert not tip.evaluate("el => el.classList.contains('visible')"), "a hover-only event must not show the tooltip on a touch-primary device"
@@ -914,10 +914,120 @@ def scenario_mobile_tap_tooltip(browser):
     assert not tip.evaluate("el => el.classList.contains('visible')"), "tapping elsewhere on the page should dismiss an open tooltip"
     print("Tapping elsewhere on the page correctly dismissed the open tooltip.")
 
+    # ---- "How to Use" button: same tap-to-toggle behavior on a touch-
+    # primary device (a plain hover must do nothing here, only a real tap).
+    howto_btn = page.locator("#howto-btn")
+    howto_tip = page.locator("#howto-tooltip")
+    assert not howto_tip.evaluate("el => el.classList.contains('visible')"), "How to Use tooltip should start out hidden"
+
+    howto_btn.hover(force=True)
+    page.wait_for_timeout(200)
+    assert not howto_tip.evaluate("el => el.classList.contains('visible')"), "a hover-only event must not show the How to Use tooltip on a touch-primary device"
+
+    howto_btn.tap()
+    page.wait_for_timeout(200)
+    assert howto_tip.evaluate("el => el.classList.contains('visible')"), "tapping the How to Use button should show the tooltip"
+    print("How to Use: tap correctly showed the tooltip on a touch-primary device.")
+
+    howto_btn.tap()
+    page.wait_for_timeout(200)
+    assert not howto_tip.evaluate("el => el.classList.contains('visible')"), "tapping the How to Use button again should toggle it closed"
+
+    howto_btn.tap()
+    page.wait_for_timeout(200)
+    assert howto_tip.evaluate("el => el.classList.contains('visible')"), "How to Use tooltip should be showing again after re-tapping"
+    page.locator("#subtitle").tap()
+    page.wait_for_timeout(200)
+    assert not howto_tip.evaluate("el => el.classList.contains('visible')"), "tapping elsewhere should dismiss an open How to Use tooltip"
+    print("How to Use: tap-to-toggle and tap-elsewhere-dismisses both work correctly on a touch-primary device.")
+
     page.close()
     assert not console_errors, f"console errors found: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
     print("\nSCENARIO 1b PASSED")
+
+
+def scenario_howto_tooltip(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO 1c: 'How to Use' button, on a real-hover (desktop) device")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    # This scenario doesn't need any live-week data -- the How to Use
+    # button/tooltip are static and always present regardless of whether a
+    # week is live -- but every route the page might touch still needs a
+    # response (an unmocked one 404s against the local static server and
+    # trips this scenario's own console-error check), so this reuses the
+    # same "not live" fixture set as scenario_cumulative_only.
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/state/nfl": load("state_lagging.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),
+        "**/stats/nfl/2026/2*": [],
+        "**/projections/nfl/2026/2*": [],
+        "**/scores/nfl/regular/2026/2": [],
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    btn = page.locator("#howto-btn")
+    assert btn.count() == 1, "expected a 'How to Use' button in the header"
+    assert btn.inner_text().strip() == "How to Use", f"expected the button's label to read 'How to Use', got {btn.inner_text()!r}"
+
+    tip = page.locator("#howto-tooltip")
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "How to Use tooltip should start out hidden"
+
+    # Hover shows it.
+    btn.hover()
+    page.wait_for_timeout(150)
+    assert tip.evaluate("el => el.classList.contains('visible')"), "hovering the How to Use button should show the tooltip"
+    tip_text = tip.inner_text()
+    print("How to Use tooltip content:\n", tip_text)
+    # The headings render visually uppercase (text-transform: uppercase in
+    # CSS), which innerText reflects -- compare case-insensitively.
+    tip_text_lower = tip_text.lower()
+    assert "actual" in tip_text_lower and "projected" in tip_text_lower, f"expected the tooltip to explain both the Actual and Projected tabs, got: {tip_text!r}"
+    # No em dashes anywhere in the explainer copy.
+    assert "—" not in tip_text, f"expected no em dashes in the How to Use tooltip copy, got: {tip_text!r}"
+    # Shouldn't mention the QB Injury Backup Adjustments table -- that's a
+    # separate feature with its own on-page description already.
+    assert "QB" not in tip_text and "backup" not in tip_text.lower(), f"expected the How to Use tooltip to NOT mention the QB injury backup adjustments feature, got: {tip_text!r}"
+    print("Confirmed hover shows the tooltip, with Actual/Projected explainer content, no em dashes, and no mention of the QB adjustments table.")
+
+    # Moving the mouse away hides it again.
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "moving the mouse away from the How to Use button should hide the tooltip"
+    print("Confirmed moving the mouse away hides the tooltip.")
+
+    # Clicking toggles it open even without hovering first (force=True skips
+    # Playwright's actionability hover step, isolating the click itself).
+    btn.click(force=True)
+    page.wait_for_timeout(150)
+    assert tip.evaluate("el => el.classList.contains('visible')"), "clicking the How to Use button should show the tooltip"
+    print("Confirmed clicking the button shows the tooltip.")
+
+    # Clicking it again toggles it back closed.
+    btn.click(force=True)
+    page.wait_for_timeout(150)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "clicking the How to Use button again should toggle the tooltip closed"
+    print("Confirmed clicking the button again toggles the tooltip closed.")
+
+    # Click to open, then click elsewhere on the page -- must dismiss.
+    btn.click(force=True)
+    page.wait_for_timeout(150)
+    assert tip.evaluate("el => el.classList.contains('visible')"), "tooltip should be showing again after re-clicking"
+    page.locator("#subtitle").click()
+    page.wait_for_timeout(150)
+    assert not tip.evaluate("el => el.classList.contains('visible')"), "clicking elsewhere on the page should dismiss an open How to Use tooltip"
+    print("Confirmed clicking elsewhere on the page dismisses an open tooltip.")
+
+    page.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIO 1c PASSED")
 
 
 def scenario_cumulative_only(browser):
@@ -1023,6 +1133,7 @@ def main():
         )
         scenario_live_blending(browser)
         scenario_mobile_tap_tooltip(browser)
+        scenario_howto_tooltip(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
         browser.close()

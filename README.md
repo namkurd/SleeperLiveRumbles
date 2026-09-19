@@ -360,6 +360,15 @@ match what Sleeper's own site shows, no matter how precisely it was
 displayed -- it was just a different scoring system. What's now called
 "Projected" is the one that actually reproduces Sleeper's own number.)
 
+### "How to Use" button
+
+A button next to "Refresh now" that shows a short explainer of what the
+Actual and Projected tabs each mean, in plain language, for anyone opening
+the page without the context above. Hover it on desktop; on a touch
+device (or with a click on desktop) it toggles open and stays open until
+you tap/click elsewhere. Same static content either way -- it's not
+per-team data, just a standing explainer.
+
 ## Files
 
 | File | What it does |
@@ -456,12 +465,27 @@ displayed -- it was just a different scoring system. What's now called
    (proving it's really on the tap-only code path, not silently falling
    back to hover), and that tapping the cell shows it, tapping the same
    cell again toggles it closed, and tapping anywhere else on the page
-   dismisses an open one.
-3. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
+   dismisses an open one. Also confirms the "How to Use" button's tooltip
+   behaves the same way on a touch device (tap-to-toggle, tap-elsewhere
+   dismisses, a plain hover does nothing).
+3. **The "How to Use" button, on a real-hover (desktop) context** --
+   confirms hovering shows the explainer tooltip (and moving the mouse
+   away hides it again), that its content actually explains both the
+   Actual and Projected tabs with no em dashes and no mention of the QB
+   Injury Backup Adjustments table, and that clicking it also works on a
+   hover-capable device: shows it, a second click toggles it closed, and
+   clicking elsewhere on the page dismisses an open one. This also
+   regression-tests a real race this button has to avoid: on a device with
+   real hover, a click is always preceded by a real mouseenter (the cursor
+   has to arrive before the click fires), so a naive show/hide toggle on
+   click would immediately re-close what hover had just opened -- click
+   there needs to PIN the tooltip open instead (see `howtoPinned` in
+   `rumbles.html`).
+4. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative
    standings, never a blank table.
-4. **`rumbles_history.json` fails to load** -- the page must show a clear,
+5. **`rumbles_history.json` fails to load** -- the page must show a clear,
    diagnosable message instead of a silent blank table.
 
 `test/test_build_rumbles.py` is a separate, plain-Python unit test (no
