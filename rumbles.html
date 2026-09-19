@@ -277,7 +277,11 @@
   /* Kickoff-time column ("Mon 1pm") -- right-aligned and pulled in tight
      (minimal padding on both sides) so it sits close against the
      left-aligned name column right next to it, smaller font since it's a
-     compact secondary detail, not one of the two headline numbers. */
+     compact secondary detail, not one of the two headline numbers. The
+     dimmed color here is only the FALLBACK for a row with no resolvable
+     timeslot color -- renderPtsTooltipContent sets an inline color (one
+     per distinct kickoff time this week, see buildTimeSlotColors) on the
+     cell itself whenever one is available, which wins over this. */
   .pts-tooltip td.pts-tooltip-time, .pts-tooltip th.pts-tooltip-time {
     text-align: right;
     padding-left: 0;
@@ -293,13 +297,16 @@
     text-align: left;
     padding-left: 4px;
   }
-  /* A player currently in a live (in-progress) game -- colored with one of
-     the existing manager matchup-pair colors (not a new color introduced
-     just for this) so "live" reads as this page's own established green.
-     The kickoff-time cell stays dimmed even on a live row (it's already
-     started, so the time is now just informational, not the focus). */
-  .pts-tooltip tr.pts-tooltip-live td { color: var(--matchup-4); }
-  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-time { color: var(--text-dim); }
+  /* A player currently in a live (in-progress) game -- their name AND
+     actual score (only those two -- not the kickoff time, which keeps its
+     own per-timeslot color, and not the projected score, which stays the
+     default text color) are colored with one of the existing manager
+     matchup-pair colors (not a new color introduced just for this) so
+     "live" reads as this page's own established green. */
+  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-name,
+  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-actual {
+    color: var(--matchup-4);
+  }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -526,6 +533,7 @@
     playersMetaFetchedAt: 0,
     matchupColorByRosterId: {}, // roster_id -> this week's matchup name color (set by buildCombinedStandings), reused by the QB Injury Backup Adjustments log so a manager's name color is the same everywhere on the page
     thisWeekTooltipData: {}, // roster_id -> {showStartTime, rows} "Pts This Week" tooltip data (set by render(), read by the pts-tooltip show/toggle handlers)
+    timeSlotColorByLabel: {}, // "Mon 1pm" etc -> "var(--matchup-N)" (set by loadLive() via buildTimeSlotColors, read by thisWeekTooltip)
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
@@ -1147,6 +1155,7 @@
           var projMap = arrayToPlayerMap(results[3]);
           var games = results[4] || [];
           var teamGameSchedule = buildTeamGameSchedule(games);
+          state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
 
@@ -1258,6 +1267,45 @@
     return TOOLTIP_DAY_NAMES[d.getDay()] + " " + hour12 + (hours >= 12 ? "pm" : "am");
   }
 
+  // Assigns one color per distinct kickoff-time LABEL this week (e.g. every
+  // "Sun 1pm" game shares a color, every "Thu 8pm" game shares a different
+  // one) so a manager whose players' games cluster into the same window is
+  // visible at a glance in the Projected tooltip's kickoff-time column.
+  // Reuses the same --matchup-N palette already used for manager name
+  // colors (not a new color set) -- see TOOLTIP_TIMESLOT_PALETTE. Colors
+  // are assigned in chronological order (earliest kickoff first) so the
+  // mapping is deterministic and stable across the 30s poll re-renders
+  // within a live week (the same real-world time always lands on the same
+  // palette index as long as this week's schedule itself doesn't change,
+  // which it doesn't mid-week). Grouping is by the DISPLAYED label, not the
+  // raw timestamp -- two games a few minutes apart that render as the same
+  // "4pm" (minutes are dropped, see formatGameStartLabel) are deliberately
+  // treated as the same slot for coloring purposes, matching what the
+  // viewer actually sees. With more than 6 distinct slots in a week (rare,
+  // but possible with international/added windows), the palette wraps
+  // around (colors repeat) rather than running out.
+  var TOOLTIP_TIMESLOT_PALETTE = ["var(--matchup-1)", "var(--matchup-2)", "var(--matchup-3)", "var(--matchup-4)", "var(--matchup-5)", "var(--matchup-6)"];
+  function buildTimeSlotColors(teamGameSchedule) {
+    var earliestByLabel = {};
+    Object.keys(teamGameSchedule || {}).forEach(function (team) {
+      var startMs = teamGameSchedule[team].startTimeMs;
+      if (typeof startMs !== "number") return;
+      var label = formatGameStartLabel(startMs);
+      if (!label) return;
+      if (earliestByLabel[label] === undefined || startMs < earliestByLabel[label]) {
+        earliestByLabel[label] = startMs;
+      }
+    });
+    var labels = Object.keys(earliestByLabel).sort(function (a, b) {
+      return earliestByLabel[a] - earliestByLabel[b];
+    });
+    var colorByLabel = {};
+    labels.forEach(function (label, i) {
+      colorByLabel[label] = TOOLTIP_TIMESLOT_PALETTE[i % TOOLTIP_TIMESLOT_PALETTE.length];
+    });
+    return colorByLabel;
+  }
+
   // Builds the "Points This Week" hover/tap tooltip's row data: one row per
   // starter, in the fixed slot order from buildPlayerBreakdown (SFLEX,
   // SFLEX, RB, RB, W/T, W/T, FLEX, TE, K, DEF). Which starters are even
@@ -1297,9 +1345,15 @@
       : breakdown.filter(function (p) { return p.game_status !== "complete"; });
     if (!players.length) return null;
     var rows = players.map(function (p) {
+      var startLabel = showStartTime ? formatGameStartLabel(p.game_start_ms) : "";
       return {
         name: p.name,
-        startLabel: showStartTime ? formatGameStartLabel(p.game_start_ms) : "",
+        startLabel: startLabel,
+        // Per-timeslot color (see buildTimeSlotColors) -- null when there's
+        // no label to color (Actual mode, or a game that couldn't be
+        // resolved), in which case the kickoff-time cell just falls back
+        // to its default dimmed CSS color.
+        timeColor: startLabel ? (state.timeSlotColorByLabel[startLabel] || null) : null,
         actual: p.actual,
         proj: p.proj,
         live: p.game_status === "in_progress"
@@ -1354,6 +1408,13 @@
         this_week: thisWeekRumbles,
         this_week_points: thisWeekPoints,
         this_week_live: !!liveInfo,
+        // true/false/null (tie, or no live matchup) -- whether THIS team is
+        // currently ahead in its live H2H matchup, under the CURRENTLY
+        // SELECTED mode's scoring (liveInfo is already mode-scoped). Used
+        // only to color the "Pts This Week" cell in Projected mode (see
+        // render()) -- Actual mode's standings/H2H stay frozen regardless,
+        // so this is never used there.
+        this_week_winning: liveInfo ? liveInfo.h2hWin : null,
         pf: combinedPf,
         pa: combinedPa,
         h2h_w: h2hW,
@@ -1491,6 +1552,16 @@
         } else {
           ptsCellAttrs += ' class="thisweek-pts"';
         }
+        // In Projected mode, the team currently AHEAD in its live H2H
+        // matchup gets its "Pts This Week" value colored the same as its
+        // own manager name (r.matchup_color) -- an at-a-glance "who's
+        // winning" signal. The trailing team (or anyone outside Projected
+        // mode, or not in a live matchup at all) just keeps the default
+        // blue from the .thisweek-pts CSS class -- no inline style
+        // overrides it in that case.
+        if (state.mode !== "actual" && r.this_week_winning === true && r.matchup_color) {
+          ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
+        }
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
@@ -1581,11 +1652,12 @@
     var showStartTime = tooltip.showStartTime;
     var timeHeaderHtml = showStartTime ? '<th class="pts-tooltip-time"></th>' : "";
     var bodyHtml = tooltip.rows.map(function (r) {
-      var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time">' + escapeHtml(r.startLabel) + "</td>" : "";
+      var timeStyle = r.timeColor ? ' style="color:' + r.timeColor + '"' : "";
+      var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time"' + timeStyle + ">" + escapeHtml(r.startLabel) + "</td>" : "";
       return '<tr class="' + (r.live ? "pts-tooltip-live" : "") + '">' +
         timeCellHtml +
         '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
-        "<td>" + r.actual.toFixed(2) + "</td>" +
+        '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         "<td>" + r.proj.toFixed(2) + "</td>" +
         "</tr>";
     }).join("");

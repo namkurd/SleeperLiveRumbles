@@ -295,12 +295,24 @@ with open(os.path.join(OUT, "stats_week2.json"), "w") as f:
 # scenario (Amon-Ra St. Brown's already-finished game): Actual mode must
 # still show a fully-finished player, but Projected mode must now exclude
 # them entirely once their real game has gone final.
+# Joe's roster (roster 5) starters P9 (played -- but ZERO_ACTUAL_ROSTERS
+# means no actual-stats row exists for him, so he's still "not played" per
+# hasPlayed) and P10 (unplayed) get real NFL team metadata here so their
+# games can be scheduled at a SECOND, distinct kickoff-time slot in
+# scores_week2.json below ("Sun 1pm", chronologically before the existing
+# MIN "Mon 8pm" game) -- this exercises buildTimeSlotColors actually
+# assigning two DIFFERENT colors for two DIFFERENT displayed labels (the
+# existing fixtures only ever produced one resolvable label). Deliberately
+# does NOT touch Aidan's P2 or Alex's P12, which have existing precise
+# "no metadata / unresolvable" tooltip assertions that must keep passing.
 players = {
     "P1": {"position": "WR", "team": "DET", "full_name": "Amon-Ra St. Brown", "injury_status": None},
     QB_INJURED_PID: {"position": "QB", "team": "MIN", "full_name": "Kyler Murray", "injury_status": "Out"},
     QB_BACKUP_PID: {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": None},
     QB_THIRDSTRING_PID: {"position": "QB", "team": "MIN", "full_name": "JJ McCarthy", "injury_status": None},
     QB_OTHER_TEAM_PID: {"position": "QB", "team": "KC", "full_name": "Some Other QB", "injury_status": None},
+    "P9": {"position": "RB", "team": "DAL", "full_name": "Joe Starter One", "injury_status": None},
+    "P10": {"position": "WR", "team": "PHI", "full_name": "Joe Starter Two", "injury_status": None},
 }
 with open(os.path.join(OUT, "players.json"), "w") as f:
     json.dump(players, f, indent=2)
@@ -338,6 +350,16 @@ with open(os.path.join(OUT, "players.json"), "w") as f:
 # label it expects to see.
 MNF_START = datetime.datetime(2026, 9, 21, 20, 0, 0, tzinfo=datetime.timezone.utc)  # a Monday
 MNF_START_MS = int(MNF_START.timestamp() * 1000)
+
+# A SECOND, distinct kickoff-time slot -- Sunday 1pm UTC (a day before the
+# Monday game above) -- for Joe's roster's two starters (P9/DAL, P10/PHI),
+# whose game hasn't started yet (status "pre_game", so still "developing"
+# per thisWeekTooltip's Projected-mode filter, and NOT live). This is what
+# lets a test confirm buildTimeSlotColors assigns two DIFFERENT colors for
+# two DIFFERENT displayed labels ("Sun 1pm" vs "Mon 8pm"), chronologically
+# ("Sun 1pm" sorts first, so it gets the first palette color).
+SUN_START = datetime.datetime(2026, 9, 20, 13, 0, 0, tzinfo=datetime.timezone.utc)  # a Sunday
+SUN_START_MS = int(SUN_START.timestamp() * 1000)
 scores = [
     {
         "status": "post_game",
@@ -347,6 +369,11 @@ scores = [
         "status": "in_progress",
         "start_time": MNF_START_MS,
         "metadata": {"away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": True},
+    },
+    {
+        "status": "pre_game",
+        "start_time": SUN_START_MS,
+        "metadata": {"away_team": "DAL", "home_team": "PHI", "is_over": False, "is_in_progress": False},
     },
 ]
 with open(os.path.join(OUT, "scores_week2.json"), "w") as f:

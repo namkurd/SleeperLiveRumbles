@@ -43,6 +43,16 @@ MNF_START_UTC = datetime.datetime.fromtimestamp(
     tz=datetime.timezone.utc,
 )
 
+# The DAL/PHI game's kickoff time (Joe's roster, P9/P10) -- a SECOND,
+# distinct displayed kickoff label ("Sun 1pm") used to verify
+# buildTimeSlotColors assigns different colors to different labels. Picked
+# out by away_team "DAL" rather than just "the other entry with a
+# start_time" so this stays correct if a third timed game is ever added.
+SUN_START_UTC = datetime.datetime.fromtimestamp(
+    next(g["start_time"] for g in load("scores_week2.json") if g.get("metadata", {}).get("away_team") == "DAL") / 1000,
+    tz=datetime.timezone.utc,
+)
+
 
 def install_routes(page, routes):
     for pattern, payload in routes.items():
@@ -120,6 +130,72 @@ def get_matchup_colors(page):
         })""",
     )
     return dict(pairs)
+
+
+def get_pts_this_week_colors(page):
+    """manager name -> inline color style of their 'Pts This Week' cell
+    (td.thisweek-pts), or None if uncolored -- same idea as
+    get_matchup_colors, but for the win-coloring feature: only the team
+    currently AHEAD in its live H2H matchup gets colored, and only in
+    Projected mode (see render() in rumbles.html)."""
+    pairs = page.eval_on_selector_all(
+        "#standings-body tr",
+        """rows => rows.map(r => {
+            var name = r.querySelector('td.manager').innerText.trim();
+            var cell = r.querySelector('td.thisweek-pts');
+            var color = cell ? cell.style.color : null;
+            return [name, color || null];
+        })""",
+    )
+    return dict(pairs)
+
+
+def get_tooltip_row_computed_colors(page, manager):
+    """Hovers the given manager's 'Pts This Week' cell (same interaction as
+    get_thisweek_pts_tooltip) and returns a list of {name, time_color,
+    name_color, actual_color, proj_color} -- real COMPUTED (getComputedStyle)
+    colors as rgb() strings, one dict per visible tooltip row, in display
+    order, or None if that cell has no tooltip. Computed style is needed
+    here (rather than the raw inline style.color that get_matchup_colors/
+    get_pts_this_week_colors read) because the live-row Name/Actual
+    green-coloring is a CSS class rule (`tr.pts-tooltip-live td...`), not an
+    inline style -- only the per-timeslot time-column color is actually set
+    inline (see renderPtsTooltipContent), but computed style reads both
+    uniformly. Moves the mouse away afterward so the next check starts
+    clean."""
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim())",
+    ).index(manager)
+    cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+    classes = cell.get_attribute("class") or ""
+    if "has-tooltip" not in classes:
+        return None
+    cell.hover()
+    page.wait_for_timeout(150)
+    tip = page.locator("#pts-tooltip")
+    is_visible = tip.evaluate("el => el.classList.contains('visible')")
+    rows = None
+    if is_visible:
+        rows = page.eval_on_selector_all(
+            "#pts-tooltip tbody tr",
+            """trs => trs.map(tr => {
+                var tds = tr.querySelectorAll('td');
+                var hasTime = tds.length === 4;
+                var i = hasTime ? 1 : 0;
+                var timeCell = hasTime ? tds[0] : null;
+                return {
+                    name: tds[i].innerText.trim(),
+                    time_color: timeCell ? getComputedStyle(timeCell).color : null,
+                    name_color: getComputedStyle(tds[i]).color,
+                    actual_color: getComputedStyle(tds[i + 1]).color,
+                    proj_color: getComputedStyle(tds[i + 2]).color,
+                };
+            })""",
+        )
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    return rows
 
 
 DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -405,6 +481,82 @@ def scenario_live_blending(browser):
                 f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
             )
             print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff column):", alex_rows)
+
+            # ---- Live-row coloring is scoped to Name + Actual only, NOT
+            # Proj -- Kyler Murray's row (still in progress) should have his
+            # Name and Actual cells computed-colored the same fixed green
+            # (--matchup-4, #008300 -- unchanged between light/dark mode, so
+            # this is safe to hardcode) that the CSS class rule applies,
+            # while his Proj cell must NOT be that color (it keeps the
+            # tooltip's default text color instead).
+            LIVE_GREEN_RGB = "rgb(0, 131, 0)"  # #008300, i.e. var(--matchup-4)
+            alex_colors = get_tooltip_row_computed_colors(page, "Alex")
+            kyler_colors = next(r for r in alex_colors if r["name"] == "Kyler Murray")
+            assert kyler_colors["name_color"] == LIVE_GREEN_RGB, (
+                f"[{mode}] expected Kyler Murray's live-row Name cell to be colored green ({LIVE_GREEN_RGB}), got {kyler_colors['name_color']}"
+            )
+            assert kyler_colors["actual_color"] == LIVE_GREEN_RGB, (
+                f"[{mode}] expected Kyler Murray's live-row Actual cell to be colored green ({LIVE_GREEN_RGB}), got {kyler_colors['actual_color']}"
+            )
+            assert kyler_colors["proj_color"] != LIVE_GREEN_RGB, (
+                f"[{mode}] expected Kyler Murray's live-row Proj cell to NOT be colored green (only Name+Actual go green on a live row), got {kyler_colors['proj_color']}"
+            )
+            print(f"Verified live-row green coloring is scoped to Name+Actual (not Proj) for {mode} mode (Alex/Kyler Murray).")
+
+            # ---- Per-timeslot kickoff-time-column coloring: Joe's two
+            # starters (P9/DAL, P10/PHI) share the SAME game ("Sun 1pm",
+            # chronologically before Alex's "Mon 8pm" MIN game) and so must
+            # share the same time-column color; that color must differ from
+            # Kyler Murray's "Mon 8pm" time-column color, proving
+            # buildTimeSlotColors assigns colors per DISPLAYED label, not
+            # just one flat color for every game.
+            joe_colors = get_tooltip_row_computed_colors(page, "Joe")
+            assert joe_colors and len(joe_colors) == 2, f"[{mode}] expected exactly 2 tooltip rows for Joe (P9 + P10), got {joe_colors}"
+            joe_time_colors = {r["time_color"] for r in joe_colors}
+            assert len(joe_time_colors) == 1, (
+                f"[{mode}] expected Joe's two starters (same game, same displayed kickoff label) to share ONE time-column color, got {joe_time_colors}"
+            )
+            joe_time_color = next(iter(joe_time_colors))
+            kyler_time_color = kyler_colors["time_color"]
+            assert joe_time_color and kyler_time_color, f"[{mode}] expected both Joe's and Kyler Murray's time cells to be colored, got {joe_time_color!r} / {kyler_time_color!r}"
+            assert joe_time_color != kyler_time_color, (
+                f"[{mode}] expected Joe's 'Sun 1pm' time-column color to differ from Kyler Murray's 'Mon 8pm' time-column color, both got {joe_time_color}"
+            )
+            print(f"Verified per-timeslot kickoff-time-column coloring for {mode} mode (Joe's 'Sun 1pm' pair share a color, differing from Alex's 'Mon 8pm').")
+
+            # Sanity check the premise via the plain text too (not just
+            # color): Joe's rows really do show the "Sun 1pm" label (read
+            # back from the fixture, not hardcoded a second time), distinct
+            # from Alex's "Mon 8pm"-equivalent label.
+            expected_sun_label = format_game_start_label(SUN_START_UTC)
+            joe_rows_for_label_check = get_thisweek_pts_tooltip(page, "Joe")
+            joe_labels = {r["time"] for r in joe_rows_for_label_check}
+            assert joe_labels == {expected_sun_label}, (
+                f"[{mode}] expected both of Joe's starters to show the '{expected_sun_label}' kickoff label, got {joe_labels}"
+            )
+
+        # ---- "Pts This Week" cell win-coloring (Projected mode only): the
+        # team currently AHEAD in this week's live H2H matchup gets its PTS
+        # cell colored to match its own manager-name color; the trailing
+        # team keeps the default (uncolored -> falls back to CSS blue).
+        # Joe (roster 5) vs Alex (roster 6) are this week's H2H pair --
+        # Joe's custom/Projected total (42.04) beats Alex's (28.43), so Joe
+        # should win the color under "custom" mode. Actual mode never
+        # colors this cell at all (Actual mode's standings/H2H stay frozen
+        # regardless of who's ahead live), regardless of who's ahead there.
+        pts_colors = get_pts_this_week_colors(page)
+        if mode == "actual":
+            assert pts_colors.get("Joe") is None, f"[actual] expected Joe's Pts This Week cell to be uncolored (win-coloring is Projected-mode-only), got {pts_colors.get('Joe')}"
+            assert pts_colors.get("Alex") is None, f"[actual] expected Alex's Pts This Week cell to be uncolored (win-coloring is Projected-mode-only), got {pts_colors.get('Alex')}"
+        else:
+            assert pts_colors.get("Joe") is not None, f"[{mode}] expected Joe's Pts This Week cell to be colored (he's ahead in this week's live H2H matchup)"
+            assert pts_colors["Joe"] == colors_by_mode[mode]["Joe"], (
+                f"[{mode}] expected Joe's winning Pts This Week color ({pts_colors['Joe']}) to match his own matchup-name color ({colors_by_mode[mode]['Joe']})"
+            )
+            assert pts_colors.get("Alex") is None, (
+                f"[{mode}] expected Alex's (trailing) Pts This Week cell to stay uncolored (default blue), got {pts_colors.get('Alex')}"
+            )
+        print(f"Verified Pts This Week win-coloring for {mode} mode (Joe colored to match his matchup color, Alex left default, {'no coloring at all in Actual mode' if mode == 'actual' else ''}).")
 
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress

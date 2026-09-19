@@ -150,6 +150,15 @@ reshuffle the colors too) and reused as-is by the QB Injury Backup
 Adjustments log below, so a given manager's name is the same color
 everywhere on the page, not just in the standings table.
 
+In **Projected** mode only, whichever manager is currently AHEAD in this
+week's live H2H matchup also gets their own "Points This Week" value
+colored to match their manager-name color -- an at-a-glance "who's
+winning this matchup" signal alongside the name coloring above. The
+trailing manager in that matchup just keeps the default color. Actual
+mode never colors this cell at all (Actual mode's season totals stay
+frozen regardless of who's ahead live, so there's nothing to signal
+there), no matter who's actually ahead on points.
+
 A team's "Points This Week" cell shows a per-starter breakdown, rendered as
 a small table (blank header cells over the kickoff-time/name columns, then
 "Actual"/"Proj" labels over the two score columns, then one row per player)
@@ -191,15 +200,28 @@ means everywhere else on the page:
   in a smaller/dimmer font, sitting immediately to the left of (and tight
   against) the player's name, so an upcoming or in-progress player's game
   window is visible at a glance without competing with the name for
-  attention.
+  attention. Each DISTINCT displayed kickoff label (e.g. "Sun 1pm", "Sun
+  4pm", "Thu 8pm") gets its own color, reusing the same matchup-pair color
+  set (assigned chronologically -- the earliest kickoff gets the first
+  color, wrapping around if there are more than 6 distinct times that
+  week) -- so it's easy to see at a glance when a manager's players'
+  games cluster into the same window versus being spread across the
+  slate. This coloring is independent of the win/name/live colors used
+  elsewhere on the page -- the same 6-color set is just reused again here
+  for a different purpose (see `buildTimeSlotColors` in `rumbles.html`).
 
 Every row, in either mode, is ordered by the player's roster SLOT (Sleeper
 Superflex, Superflex, RB, RB, WR/TE flex, WR/TE flex, FLEX, TE, K, DEF), not
 by whatever order Sleeper happens to return the starters in -- see
 `TOOLTIP_SLOT_ORDER`/`tooltipSlotRank` in `rumbles.html`. A player currently
-in a live (in-progress) game gets highlighted with green text -- reusing
-`--matchup-4`, one of the existing matchup-pair colors, rather than
-introducing a new one just for this.
+in a live (in-progress) game gets highlighted with green text on their name
+AND their Actual score -- reusing `--matchup-4`, one of the existing
+matchup-pair colors, rather than introducing a new one just for this. Their
+Proj column and kickoff-time cell are NOT included in that green highlight
+(Proj keeps the tooltip's default text color, and the kickoff-time cell
+keeps its own per-timeslot color from above), so the green stays a clean
+signal for "this is a real, live number" without competing with the other
+two colorings.
 
 If nobody on a team's roster qualifies for the current mode -- nobody's
 played yet in Actual mode, or every starter's game is already final in
@@ -403,7 +425,16 @@ displayed -- it was just a different scoring system. What's now called
    deliberately-reversed `roster_positions` and `scores_week2.json`'s
    `start_time`, which also proves the slot-order re-sort actually ran --
    the roster-mate in the other slot must display FIRST despite being
-   `starters[1]`).
+   `starters[1]`). Also confirms (via real `getComputedStyle` colors, not
+   just text content) that a live row's green highlight lands on the Name
+   and Actual cells but NOT the Proj cell, that two starters whose games
+   share the same displayed kickoff label (a second fixture game, "Sun
+   1pm", added specifically for this) get the SAME per-timeslot color
+   while a different label ("Mon 8pm") gets a DIFFERENT one, and that the
+   "Points This Week" cell of whichever manager is ahead in this week's
+   live H2H matchup is colored to match their own matchup-name color in
+   Projected mode (their opponent stays uncolored, and neither is colored
+   in Actual mode regardless of who's actually ahead on points there).
 2. **Same live week, in a touch-primary (mobile) context** -- confirms the
    page's own hover-capability check (`matchMedia("(hover: hover) and
    (pointer: fine)")`) correctly reports `false` for a mobile-emulated
