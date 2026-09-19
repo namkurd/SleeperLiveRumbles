@@ -150,44 +150,56 @@ reshuffle the colors too) and reused as-is by the QB Injury Backup
 Adjustments log below, so a given manager's name is the same color
 everywhere on the page, not just in the standings table.
 
-A team's "Points This Week" cell shows a per-starter breakdown, one line
-per player, during a live week -- hover it on desktop, or tap it on
+A team's "Points This Week" cell shows a per-starter breakdown, rendered as
+a small table (blank corner cell, then "Actual"/"Proj" column headers, then
+one row per player -- name left-aligned, both score columns centered under
+their headers) during a live week -- hover it on desktop, or tap it on
 mobile (a native `title`-attribute tooltip never appears on tap at all, so
 this is a custom element instead -- see `#pts-tooltip`/`.pts-tooltip` in
 `rumbles.html` -- driven by real hover where a device has one, and
 tap-to-toggle (tap again, or tap elsewhere, to dismiss) where it doesn't;
 which one a given device gets is decided once via
-`matchMedia("(hover: hover) and (pointer: fine)")`). What it shows depends
-on which scoring mode is currently selected, matching what that toggle
-already means everywhere else on the page:
+`matchMedia("(hover: hover) and (pointer: fine)")`). Every row always shows
+both a player's actual AND projected score, regardless of mode -- what
+differs by mode is which starters even qualify to be shown, matching what
+the Actual/Projected toggle already means everywhere else on the page:
 
 - **Actual** -- only starters who've completed or are currently in a live
   game; anyone who hasn't started yet is left off entirely (a flat "0.00"
-  line for them would just be noise in a view that's explicitly about
-  banked, real production) -- e.g. `Justin Jefferson: 14.20`.
+  row for them would just be noise in a view that's explicitly about
+  banked, real production).
 - **Projected** -- only starters whose game is still developing: not yet
-  started, or currently in progress -- e.g. `Justin Jefferson — Actual
-  14.20, Proj 17.50` for someone still playing, or `Actual 0.00, Proj
-  12.30` for someone who hasn't kicked off yet. A starter whose real game
-  has already gone FINAL is deliberately left out here (even though Actual
-  mode still shows them): once a game's over, their score is fully locked
-  in and already baked into the roster total, so re-showing "Actual X,
-  Proj Y" for them in a tooltip about what's still live or still to come
-  is just clutter. Telling "still in progress" apart from "finished" needs
-  more than the stats/projections payloads alone can say (a player who's
-  already played looks identical in both cases from those alone), so this
-  additionally fetches Sleeper's own live-scoreboard feed
-  (`/scores/nfl/{season_type}/{season}/{week}`, a small ~16-game payload,
-  not the multi-MB player-stats one) and matches each starter's game
-  status by their NFL team. If that fetch fails, or a player's team isn't
-  in it for some reason (a bye week, say), they're treated as NOT complete
-  and kept in the tooltip rather than risking hiding someone whose game
-  might still be going.
+  started, or currently in progress. A starter whose real game has already
+  gone FINAL is deliberately left out here (even though Actual mode still
+  shows them): once a game's over, their score is fully locked in and
+  already baked into the roster total, so re-showing them in a tooltip
+  about what's still live or still to come is just clutter. Telling "still
+  in progress" apart from "finished" needs more than the stats/projections
+  payloads alone can say (a player who's already played looks identical in
+  both cases from those alone), so this additionally fetches Sleeper's own
+  live-scoreboard feed (`/scores/nfl/{season_type}/{season}/{week}`, a
+  small ~16-game payload, not the multi-MB player-stats one) and matches
+  each starter's game status (and kickoff time) by their NFL team. If that
+  fetch fails, or a player's team isn't in it for some reason (a bye week,
+  say), they're treated as NOT complete and kept in the tooltip rather than
+  risking hiding someone whose game might still be going. Each row in this
+  mode is also prefixed with a compact "Mon 8pm" / "Sun 1pm" / "Thu 8:15pm"
+  kickoff-time label (day + local time, minutes only shown when the game
+  doesn't start exactly on the hour) ahead of the player's name, so an
+  upcoming or in-progress player's game window is visible at a glance.
+
+Every row, in either mode, is ordered by the player's roster SLOT (Sleeper
+Superflex, Superflex, RB, RB, WR/TE flex, WR/TE flex, FLEX, TE, K, DEF), not
+by whatever order Sleeper happens to return the starters in -- see
+`TOOLTIP_SLOT_ORDER`/`tooltipSlotRank` in `rumbles.html`. A player currently
+in a live (in-progress) game gets highlighted with green text -- reusing
+`--matchup-4`, one of the existing matchup-pair colors, rather than
+introducing a new one just for this.
 
 If nobody on a team's roster qualifies for the current mode -- nobody's
 played yet in Actual mode, or every starter's game is already final in
 Projected mode -- the tooltip is simply absent rather than showing an
-empty list.
+empty table.
 
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
@@ -371,16 +383,22 @@ displayed -- it was just a different scoring system. What's now called
    row from `rumbles_history.json` in the right sort order, and reuses the
    standings table's exact matchup colors for the same managers (by their
    current-week matchup, even for a log row about an older week). Also
-   hand-verifies the "Points This Week" hover tooltip content in both
-   modes for a hand-crafted roster (Actual: only the played starter, by
-   real name now that it has metadata, with the unplayed one filtered out
-   entirely; Projected: the same played starter is EXCLUDED because his
-   NFL team is marked "complete" in the mock live-scoreboard fixture --
-   reproducing the exact reported scenario -- while the still-pregame
-   starter is kept), confirms a fully-pregame roster gets no tooltip at
-   all in Actual mode rather than an empty or all-zero one, and confirms a
-   starter whose team is "in_progress" (not "complete") is still kept in
-   the Projected tooltip.
+   hand-verifies the "Points This Week" hover tooltip's table content in
+   both modes for a hand-crafted roster (Actual: only the played starter,
+   by real name now that it has metadata, with both its actual AND
+   projected columns checked, and the unplayed one filtered out entirely;
+   Projected: the same played starter is EXCLUDED because his NFL team is
+   marked "complete" in the mock live-scoreboard fixture -- reproducing the
+   exact reported scenario -- while the still-pregame starter is kept),
+   confirms a fully-pregame roster gets no tooltip at all in Actual mode
+   rather than an empty table, and confirms a starter whose team is
+   "in_progress" (not "complete") is still kept in the Projected tooltip,
+   rendered with a green "live" row and a "Mon 8pm"-style kickoff-time
+   label ahead of their name (both read back from `league.json`'s
+   deliberately-reversed `roster_positions` and `scores_week2.json`'s
+   `start_time`, which also proves the slot-order re-sort actually ran --
+   the roster-mate in the other slot must display FIRST despite being
+   `starters[1]`).
 2. **Same live week, in a touch-primary (mobile) context** -- confirms the
    page's own hover-capability check (`matchMedia("(hover: hover) and
    (pointer: fine)")`) correctly reports `false` for a mobile-emulated

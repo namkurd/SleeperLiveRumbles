@@ -19,6 +19,7 @@ Three scenarios:
   3. history_load_failure -- rumbles_history.json 404s. The page must show
                             a clear error instead of a silent blank table.
 """
+import datetime
 import json
 import os
 
@@ -31,6 +32,16 @@ PAGE_URL = "http://127.0.0.1:8123/rumbles.html"
 def load(name):
     with open(os.path.join(FIX, name)) as f:
         return json.load(f)
+
+
+# The MIN (Kyler Murray) game's kickoff time, read back out of the scores
+# fixture rather than hardcoded a second time here -- see make_fixtures.py's
+# MNF_START_MS comment. Used by scenario_live_blending's Alex assertion via
+# format_game_start_label (defined below).
+MNF_START_UTC = datetime.datetime.fromtimestamp(
+    next(g["start_time"] for g in load("scores_week2.json") if "start_time" in g) / 1000,
+    tz=datetime.timezone.utc,
+)
 
 
 def install_routes(page, routes):
@@ -111,12 +122,33 @@ def get_matchup_colors(page):
     return dict(pairs)
 
 
+DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+
+def format_game_start_label(dt_utc):
+    """Python mirror of rumbles.html's formatGameStartLabel, given a
+    timezone-aware UTC datetime -- valid as a mirror only because every
+    test page/context is pinned to timezone_id="UTC" (see new_page/
+    new_mobile_page below), so the browser's local Date methods and this
+    function's UTC fields agree."""
+    hour, minute = dt_utc.hour, dt_utc.minute
+    hour12 = hour % 12 or 12
+    minute_part = f":{minute:02d}" if minute else ""
+    ampm = "pm" if hour >= 12 else "am"
+    js_weekday = (dt_utc.weekday() + 1) % 7  # Python: Mon=0 -> JS: Sun=0
+    return f"{DAY_NAMES[js_weekday]} {hour12}{minute_part}{ampm}"
+
+
 def get_thisweek_pts_tooltip(page, manager):
     """Hovers the given manager's 'Pts This Week' cell (real mouse hover,
     exercising the actual show/position logic, not just the underlying
-    state) and returns the custom #pts-tooltip's visible text split into
-    lines, or None if that cell has no tooltip to show. Moves the mouse
-    away afterward so the next check starts clean."""
+    state) and returns the custom #pts-tooltip's visible table content as a
+    list of {name, actual, proj, live} dicts (one per body row, in DOM/
+    display order), or None if that cell has no tooltip to show. `name`
+    includes the "Mon 8pm"-style kickoff prefix when the row has one (see
+    formatGameStartLabel in rumbles.html) since that's rendered into the
+    same cell. Moves the mouse away afterward so the next check starts
+    clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
         "cells => cells.map(c => c.innerText.trim())",
@@ -129,14 +161,31 @@ def get_thisweek_pts_tooltip(page, manager):
     page.wait_for_timeout(150)
     tip = page.locator("#pts-tooltip")
     is_visible = tip.evaluate("el => el.classList.contains('visible')")
-    text = tip.inner_text() if is_visible else None
+    rows = None
+    if is_visible:
+        rows = page.eval_on_selector_all(
+            "#pts-tooltip tbody tr",
+            """trs => trs.map(tr => {
+                var tds = tr.querySelectorAll('td');
+                return {
+                    name: tds[0].innerText.trim(),
+                    actual: tds[1].innerText.trim(),
+                    proj: tds[2].innerText.trim(),
+                    live: tr.classList.contains('pts-tooltip-live'),
+                };
+            })""",
+        )
     page.mouse.move(0, 0)
     page.wait_for_timeout(150)
-    return text.split("\n") if text else None
+    return rows
 
 
 def new_page(browser, console_errors, page_errors):
-    page = browser.new_page()
+    # timezone_id="UTC" pins Date's local-time methods (getHours/getDay,
+    # used by rumbles.html's formatGameStartLabel) to a known offset, so
+    # the "Mon 8pm"-style kickoff-label assertions are deterministic
+    # regardless of whatever timezone the machine running this test is in.
+    page = browser.new_page(timezone_id="UTC")
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     page.on("pageerror", lambda exc: page_errors.append(str(exc)))
     return page
@@ -147,8 +196,9 @@ def new_mobile_page(browser, console_errors, page_errors):
     and (pointer: coarse) for this, exactly like a real phone, which is
     what makes rumbles.html pick the tap-to-toggle code path for the
     'Pts This Week' tooltip instead of the hover path (see
-    supportsHoverPtsTooltip in rumbles.html)."""
-    context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    supportsHoverPtsTooltip in rumbles.html). timezone_id="UTC" for the
+    same determinism reason as new_page above."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
     page = context.new_page()
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     page.on("pageerror", lambda exc: page_errors.append(str(exc)))
@@ -294,8 +344,10 @@ def scenario_live_blending(browser):
             )
         print(f"Hand-verified Points This Week checks passed for {mode} mode:", {k: v for k, v in expected_points_this_week[mode].items() if v is not None})
 
-        # ---- "Pts This Week" hover tooltip: per-starter actual/projected
-        # breakdown -- content depends on the Actual/Projected toggle.
+        # ---- "Pts This Week" hover tooltip: a table of per-starter actual/
+        # projected rows -- which starters are even included depends on the
+        # Actual/Projected toggle; every row shows both an Actual and a Proj
+        # column regardless of mode.
         # Aidan (roster 1) is hand-verified above: played starter "P1" (now
         # given real metadata -- "Amon-Ra St. Brown" on team DET, actual
         # 2.5, pregame projection 17.0) and unplayed starter "P2" (no
@@ -304,35 +356,49 @@ def scenario_live_blending(browser):
         # DET as "complete" -- Amon-Ra's real game is fully over, exactly
         # the reported scenario -- so Projected mode must exclude him
         # entirely even though Actual mode still shows him.
-        aidan_lines = get_thisweek_pts_tooltip(page, "Aidan")
-        assert aidan_lines, f"[{mode}] Aidan's Pts This Week cell should have a hover tooltip, got {aidan_lines!r}"
+        aidan_rows = get_thisweek_pts_tooltip(page, "Aidan")
+        assert aidan_rows, f"[{mode}] Aidan's Pts This Week cell should have a hover tooltip, got {aidan_rows!r}"
         if mode == "actual":
             # Only played-or-live starters -- P2 hasn't played, so it must
-            # NOT appear at all (a flat "0.00" line here would be noise in
+            # NOT appear at all (a flat "0.00" row here would be noise in
             # a view that's explicitly about banked, real production). A
             # completed game does NOT get excluded in Actual mode -- that
-            # exclusion is Projected-mode-only (see below).
-            assert aidan_lines == ["Amon-Ra St. Brown: 2.50"], (
-                f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_lines}"
+            # exclusion is Projected-mode-only (see below). No startLabel
+            # in Actual mode (kickoff time is a Projected-only concept),
+            # and "complete" isn't "in_progress" so this row isn't live.
+            assert aidan_rows == [{"name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "17.00", "live": False}], (
+                f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_rows}"
             )
         else:
             # Amon-Ra St. Brown's game (DET) is marked "complete" -- must
-            # be excluded from Projected entirely, leaving only P2.
-            assert aidan_lines == ["P2 — Actual 0.00, Proj 12.50"], (
+            # be excluded from Projected entirely, leaving only P2 (whose
+            # team/game is unresolvable -- no startLabel, not live).
+            assert aidan_rows == [{"name": "P2", "actual": "0.00", "proj": "12.50", "live": False}], (
                 f"[{mode}] expected Aidan's tooltip to exclude the finished starter (Amon-Ra St. Brown / DET, complete) "
-                f"and show only the still-pregame one, got {aidan_lines}"
+                f"and show only the still-pregame one, got {aidan_rows}"
             )
-        print(f"Verified Pts This Week tooltip content for {mode} mode (Aidan):", aidan_lines)
+        print(f"Verified Pts This Week tooltip content for {mode} mode (Aidan):", aidan_rows)
 
         # Alex (roster 6): Kyler Murray's team (MIN) is "in_progress", NOT
         # "complete" -- Projected mode must still include him (only a fully
-        # finished game gets excluded, not one that's still being played).
+        # finished game gets excluded, not one that's still being played),
+        # colored live (green), and prefixed with his game's "Mon 8pm"
+        # kickoff label (from scores_week2.json's MNF_START_MS). His
+        # roster-mate P12 (unresolvable game -- no label, not live) must
+        # come FIRST despite being starters[1] -- league.json's
+        # roster_positions is deliberately reversed (see make_fixtures.py)
+        # so this only passes if the slot-order re-sort actually ran.
         if mode != "actual":
-            alex_lines = get_thisweek_pts_tooltip(page, "Alex")
-            assert alex_lines and any(line.startswith("Kyler Murray") for line in alex_lines), (
-                f"[{mode}] expected Alex's Projected tooltip to still include Kyler Murray (MIN, in_progress -- not complete), got {alex_lines}"
+            alex_rows = get_thisweek_pts_tooltip(page, "Alex")
+            expected_kickoff = format_game_start_label(MNF_START_UTC)
+            assert alex_rows == [
+                {"name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
+                {"name": f"{expected_kickoff} Kyler Murray", "actual": "7.20", "proj": "21.09", "live": True},
+            ], (
+                f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live, "
+                f"kickoff-labeled Kyler Murray (MIN, in_progress -- not complete), got {alex_rows}"
             )
-            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, in-progress game kept):", alex_lines)
+            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff label):", alex_rows)
 
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress
@@ -399,13 +465,13 @@ def scenario_live_blending(browser):
         # live yet), so there must be NO tooltip at all rather than an empty
         # or all-zero one. In Projected mode his starters are still shown
         # (with actual 0.00 alongside a real projection).
-        joe_title = get_thisweek_pts_tooltip(page, "Joe")
+        joe_rows = get_thisweek_pts_tooltip(page, "Joe")
         if mode == "actual":
-            assert joe_title is None, f"[actual] Joe (fully pregame roster) should have no Pts This Week tooltip, got {joe_title}"
+            assert joe_rows is None, f"[actual] Joe (fully pregame roster) should have no Pts This Week tooltip, got {joe_rows}"
         else:
-            assert joe_title, f"[{mode}] Joe should still have a tooltip showing his pregame projections, got {joe_title}"
-            assert all("Actual 0.00" in line for line in joe_title), (
-                f"[{mode}] Joe's tooltip lines should all show Actual 0.00 (nobody on his roster has played), got {joe_title}"
+            assert joe_rows, f"[{mode}] Joe should still have a tooltip showing his pregame projections, got {joe_rows}"
+            assert all(r["actual"] == "0.00" and not r["live"] for r in joe_rows), (
+                f"[{mode}] Joe's tooltip rows should all show Actual 0.00 and not be live (nobody on his roster has played or kicked off), got {joe_rows}"
             )
 
     # Confirm the two modes aren't secretly aliased to each other. Now that

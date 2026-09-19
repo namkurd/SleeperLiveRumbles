@@ -22,13 +22,17 @@
        steps (slots 3,4,5,6,7,8 of the standard 8-hue order: aqua, yellow,
        magenta, green, violet, red), skipping slots 1-2 (blue/orange)
        since those are already this page's --accent-2/--accent colors
-       used for Rumbles/live figures, to avoid visual collision. */
-    --matchup-1: #199e70;
+       used for Rumbles/live figures, to avoid visual collision.
+       matchup-1 (teal/cyan) and matchup-4 (green) are deliberately pushed
+       to different hue families (blue-green vs true green) so they don't
+       read as "the same green" at a glance; same for matchup-3 (magenta)
+       vs matchup-6 (red), which used to be two shades of the same pink. */
+    --matchup-1: #1aa7c9;
     --matchup-2: #c98500;
-    --matchup-3: #d55181;
+    --matchup-3: #d6399e;
     --matchup-4: #008300;
     --matchup-5: #9085e9;
-    --matchup-6: #e66767;
+    --matchup-6: #dc3535;
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -43,12 +47,12 @@
       --bad: #d43b40;
       --live: #1f9d52;
       --row-alt: #f8f9fc;
-      --matchup-1: #1baf7a;
+      --matchup-1: #0e8aa6;
       --matchup-2: #eda100;
-      --matchup-3: #e87ba4;
+      --matchup-3: #c23b8a;
       --matchup-4: #008300;
       --matchup-5: #4a3aa7;
-      --matchup-6: #e34948;
+      --matchup-6: #d6302f;
     }
   }
   * { box-sizing: border-box; }
@@ -177,7 +181,7 @@
     font-size: 0.85rem;
   }
   thead th {
-    text-align: right;
+    text-align: center;
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -186,20 +190,22 @@
     border-bottom: 1px solid var(--panel-border);
     white-space: nowrap;
   }
-  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  /* Every column is center-aligned except Manager (column 2), which stays
+     left-aligned since it's a name, not a number/stat. */
+  thead th:nth-child(2) { text-align: left; }
   thead th.sortable { cursor: pointer; user-select: none; }
   thead th.sortable:hover { color: var(--text); }
   thead th.sort-active { color: var(--text); }
   .matchup-name { font-weight: 700; }
   tbody td {
     padding: 9px 12px;
-    text-align: right;
+    text-align: center;
     border-bottom: 1px solid var(--panel-border);
     white-space: nowrap;
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:nth-child(even) { background: var(--row-alt); }
-  td.rank, td.manager { text-align: left; }
+  td.manager { text-align: left; }
   td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 40px; min-width: 40px; }
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -227,37 +233,61 @@
   .pts-tooltip {
     position: fixed;
     z-index: 50;
-    /* Shrinks to fit whichever player line is actually longest (never
-       wider than that), capped so it can't overflow a narrow viewport or
-       balloon absurdly wide -- see .pts-tooltip-line below for how a line
-       longer than that cap degrades (ellipsis, not wrap). */
+    /* Shrinks to fit the table's own intrinsic width (never wider than
+       that), capped so it can't overflow a narrow viewport or balloon
+       absurdly wide -- see td.pts-tooltip-name below for how a single
+       outlier-long name degrades (ellipsis, not wrap, not a wider box). */
     width: max-content;
     max-width: min(92vw, 340px);
     background: var(--panel);
     color: var(--text);
     border: 1px solid var(--panel-border);
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 7px 10px;
     font-size: 0.78rem;
-    line-height: 1.6;
+    line-height: 1.35;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
   }
   .pts-tooltip.visible { opacity: 1; visibility: visible; }
-  /* Each player is one <div>, not just one \n-separated span of running
-     text -- a fixed pixel width plus plain line-wrapping (or a single
-     giant unbroken line) both eventually make some player's row spill
-     onto a second visual line. Giving each row its own block with
-     nowrap + ellipsis instead means every player is guaranteed exactly
-     one visual line, gracefully truncating only the rare outlier that's
-     still too long for the box rather than ever wrapping it. */
-  .pts-tooltip-line {
+  /* Rendered as a real <table> (see renderPtsTooltipContent) -- a header
+     row labels the Actual/Proj columns, one row per player. Player name
+     stays left-aligned (it's a name, not a number); the two score columns
+     are centered under their headers. */
+  /* width/min-width explicitly reset -- the page's global `table` rule
+     (min-width: 760px, meant for the standings table) would otherwise
+     force this tiny tooltip table just as wide, blowing right through
+     the container's max-width cap. */
+  .pts-tooltip table { border-collapse: collapse; width: auto; min-width: 0; }
+  .pts-tooltip th, .pts-tooltip td {
+    padding: 1px 10px 1px 0;
+    text-align: center;
     white-space: nowrap;
+  }
+  .pts-tooltip th:first-child, .pts-tooltip td:first-child { text-align: left; }
+  .pts-tooltip th:last-child, .pts-tooltip td:last-child { padding-right: 0; }
+  .pts-tooltip th {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+    font-weight: 600;
+    padding-bottom: 3px;
+  }
+  /* One absurdly long player name shouldn't balloon the whole tooltip's
+     width -- capped and truncated with an ellipsis instead of wrapping,
+     same reasoning the old single-line-per-player layout used. */
+  .pts-tooltip td.pts-tooltip-name {
+    max-width: 170px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* A player currently in a live (in-progress) game -- colored with one of
+     the existing manager matchup-pair colors (not a new color introduced
+     just for this) so "live" reads as this page's own established green. */
+  .pts-tooltip tr.pts-tooltip-live td { color: var(--matchup-4); }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -483,7 +513,7 @@
     teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
     playersMetaFetchedAt: 0,
     matchupColorByRosterId: {}, // roster_id -> this week's matchup name color (set by buildCombinedStandings), reused by the QB Injury Backup Adjustments log so a manager's name color is the same everywhere on the page
-    thisWeekTooltipLines: {}, // roster_id -> "Pts This Week" tooltip text (set by render(), read by the pts-tooltip show/toggle handlers)
+    thisWeekTooltipRows: {}, // roster_id -> array of "Pts This Week" tooltip row objects (set by render(), read by the pts-tooltip show/toggle handlers)
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
@@ -692,6 +722,23 @@
     return total;
   }
 
+  // Canonical display order for the "Points This Week" tooltip, by roster
+  // SLOT type (not by player position) -- this league's 10 starting slots
+  // are 2x Superflex, 2x RB, 2x WR/TE flex, 1x FLEX (RB/WR/TE), 1x TE, 1x K,
+  // 1x DEF. `roster.starters` is positionally aligned with
+  // `league.roster_positions` (starters[i] fills roster_positions[i]), but
+  // that raw order isn't guaranteed to match the order we want displayed,
+  // so buildPlayerBreakdown re-sorts every breakdown into this fixed order
+  // regardless of how Sleeper happens to store the slots. Sleeper's slot
+  // codes: SUPER_FLEX (Superflex/SFLEX), RB, REC_FLEX (WR/TE, "W/T"), FLEX
+  // (RB/WR/TE), TE, K, DEF. Anything unrecognized sorts to the end, after
+  // DEF, rather than being dropped.
+  var TOOLTIP_SLOT_ORDER = ["SUPER_FLEX", "RB", "REC_FLEX", "FLEX", "TE", "K", "DEF"];
+  function tooltipSlotRank(slot) {
+    var idx = TOOLTIP_SLOT_ORDER.indexOf(slot);
+    return idx === -1 ? TOOLTIP_SLOT_ORDER.length : idx;
+  }
+
   // Per-starter breakdown for the "Points This Week" hover tooltip. Unlike
   // rosterScore (which only needs a single summed total), the tooltip needs
   // each starter's actual AND projected score side by side, plus whether
@@ -714,11 +761,15 @@
   //   - "game_status" -- "pre_game" / "in_progress" / "complete" / "unknown"
   //     (the last when their NFL team isn't in this week's schedule at
   //     all, e.g. a bye, or the scores fetch failed) -- from Sleeper's own
-  //     live-scoreboard endpoint (see buildTeamGameStatus below), used to
+  //     live-scoreboard endpoint (see buildTeamGameSchedule below), used to
   //     tell a fully-final game apart from one still being played, which
   //     the stats/projections payloads alone can't distinguish.
-  function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta, teamGameStatus) {
+  //   - "game_start_ms" -- that same game's kickoff time (epoch ms, or null
+  //     if unknown) -- shown in the Projected tooltip so an upcoming
+  //     player's kickoff day/time is visible at a glance.
+  function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions) {
     var starters = roster.starters || [];
+    var slots = rosterPositions || [];
     var out = [];
     for (var i = 0; i < starters.length; i++) {
       var pid = starters[i];
@@ -727,16 +778,21 @@
       var played = !!actualSource;
       var meta = playersMeta ? playersMeta[pid] : null;
       var team = meta ? meta.team : null;
-      var gameStatus = (team && teamGameStatus && teamGameStatus[team]) || "unknown";
+      var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
       out.push({
         player_id: pid,
         name: meta ? playerName(meta) : pid,
         actual: round2(played ? scoreFrom(actualSource, scoringSettings, true) : 0),
         proj: round2(scoreFrom(projMap[pid], scoringSettings, false)),
         played: played,
-        game_status: gameStatus
+        game_status: (game && game.status) || "unknown",
+        game_start_ms: (game && game.startTimeMs) || null,
+        slot: slots[i] || null
       });
     }
+    // Stable sort -- ties (e.g. the two RB slots) keep their original
+    // relative order, only the slot GROUPS get reordered.
+    out.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
     return out;
   }
 
@@ -765,16 +821,28 @@
     return "pre_game";
   }
 
-  function buildTeamGameStatus(games) {
+  // Per-team {status, startTimeMs} lookup built from Sleeper's live-
+  // scoreboard feed. startTimeMs prefers the top-level "start_time" epoch-
+  // ms field (confirmed live, Sep 2026); metadata.date_time (an ISO string)
+  // is a fallback for a payload shape that omits it.
+  function buildTeamGameSchedule(games) {
     var map = {};
     (games || []).forEach(function (g) {
       if (!g) return;
       var meta = g.metadata || {};
       var status = normalizeGameStatus(g);
+      var startTimeMs = null;
+      if (typeof g.start_time === "number") {
+        startTimeMs = g.start_time;
+      } else if (meta.date_time || g.date_time) {
+        var parsed = new Date(meta.date_time || g.date_time).getTime();
+        if (!isNaN(parsed)) startTimeMs = parsed;
+      }
+      var entry = { status: status, startTimeMs: startTimeMs };
       var away = meta.away_team || g.away_team;
       var home = meta.home_team || g.home_team;
-      if (away) map[away] = status;
-      if (home) map[home] = status;
+      if (away) map[away] = entry;
+      if (home) map[home] = entry;
     });
     return map;
   }
@@ -1066,8 +1134,9 @@
           var statsMap = arrayToPlayerMap(results[2]);
           var projMap = arrayToPlayerMap(results[3]);
           var games = results[4] || [];
-          var teamGameStatus = buildTeamGameStatus(games);
+          var teamGameSchedule = buildTeamGameSchedule(games);
           var scoringSettings = league.scoring_settings || {};
+          var rosterPositions = league.roster_positions || [];
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early
@@ -1121,7 +1190,7 @@
               matchups.forEach(function (m) {
                 var rid = m.roster_id;
                 if (state.live.byRoster[rid]) {
-                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameStatus);
+                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
                 }
               });
 
@@ -1160,41 +1229,68 @@
 
   function formatRecord(w, l) { return w + "-" + l; }
 
-  // Builds the "Points This Week" hover/tap tooltip text: one line per
-  // starter. What each line shows -- and which starters are even included
-  // -- depends on the Actual/Projected toggle, matching what that toggle
-  // already means everywhere else on this page:
+  // "Mon 8pm" / "Sun 1pm" / "Thu 8:15pm" -- a compact day+time label for a
+  // game's kickoff, shown in the Projected tooltip so an upcoming or
+  // in-progress player's game window is visible at a glance. Always
+  // rendered in the viewer's own local time zone (Date's getDay/getHours
+  // are local-time by construction). Minutes are only shown when the
+  // kickoff isn't exactly on the hour, to keep the common case terse.
+  var TOOLTIP_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function formatGameStartLabel(ms) {
+    if (typeof ms !== "number" || isNaN(ms)) return "";
+    var d = new Date(ms);
+    var hours = d.getHours();
+    var minutes = d.getMinutes();
+    var hour12 = hours % 12;
+    if (hour12 === 0) hour12 = 12;
+    var minutePart = minutes ? ":" + (minutes < 10 ? "0" : "") + minutes : "";
+    return TOOLTIP_DAY_NAMES[d.getDay()] + " " + hour12 + minutePart + (hours >= 12 ? "pm" : "am");
+  }
+
+  // Builds the "Points This Week" hover/tap tooltip's row data: one row per
+  // starter, in the fixed slot order from buildPlayerBreakdown (SFLEX,
+  // SFLEX, RB, RB, W/T, W/T, FLEX, TE, K, DEF). Which starters are even
+  // included depends on the Actual/Projected toggle, matching what that
+  // toggle already means everywhere else on this page:
   //   - Actual ("actual") -- only starters who've completed or are
   //     currently in a live game (i.e. statsMap actually has an entry for
-  //     them), showing just their actual score -- a bench-quality "0.00"
-  //     line for someone who simply hasn't kicked off yet would be noise in
-  //     a view that's explicitly about banked, real production.
+  //     them) -- a bench-quality "0.00" row for someone who simply hasn't
+  //     kicked off yet would be noise in a view that's explicitly about
+  //     banked, real production.
   //   - Projected ("custom") -- only starters whose game is STILL
   //     developing: not yet started, or currently in progress. A starter
   //     whose real game has already gone final is deliberately left OUT
   //     here (even though Actual mode still shows them) -- once a game is
   //     over their score is fully locked in and already baked into the
-  //     roster total, so re-showing "Actual X, Proj Y" for them in a
-  //     forward-looking Projected tooltip is just clutter; the tooltip's
-  //     whole point in this mode is to show what's still live or still to
-  //     come. Uses game_status from buildPlayerBreakdown (Sleeper's own
-  //     live-scoreboard feed, see SCORES_BASE) -- "unknown" (bye week, or
-  //     that feed failed) is treated as NOT complete, so a player is never
-  //     wrongly hidden just because their game status couldn't be
-  //     confirmed.
+  //     roster total, so re-showing them in a forward-looking Projected
+  //     tooltip is just clutter; the tooltip's whole point in this mode is
+  //     to show what's still live or still to come. Uses game_status from
+  //     buildPlayerBreakdown (Sleeper's own live-scoreboard feed, see
+  //     SCORES_BASE) -- "unknown" (bye week, or that feed failed) is
+  //     treated as NOT complete, so a player is never wrongly hidden just
+  //     because their game status couldn't be confirmed.
+  // Every row always carries both actual AND projected values (rendered as
+  // a 2-column table -- see renderPtsTooltipContent); only Projected mode's
+  // rows also carry a startLabel (Actual mode is about banked production,
+  // where a kickoff time isn't relevant). `live: true` (a game currently
+  // in progress) is what render's row-coloring uses to highlight that
+  // player in green.
   function thisWeekTooltip(mode, breakdown) {
-    if (!breakdown || !breakdown.length) return "";
-    var lines;
-    if (mode === "actual") {
-      lines = breakdown
-        .filter(function (p) { return p.played; })
-        .map(function (p) { return p.name + ": " + p.actual.toFixed(2); });
-    } else {
-      lines = breakdown
-        .filter(function (p) { return p.game_status !== "complete"; })
-        .map(function (p) { return p.name + " — Actual " + p.actual.toFixed(2) + ", Proj " + p.proj.toFixed(2); });
-    }
-    return lines.join("\n");
+    if (!breakdown || !breakdown.length) return null;
+    var showStartTime = mode !== "actual";
+    var players = mode === "actual"
+      ? breakdown.filter(function (p) { return p.played; })
+      : breakdown.filter(function (p) { return p.game_status !== "complete"; });
+    if (!players.length) return null;
+    return players.map(function (p) {
+      return {
+        name: p.name,
+        startLabel: showStartTime ? formatGameStartLabel(p.game_start_ms) : "",
+        actual: p.actual,
+        proj: p.proj,
+        live: p.game_status === "in_progress"
+      };
+    });
   }
 
   function buildCombinedStandings() {
@@ -1348,7 +1444,7 @@
     }
     updateHeaderSortIndicators();
 
-    state.thisWeekTooltipLines = {};
+    state.thisWeekTooltipRows = {};
     if (!rows.length) {
       var emptyMsg;
       if (state.historyError) {
@@ -1370,12 +1466,12 @@
         // hide/toggle below), not a native title attribute -- a native
         // title tooltip never appears on tap on mobile at all, so this
         // cell just carries a data-roster-id for the delegated hover/tap
-        // handlers to look up pre-built tooltip text from
-        // state.thisWeekTooltipLines with.
-        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
+        // handlers to look up pre-built tooltip rows from
+        // state.thisWeekTooltipRows with.
+        var ptsTooltipRows = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
-        if (ptsTooltip) {
-          state.thisWeekTooltipLines[r.roster_id] = ptsTooltip;
+        if (ptsTooltipRows) {
+          state.thisWeekTooltipRows[r.roster_id] = ptsTooltipRows;
           ptsCellAttrs += ' class="thisweek-pts has-tooltip"';
         } else {
           ptsCellAttrs += ' class="thisweek-pts"';
@@ -1459,23 +1555,33 @@
     tip.style.top = top + "px";
   }
 
-  // One <div class="pts-tooltip-line"> per player rather than a single
-  // text blob with embedded \n's -- see the .pts-tooltip-line CSS comment
-  // for why (guarantees exactly one visual line per player, ellipsis-
-  // truncated instead of wrapped for the rare outlier that's too long).
-  function renderPtsTooltipContent(lines) {
-    els.ptsTooltip.innerHTML = lines
-      .split("\n")
-      .map(function (line) { return '<div class="pts-tooltip-line">' + escapeHtml(line) + "</div>"; })
-      .join("");
+  // Renders the tooltip's row data (see thisWeekTooltip) as a real table:
+  // a header row labeling the Actual/Proj columns, then one row per player
+  // -- name first (prefixed with its "Mon 8pm"-style kickoff label when
+  // the row has one, i.e. Projected mode only), then its actual and
+  // projected scores. A row for a player whose game is currently live gets
+  // the .pts-tooltip-live class (green text -- see that CSS rule).
+  function renderPtsTooltipContent(rows) {
+    var bodyHtml = rows.map(function (r) {
+      var nameText = (r.startLabel ? r.startLabel + " " : "") + r.name;
+      return '<tr class="' + (r.live ? "pts-tooltip-live" : "") + '">' +
+        '<td class="pts-tooltip-name">' + escapeHtml(nameText) + "</td>" +
+        "<td>" + r.actual.toFixed(2) + "</td>" +
+        "<td>" + r.proj.toFixed(2) + "</td>" +
+        "</tr>";
+    }).join("");
+    els.ptsTooltip.innerHTML =
+      "<table><thead><tr><th></th><th>Actual</th><th>Proj</th></tr></thead><tbody>" +
+      bodyHtml +
+      "</tbody></table>";
   }
 
   function showPtsTooltip(cell) {
     var rid = cell.getAttribute("data-roster-id");
-    var lines = state.thisWeekTooltipLines[rid];
-    if (!lines) return;
+    var rows = state.thisWeekTooltipRows[rid];
+    if (!rows) return;
     state.activePtsTooltipRosterId = rid;
-    renderPtsTooltipContent(lines);
+    renderPtsTooltipContent(rows);
     els.ptsTooltip.setAttribute("aria-hidden", "false");
     els.ptsTooltip.classList.add("visible");
     positionPtsTooltip(cell);
@@ -1497,13 +1603,13 @@
   function refreshOrHidePtsTooltip() {
     var rid = state.activePtsTooltipRosterId;
     if (rid == null) return;
-    var lines = state.thisWeekTooltipLines[rid];
+    var rows = state.thisWeekTooltipRows[rid];
     var cell = els.body.querySelector('td.thisweek-pts[data-roster-id="' + rid + '"]');
-    if (!lines || !cell) {
+    if (!rows || !cell) {
       hidePtsTooltip();
       return;
     }
-    renderPtsTooltipContent(lines);
+    renderPtsTooltipContent(rows);
     positionPtsTooltip(cell);
   }
 

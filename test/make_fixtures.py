@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Builds mock Sleeper API fixtures + a matching rumbles_history.json for
 end-to-end testing rumbles.html without real network access."""
+import datetime
 import json
 import os
 
@@ -97,8 +98,20 @@ scoring_settings = {
     "kr_yd": 0.04,
     "fgmiss": -1.0,
 }
+# roster_positions is positionally zipped with each roster's `starters`
+# array by buildPlayerBreakdown (starters[i] fills roster_positions[i]) to
+# sort the "Pts This Week" tooltip into a fixed slot order (see
+# TOOLTIP_SLOT_ORDER in rumbles.html), independent of whatever order
+# Sleeper happens to list the starters in. Deliberately REVERSED from
+# TOOLTIP_SLOT_ORDER's ranking here (index 0 = "RB", which ranks AFTER
+# "SUPER_FLEX" at index 1) -- every fixture roster only has 2 starters, so
+# this exercises the actual re-sort (index 1 must display BEFORE index 0),
+# not just a pass-through of Sleeper's already-correct order.
 with open(os.path.join(OUT, "league.json"), "w") as f:
-    json.dump({"league_id": LEAGUE_ID, "season": "2026", "scoring_settings": scoring_settings}, f)
+    json.dump({
+        "league_id": LEAGUE_ID, "season": "2026", "scoring_settings": scoring_settings,
+        "roster_positions": ["RB", "SUPER_FLEX"],
+    }, f)
 
 # ---- /v1/league/{id}/matchups/2 : 12 rosters, 6 matchups, 2 starters each ----
 # roster_id 1 has player "P1" (already played) + "P2" (not yet played)
@@ -294,15 +307,15 @@ with open(os.path.join(OUT, "players.json"), "w") as f:
 
 # ---- /v1/scores/nfl/{season_type}/{season}/{week} : per-game live status ----
 # Sleeper's own live-scoreboard feed -- what the "Pts This Week" tooltip
-# uses (see buildTeamGameStatus in rumbles.html) to tell a fully-final game
-# apart from one that's still being played, which the stats/projections
-# payloads alone can't distinguish (a player who's already played has a
-# real stats entry in both cases).
+# uses (see buildTeamGameSchedule in rumbles.html) to tell a fully-final
+# game apart from one that's still being played, which the stats/
+# projections payloads alone can't distinguish (a player who's already
+# played has a real stats entry in both cases).
 #
 # Shape confirmed live against the real endpoint (Sep 2026): team
 # abbreviations and the authoritative "is this game over" booleans live
 # under "metadata", not at the top level -- top-level only has a coarse
-# "status" string (e.g. "pre_game"). buildTeamGameStatus checks
+# "status" string (e.g. "pre_game"). buildTeamGameSchedule checks
 # metadata.is_over / metadata.is_in_progress first and falls back to the
 # top-level fields, so these fixtures exercise the metadata path since
 # that's what production traffic actually returns.
@@ -315,6 +328,16 @@ with open(os.path.join(OUT, "players.json"), "w") as f:
 #   - Every other team: no entry at all here, exercising the "unknown"
 #     fallback (P2/roster 1's unplayed starter has no metadata at all, so
 #     it's "unknown" regardless).
+#
+# The MIN game also carries a "start_time" (epoch ms, matching the real
+# payload's top-level field) -- a Monday 8:00pm UTC kickoff -- so the
+# Projected tooltip's "Mon 8pm"-style kickoff label (see
+# formatGameStartLabel in rumbles.html) has something real to render for
+# Kyler Murray's row. run_test.py reads this same value back out of this
+# fixture file (rather than hardcoding it a second time) to compute the
+# label it expects to see.
+MNF_START = datetime.datetime(2026, 9, 21, 20, 0, 0, tzinfo=datetime.timezone.utc)  # a Monday
+MNF_START_MS = int(MNF_START.timestamp() * 1000)
 scores = [
     {
         "status": "post_game",
@@ -322,6 +345,7 @@ scores = [
     },
     {
         "status": "in_progress",
+        "start_time": MNF_START_MS,
         "metadata": {"away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": True},
     },
 ]
