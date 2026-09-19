@@ -150,14 +150,25 @@ reshuffle the colors too) and reused as-is by the QB Injury Backup
 Adjustments log below, so a given manager's name is the same color
 everywhere on the page, not just in the standings table.
 
-In **Projected** mode only, whichever manager is currently AHEAD in this
-week's live H2H matchup also gets their own "Points This Week" value
-colored to match their manager-name color -- an at-a-glance "who's
-winning this matchup" signal alongside the name coloring above. The
-trailing manager in that matchup just keeps the default color. Actual
-mode never colors this cell at all (Actual mode's season totals stay
-frozen regardless of who's ahead live, so there's nothing to signal
-there), no matter who's actually ahead on points.
+The 6 matchup colors (and the "live game" green reused from one of them,
+and the per-timeslot kickoff-time coloring described below) were all
+chosen to also be clearly distinguishable from the page's own fixed
+colors -- the default blue used for "This Week"/"Points This Week", the
+orange used for "Rumbles" figures, and the red used for negative/error
+states -- not just from each other. In particular, the color that used to
+sit in matchup slot 1 was a cyan that read as barely more than a lighter
+shade of the default blue at a glance; it's now a true purple instead.
+
+Whichever manager is currently AHEAD in this week's live H2H matchup --
+under whichever scoring mode (Actual or Projected) is currently
+selected -- gets their own "This Week" (Rumbles earned so far) AND
+"Points This Week" values colored to match their manager-name color, in
+BOTH modes -- an at-a-glance "who's winning this matchup right now"
+signal alongside the name coloring above. This is purely about the two
+live, per-week figures; it's independent of whether Actual mode's
+season-cumulative totals (PF/PA/H2H/Vs. Field, all frozen until the week
+is finalized) reflect this week's outcome yet or not. The trailing
+manager in that matchup just keeps the default color for both cells.
 
 A team's "Points This Week" cell shows a per-starter breakdown, rendered as
 a small table (blank header cells over the kickoff-time/name columns, then
@@ -431,10 +442,13 @@ displayed -- it was just a different scoring system. What's now called
    share the same displayed kickoff label (a second fixture game, "Sun
    1pm", added specifically for this) get the SAME per-timeslot color
    while a different label ("Mon 8pm") gets a DIFFERENT one, and that the
-   "Points This Week" cell of whichever manager is ahead in this week's
-   live H2H matchup is colored to match their own matchup-name color in
-   Projected mode (their opponent stays uncolored, and neither is colored
-   in Actual mode regardless of who's actually ahead on points there).
+   "This Week" and "Points This Week" cells of whichever manager is ahead
+   in this week's live H2H matchup are colored to match their own
+   matchup-name color, checked in BOTH modes -- including that the two
+   modes can disagree on who's actually ahead (this fixture's H2H pair
+   has different leaders in Actual vs. Projected), proving the coloring
+   is genuinely re-evaluated per mode rather than fixed to one of them;
+   their opponent's cells stay uncolored in both cases.
 2. **Same live week, in a touch-primary (mobile) context** -- confirms the
    page's own hover-capability check (`matchMedia("(hover: hover) and
    (pointer: fine)")`) correctly reports `false` for a mobile-emulated

@@ -136,13 +136,30 @@ def get_pts_this_week_colors(page):
     """manager name -> inline color style of their 'Pts This Week' cell
     (td.thisweek-pts), or None if uncolored -- same idea as
     get_matchup_colors, but for the win-coloring feature: only the team
-    currently AHEAD in its live H2H matchup gets colored, and only in
-    Projected mode (see render() in rumbles.html)."""
+    currently AHEAD in its live H2H matchup (under whichever mode is
+    currently selected) gets colored (see render() in rumbles.html)."""
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
             var name = r.querySelector('td.manager').innerText.trim();
             var cell = r.querySelector('td.thisweek-pts');
+            var color = cell ? cell.style.color : null;
+            return [name, color || null];
+        })""",
+    )
+    return dict(pairs)
+
+
+def get_thisweek_rumbles_colors(page):
+    """manager name -> inline color style of their 'This Week' (Rumbles
+    earned so far this week) cell (td.thisweek), or None if uncolored --
+    same win-coloring feature/idea as get_pts_this_week_colors, applied to
+    the OTHER per-week cell."""
+    pairs = page.eval_on_selector_all(
+        "#standings-body tr",
+        """rows => rows.map(r => {
+            var name = r.querySelector('td.manager').innerText.trim();
+            var cell = r.querySelector('td.thisweek');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
         })""",
@@ -535,28 +552,29 @@ def scenario_live_blending(browser):
                 f"[{mode}] expected both of Joe's starters to show the '{expected_sun_label}' kickoff label, got {joe_labels}"
             )
 
-        # ---- "Pts This Week" cell win-coloring (Projected mode only): the
-        # team currently AHEAD in this week's live H2H matchup gets its PTS
-        # cell colored to match its own manager-name color; the trailing
-        # team keeps the default (uncolored -> falls back to CSS blue).
-        # Joe (roster 5) vs Alex (roster 6) are this week's H2H pair --
-        # Joe's custom/Projected total (42.04) beats Alex's (28.43), so Joe
-        # should win the color under "custom" mode. Actual mode never
-        # colors this cell at all (Actual mode's standings/H2H stay frozen
-        # regardless of who's ahead live), regardless of who's ahead there.
+        # ---- "This Week"/"Pts This Week" cell win-coloring, in BOTH modes:
+        # the team currently AHEAD in this week's live H2H matchup (under
+        # whichever mode is selected) gets both cells colored to match its
+        # own manager-name color; the trailing team keeps the default
+        # (uncolored -> falls back to CSS blue). Joe (roster 5) vs Alex
+        # (roster 6) are this week's H2H pair, and the two modes disagree
+        # on who's ahead -- exercising that the coloring is genuinely
+        # mode-scoped, not just "whoever won under one particular mode":
+        #   - actual: Joe 0.00 vs Alex 7.20 -> ALEX is ahead (nobody on
+        #     Joe's roster has any actual stats yet).
+        #   - custom/Projected: Joe 42.04 vs Alex 28.43 -> JOE is ahead.
+        winner, loser = ("Alex", "Joe") if mode == "actual" else ("Joe", "Alex")
         pts_colors = get_pts_this_week_colors(page)
-        if mode == "actual":
-            assert pts_colors.get("Joe") is None, f"[actual] expected Joe's Pts This Week cell to be uncolored (win-coloring is Projected-mode-only), got {pts_colors.get('Joe')}"
-            assert pts_colors.get("Alex") is None, f"[actual] expected Alex's Pts This Week cell to be uncolored (win-coloring is Projected-mode-only), got {pts_colors.get('Alex')}"
-        else:
-            assert pts_colors.get("Joe") is not None, f"[{mode}] expected Joe's Pts This Week cell to be colored (he's ahead in this week's live H2H matchup)"
-            assert pts_colors["Joe"] == colors_by_mode[mode]["Joe"], (
-                f"[{mode}] expected Joe's winning Pts This Week color ({pts_colors['Joe']}) to match his own matchup-name color ({colors_by_mode[mode]['Joe']})"
+        rumbles_colors = get_thisweek_rumbles_colors(page)
+        for label, colors in (("Pts This Week", pts_colors), ("This Week", rumbles_colors)):
+            assert colors.get(winner) is not None, f"[{mode}] expected {winner}'s {label!r} cell to be colored (they're ahead in this week's live H2H matchup)"
+            assert colors[winner] == colors_by_mode[mode][winner], (
+                f"[{mode}] expected {winner}'s winning {label!r} color ({colors[winner]}) to match their own matchup-name color ({colors_by_mode[mode][winner]})"
             )
-            assert pts_colors.get("Alex") is None, (
-                f"[{mode}] expected Alex's (trailing) Pts This Week cell to stay uncolored (default blue), got {pts_colors.get('Alex')}"
+            assert colors.get(loser) is None, (
+                f"[{mode}] expected {loser}'s (trailing) {label!r} cell to stay uncolored (default color), got {colors.get(loser)}"
             )
-        print(f"Verified Pts This Week win-coloring for {mode} mode (Joe colored to match his matchup color, Alex left default, {'no coloring at all in Actual mode' if mode == 'actual' else ''}).")
+        print(f"Verified This Week/Pts This Week win-coloring for {mode} mode ({winner} colored to match their matchup color, {loser} left default).")
 
         # Actual mode's Rumbles/H2H/PF/PA/Vs.Field W-L must ALL be frozen to
         # what's already final in rumbles_history.json -- the in-progress

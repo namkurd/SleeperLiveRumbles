@@ -18,21 +18,27 @@
     --live: #35c26b;
     --row-alt: #1c202a;
     /* Matchup-pair tagging dots -- 6 slots covers every matchup in a
-       12-team league. Drawn from the validated dark-mode categorical
-       steps (slots 3,4,5,6,7,8 of the standard 8-hue order: aqua, yellow,
-       magenta, green, violet, red), skipping slots 1-2 (blue/orange)
-       since those are already this page's --accent-2/--accent colors
-       used for Rumbles/live figures, to avoid visual collision.
-       matchup-1 (teal/cyan) and matchup-4 (green) are deliberately pushed
-       to different hue families (blue-green vs true green) so they don't
-       read as "the same green" at a glance; same for matchup-3 (magenta)
-       vs matchup-6 (red), which used to be two shades of the same pink. */
-    --matchup-1: #1aa7c9;
+       12-team league. Chosen so each of the 6 is clearly distinguishable
+       from EVERY other color that appears as text on this page, not just
+       from each other: matchup-1 used to be a cyan (#1aa7c9) that read as
+       just a lighter shade of --accent-2 (the default "Points This
+       Week"/"This Week" blue, #4d9fff) at a glance -- swapped for a true
+       purple (well clear of blue's hue) to fix that. matchup-5 used to be
+       a blue-violet that would have collided with the new purple, so it
+       moved to teal (pushed further from blue's hue than the old cyan
+       was, and far enough from matchup-4's true green to still read as
+       its own color). matchup-6 used to be almost the same red as --bad;
+       it's now a deeper, more muted maroon so it doesn't get lost against
+       either --bad or --accent (orange). matchup-2 (amber) and matchup-4
+       (green -- also reused as the "live game" highlight color elsewhere
+       on the page, see .pts-tooltip-live below) were already distinct
+       enough and are unchanged. */
+    --matchup-1: #a855f7;
     --matchup-2: #c98500;
     --matchup-3: #d6399e;
     --matchup-4: #008300;
-    --matchup-5: #9085e9;
-    --matchup-6: #dc3535;
+    --matchup-5: #14b8a6;
+    --matchup-6: #a13d54;
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -47,12 +53,12 @@
       --bad: #d43b40;
       --live: #1f9d52;
       --row-alt: #f8f9fc;
-      --matchup-1: #0e8aa6;
+      --matchup-1: #9333ea;
       --matchup-2: #eda100;
       --matchup-3: #c23b8a;
       --matchup-4: #008300;
-      --matchup-5: #4a3aa7;
-      --matchup-6: #d6302f;
+      --matchup-5: #0d9488;
+      --matchup-6: #8a2e42;
     }
   }
   * { box-sizing: border-box; }
@@ -1411,9 +1417,11 @@
         // true/false/null (tie, or no live matchup) -- whether THIS team is
         // currently ahead in its live H2H matchup, under the CURRENTLY
         // SELECTED mode's scoring (liveInfo is already mode-scoped). Used
-        // only to color the "Pts This Week" cell in Projected mode (see
-        // render()) -- Actual mode's standings/H2H stay frozen regardless,
-        // so this is never used there.
+        // to color the "This Week"/"Pts This Week" cells to match the
+        // winning manager's own name color (see render()), in BOTH modes
+        // -- this is just a live "who's ahead right now" signal for the
+        // two per-week figures, independent of whether Actual mode's
+        // season-cumulative totals (PF/PA/H2H/etc) are frozen or not.
         this_week_winning: liveInfo ? liveInfo.h2hWin : null,
         pf: combinedPf,
         pa: combinedPa,
@@ -1552,21 +1560,25 @@
         } else {
           ptsCellAttrs += ' class="thisweek-pts"';
         }
-        // In Projected mode, the team currently AHEAD in its live H2H
-        // matchup gets its "Pts This Week" value colored the same as its
-        // own manager name (r.matchup_color) -- an at-a-glance "who's
-        // winning" signal. The trailing team (or anyone outside Projected
-        // mode, or not in a live matchup at all) just keeps the default
-        // blue from the .thisweek-pts CSS class -- no inline style
-        // overrides it in that case.
-        if (state.mode !== "actual" && r.this_week_winning === true && r.matchup_color) {
+        // The team currently AHEAD in its live H2H matchup (under whichever
+        // scoring mode -- Actual or Projected -- is currently selected;
+        // r.this_week_winning is already mode-scoped) gets both its "This
+        // Week" (Rumbles earned so far) and "Pts This Week" values colored
+        // the same as its own manager name (r.matchup_color) -- an
+        // at-a-glance "who's winning" signal in either mode. The trailing
+        // team (or anyone not in a live matchup at all) just keeps the
+        // default colors from the .thisweek/.thisweek-pts CSS classes --
+        // no inline style overrides them in that case.
+        var thisWeekCellAttrs = "";
+        if (r.this_week_winning === true && r.matchup_color) {
+          thisWeekCellAttrs = ' style="color:' + r.matchup_color + '"';
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
         return "<tr>" +
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
-          '<td class="thisweek">' + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +
