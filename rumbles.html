@@ -885,14 +885,6 @@
   // left in Q1 -- remainingFraction 0.9356) and Sleeper's own live
   // "projected" number for him read 33.41, while this page -- still using
   // the Q1-3 constants above -- showed 27.69, a 5.7-point undershoot.
-  // Solving backward for what dampening value WOULD reproduce 33.41 at
-  // that exact actual/pregame/remainingFraction shows dampening was
-  // effectively ~0.97, i.e. Sleeper applied almost NONE of the pace-based
-  // discount the Q1-3 constants call for at that pace (0.75) -- 33.41 sits
-  // only a third of a point off the fully UNDAMPENED flat blend
-  // (actual + remainingFraction*pregame = 34.07), the exact model an
-  // earlier iteration of this formula used and had to add dampening
-  // BECAUSE OF later-game overshoot (see the iteration history below).
   // That's the same story as the Q4 finding above, just at the other end:
   // the miss isn't really a function of pace alone, it's a function of
   // how much of the game has actually happened yet to have SEEN that
@@ -906,24 +898,43 @@
   // because there's almost no game left for anything to average out or
   // for a real trend to keep developing; Q1 barely dampens at all because
   // the opposite is true -- there's essentially a full game left.
-  // PACE_DAMPENING_FLOOR_Q1/K_Q1 below were fit to land within about a
-  // quarter-point of this one real example (0.85/0.50 -> 33.19, vs
-  // Sleeper's real 33.41). This is a SINGLE validated data point, not the
-  // 11-point Q4/OT sample the Q4 constants above were fit and
-  // cross-validated against -- shipped anyway because the direction and
-  // rough size of the miss are unambiguous and the underlying mechanism
-  // (more game left = trust the pregame projection more, not less) is the
-  // same logic that already paid off for Q4, but these two constants
-  // specifically should be revisited and tightened as more real Q1
-  // examples come in, the same way the Q4 constants were refined across
-  // several gameday reports before landing where they are now.
+  //
+  // A follow-up report a few minutes later added three more real points
+  // from the SAME early Sunday window: Jeremiyah Love (low pace, 0.70 off
+  // a 12.83 pregame proj) and Stefon Diggs (zero actual yet -- pace 0,
+  // where dampening is a no-op by construction: floor+(1-floor)*e^0 == 1
+  // no matter what floor/k are, so this point can't discriminate between
+  // constant choices at all, but it's a useful exact-match sanity check),
+  // PLUS a SECOND read on Smith-Njigba himself, re-checked a few minutes
+  // further into the same quarter (remainingFraction now 0.8447, pace
+  // essentially unchanged at ~0.7535 since he hadn't scored again).
+  // That second Smith-Njigba read is the important one: at virtually the
+  // SAME pace as the first read, Sleeper's own number had moved from
+  // implying ~0.96 dampening down to ~0.88 -- proof, not just noisy
+  // variance, that dampening keeps sliding down through Q1 as time
+  // passes even when pace itself hasn't changed. A flat, pace-only
+  // formula literally cannot reproduce two different dampening values at
+  // one fixed pace, so no single (floor, k) pair fit to Q1 can get both
+  // of Smith-Njigba's reads exactly right at once -- unlike Q4, which
+  // really did look like a clean step change, Q1 looks like a genuine
+  // continuous drift that this page's current per-quarter-bucket design
+  // can't fully represent. PACE_DAMPENING_FLOOR_Q1/K_Q1 below were
+  // refit (least squared error) across all four of these real points --
+  // Love and Diggs land almost exactly, and the fit deliberately splits
+  // the difference on the two Smith-Njigba reads (+0.7 / -0.7, bracketing
+  // both rather than nailing one and missing the other by more). Still
+  // only 4 points from 2 real games, well short of the Q4/OT constants'
+  // 11-point, cross-validated sample -- treat this as a better-informed
+  // estimate, not a settled fit, and worth replacing with an actually
+  // continuous (time-since-kickoff-aware) model once enough independent
+  // Q1 examples accumulate to fit one responsibly.
   // remainingFraction()'s own math means a value strictly above this
   // threshold can only ever come from Q1 (Q2 tops out at exactly 0.75) --
   // same exact-partition logic as the Q4 threshold above, just at the
   // other boundary.
   var PACE_DAMPENING_Q1_THRESHOLD = 0.75;
-  var PACE_DAMPENING_FLOOR_Q1 = 0.85;
-  var PACE_DAMPENING_K_Q1 = 0.50;
+  var PACE_DAMPENING_FLOOR_Q1 = 0.90;
+  var PACE_DAMPENING_K_Q1 = 1.75;
   function blendedProjection(actualPts, pregameProjPts, remainingFraction) {
     if (remainingFraction <= 0) return actualPts;
     var pace = pregameProjPts > 0 ? actualPts / pregameProjPts : 0;

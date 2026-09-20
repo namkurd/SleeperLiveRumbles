@@ -367,7 +367,7 @@ their pregame projection** -- not either one alone. The exact formula
 
 ```
 pace = actualPointsSoFar / pregameProjectionPoints        (0 if no projection, or 0 actual)
-FLOOR, K = (0.85, 0.50) if remainingGameClockFraction > 0.75   -- Q1, see below
+FLOOR, K = (0.90, 1.75) if remainingGameClockFraction > 0.75   -- Q1, see below
          = (0.15, 1.40) if remainingGameClockFraction <= 0.25  -- Q4/OT, see below
          = (0.40, 1.10) otherwise                               -- Q2-Q3 (the original fit)
 dampening = FLOOR + (1 - FLOOR) * exp(-K * pace)
@@ -578,20 +578,44 @@ whole game still ahead for a normal share of production to arrive on top
 -- there's little reason to discount the rest of their pregame
 projection nearly as hard as this page discounts an equally-hot player
 deep in the 3rd quarter, who's already had most of a game to prove that
-pace out. Q1 now gets its own, much gentler constants
-(`PACE_DAMPENING_FLOOR_Q1` = 0.85, `PACE_DAMPENING_K_Q1` = 0.50),
-switched on whenever `remainingGameClockFraction` is above 0.25 -- 0.75,
-a threshold that, symmetrically to the Q4 one, can only ever be reached
-in Q1 (Q2 tops out at exactly 0.75). This is shipped from a SINGLE
-validated data point, not the 11-point Q4/OT sample the Q4 constants
-were fit and cross-validated against, so it's held to a lower-confidence
-bar than that fix -- but the direction and rough size of the miss are
-unambiguous, and the mechanism (more game left = trust the projection
-more, not less) is the same logic that already paid off for Q4, just
-running the other way. These two constants specifically should be
-revisited and tightened as more real Q1 examples come in, the same way
-the Q4 ones were refined across several gameday reports before landing
-where they are now.
+pace out. Q1 now gets its own, much gentler constants, switched on
+whenever `remainingGameClockFraction` is above 0.75, a threshold that,
+symmetrically to the Q4 one, can only ever be reached in Q1 (Q2 tops out
+at exactly 0.75).
+
+**A follow-up report a few minutes later, same gameday, added three more
+real points -- including a second read on Smith-Njigba himself -- and
+that second read is what actually shaped the final constants.** Jeremiyah
+Love (low pace, 0.70 off a 12.83 pregame projection) and Stefon Diggs
+(zero actual yet) both came in essentially exact regardless of the exact
+constants chosen -- at pace 0, the dampening term is a no-op by
+construction (`floor + (1-floor)*e^0` always equals 1, whatever `floor`
+and `k` are), so these two are useful sanity checks but don't help pick
+between candidate constants. The important addition was re-checking
+Smith-Njigba himself a few minutes further into the same quarter
+(`remainingGameClockFraction` down to 0.8447, pace essentially unchanged
+at ~0.7535 since he hadn't scored again): at virtually the SAME pace as
+the first read, Sleeper's own number had moved from implying about 0.96
+dampening down to about 0.88. That's not noise -- it's direct proof that
+dampening keeps sliding down through Q1 purely as time passes, even
+holding pace fixed, something a flat pace-only formula can't represent
+at all (by definition, one `(floor, k)` pair gives exactly one dampening
+value for a given pace, never two). Unlike Q4, which looked like a clean
+step change once bucketed by quarter, Q1 looks like a genuine continuous
+drift that this page's per-quarter-bucket design can't fully capture.
+`PACE_DAMPENING_FLOOR_Q1` / `PACE_DAMPENING_K_Q1` were refit (least
+squared error) across all four real points -- landing at 0.90 / 1.75,
+with Love and Diggs matching almost exactly and the fit deliberately
+splitting the difference on Smith-Njigba's two reads (about +0.7 on the
+early one, -0.7 on the later one) rather than nailing one and ignoring
+the other. That's still only 4 points from 2 real games, nowhere near
+the 11-point, cross-validated Q4/OT sample, so this remains a
+lower-confidence, better-informed-than-before estimate rather than a
+settled fit -- worth replacing with an actually continuous,
+time-since-kickoff-aware model once enough independent Q1 examples
+accumulate to fit one responsibly, the same way Q4's step-function
+insight only became clear once enough points existed to bucket by
+quarter in the first place.
 
 **Overtime is now a hard cutoff to actual-so-far, with zero blended
 credit for the extra period, for every position -- not just the

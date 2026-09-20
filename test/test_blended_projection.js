@@ -120,10 +120,23 @@ assertClose(blendedProjection(25.58, 14.6588, 0.1389), 26.07, 0.05, "Young, re-c
 // touchdown (11:08 left in the 1st -- remainingFraction 0.9356) and found
 // the opposite problem: this formula, still on the Q1-3 constants,
 // undershot Sleeper's real live "projected" number by 5.7 points (27.69
-// vs 33.41). See PACE_DAMPENING_FLOOR_Q1/K_Q1's comment in rumbles.html --
-// this is a single validated point (not the 11-point Q4/OT sample), so
-// held to a wider tolerance than the tight Q4 checks above.
-assertClose(blendedProjection(15.20, 20.174, 0.9356), 33.41, 0.3, "Smith-Njigba (Q1, hot start) lands within ~0.3pt of Sleeper's real live number with the Q1-specific constants");
+// vs 33.41) -- the first Q1-specific constants (0.85/0.50) were fit to
+// this one point alone. A follow-up check a few minutes later added
+// three more real points, including a SECOND read on Smith-Njigba
+// himself at virtually the same pace but more time elapsed -- proof
+// (not just noise) that dampening keeps sliding down through Q1 even at
+// constant pace, which no flat (floor, k) pair can perfectly reproduce
+// at two different remainingFractions for the same pace. See
+// PACE_DAMPENING_FLOOR_Q1/K_Q1's comment in rumbles.html for the refit
+// across all four points -- still a thin, 4-point/2-game sample (not the
+// 11-point Q4/OT one), so held to wider tolerances than the tight Q4
+// checks above, and Smith-Njigba's two reads are deliberately allowed to
+// miss in OPPOSITE directions (the fit brackets both rather than nailing
+// one and ignoring the other).
+assertClose(blendedProjection(15.20, 20.174, 0.9356), 33.41, 0.8, "Smith-Njigba (Q1, hot start, early read) lands within ~0.8pt of Sleeper's real live number with the refit Q1 constants");
+assertClose(blendedProjection(15.20, 20.17, 0.8447), 30.25, 0.8, "Smith-Njigba (Q1, hot start, re-checked minutes later at the same pace) also lands within ~0.8pt -- the fit brackets both reads rather than matching only one");
+assertClose(blendedProjection(0.70, 12.83, 0.84472), 11.44, 0.1, "Love (Q1, low pace) matches Sleeper's real live number closely");
+assertClose(blendedProjection(0.00, 13.14, 0.84611), 11.11, 0.05, "Diggs (Q1, zero actual -- dampening is a no-op at pace=0 regardless of floor/k) matches almost exactly");
 
 // ---- blendedProjection: the Q1/Q4/OT constant switches themselves -------
 // remainingFraction()'s own math means Q2 never produces anything above
