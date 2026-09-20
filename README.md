@@ -347,22 +347,25 @@ estimate blended into their live total rather than the frozen pregame
 projection.)
 
 **A player whose game is currently in progress is scored, in Projected
-mode, as a CLOCK-WEIGHTED BLEND of their actual-so-far stat line and
-their pregame projection** -- not either one alone. The exact formula:
+mode, as a PACE-DAMPENED BLEND of their actual-so-far stat line and
+their pregame projection** -- not either one alone. The exact formula
+(see `blendedProjection()` in `rumbles.html`):
 
 ```
-points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints
+pace = actualPointsSoFar / pregameProjectionPoints        (0 if no projection, or 0 actual)
+dampening = 0.45 + 0.55 * exp(-1.25 * pace)
+points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints * dampening
 ```
 
 `remainingGameClockFraction` runs from 1 at kickoff down to 0 at the
 final whistle (computed from Sleeper's live-scoreboard `quarter_num` /
 `time_remaining` fields, treating each quarter as 15 game-clock minutes
 -- see `remainingFraction()` in `rumbles.html`). So at kickoff this is
-100% pregame projection; at the final whistle it's 100% actual stats;
-in between it shifts smoothly from one to the other. Once a game is
-confirmed COMPLETE, only the real stat line counts, same as before.
+100% pregame projection; at the final whistle it's 100% actual stats.
+Once a game is confirmed COMPLETE, only the real stat line counts.
 
-This replaced two earlier, cruder attempts, in order:
+This formula went through three iterations, each one replacing a real,
+validated shortcoming of the last:
 
 1. Swap straight from pregame projection to actual-so-far the instant a
    player's game merely *started*. A gameday report showed this dragged
@@ -371,51 +374,90 @@ This replaced two earlier, cruder attempts, in order:
    a 21-point pregame projection to under 1 real point the instant his
    game kicked off, even though the vast majority of his likely
    production was still ahead of him.
-2. Just keep the frozen pregame projection for the entire time a game is
-   in progress, only swapping to actual once it's confirmed complete.
-   This fixed problem 1, but has the opposite, equally real problem: it
-   never credits any actual production while a game is live, so a
-   player already *outproducing* their projection gets under-reported
-   until their game ends.
+2. Keep the frozen pregame projection for the entire time a game is in
+   progress, only swapping to actual once it's confirmed complete. This
+   fixed problem 1, but had the opposite, equally real problem: it never
+   credited any actual production while a game was live, so a player
+   already *outproducing* their projection got under-reported until
+   their game ended.
+3. A flat clock-weighted blend with no dampening (`points =
+   actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints`,
+   i.e. the formula above with `dampening` fixed at 1). This fixed
+   problem 2 -- credits actual production immediately -- but a follow-up
+   gameday report with more real examples showed it now systematically
+   OVERSHOT Sleeper's own live-displayed number, and by MORE the further
+   ahead of a flat pace a player was already running. Comparing two
+   players in the exact same real game at the exact same clock reading
+   made this unmistakable: a receiver already at 78% of his full pregame
+   projection early in the 3rd quarter needed his blend pulled down hard,
+   while his teammate at only 11% of projection barely needed any
+   adjustment at all -- the clock alone wasn't driving the gap, how far
+   ahead of pace each player was already running was. That's where the
+   `dampening` term above comes from: `0.45 + 0.55*exp(-1.25*pace)` keeps
+   ~100% credit for a player with zero production so far, and saturates
+   down to ~45% credit for a player already running well ahead of pace
+   (their overall total is barely affected by this -- their actual-so-far
+   is untouched and is usually the bigger share of their eventual total
+   anyway -- it only dampens what's assumed about the game still ahead).
 
-The clock-weighted blend above was derived and then validated against
-Sleeper's own live-displayed "projected" number, screenshotted directly
-off Sleeper's real matchup page for 8 different real Week 2 players
-mid-game (a mix of TE/WR/RB/K), each cross-checked against this page's
-own live-fetched actual stats, pregame projection, and the scores
-feed's `quarter_num`/`time_remaining` fields at the matching moment:
+This final formula was fit (least total absolute error) and then
+validated against Sleeper's own live-displayed "projected" number,
+screenshotted directly off Sleeper's real matchup pages across two
+separate live Sundays, for 13 different real players (a mix of
+QB/RB/WR/TE/K), each cross-checked against this page's own live-fetched
+actual stats, pregame projection, and the scores feed's
+`quarter_num`/`time_remaining` fields at the matching moment:
 
-| Player | Actual so far | Pregame proj | Sleeper's live number | This formula |
-|---|---|---|---|---|
-| Tucker Kraft (TE) | 0.00 | 12.24 | 7.19 | 7.19 |
-| Ka'imi Fairbairn (K) | 0.00 | 9.06 | 4.76 | 4.77 |
-| DK Metcalf (WR) | 1.20 | 14.32 | 8.49 | 8.79 |
-| Garrett Wilson (WR) | 3.10 | 15.66 | 11.21 | 11.98 |
-| Quinshon Judkins (RB) | 3.70 | 12.60 | 9.50 | 10.42 |
-| DeVonta Smith (WR) | 19.10 | 15.22 | 23.98 | 26.80 |
-| Tee Higgins (WR) | 10.70 | 14.26 | 15.64 | 18.31 |
-| Chase McLaughlin (K) | 10.40 | 8.41 | 13.19 | 14.76 |
+| Player | Actual so far | Pregame proj | Sleeper's live number | Flat blend (iteration 3) | This formula |
+|---|---|---|---|---|---|
+| Tucker Kraft (TE) | 0.00 | 12.24 | 7.19 | 7.19 | 7.19 |
+| Ka'imi Fairbairn (K) | 0.00 | 9.06 | 4.76 | 4.77 | 4.77 |
+| DK Metcalf (WR) | 1.20 | 14.32 | 8.49 | 8.79 | 8.37 |
+| Garrett Wilson (WR) | 3.10 | 15.66 | 11.21 | 11.98 | 10.89 |
+| Colston Loveland (TE) | 1.30 | 12.30 | 6.56 | 6.88 | 6.50 |
+| Quinshon Judkins (RB) | 3.70 | 12.60 | 9.50 | 10.42 | 9.27 |
+| Travis Etienne (RB) | 4.40 | 11.98 | 8.45 | 9.53 | 8.48 |
+| Aaron Jones (RB) | 5.70 | 14.22 | 10.74 | 12.15 | 10.74 |
+| Tee Higgins (WR) | 10.70 | 14.26 | 15.64 | 18.30 | 15.75 |
+| D'Andre Swift (RB) | 10.00 | 12.78 | 13.32 | 15.80 | 13.80 |
+| Chase McLaughlin (K) | 10.40 | 8.41 | 13.19 | 14.76 | 12.88 |
+| Dalton Schultz (TE) | 12.30 | 11.09 | 15.38 | 17.84 | 15.56 |
+| DeVonta Smith (WR) | 19.10 | 15.22 | 23.98 | 26.80 | 23.45 |
 
-The two players with zero actual production so far (a TE and a kicker)
-matched Sleeper's shown number almost exactly (within 0.01-0.03
-points). Players already on-pace-or-ahead of their pregame projection
-were the least precise, generally off by 2-3 points -- Sleeper's real
-live number for those clearly factors in something beyond
-time-remaining-and-pregame-projection alone, almost certainly a live
-usage/opportunity signal (snaps, targets, red-zone role) that isn't
-exposed by any of the public stats/projections/scores endpoints this
-page reads, so it can't be reproduced exactly without guessing at an
-unverified extra factor -- exactly the mistake the
-`bonus_fd_<position>` episode above already was. Even so, across all 8
-players this formula's average miss was about 1.1 points, versus about
-4.7 points for the flat-pregame-projection version it replaced (which
-also got the *direction* of the error backwards for half of them) -- a
-clear, validated improvement, just not a pixel-perfect reproduction of
-Sleeper's own (undisclosed) live blend.
+Average miss: 1.29 points for the flat blend (iteration 3), 0.18 points
+for the pace-dampened version above -- about 7x tighter, and several
+players landing within a few hundredths of a point. This isn't
+believed to be a coincidence of overfitting 13 points: leave-one-out
+cross-validation (refitting the two constants with each player held out
+in turn) kept both in a similar range each time, and every held-out
+player's prediction still landed within about half a point of what the
+full fit predicted. That said, **this is a heuristic fit to real
+examples, not a disclosed Sleeper formula** -- nothing about Sleeper's
+actual live blend is exposed by the public stats/projections/scores
+endpoints this page reads (a live usage/opportunity signal -- snaps,
+targets, red-zone role -- almost certainly factors into Sleeper's real
+number, and none of that is available here), so this page validates
+against real examples rather than guessing at an unverified extra
+factor -- exactly the discipline the `bonus_fd_<position>` episode
+above was a lesson in. It should be revisited if a future gameday
+report shows it drifting.
 
 A player whose live game status can't be resolved at all (no team
 metadata, or the live-status feed came back empty) falls back to the
 plain has-actual-stats check used everywhere else on this page.
+
+**The "Pts This Week" hover tooltip's "Proj" column now shows this same
+number**, not a fixed pregame projection: a not-yet-started player still
+shows their plain pregame projection (the formula above reduces to
+exactly that when nothing's happened yet), an in-progress player shows
+the pace-dampened live estimate, and a player whose game has gone final
+shows their real final score (there's no more game left to project, so
+the formula collapses straight to their actual). That last part is a
+deliberate trade-off: this column used to always show the fixed pregame
+number even after a player's game ended, specifically so a bust could be
+compared against what was expected of them at a glance -- that
+comparison is no longer available directly in this column post-game,
+since it now converges to their actual final total instead.
 
 - **Actual** (default on page load) -- ONLY real, actually-banked stats.
   Never touches projections. This is the fully "solidified" view: Rumbles,
@@ -430,7 +472,7 @@ plain has-actual-stats check used everywhere else on this page.
   over and the workflow finalizes it.
 - **Projected** -- a player uses their pregame projection while their game
   hasn't started, their real actual-so-far stat line once it's confirmed
-  COMPLETE, and a clock-weighted blend of both while it's in progress (see
+  COMPLETE, and a pace-dampened blend of both while it's in progress (see
   the in-progress-scoring section above for the formula and how closely it
   tracks -- but doesn't exactly reproduce -- Sleeper's own live blended
   number). This mode DOES fold the in-progress week's numbers -- Rumbles,

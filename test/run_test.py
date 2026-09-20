@@ -368,11 +368,15 @@ def scenario_live_blending(browser):
     #     game (MIN) is marked IN_PROGRESS in scores_week2.json, with
     #     "quarter_num": 2 / "time_remaining": "9:00" -- 21:00 elapsed of
     #     60:00, i.e. remainingFraction = 39/60 = 0.65. His actual so far is
-    #     7.20 and his pregame projection is 21.09, so the blend is
-    #     7.20 + 0.65*21.09 = 20.9085 -> rounds to 20.91. On top of his
-    #     other starter's projection (21.23, still fully pregame, untouched
-    #     by any of this) -> 20.91+21.23=42.14.
-    #     Custom PF = 105.0+42.14=147.14.
+    #     7.20 and his pregame projection is 21.09, so his pace is
+    #     7.20/21.09=0.3414, giving a dampening of
+    #     0.45+0.55*exp(-1.25*0.3414)=0.8089 (see blendedProjection()'s
+    #     comment in rumbles.html for why the remaining share gets
+    #     dampened at all). Blend = 7.20 + 0.65*21.09*0.8089 = 18.2895 ->
+    #     rounds to 18.29. On top of his other starter's projection (21.23,
+    #     still fully pregame, untouched by any of this) -> 18.29+21.23=
+    #     39.52.
+    #     Custom PF = 105.0+39.52=144.52.
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
@@ -391,14 +395,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 147.14, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 144.52, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
         "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 42.14, "Joe": None},
+        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 39.52, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -477,8 +481,14 @@ def scenario_live_blending(browser):
             # exclusion is Projected-mode-only (see below). No time column
             # at all in Actual mode (kickoff time is a Projected-only
             # concept), and "complete" isn't "in_progress" so this row
-            # isn't live.
-            assert aidan_rows == [{"time": "", "name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "17.00", "live": False}], (
+            # isn't live. "proj" now shows "2.50", matching "actual" exactly
+            # rather than his 17.0 pregame projection -- once a game is
+            # confirmed complete, blendedProjection's remainingFraction=0
+            # collapses straight to actualPts (no more game left to
+            # project), so this column becomes this page's live-projection
+            # ESTIMATE rather than a fixed "what was expected of them"
+            # figure (see buildPlayerBreakdown's comment on "proj").
+            assert aidan_rows == [{"time": "", "name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "2.50", "live": False}], (
                 f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_rows}"
             )
         else:
@@ -504,9 +514,16 @@ def scenario_live_blending(browser):
         if mode != "actual":
             alex_rows = get_thisweek_pts_tooltip(page, "Alex")
             expected_kickoff = format_game_start_label(MNF_START_UTC)
+            # Kyler Murray's "proj" is now 18.29, not his raw 21.09 pregame
+            # projection -- see blendedProjection()'s comment in
+            # rumbles.html: actual (7.20) + 65% of pregame (21.09) *
+            # pace-dampening(7.20/21.09=0.3414) = 7.20 + 0.65*21.09*0.8089
+            # = 18.29. P12 (unresolvable game -- "unknown" status, no
+            # remainingFraction to blend with) keeps showing his raw
+            # pregame projection unchanged, same as before this change.
             assert alex_rows == [
                 {"time": "", "name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
-                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "21.09", "live": True},
+                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "18.29", "live": True},
             ], (
                 f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live "
                 f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
@@ -566,25 +583,27 @@ def scenario_live_blending(browser):
                 f"[{mode}] expected both of Joe's starters to show the '{expected_sun_label}' kickoff label, got {joe_labels}"
             )
 
-        # ---- "This Week"/"Pts This Week" cell win-coloring, in BOTH modes:
-        # the team currently AHEAD in this week's live H2H matchup (under
-        # whichever mode is selected) gets both cells colored to match its
-        # own manager-name color; the trailing team keeps the default
+        # ---- "This Week"/"Pts This Week" cell win-coloring: the team
+        # currently AHEAD in this week's live H2H matchup (under whichever
+        # mode is selected) gets both cells colored to match its own
+        # manager-name color; the trailing team keeps the default
         # (uncolored -> falls back to CSS blue). Joe (roster 5) vs Alex
-        # (roster 6) are this week's H2H pair. Alex is ahead in BOTH modes
-        # here: his only played starter, Kyler Murray, has a game that's
-        # still confirmed "in_progress" (not complete) with 65% of the game
-        # clock left (see the MIN game's quarter_num/time_remaining in
-        # make_fixtures.py), so Projected mode blends his actual-so-far
-        # (7.20) with 65% of his pregame projection (21.09) --
-        # 7.20+0.65*21.09=20.91 -- rather than using either number alone
-        # (see playerPoints' comment on why). That's still enough to nudge
-        # Alex's Projected total (20.91+21.23=42.14) very slightly ahead of
-        # Joe's (42.04, his own two starters are both still pregame so this
-        # change doesn't touch him), unlike before this fix existed when Joe
-        # led Projected mode by using Kyler Murray's tiny partial actual
-        # score directly against Alex.
-        winner, loser = ("Alex", "Joe")
+        # (roster 6) are this week's H2H pair. The winner is DIFFERENT per
+        # mode here, deliberately: in Actual mode Alex leads 7.20-0.00 (his
+        # only played starter, Kyler Murray, has SOME real production;
+        # Joe's whole roster is still pregame with zero actual stats
+        # recorded for anyone). In Projected mode Joe leads instead: Kyler
+        # Murray's game is "in_progress" with 65% of the game clock left
+        # (see the MIN game's quarter_num/time_remaining in
+        # make_fixtures.py) and his actual-so-far (7.20) is already running
+        # at 34% of his full pregame projection (21.09) -- a well-above-
+        # flat pace this early in the game -- so blendedProjection's pace
+        # dampening (see its comment in rumbles.html) pulls his remaining-
+        # game share down to about 81% credit: 7.20 + 0.65*21.09*0.8089 =
+        # 18.29, +21.23 for his other (fully pregame) starter = 39.52. Joe's
+        # Projected total (42.04, his own two starters are both still
+        # pregame so none of this touches him) comes out ahead of that.
+        winner, loser = ("Alex", "Joe") if mode == "actual" else ("Joe", "Alex")
         pts_colors = get_pts_this_week_colors(page)
         rumbles_colors = get_thisweek_rumbles_colors(page)
         for label, colors in (("Pts This Week", pts_colors), ("This Week", rumbles_colors)):

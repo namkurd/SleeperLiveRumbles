@@ -795,55 +795,67 @@
     return dotProduct(source, scoringSettings, isActual);
   }
 
+  // A player currently in progress is blended: actual-so-far PLUS a
+  // DAMPENED share of their pregame projection for the game clock still
+  // remaining. The naive version of this (no dampening -- just
+  // actualPts + remainingFraction*pregameProjectionPts) was checked
+  // against Sleeper's own live-displayed "projected" number for 13 real
+  // players across two separate Week 2 gameday reports, and it
+  // systematically OVERSHOT for every player already producing at or
+  // above a flat pace (average miss 1.29 points, worse the further ahead
+  // of pace they were running) -- exactly backwards from the very first
+  // version of this fix (flat pregame projection the whole time a game's
+  // in progress), which systematically UNDERSHOT the same way. Comparing
+  // two players in the exact same real game at the exact same clock
+  // reading (a receiver already at 78% of his full pregame projection by
+  // early in the 3rd quarter, versus a teammate at only 11% of his) made
+  // the pattern unmistakable: it's not the clock alone driving the gap --
+  // it's specifically how far ahead of (or behind) a flat, uniform pace a
+  // player is already running. A player with zero production so far
+  // should keep essentially their full remaining-game projection; a
+  // player already running well ahead of pace should have that remaining
+  // share pulled down, since a real system would naturally regress an
+  // already-hot rate back toward the mean rather than keep extrapolating
+  // it forward at face value.
+  //
+  // dampening(pace) = FLOOR + (1-FLOOR)*exp(-K*pace), where pace =
+  // actualPointsSoFar / pregameProjectionPoints (0 when there's no
+  // projection to divide by, or genuinely 0 actual so far). FLOOR=0.45
+  // and K=1.25 were fit (least total absolute error) against those same
+  // 13 real players' live-displayed numbers -- average miss 0.18 points,
+  // about 7x tighter than the undampened version. Leave-one-out
+  // cross-validation (refit with each of the 13 held out in turn) kept
+  // both parameters in a similar range and every held-out prediction
+  // within about half a point of the full fit, so this isn't just curve-
+  // fitting noise -- but it IS fit to two live Sundays' worth of real
+  // examples, not a disclosed Sleeper formula (nothing about Sleeper's
+  // real blend is exposed by the public stats/projections/scores
+  // endpoints this page reads, so it can't be reproduced exactly -- see
+  // the first-down-bonus lesson above for why this page validates rather
+  // than guesses at an unverifiable extra factor). It should be
+  // revisited if a future gameday report shows it drifting.
+  var PACE_DAMPENING_FLOOR = 0.45;
+  var PACE_DAMPENING_K = 1.25;
+  function blendedProjection(actualPts, pregameProjPts, remainingFraction) {
+    if (remainingFraction <= 0) return actualPts;
+    var pace = pregameProjPts > 0 ? actualPts / pregameProjPts : 0;
+    if (pace < 0) pace = 0;
+    var dampening = PACE_DAMPENING_FLOOR + (1 - PACE_DAMPENING_FLOOR) * Math.exp(-PACE_DAMPENING_K * pace);
+    return actualPts + remainingFraction * pregameProjPts * dampening;
+  }
+
   // Two lenses on a player's week:
   //   "actual" -- ONLY their actual banked stats. Never touches
   //     projections -- legitimately 0 for anyone who hasn't played, or
   //     whose box score is genuinely empty.
   //   "custom" -- the Projected-tab lens. A still-pregame player scores off
-  //     Sleeper's pregame projection; a fully-complete player scores off
-  //     their real stat line; and a player whose game is currently IN
-  //     PROGRESS is blended: their actual-so-far PLUS a shrinking share of
-  //     their pregame projection, that share equal to the fraction of the
-  //     game clock still remaining (see remainingFraction() above) --
-  //     actualPts + remainingFraction * pregameProjectionPts. At kickoff
-  //     that's 100% pregame projection (remainingFraction=1); at the final
-  //     whistle it's 100% actual (remainingFraction=0); in between it
-  //     shifts smoothly from one to the other as the game clock runs down.
-  //
-  //     This replaced an earlier, even simpler version of this fix (just
-  //     keep showing the frozen pregame projection for the whole time a
-  //     player's game is in progress, ignoring the clock and their actual
-  //     stats entirely). That version was a safe stopgap for the original
-  //     reported bug (in-progress players' tiny partial actual totals
-  //     dragging Projected way down), but it had an opposite, equally real
-  //     problem: it UNDER-reported anyone already outproducing their
-  //     projection, since it never credited actual production at all while
-  //     a game was still live.
-  //
-  //     The clock-blended version above was derived and validated against
-  //     Sleeper's own live in-game "projected" numbers, screenshotted
-  //     directly off Sleeper's matchup page for 8 different real Week 2
-  //     players mid-game (a mix of TE/WR/RB/K), each checked against this
-  //     page's own live-fetched actual stats, pregame projection, and the
-  //     scores feed's quarter_num/time_remaining fields at the matching
-  //     moment. Two players with zero actual production so far (a TE and a
-  //     kicker) matched Sleeper's shown number almost exactly (within
-  //     0.01-0.03 points). Players already on-pace-or-ahead of their
-  //     projection (several WRs and a kicker already past their FULL
-  //     pregame total by halftime) were the least precise, generally off
-  //     by 2-3 points -- Sleeper's real live number for those clearly
-  //     factors in something beyond time-remaining-and-pregame-projection
-  //     alone, almost certainly a live usage/opportunity signal (snaps,
-  //     targets, red-zone role) that simply isn't exposed by the public
-  //     stats/projections/scores endpoints this page reads, so it can't be
-  //     reproduced exactly (see the first-down-bonus lesson above for why
-  //     this page won't guess at an unverifiable extra factor rather than
-  //     ship one that's actually confirmed to help). Even so, across all 8
-  //     players this blended model's average miss was about 1.1 points,
-  //     versus about 4.7 points for the flat-pregame-projection version it
-  //     replaced (which also got the DIRECTION of the error backwards for
-  //     half of them) -- a clear, validated improvement, just not a pixel-
-  //     perfect reproduction.
+  //     Sleeper's pregame projection (blendedProjection() above reduces to
+  //     exactly that when remainingFraction=1 and actual=0); a fully-
+  //     complete player scores off their real stat line (remainingFraction
+  //     =0 reduces the same formula to just actualPts); and a player whose
+  //     game is currently IN PROGRESS gets the full pace-dampened blend.
+  //     See blendedProjection()'s comment for the formula, the validation
+  //     data, and why the dampening exists at all.
   //
   //     "unknown" (no team metadata for this player, or the live-status
   //     feed failed/doesn't cover their team) falls back to the plain
@@ -874,7 +886,7 @@
     }
     var actualPts = actualSource ? scoreFrom(actualSource, scoringSettings, true) : 0;
     var pregameProj = scoreFrom(projMap[playerId], scoringSettings, false);
-    return actualPts + game.remainingFraction * pregameProj;
+    return blendedProjection(actualPts, pregameProj, game.remainingFraction);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode, playersMeta, teamGameSchedule) {
@@ -953,11 +965,25 @@
       var meta = playersMeta ? playersMeta[pid] : null;
       var team = meta ? meta.team : null;
       var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
+      var actualPts = played ? scoreFrom(actualSource, scoringSettings, true) : 0;
+      var pregameProjPts = scoreFrom(projMap[pid], scoringSettings, false);
+      // "proj" shows the SAME number Projected mode actually sums for this
+      // player (see playerPoints/blendedProjection): their plain pregame
+      // projection while their game hasn't started, their real stat line
+      // once it's confirmed complete, and a pace-dampened blend of both
+      // while it's in progress -- this page's best estimate of Sleeper's
+      // own live "projected" number, not a reproduction of it (see
+      // blendedProjection's comment for how close that estimate actually
+      // gets, validated against real examples). A player whose game status
+      // is "unknown" (no team metadata, or the live-status feed failed)
+      // has no remainingFraction to blend with, so this just shows their
+      // raw pregame projection, same as before this blending model existed.
+      var projPts = game ? blendedProjection(actualPts, pregameProjPts, game.remainingFraction) : pregameProjPts;
       out.push({
         player_id: pid,
         name: meta ? playerName(meta) : pid,
-        actual: round2(played ? scoreFrom(actualSource, scoringSettings, true) : 0),
-        proj: round2(scoreFrom(projMap[pid], scoringSettings, false)),
+        actual: round2(actualPts),
+        proj: round2(projPts),
         played: played,
         game_status: (game && game.status) || "unknown",
         game_start_ms: (game && game.startTimeMs) || null,
