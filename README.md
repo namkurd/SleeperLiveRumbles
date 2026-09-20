@@ -258,8 +258,12 @@ against the league's real `scoring_settings` -- never Sleeper's generic
 (standard PPR/standard scoring) that won't match a league with custom
 rules like this one's first-down bonuses and tiered defense scoring. This
 was verified directly against Sleeper's own displayed matchup projection:
-summing a team's starters through this exact formula reproduced Sleeper's
-own PRE-GAME number to the penny for every roster tested.
+summing a team's starters through this exact formula reproduces Sleeper's
+own PRE-GAME number to the penny, including the position-keyed first-down
+bonus described below (`bonus_fd_qb`/`bonus_fd_rb`/`bonus_fd_wr`/
+`bonus_fd_te`) -- an earlier version of this page didn't derive that
+bonus for a still-pregame player, which is what the gameday report
+further down describes finding and fixing.
 
 **Once a player has actually played**, the blended total can still be off
 by a point or two from what Sleeper's site shows, even hours after the
@@ -310,25 +314,44 @@ revised by its providers through the week, independent of any of the
 above -- so a snapshot comparison against Sleeper's site for a still-
 pregame player will only match exactly at the instant both are captured.)
 
-**A follow-up check confirmed there's nothing further to fix here.**
-Re-derived one roster's live total from scratch, independently, and it
-matched the page's own number to the penny -- so the formula and the
-actual-vs-projection gating are both executing exactly as intended, with
-no remaining silent bug. The residual gap against Sleeper's own displayed
-number (still up to a couple of points on a roster with many still-
-pregame starters) traces to two things outside this page's control: (1)
-ordinary pregame-projection drift (documented above), which compounds
-with each additional still-pregame starter on a roster, and (2) this
-league's first-down bonus categories (`bonus_fd_qb`/`bonus_fd_wr`/
-`bonus_fd_rb`/`bonus_fd_te`) are real fields on an ACTUAL post-game stat
-line but are never present on a PREGAME projection at all (the projection
-provider simply doesn't forecast them) -- every roster's still-pregame
-starters are missing that credit equally, so it's not a bug specific to
-any one team, but it does mean Sleeper's own displayed "projected" number
-may be drawing on some additional internal blending or correction this
-page's public API access can't fully replicate. Given that, this is as
-close as this approach can get without Sleeper exposing more of its own
-internal projection math.
+**A real Week 2 gameday report caught one more bug, since fixed.** A
+roster with several still-pregame starters was running noticeably below
+Sleeper's own displayed Projected total -- not the couple of points of
+ordinary pregame-projection drift described above, but tens of points on
+a full roster. Pulling that league's real `scoring_settings` turned up
+the cause: this league scores first downs through POSITION-KEYED
+`bonus_fd_qb` / `bonus_fd_rb` / `bonus_fd_wr` / `bonus_fd_te` fields
+(weighted 0.2/0.5/0.5/0.5), not the generic `pass_fd` / `rush_fd` /
+`rec_fd` fields (all weighted 0 in this league -- they're just the raw
+building blocks the bonus is computed from). A real ACTUAL (post-game)
+stat line already carries the correct `bonus_fd_<position>` field
+precomputed by Sleeper, so Actual mode was already scoring it correctly
+with no fix needed -- which is exactly why "the Actual tab is perfect"
+while Projected ran low. A real PREGAME projection, however, never
+carries any `bonus_fd_*` field at all, only the raw `pass_fd` /
+`rush_fd` / `rec_fd` counts -- so a plain key-by-key match was silently
+dropping that entire scoring category for every still-pregame starter.
+
+Fixed the same way Sleeper computes it for real stats: for a still-
+pregame player, `FD_BONUS_KEYS` in `rumbles.html` derives
+`bonus_fd_<their position>` as the sum of whichever of `pass_fd` /
+`rush_fd` / `rec_fd` are present on their projection (confirmed against
+real Week 1 actual data, where both the raw counts and the precomputed
+bonus coexist on the same stat line, that this is exactly the formula
+Sleeper itself uses). Deliberately the mirror image of `KEY_ALIASES` /
+`TIER_SUM_KEYS` above -- gated to fire only on a still-pregame player
+(`isActual` false), never on a real stat line, which already has the
+right field. Needs to know the player's fantasy position, which is why
+`playerPoints`/`rosterScore`/`buildPlayerBreakdown` now all thread
+`playersMeta` through to `scoreFrom`.
+
+Validated directly against the real report: for the roster in question,
+the page's buggy total was 145.85 against Sleeper's own displayed 168.02
+-- a roughly 22-point gap. Recomputing that same roster's real Week 2
+payload with the fix applied came to 169.52, within normal pregame-
+projection-drift (and few-seconds-of-timing) distance of Sleeper's
+168.02, confirming this fully explains the reported gap rather than
+just narrowing it.
 
 - **Actual** (default on page load) -- ONLY real, actually-banked stats.
   Never touches projections. This is the fully "solidified" view: Rumbles,

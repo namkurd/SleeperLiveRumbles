@@ -712,6 +712,34 @@
   // that happens to share a prefix.
   var TIER_SUM_KEYS = { fgmiss: true };
 
+  // Confirmed against real Week 2 gameday data (a live Projected total
+  // running ~20+ points below what Sleeper's own matchup page showed for
+  // the same roster -- see the investigation this was added for): this
+  // league's scoring_settings scores first downs through POSITION-KEYED
+  // "bonus_fd_qb" / "bonus_fd_rb" / "bonus_fd_wr" / "bonus_fd_te" fields
+  // (weighted 0.2/0.5/0.5/0.5 here), not the generic "pass_fd"/"rush_fd"/
+  // "rec_fd" fields (all weighted 0 in this league -- they're just the
+  // raw building blocks the bonus is computed from). A REAL ACTUAL stat
+  // line already carries the correct "bonus_fd_<pos>" field precomputed
+  // by Sleeper (confirmed: it equals pass_fd + rush_fd + rec_fd for that
+  // player, whichever of those apply), so isActual scoring already works
+  // with no fix needed there -- this is why "the Actual tab is perfect"
+  // while Projected was running low. A PREGAME PROJECTION, however, never
+  // carries any "bonus_fd_*" field at all -- only the raw pass_fd/rush_fd/
+  // rec_fd counts -- so a plain key-by-key match silently drops the whole
+  // category for every still-pregame starter. Fixed the same way as
+  // Sleeper computes it for real stats: for a still-pregame player, derive
+  // "bonus_fd_<their position>" as the sum of whichever of pass_fd/
+  // rush_fd/rec_fd are present on their projection. Deliberately the
+  // MIRROR IMAGE of KEY_ALIASES/TIER_SUM_KEYS above -- this only ever
+  // fires when isActual is FALSE, never on a real stat line (which
+  // already has the right field, and where re-deriving it from the same
+  // three raw counts happens to be exactly equivalent anyway, so gating
+  // it to projections-only is a safety choice, not a shortcut). Needs to
+  // know the player's fantasy position, which the two callers below now
+  // both thread through as an extra argument.
+  var FD_BONUS_KEYS = { bonus_fd_qb: "QB", bonus_fd_rb: "RB", bonus_fd_wr: "WR", bonus_fd_te: "TE" };
+
   // NOTE (known, currently-unfixed gap): scoring_settings' kicker
   // "fgm_yds_over_30" bonus (extra credit per yard past 30 on a made FG)
   // has no reliable source in either the actual-stats or projections
@@ -721,7 +749,7 @@
   // silently scored as 0 for now. In practice this only shifts a kicker's
   // total by a small fraction of a point (worth revisiting if kicker
   // scores start looking consistently light once real games are in).
-  function dotProduct(statsObj, scoringSettings, isActual) {
+  function dotProduct(statsObj, scoringSettings, isActual, position) {
     if (!statsObj || !scoringSettings) return 0;
     var total = 0;
     for (var key in scoringSettings) {
@@ -745,6 +773,10 @@
           if (sawTier) val = tierTotal;
         }
       }
+      if (typeof val !== "number" && !isActual && position && FD_BONUS_KEYS[key] === position) {
+        var fdTotal = (statsObj.pass_fd || 0) + (statsObj.rush_fd || 0) + (statsObj.rec_fd || 0);
+        if (fdTotal) val = fdTotal;
+      }
       if (typeof val === "number") {
         total += weight * val;
       }
@@ -760,11 +792,21 @@
   // bonuses, etc. Verified directly against Sleeper's own displayed
   // matchup projection: summing each starter's projected stat line
   // through this exact formula reproduced Sleeper's own number to the
-  // penny. Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic
-  // scoring system and will not match a league with custom scoring_settings.)
-  function scoreFrom(source, scoringSettings, isActual) {
+  // penny -- INCLUDING the position-keyed first-down bonus, once
+  // FD_BONUS_KEYS above was added to derive it for a still-pregame
+  // player; an earlier version of this comment claimed this matched
+  // exactly before that fix existed, which wasn't actually true for a
+  // roster with pregame starters carrying real first-down volume -- see
+  // FD_BONUS_KEYS's comment for how that was caught and confirmed fixed
+  // against live gameday data. Sleeper's "pts_ppr"/"pts_std" fields are a
+  // DIFFERENT, generic scoring system and will not match a league with
+  // custom scoring_settings.) `position` is only ever consulted for a
+  // still-pregame projection (see FD_BONUS_KEYS) -- passing it for a real
+  // actual stat line is harmless (isActual short-circuits before it's
+  // ever read) but callers pass it either way for simplicity.
+  function scoreFrom(source, scoringSettings, isActual, position) {
     if (!source) return 0;
-    return dotProduct(source, scoringSettings, isActual);
+    return dotProduct(source, scoringSettings, isActual, position);
   }
 
   // Two lenses on a player's week:
@@ -782,24 +824,31 @@
   // entry exists for this player (statsMap), not from which mode is
   // selected -- a player who's already played gets the actual-only
   // KEY_ALIASES/TIER_SUM_KEYS treatment in EITHER mode, while a
-  // still-pregame player never does, even in "custom" mode.
-  function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
+  // still-pregame player never does, even in "custom" mode (they instead
+  // get the projection-only FD_BONUS_KEYS treatment). `playersMeta` is
+  // used only to look up the player's position for FD_BONUS_KEYS -- a
+  // missing/unavailable meta just means that derivation quietly doesn't
+  // fire for that player (same as any other player whose position can't
+  // be resolved), never an error.
+  function playerPoints(playerId, statsMap, projMap, scoringSettings, mode, playersMeta) {
+    var meta = playersMeta ? playersMeta[playerId] : null;
+    var position = meta ? meta.position : null;
     var actualSource = statsMap[playerId];
     if (mode === "actual") {
-      return scoreFrom(actualSource, scoringSettings, true);
+      return scoreFrom(actualSource, scoringSettings, true, position);
     }
     var isActual = !!actualSource;
     var source = actualSource || projMap[playerId];
-    return scoreFrom(source, scoringSettings, isActual);
+    return scoreFrom(source, scoringSettings, isActual, position);
   }
 
-  function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
+  function rosterScore(roster, statsMap, projMap, scoringSettings, mode, playersMeta) {
     var starters = roster.starters || [];
     var total = 0;
     for (var i = 0; i < starters.length; i++) {
       var pid = starters[i];
       if (!pid || pid === "0") continue;
-      total += playerPoints(pid, statsMap, projMap, scoringSettings, mode);
+      total += playerPoints(pid, statsMap, projMap, scoringSettings, mode, playersMeta);
     }
     return total;
   }
@@ -835,7 +884,8 @@
   //     was expected of them). Note this deliberately does NOT apply the
   //     isActual-only KEY_ALIASES/TIER_SUM_KEYS treatment (scoreFrom's
   //     3rd arg is false), matching how projections are scored everywhere
-  //     else in this file.
+  //     else in this file -- but DOES get the projection-only FD_BONUS_KEYS
+  //     treatment (the 4th arg, position), which is the mirror image.
   //   - "played" -- true once statsMap has a real entry for them, i.e.
   //     their game has kicked off (matches the isActual check playerPoints
   //     already uses to decide whether to trust actual stats over a
@@ -860,12 +910,18 @@
       var played = !!actualSource;
       var meta = playersMeta ? playersMeta[pid] : null;
       var team = meta ? meta.team : null;
+      var position = meta ? meta.position : null;
       var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
       out.push({
         player_id: pid,
         name: meta ? playerName(meta) : pid,
-        actual: round2(played ? scoreFrom(actualSource, scoringSettings, true) : 0),
-        proj: round2(scoreFrom(projMap[pid], scoringSettings, false)),
+        actual: round2(played ? scoreFrom(actualSource, scoringSettings, true, position) : 0),
+        // FD_BONUS_KEYS still applies here (position, 4th arg) even though
+        // isActual is hardcoded false -- this "proj" figure is always
+        // Sleeper's raw pregame projection regardless of whether the
+        // player has since played, and that's exactly the case
+        // FD_BONUS_KEYS derives the first-down bonus for.
+        proj: round2(scoreFrom(projMap[pid], scoringSettings, false, position)),
         played: played,
         game_status: (game && game.status) || "unknown",
         game_start_ms: (game && game.startTimeMs) || null,
@@ -1230,69 +1286,78 @@
             return null;
           }
 
-          var scoresActual = {};
-          var scoresCustom = {};
-          var pairsByMatchupId = {};
+          // playersMeta has to be resolved BEFORE any scoring happens now
+          // (not just before the tooltip/QB-adjustment step, as before) --
+          // rosterScore needs each starter's POSITION to correctly derive
+          // their first-down bonus on a still-pregame projection (see
+          // FD_BONUS_KEYS). ensurePlayersMeta() only ever pays the real
+          // network cost once per page load (it caches in state.playersMeta
+          // and every later call, including every subsequent 30s poll,
+          // resolves that cached copy immediately) -- so this only adds
+          // latency to the very first load, not to the ongoing poll loop.
+          return ensurePlayersMeta().then(function (playersMeta) {
+            var scoresActual = {};
+            var scoresCustom = {};
+            var pairsByMatchupId = {};
 
-          matchups.forEach(function (m) {
-            var rid = m.roster_id;
-            scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual");
-            scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom");
-            var mid = m.matchup_id;
-            if (mid !== undefined && mid !== null) {
-              if (!pairsByMatchupId[mid]) pairsByMatchupId[mid] = [];
-              pairsByMatchupId[mid].push(rid);
-            }
-          });
-
-          var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
-          var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
-
-          var byRoster = {};
-          Object.keys(scoresActual).forEach(function (rid) {
-            byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
-          });
-
-          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
-
-          // Best-effort: also try to detect this week's QB-injury-backup
-          // adjustments live (see detectQbAdjustmentsForWeek above).
-          // Never allowed to break the main standings if it fails.
-          var managerByRosterId = {};
-          ((state.history && state.history.standings) || []).forEach(function (s) {
-            managerByRosterId[s.roster_id] = s.manager;
-          });
-          return ensurePlayersMeta()
-            .then(function (playersMeta) {
-              var teamQbIndex = state.teamQbIndex || {};
-
-              // Attach each roster's per-starter actual/projected breakdown
-              // for the "Points This Week" hover tooltip. Independent of
-              // the QB-adjustment detection below -- best-effort, and never
-              // allowed to block or break it if player names are missing.
-              matchups.forEach(function (m) {
-                var rid = m.roster_id;
-                if (state.live.byRoster[rid]) {
-                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
-                }
-              });
-
-              var prelim = detectQbAdjustmentsForWeek(
-                targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-              );
-              var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
-              var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
-              if (needsFreshCheck && stale) {
-                return fetchPlayersMeta()
-                  .then(function (freshMeta) {
-                    return detectQbAdjustmentsForWeek(
-                      targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-                    );
-                  })
-                  .catch(function () { return prelim; });
+            matchups.forEach(function (m) {
+              var rid = m.roster_id;
+              scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual", playersMeta);
+              scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom", playersMeta);
+              var mid = m.matchup_id;
+              if (mid !== undefined && mid !== null) {
+                if (!pairsByMatchupId[mid]) pairsByMatchupId[mid] = [];
+                pairsByMatchupId[mid].push(rid);
               }
-              return prelim;
-            })
+            });
+
+            var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
+            var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
+
+            var byRoster = {};
+            Object.keys(scoresActual).forEach(function (rid) {
+              byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
+            });
+
+            state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+
+            // Best-effort: also try to detect this week's QB-injury-backup
+            // adjustments live (see detectQbAdjustmentsForWeek above).
+            // Never allowed to break the main standings if it fails.
+            var managerByRosterId = {};
+            ((state.history && state.history.standings) || []).forEach(function (s) {
+              managerByRosterId[s.roster_id] = s.manager;
+            });
+
+            var teamQbIndex = state.teamQbIndex || {};
+
+            // Attach each roster's per-starter actual/projected breakdown
+            // for the "Points This Week" hover tooltip. Independent of the
+            // QB-adjustment detection below -- best-effort, and never
+            // allowed to block or break it if player names are missing.
+            matchups.forEach(function (m) {
+              var rid = m.roster_id;
+              if (state.live.byRoster[rid]) {
+                state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+              }
+            });
+
+            var prelim = detectQbAdjustmentsForWeek(
+              targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+            );
+            var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
+            var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
+            if (needsFreshCheck && stale) {
+              return fetchPlayersMeta()
+                .then(function (freshMeta) {
+                  return detectQbAdjustmentsForWeek(
+                    targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+                  );
+                })
+                .catch(function () { return prelim; });
+            }
+            return prelim;
+          })
             .then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
             })

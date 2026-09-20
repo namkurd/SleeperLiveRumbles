@@ -353,16 +353,28 @@ def scenario_live_blending(browser):
     #     "Points This Week" shows the live 2.5 figure.
     #     Custom=2.5+12.5=15.0 folded on top of history -> PF 92.5+15.0=107.5
     #   Jake (roster 3, history PF 97.5): played player is having a
-    #     blowout (33.0 actual -- 30.0 base plus the kr_yd-alias (+4.0) and
-    #     fgmiss-tier-sum (-1.0) regression checks, see make_fixtures.py)
+    #     blowout (34.5 actual -- 30.0 base plus the kr_yd-alias (+4.0) and
+    #     fgmiss-tier-sum (-1.0) regression checks, PLUS a real precomputed
+    #     "bonus_fd_wr" actual-stats field (+1.5, see FD_BONUS_KEYS in
+    #     rumbles.html and make_fixtures.py) used as-is with no
+    #     re-derivation, since he's already played -- 30.0+4.0-1.0+1.5=34.5)
     #     that now replaces the much smaller pregame projection (7.0);
-    #     unplayed player only has a projection (4.0).
+    #     unplayed player only has a projection (4.0, no position metadata
+    #     so FD_BONUS_KEYS never fires for him either).
     #     Actual PF stays frozen at history (97.5).
-    #     Custom=33.0+4.0=37.0 folded on top of history -> PF 97.5+37.0=134.5
+    #     Custom=34.5+4.0=38.5 folded on top of history -> PF 97.5+38.5=136.0
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
     #     path also happens to start from, before folding its projection).
+    #     Joe's two starters (P9/RB, P10/WR) are exactly the case
+    #     FD_BONUS_KEYS exists for: still-pregame projections with real
+    #     position metadata but no native "bonus_fd_*" field. Each derives
+    #     pass_fd(5)+rush_fd(1)+rec_fd(2)=8, worth +4.0 apiece at this
+    #     fixture's 0.5 weight, on top of their base projected totals of
+    #     20.95 (P9) and 21.09 (P10) -- see make_fixtures.py's generic
+    #     projection pattern -- for 24.95 + 25.09 = 50.04.
+    #     Custom PF = 102.5 + 50.04 = 152.54.
     # The frozen/actualized baseline is exactly what's already in
     # rumbles_history.json (only Week 1 is final in this fixture) -- pull
     # it straight from there rather than re-deriving the formula, so this
@@ -377,14 +389,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 134.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 136.0, "Joe": 152.54},
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
-        "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 37.0, "Joe": None},
+        "actual": {"Aidan": 2.5, "Jake": 34.5, "Joe": 0.0},
+        "custom": {"Aidan": 15.0, "Jake": 38.5, "Joe": 50.04},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -447,12 +459,18 @@ def scenario_live_blending(browser):
         # column regardless of mode.
         # Aidan (roster 1) is hand-verified above: played starter "P1" (now
         # given real metadata -- "Amon-Ra St. Brown" on team DET, actual
-        # 2.5, pregame projection 17.0) and unplayed starter "P2" (no
-        # metadata -- falls back to the raw player_id, actual 0, projection
-        # 12.5 per HAND_CRAFTED_PROJ_UNPLAYED[1]). scores_week2.json marks
-        # DET as "complete" -- Amon-Ra's real game is fully over, exactly
-        # the reported scenario -- so Projected mode must exclude him
-        # entirely even though Actual mode still shows him.
+        # 2.5, pregame projection 17.0 base + 2.0 FD_BONUS_KEYS-derived
+        # (rec_fd:4, no pass_fd/rush_fd -> fdTotal 4 * bonus_fd_wr 0.5 =
+        # 2.0, since his tooltip "proj" column ALWAYS reads from the
+        # pregame projection regardless of played status -- see
+        # buildPlayerBreakdown -- and now has real WR position metadata) =
+        # 19.0) and unplayed starter "P2" (no metadata -- falls back to the
+        # raw player_id, actual 0, projection 12.5 per
+        # HAND_CRAFTED_PROJ_UNPLAYED[1], unaffected by FD_BONUS_KEYS since
+        # his position can't be resolved). scores_week2.json marks DET as
+        # "complete" -- Amon-Ra's real game is fully over, exactly the
+        # reported scenario -- so Projected mode must exclude him entirely
+        # even though Actual mode still shows him.
         aidan_rows = get_thisweek_pts_tooltip(page, "Aidan")
         assert aidan_rows, f"[{mode}] Aidan's Pts This Week cell should have a hover tooltip, got {aidan_rows!r}"
         if mode == "actual":
@@ -464,7 +482,7 @@ def scenario_live_blending(browser):
             # at all in Actual mode (kickoff time is a Projected-only
             # concept), and "complete" isn't "in_progress" so this row
             # isn't live.
-            assert aidan_rows == [{"time": "", "name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "17.00", "live": False}], (
+            assert aidan_rows == [{"time": "", "name": "Amon-Ra St. Brown", "actual": "2.50", "proj": "19.00", "live": False}], (
                 f"[actual] expected Aidan's tooltip to list only the played starter (by real name now that P1 has metadata), got {aidan_rows}"
             )
         else:
@@ -490,9 +508,16 @@ def scenario_live_blending(browser):
         if mode != "actual":
             alex_rows = get_thisweek_pts_tooltip(page, "Alex")
             expected_kickoff = format_game_start_label(MNF_START_UTC)
+            # Kyler Murray's "proj" (21.09 base + 1.60 FD_BONUS_KEYS-derived
+            # -- his generic-pattern projection carries pass_fd(5) +
+            # rush_fd(1) + rec_fd(2) = 8, times this fixture's
+            # bonus_fd_qb weight 0.2 = 1.60 -- he has real QB position
+            # metadata, so this fires despite already having played,
+            # exactly like Amon-Ra St. Brown's "proj" column above) =
+            # 22.69.
             assert alex_rows == [
                 {"time": "", "name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
-                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "21.09", "live": True},
+                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "22.69", "live": True},
             ], (
                 f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live "
                 f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
@@ -626,21 +651,17 @@ def scenario_live_blending(browser):
                 )
         print(f"Verified actualized-vs-projected Rumbles/H2H/PA/Vs.Field split for {mode} mode.")
 
-        # Joe's roster has ZERO actual stats recorded for anyone (still
-        # pregame) -- Actual mode must show exactly the history PF with no
-        # addition, while Projected must still show a real, nonzero
-        # projected total (never just falling back to 0).
-        joe_pf = pf_by_manager["Joe"]
-        if mode == "actual":
-            assert abs(joe_pf - 102.5) < 0.05, f"Joe (fully pregame roster) should show flat history PF in Actual mode, got {joe_pf}"
-        else:
-            assert joe_pf > 102.5 + 1.0, f"Joe (fully pregame roster) should show a real nonzero projection in {mode} mode, got {joe_pf}"
-
         # Joe's whole roster is still pregame -- in Actual mode every one of
         # his starters gets filtered out of the tooltip (nobody's played or
         # live yet), so there must be NO tooltip at all rather than an empty
         # or all-zero one. In Projected mode his starters are still shown
-        # (with actual 0.00 alongside a real projection).
+        # (with actual 0.00 alongside a real projection) -- including the
+        # FD_BONUS_KEYS-derived first-down bonus folded into that
+        # projection (P9/RB proj 24.95, P10/WR proj 25.09 -- see
+        # make_fixtures.py and the exact hand-verified PF/Points-This-Week
+        # totals above, which already exercise the roster-level sum; this
+        # checks the SAME fix at the individual-player level, via the same
+        # tooltip breakdown a real user would hover to see).
         joe_rows = get_thisweek_pts_tooltip(page, "Joe")
         if mode == "actual":
             assert joe_rows is None, f"[actual] Joe (fully pregame roster) should have no Pts This Week tooltip, got {joe_rows}"
@@ -649,6 +670,13 @@ def scenario_live_blending(browser):
             assert all(r["actual"] == "0.00" and not r["live"] for r in joe_rows), (
                 f"[{mode}] Joe's tooltip rows should all show Actual 0.00 and not be live (nobody on his roster has played or kicked off), got {joe_rows}"
             )
+            joe_projs = sorted(float(r["proj"]) for r in joe_rows)
+            expected_joe_projs = sorted([24.95, 25.09])
+            assert len(joe_projs) == 2 and all(abs(a - b) < 0.01 for a, b in zip(joe_projs, expected_joe_projs)), (
+                f"[{mode}] expected Joe's two still-pregame starters' tooltip proj values to include the "
+                f"FD_BONUS_KEYS-derived first-down bonus ({expected_joe_projs}), got {joe_projs}"
+            )
+            print(f"Verified FD_BONUS_KEYS-derived first-down bonus in {mode} mode's Pts This Week tooltip (Joe, still-pregame): {joe_projs}")
 
     # Confirm the two modes aren't secretly aliased to each other. Now that
     # PF displays to 2 decimal places, an arbitrary generic-pattern
