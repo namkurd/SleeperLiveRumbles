@@ -840,11 +840,49 @@
   // gameday report shows it drifting.
   var PACE_DAMPENING_FLOOR = 0.40;
   var PACE_DAMPENING_K = 1.10;
+  // A follow-up gameday report added 16 more real data points, mostly
+  // deep in the 3rd/4th quarter, and this formula was consistently
+  // overshooting them -- but bucketing EVERY validated point (34 total)
+  // by which quarter it fell in, rather than treating
+  // remainingGameClockFraction as one continuous scale, found the miss
+  // wasn't spread evenly: Q1-Q3 points averaged a small, roughly
+  // symmetric miss (well under half a point, errors landing on both
+  // sides of zero), while every single one of 11 real Q4/OT points
+  // overshot, by 0.3-0.8 points each, with no exceptions. That's a clean
+  // enough split that a single global exponent on
+  // remainingGameClockFraction (tried first, to make the remaining-
+  // credit term shrink faster as the clock runs low, independent of
+  // pace) was tested and rejected -- it only ever made the Q1-Q3 fit
+  // worse without fully fixing Q4, because it was trying to smoothly
+  // interpolate between two ranges that don't actually share one shape.
+  // A SEPARATE set of constants specifically for Q4/OT, left otherwise
+  // identical, fit those 11 points about 4x tighter (0.13 average miss
+  // vs 0.53) while leaving the already-good Q1-Q3 fit completely
+  // untouched. Leave-one-out cross-validation on just the Q4/OT set held
+  // up too (refit constants stayed in a similar neighborhood each time,
+  // every held-out prediction within about a third of a point). This
+  // tracks with how football actually plays out late in games -- run-
+  // out-the-clock playcalling in a decided game, reduced roles once the
+  // outcome is settled, backups checking in -- game-flow effects that
+  // are specific to "how much of the game is left", not merely "how hot
+  // is this player running", and that apparently kick in sharply at the
+  // Q4 line rather than building up gradually through the whole game.
+  // remainingFraction()'s own math means a value at or below this
+  // threshold can only ever come from Q4 or OT (Q3 never produces
+  // anything below 0.25; OT's entire range, [0, 0.1429], sits inside it)
+  // -- so checking it directly, with no extra quarter-number plumbing,
+  // exactly identifies "Q4 or later".
+  var PACE_DAMPENING_Q4_THRESHOLD = 0.25;
+  var PACE_DAMPENING_FLOOR_Q4 = 0.15;
+  var PACE_DAMPENING_K_Q4 = 1.40;
   function blendedProjection(actualPts, pregameProjPts, remainingFraction) {
     if (remainingFraction <= 0) return actualPts;
     var pace = pregameProjPts > 0 ? actualPts / pregameProjPts : 0;
     if (pace < 0) pace = 0;
-    var dampening = PACE_DAMPENING_FLOOR + (1 - PACE_DAMPENING_FLOOR) * Math.exp(-PACE_DAMPENING_K * pace);
+    var isQ4OrLater = remainingFraction <= PACE_DAMPENING_Q4_THRESHOLD;
+    var floor = isQ4OrLater ? PACE_DAMPENING_FLOOR_Q4 : PACE_DAMPENING_FLOOR;
+    var k = isQ4OrLater ? PACE_DAMPENING_K_Q4 : PACE_DAMPENING_K;
+    var dampening = floor + (1 - floor) * Math.exp(-k * pace);
     return actualPts + remainingFraction * pregameProjPts * dampening;
   }
 

@@ -36,6 +36,9 @@ function extract(pattern, label) {
 const source = [
   extract(/var PACE_DAMPENING_FLOOR = [^;]+;/, "PACE_DAMPENING_FLOOR"),
   extract(/var PACE_DAMPENING_K = [^;]+;/, "PACE_DAMPENING_K"),
+  extract(/var PACE_DAMPENING_Q4_THRESHOLD = [^;]+;/, "PACE_DAMPENING_Q4_THRESHOLD"),
+  extract(/var PACE_DAMPENING_FLOOR_Q4 = [^;]+;/, "PACE_DAMPENING_FLOOR_Q4"),
+  extract(/var PACE_DAMPENING_K_Q4 = [^;]+;/, "PACE_DAMPENING_K_Q4"),
   extract(/function blendedProjection\([^)]*\) \{[\s\S]*?\n  \}/, "blendedProjection"),
   extract(/function effectiveRemainingFraction\([^)]*\) \{[\s\S]*?\n  \}/, "effectiveRemainingFraction"),
 ].join("\n");
@@ -81,16 +84,44 @@ assertClose(blendedProjection(0.00, 12.24, 0.5872), 7.19, 0.05, "Kraft (0 actual
 // Sleeper's real 23.98.
 assertClose(blendedProjection(19.10, 15.22, 0.5056), 23.98, 1.0, "Smith (already over pregame proj) lands within ~1pt of Sleeper's real live number");
 // A fourth gameday report (see README) added 12 more players, mostly deep
-// in the 3rd/4th quarter (small remainingFraction) -- this batch's misses
-// ran a bit bigger on average, but a full refit against all 30 points
-// together didn't move the shipped constants, so these are pinned down as
-// plain regression coverage rather than a formula change. Derrick Henry:
-// small remainingFraction (0.1464), pace already over 100%.
-assertClose(blendedProjection(19.20, 15.28, 0.1464), 19.61, 1.0, "Henry (late 4th quarter, over pace) lands within ~1pt of Sleeper's real live number");
-// Jayden Reed: small remainingFraction, but very low pace (barely any
-// production yet) -- dampening barely matters here either, same as Kraft
-// above, and this one matched almost exactly.
+// in the 3rd/4th quarter (small remainingFraction). Jayden Reed: small
+// remainingFraction, but very low pace (barely any production yet) --
+// dampening barely matters here either, same as Kraft above, so this one
+// matched almost exactly even before the Q4-specific fix below (Reed's
+// remainingFraction, 0.2631, is actually still Q3 -- see the boundary
+// tests further down).
 assertClose(blendedProjection(1.40, 12.262, 0.2631), 4.35, 0.1, "Reed (low pace, late game) matches Sleeper's real live number closely");
+// Derrick Henry: remainingFraction 0.1464 -- genuinely Q4. A fifth
+// gameday report re-checked several of this batch's players even later
+// in the same games (remainingFraction down to 0.05-0.17) and found this
+// formula was STILL overshooting every one of them -- bucketing all the
+// validated points by quarter (not just by remainingFraction as one
+// continuous scale) showed the miss wasn't a smooth drift, it was
+// specific to Q4/OT: every real Q4/OT point overshot, while Q1-Q3 stayed
+// small and mixed-sign. Q4/OT now gets its own, more aggressive
+// constants (see PACE_DAMPENING_FLOOR_Q4/K_Q4's comment in rumbles.html)
+// -- these next few assertions are real Q4 data points, now held to a
+// tight tolerance instead of the ~1pt one they needed before that fix.
+assertClose(blendedProjection(19.20, 15.28, 0.1464), 19.61, 0.3, "Henry (Q4, over pace) lands within ~0.3pt of Sleeper's real live number with the Q4-specific constants");
+assertClose(blendedProjection(12.30, 11.095, 0.1672), 12.64, 0.3, "Schultz, re-checked later in the same game (Q4 now) lands within ~0.3pt");
+assertClose(blendedProjection(27.00, 17.838, 0.1672), 27.76, 0.05, "Chase, re-checked later in the same game (Q4 now) matches almost exactly");
+assertClose(blendedProjection(25.58, 14.6588, 0.1389), 26.07, 0.05, "Young, re-checked later in the same game (Q4 now) matches almost exactly");
+
+// ---- blendedProjection: the Q4/OT constant switch itself ----------------
+// remainingFraction()'s own math means Q3 never produces anything below
+// 0.25 and Q4 never produces anything above it -- so the switch is exact,
+// not approximate, and these pin that boundary down directly rather than
+// only exercising it indirectly through the real data points above.
+(function () {
+  var justAboveQ4 = blendedProjection(10, 20, 0.2501); // still Q3 -- FLOOR/K
+  var justAtQ4 = blendedProjection(10, 20, 0.25); // Q4 -- FLOOR_Q4/K_Q4
+  if (justAboveQ4 === justAtQ4) {
+    failures++;
+    console.error("FAIL: Q3/Q4 boundary -- expected a visible jump in the blended value right at remainingFraction=0.25, got none (Q4-specific constants aren't being applied)");
+  } else {
+    console.log(`PASS: Q3/Q4 boundary produces a real jump (0.2501 -> ${justAboveQ4.toFixed(4)}, 0.2500 -> ${justAtQ4.toFixed(4)})`);
+  }
+})();
 
 // ---- effectiveRemainingFraction: the DEF cap ----------------------------
 assertEqual(effectiveRemainingFraction("DEF", 0.65), 0, "an in-progress DEF gets its remainingFraction zeroed out (no blended future credit)");

@@ -363,7 +363,8 @@ their pregame projection** -- not either one alone. The exact formula
 
 ```
 pace = actualPointsSoFar / pregameProjectionPoints        (0 if no projection, or 0 actual)
-dampening = 0.40 + 0.60 * exp(-1.10 * pace)
+FLOOR, K = (0.15, 1.40) if remainingGameClockFraction <= 0.25 else (0.40, 1.10)  -- Q4/OT vs Q1-Q3, see below
+dampening = FLOOR + (1 - FLOOR) * exp(-K * pace)
 points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints * dampening
 ```
 
@@ -499,32 +500,52 @@ accumulate, especially more RB data and more players checked earlier in
 their games (larger `remainingGameClockFraction`) to see whether that
 clock-correlation in this batch holds up or was this batch's own noise.
 
-**That clock-correlation held up on a follow-up check and still isn't
-fixable with this formula's two constants.** The same four players
-(Schultz, Jones, Chase, Young) were re-checked later in the exact same
-games, with `remainingGameClockFraction` down to 0.05-0.17 -- and this
-page was still running 0.3-0.8 points ahead of Sleeper's real number for
-every one of them, the same direction and a similar size as before, even
-though the absolute remaining-credit term itself had shrunk a lot by
-then. Refitting FLOOR/K against just this late-clock cluster (16 points
-now, both reports combined) finds a meaningfully tighter fit on its own
-(floor 0.20, K 1.70, well under half the error of the shipped
-constants) -- but applying those same constants back to the original
-18-player set makes THAT fit almost 5x worse, so it's a real
-disagreement between the two clusters, not a rounding difference. The
-natural next thing to try -- adding an extra exponent onto
-`remainingGameClockFraction` itself, so the remaining-credit term shrinks
-faster than linearly as the clock runs out, independent of pace -- was
-tried and re-tried across the full validated set (34 points) with a
-wide grid search, and it never won: the fit always converged back to no
-exponent at all, because compressing the late-clock end always cost more
-accuracy on the earlier-clock points than it gained. So this stays
-unshipped for the same reason the position splits do: real signal, but
-resolving it looks like it needs a genuinely different shape (something
-that treats "how much clock is left" as its own factor rather than
-folding it into the existing pace curve), not just a re-tuned exponent,
-and there isn't enough data yet to fit that responsibly without a real
-risk of chasing this specific handful of games.
+**That clock-correlation held up on a follow-up check, and turned out to
+be fixable after all -- just not the way a single continuous formula
+could do it.** The same four players (Schultz, Jones, Chase, Young) were
+re-checked later in the exact same games, with `remainingGameClockFraction`
+down to 0.05-0.17 -- and this page was still running 0.3-0.8 points
+ahead of Sleeper's real number for every one of them, the same direction
+and a similar size as before, even though the absolute remaining-credit
+term itself had shrunk a lot by then. An extra exponent on
+`remainingGameClockFraction` (so the remaining-credit term shrinks
+faster than linearly as the clock runs out, independent of pace) was
+tried again across the full validated set and rejected again, same as
+before -- it only ever traded accuracy from one part of the game for
+another, because it was trying to smoothly interpolate between ranges
+that don't share one shape.
+
+The fix came from asking a more specific question: does the miss track
+which QUARTER a player is in, not just `remainingGameClockFraction` as
+one continuous number? Bucketing every validated point (34 total) by
+quarter instead answered it cleanly: Q1-Q3 points had a small, mixed-sign
+average miss (well under half a point either way), while all 11 real
+Q4/overtime points overshot, every single one, by 0.3-0.8 points each.
+That's not a gradient -- it's a step. So Q4/OT now gets its own,
+separately-fit constants (`PACE_DAMPENING_FLOOR_Q4` = 0.15,
+`PACE_DAMPENING_K_Q4` = 1.40, both more aggressive than the Q1-Q3
+values), switched on whenever `remainingGameClockFraction` is 0.25 or
+below -- a threshold that, by `remainingFraction()`'s own math, can only
+ever be reached in Q4 or OT (Q3 never produces anything below 0.25; OT's
+entire range sits inside it), so no extra quarter-number plumbing was
+needed to detect it. This dropped the average miss on the 11 validated
+Q4/OT points from 0.53 to 0.13 -- about 4x tighter -- while leaving the
+Q1-Q3 fit exactly as it was. Leave-one-out cross-validation on the
+Q4/OT set held up too: refitting with each point held out kept both
+constants in a similar neighborhood each time, and every held-out
+prediction landed within about a third of a point of the full fit. This
+tracks with how football actually plays late in games -- run-out-the-
+clock playcalling once a game is decided, reduced roles, backups
+checking in -- game-flow effects tied specifically to how much game is
+left, not to how hot a player is running, and ones that apparently kick
+in sharply at the Q4 line rather than building up gradually through the
+whole game. One visible side effect: because the switch is a hard
+threshold rather than a smooth blend, a player's live projection can
+take a small, real step right at the Q3/Q4 boundary rather than drifting
+continuously -- an accepted trade-off for a fix that's this well-
+supported by the data, and arguably a more honest reflection of a real
+discontinuity in the underlying football than a smoothed-over curve
+would be.
 
 **Team defenses are a deliberate exception to the blend above: once a
 DEF's game has started, its Projected-mode score is pinned exactly to
