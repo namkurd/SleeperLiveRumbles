@@ -667,33 +667,33 @@
 
   // ---- scoring helpers -----------------------------------------------
 
-  // Confirmed by directly cross-checking real Week 2 Sleeper API payloads
-  // against a manual per-key recomputation (see the investigation this
-  // was added for): a handful of scoring_settings keys don't literally
-  // match the field name Sleeper's REAL POST-GAME stat payloads use for
-  // the same category, so a naive key-by-key match silently drops them.
-  //   - scoring_settings "kr_yd" (kick-return yardage, no def_ prefix) --
-  //     a real, already-played defense's actual-stats payload only ever
-  //     carries this under "def_kr_yd". Without this alias, every
-  //     defense's kick-return credit is silently zeroed once they've
-  //     played.
-  //
-  // IMPORTANT: both this alias map and TIER_SUM_KEYS below are only ever
-  // applied to REAL ACTUAL stat lines (see the `isActual` flag threaded
-  // through dotProduct/scoreFrom/playerPoints) -- never to a pregame
-  // PROJECTION. A follow-up investigation found that a projection's
-  // "def_kr_yd" field is NOT a plausible single-week kick-return total
-  // (one roster's projected value was 130.97 -- a real single-game team
-  // total tops out around 60 without a return TD), so applying this same
-  // alias to a projection was adding ~5 phantom points to any
-  // still-pregame team with a defense projected to return kicks. That
-  // field means something different (season-aggregate, multi-source-
-  // blended, or otherwise off-scale) in Rotowire's projections schema
-  // than it does in Sleeper's real post-game box score, so it's only
-  // trustworthy once the real actual-stats payload exists.
-  var KEY_ALIASES = {
-    kr_yd: "def_kr_yd"
-  };
+  // REVERSED (see the investigation this note replaces): an earlier
+  // version of this file aliased scoring_settings' "kr_yd" (kick-return
+  // yardage, no def_ prefix) to a real, already-played DEFENSE's
+  // "def_kr_yd" actual-stats field, on the theory that Sleeper's real
+  // payload just used a differently-prefixed name for the same category
+  // and a naive key-by-key match was silently dropping it. That theory
+  // was wrong. A direct side-by-side check against Sleeper's own
+  // displayed matchup page -- multiple real, live team defenses,
+  // mid-Sunday -- found this alias was inflating EVERY defense's actual
+  // score by however many kick/punt-return yards their opponent racked
+  // up that game (0.04/yd, often 3-5+ points): e.g. Tampa Bay's real
+  // defense showed 8.39 on Sleeper's own site while this page, with the
+  // alias applied, computed 12.55 for the exact same moment -- and
+  // removing just the kr_yd credit (12.55 - 107*0.04 = 8.27) landed
+  // right back on Sleeper's real number. Green Bay's defense the same
+  // day confirmed it again (6.41 real vs. 9.97 with the alias vs. 6.25
+  // without it). So Sleeper's own scoring engine does NOT apply "kr_yd"
+  // to the team DEF slot at all -- it's exclusively an individual
+  // return-specialist category (a real player's own actual-stats payload
+  // already carries a literal "kr_yd" field with no alias needed; only
+  // the team DEFENSE entries use "def_kr_yd" instead, for an unrelated,
+  // not-separately-scored team stat). KEY_ALIASES is left as an empty,
+  // reusable mechanism rather than deleted outright -- TIER_SUM_KEYS
+  // below is the same kind of fix and IS still confirmed correct -- but
+  // nothing should be added back here without the same kind of direct,
+  // live, side-by-side confirmation this reversal is based on.
+  var KEY_ALIASES = {};
 
   // A few scoring_settings keys are a single flat weight for a category
   // that Sleeper's REAL ACTUAL stat payloads only expose pre-split into

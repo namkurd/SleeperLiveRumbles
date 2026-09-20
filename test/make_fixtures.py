@@ -84,11 +84,22 @@ with open(os.path.join(OUT, "matchups_week2_empty.json"), "w") as f:
     json.dump([], f)
 
 # ---- /v1/league/{id} : scoring_settings with non-PPR + first-down bonus ----
-# Also includes kr_yd and fgmiss -- both discovered (via a real live-data
-# investigation) to have no literal key-name match in Sleeper's real stat/
-# projection payloads (payloads use "def_kr_yd" and tiered "fgmiss_XX_YY"
-# fields instead). See rumbles.html's KEY_ALIASES/TIER_SUM_KEYS and the
-# roster-3 fixture stats below, which exercise both fixes.
+# Also includes kr_yd and fgmiss:
+#   - fgmiss is a single flat weight, but Sleeper's real ACTUAL payloads
+#     only expose missed field goals pre-split by distance tier
+#     ("fgmiss_XX_YY") -- there's never a literal "fgmiss" field to
+#     match. Confirmed fix: sum every "fgmiss_*" tier present. See
+#     rumbles.html's TIER_SUM_KEYS and the roster-3 fixture stats below.
+#   - kr_yd is kept here (weight 0.04) even though nothing in these
+#     fixtures ever literally matches it, on purpose: a real, already-
+#     played DEFENSE's actual-stats payload carries a "def_kr_yd" field
+#     instead (see roster 3's fixture below), and an earlier version of
+#     this page aliased "kr_yd" to that field -- which a live check
+#     against Sleeper's own displayed numbers proved wrong (it was
+#     inflating every defense's score by its opponent's return yardage;
+#     see rumbles.html's KEY_ALIASES comment for the full story). Roster
+#     3's fixture below is what regression-tests that "def_kr_yd" now
+#     stays correctly UN-matched.
 scoring_settings = {
     "pass_yd": 0.04, "pass_td": 4, "pass_int": -2,
     "rush_yd": 0.1, "rush_td": 6,
@@ -176,15 +187,21 @@ HAND_CRAFTED_ACTUAL = {
     # Roster 3's played player: blowout actual (30.0 from the base
     # rec/rec_yd/rec_td/rec_fd line below) PLUS two deliberately
     # misnamed-key categories that regression-test the real-data fixes:
-    #   - "def_kr_yd": 100 -- Sleeper's real field name for kick-return
-    #     yardage (scoring_settings' matching key is the bare "kr_yd") --
-    #     worth 100 * 0.04 = +4.0 if the KEY_ALIASES fix is working,
-    #     silently 0 if it regresses.
+    #   - "def_kr_yd": 100 -- a real, already-played DEFENSE's field name
+    #     for kick-return yardage. This used to be aliased to
+    #     scoring_settings' bare "kr_yd" (worth 100 * 0.04 = +4.0) until a
+    #     live check against Sleeper's own displayed numbers proved that
+    #     alias was wrong -- Sleeper's own scoring engine never applies
+    #     "kr_yd" to a team DEFENSE at all (see rumbles.html's
+    #     KEY_ALIASES comment for the full story). It's kept in this
+    #     fixture specifically so this stays a regression check: it must
+    #     contribute 0, not silently start contributing again.
     #   - "fgmiss_30_39": 1 -- one of Sleeper's real tiered missed-FG
     #     fields (scoring_settings only has one flat "fgmiss": -1 weight
     #     covering every tier) -- worth 1 * -1.0 = -1.0 if the
     #     TIER_SUM_KEYS fix is working, silently 0 if it regresses.
-    # Net: 30.0 (base) + 4.0 (kr_yd alias) - 1.0 (fgmiss tier-sum) = 33.0.
+    # Net: 30.0 (base) + 0.0 (def_kr_yd, correctly ignored) - 1.0
+    # (fgmiss tier-sum) = 29.0.
     3: {"rec": 10, "rec_yd": 150, "rec_td": 2, "rec_fd": 6, "pts_ppr": 35.0,
         "def_kr_yd": 100, "fgmiss_30_39": 1},
     # roster 5 deliberately has NO actual-stats entry at all for anyone --
@@ -197,12 +214,12 @@ HAND_CRAFTED_PROJ_PLAYED = {
 HAND_CRAFTED_PROJ_UNPLAYED = {
     # Roster 1's unplayed player also carries a poison-pill regression
     # check: "def_kr_yd"/"fgmiss_30_39" on a PROJECTION (never a real
-    # actual-stats line) should NEVER trigger the KEY_ALIASES/
-    # TIER_SUM_KEYS fallbacks -- those are gated to real actual stats only
-    # (see rumbles.html's `isActual` flag; a real investigation found a
-    # projection's "def_kr_yd" isn't a trustworthy single-week number the
-    # way a real post-game "def_kr_yd" is). If that gating ever regresses,
-    # this would silently add 500*0.04 - 1*1.0 = +19.0 phantom points to
+    # actual-stats line) should NEVER trigger the TIER_SUM_KEYS fallback
+    # (KEY_ALIASES is empty now, so "def_kr_yd" was never going to match
+    # anything here either way -- this still exercises the isActual gate
+    # for TIER_SUM_KEYS/fgmiss, and stands ready for any future confirmed
+    # KEY_ALIASES entry to reuse). If that gating ever regressed, this
+    # would silently add 500*0.04 - 1*1.0 = +19.0 phantom points to
     # Aidan's "custom" total (107.5 -> 126.5), which the existing PF/
     # Points-This-Week assertions below already catch without any extra
     # test code.

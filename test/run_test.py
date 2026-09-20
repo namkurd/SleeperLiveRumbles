@@ -358,12 +358,13 @@ def scenario_live_blending(browser):
     #   Jake (roster 3, history PF 97.5): played player has no team
     #     metadata at all (game status resolves to "unknown"), so the
     #     plain has-actual-stats fallback applies -- his blowout actual
-    #     (33.0 -- 30.0 base plus the kr_yd-alias (+4.0) and fgmiss-tier-sum
-    #     (-1.0) regression checks, see make_fixtures.py) replaces the much
-    #     smaller pregame projection (7.0); unplayed player only has a
-    #     projection (4.0).
+    #     (29.0 -- 30.0 base, plus a "def_kr_yd" field that must
+    #     contribute 0 now (a reversed alias -- see make_fixtures.py and
+    #     rumbles.html's KEY_ALIASES comment) minus the fgmiss-tier-sum
+    #     regression check (-1.0)) replaces the much smaller pregame
+    #     projection (7.0); unplayed player only has a projection (4.0).
     #     Actual PF stays frozen at history (97.5).
-    #     Custom=33.0+4.0=37.0 folded on top of history -> PF 97.5+37.0=134.5
+    #     Custom=29.0+4.0=33.0 folded on top of history -> PF 97.5+33.0=130.5
     #   Alex (roster 6, history PF 105.0): played starter Kyler Murray's
     #     game (MIN) is marked IN_PROGRESS in scores_week2.json, with
     #     "quarter_num": 2 / "time_remaining": "9:00" -- 21:00 elapsed of
@@ -396,14 +397,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 144.56, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 130.5, "Alex": 144.56, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
-        "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 39.56, "Joe": None},
+        "actual": {"Aidan": 2.5, "Jake": 29.0, "Joe": 0.0},
+        "custom": {"Aidan": 15.0, "Jake": 33.0, "Alex": 39.56, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}

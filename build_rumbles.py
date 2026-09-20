@@ -274,7 +274,11 @@ def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, d
 # (no override, and not fresh / not ruled Out) is NOT logged at all -- it's
 # exactly as likely to be a garbage-time benching as a real injury, and
 # this log is meant to only contain confirmed-or-well-corroborated cases.
-KEY_ALIASES = {"kr_yd": "def_kr_yd"}
+# KEY_ALIASES was previously {"kr_yd": "def_kr_yd"} -- reversed after a
+# live check against Sleeper's own displayed numbers showed it was
+# inflating every defense's actual score by its opponent's return
+# yardage; see the full explanation on KEY_ALIASES in rumbles.html.
+KEY_ALIASES: dict[str, str] = {}
 TIER_SUM_KEYS = {"fgmiss": True}
 
 

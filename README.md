@@ -267,33 +267,43 @@ game with zero live drift happening. A real Week 2 investigation (pulling
 that exact roster's real stat/projection payloads and hand-recomputing
 the dot product) found the formula itself matches -- it reproduced the
 page's own displayed number exactly, key by key -- but it also turned up
-two genuine bugs in how a couple of `scoring_settings` keys get matched
-against Sleeper's real per-player payloads (both now fixed, see
-`KEY_ALIASES` / `TIER_SUM_KEYS` in `rumbles.html`):
+a genuine bug in how one `scoring_settings` key gets matched against
+Sleeper's real per-player payloads, plus a real fix for a second one
+(see `KEY_ALIASES` / `TIER_SUM_KEYS` in `rumbles.html`):
 
-- `kr_yd` (kick-return yardage) never had a literal match -- Sleeper's
-  real ACTUAL (post-game) stat payloads name that field `def_kr_yd`, not
-  `kr_yd`, so every defense's return-yardage credit was being silently
-  dropped once they'd played. Fixed via an explicit key alias.
 - `fgmiss` is a single flat weight in `scoring_settings`, but Sleeper's
   real ACTUAL payloads only expose missed field goals pre-split by
   distance tier (`fgmiss_30_39`, `fgmiss_40_49`, ...) -- there's never a
   bare `fgmiss` field to match. Fixed by summing every `fgmiss_*` tier
-  present and applying the flat weight to that sum.
+  present and applying the flat weight to that sum. This one's confirmed
+  correct and still in place.
+- `kr_yd` (kick-return yardage) was a real mistake, now reversed. An
+  earlier version of this page aliased it to a real, already-played
+  DEFENSE's `def_kr_yd` actual-stats field, on the theory that Sleeper's
+  payload just used a different field name for the same category. A
+  direct side-by-side check against Sleeper's own displayed matchup page
+  (multiple real, live team defenses) found this was flat-out wrong: it
+  was inflating every defense's actual score by its opponent's
+  return-yardage total that game (0.04/yd, often 3-5+ points) --
+  Tampa Bay's real defense showed 8.39 on Sleeper's own site at a moment
+  this page, with the alias applied, computed 12.55 for; removing just
+  the kick-return credit landed right on 8.27. Green Bay confirmed it
+  again the same day (6.41 real vs. 9.97 with the alias vs. 6.25
+  without). Sleeper's own scoring engine simply doesn't apply `kr_yd` to
+  the team DEF slot at all -- it's an individual return-specialist
+  category only (a real return specialist's own actual-stats payload
+  already carries a literal `kr_yd` field with no alias needed; the team
+  DEFENSE entries' `def_kr_yd` is an unrelated, not-separately-scored
+  team stat). The alias has been removed -- `KEY_ALIASES` is now empty,
+  kept as a mechanism for a future confirmed case rather than deleted
+  outright.
 
-**Both of those fixes are deliberately gated to real, already-played
-stat lines only -- never applied to a pregame projection.** The first
-version of this fix applied the `kr_yd` alias everywhere, which
-introduced a NEW, worse bug: a still-100%-pregame roster (with a defense
-projected to return kicks) started overshooting Sleeper's own number by
-~5 points, because a projection's `def_kr_yd` field turned out not to be
-a plausible single-week number at all (one real example: `130.97`, when
-a real single-game team return total tops out around 60 without a
-return TD) -- it's scaled or sourced completely differently than the
-same field name in a real post-game box score. So `KEY_ALIASES` and
-`TIER_SUM_KEYS` in `rumbles.html` only ever apply when scoring a
-player's REAL actual stats, determined per-player (not per-mode) --
-even in Projected mode, a player who's already played gets the alias
+**`TIER_SUM_KEYS` is deliberately gated to real, already-played stat
+lines only -- never applied to a pregame projection.** A still-100%-
+pregame roster's `fgmiss_*` fields (if a provider's projection payload
+ever carried any) are never summed into a phantom `fgmiss` penalty --
+that gating is determined per-player (not per-mode), so even in
+Projected mode, a player who's already played gets the tier-sum
 treatment, while a teammate who hasn't gets none of it, still-frozen
 projection and all.
 
@@ -489,6 +499,33 @@ accumulate, especially more RB data and more players checked earlier in
 their games (larger `remainingGameClockFraction`) to see whether that
 clock-correlation in this batch holds up or was this batch's own noise.
 
+**That clock-correlation held up on a follow-up check and still isn't
+fixable with this formula's two constants.** The same four players
+(Schultz, Jones, Chase, Young) were re-checked later in the exact same
+games, with `remainingGameClockFraction` down to 0.05-0.17 -- and this
+page was still running 0.3-0.8 points ahead of Sleeper's real number for
+every one of them, the same direction and a similar size as before, even
+though the absolute remaining-credit term itself had shrunk a lot by
+then. Refitting FLOOR/K against just this late-clock cluster (16 points
+now, both reports combined) finds a meaningfully tighter fit on its own
+(floor 0.20, K 1.70, well under half the error of the shipped
+constants) -- but applying those same constants back to the original
+18-player set makes THAT fit almost 5x worse, so it's a real
+disagreement between the two clusters, not a rounding difference. The
+natural next thing to try -- adding an extra exponent onto
+`remainingGameClockFraction` itself, so the remaining-credit term shrinks
+faster than linearly as the clock runs out, independent of pace -- was
+tried and re-tried across the full validated set (34 points) with a
+wide grid search, and it never won: the fit always converged back to no
+exponent at all, because compressing the late-clock end always cost more
+accuracy on the earlier-clock points than it gained. So this stays
+unshipped for the same reason the position splits do: real signal, but
+resolving it looks like it needs a genuinely different shape (something
+that treats "how much clock is left" as its own factor rather than
+folding it into the existing pace curve), not just a re-tuned exponent,
+and there isn't enough data yet to fit that responsibly without a real
+risk of chasing this specific handful of games.
+
 **Team defenses are a deliberate exception to the blend above: once a
 DEF's game has started, its Projected-mode score is pinned exactly to
 its actual-so-far, with zero blended credit for the rest of the game**
@@ -638,11 +675,13 @@ per-team data, just a standing explainer.
    roster to confirm Actual correctly shows the frozen history PF while
    Projected still shows a real, nonzero folded number, a check that
    every manager gets two genuinely distinct totals (proving the modes
-   never bleed into each other), a regression check for the `kr_yd`/
-   `fgmiss` key-matching fixes on an already-played stat line (a
-   "poison-pill" fixture also plants the same fields on a still-pregame
-   projection to prove those fixes correctly do NOT fire there), a check
-   that every column -- `#` included -- sorts correctly in both
+   never bleed into each other), a regression check for the `fgmiss`
+   key-matching fix AND for the reversed `kr_yd` alias -- an
+   already-played fixture DEFENSE-shaped stat line still carries a
+   `def_kr_yd` field, now asserted to be correctly ignored rather than
+   double-counted (a "poison-pill" fixture also plants the same fields
+   on a still-pregame projection to prove neither ever fires there), a
+   check that every column -- `#` included -- sorts correctly in both
    directions while each team's own `#` value never changes, a check
    that this week's H2H matchup pairs share a name color (every pair gets
    a distinct one, and the colors stay identical between Actual and
