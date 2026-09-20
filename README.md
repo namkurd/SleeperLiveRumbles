@@ -225,14 +225,18 @@ Every row, in either mode, is ordered by the player's roster SLOT (Sleeper
 Superflex, Superflex, RB, RB, WR/TE flex, WR/TE flex, FLEX, TE, K, DEF), not
 by whatever order Sleeper happens to return the starters in -- see
 `TOOLTIP_SLOT_ORDER`/`tooltipSlotRank` in `rumbles.html`. A player currently
-in a live (in-progress) game gets highlighted with green text on their name
-AND their Actual score -- reusing `--matchup-4`, one of the existing
-matchup-pair colors, rather than introducing a new one just for this. Their
-Proj column and kickoff-time cell are NOT included in that green highlight
-(Proj keeps the tooltip's default text color, and the kickoff-time cell
-keeps its own per-timeslot color from above), so the green stays a clean
-signal for "this is a real, live number" without competing with the other
-two colorings.
+in a live (in-progress) game gets highlighted with green text on their name,
+Actual score, AND Proj score -- reusing `--matchup-4`, one of the existing
+matchup-pair colors, rather than introducing a new one just for this. Only
+the kickoff-time cell is excluded (it keeps its own per-timeslot color from
+above), so the green reads as a clean "this whole row is still live and
+updating" signal, including the still-moving projected number, without
+competing with the timeslot coloring. (Name+Actual-only used to be the
+rule, with Proj deliberately left uncolored on the theory that it wasn't
+"real" the way Actual was -- that was changed because an in-progress
+player's Proj cell genuinely is live too, recomputing every 30-second poll
+right along with Actual, and leaving it the default color made it read as
+static/settled when it wasn't.)
 
 If nobody on a team's roster qualifies for the current mode -- nobody's
 played yet in Actual mode, or every starter's game is already final in
@@ -597,6 +601,40 @@ A player whose live game status can't be resolved at all (no team
 metadata, or the live-status feed came back empty) falls back to the
 plain has-actual-stats check used everywhere else on this page.
 
+**A real bug found this way (live, Sep 20 2026): a weather-delayed game
+was silently treated as still pregame, double-counting every player on
+both teams who'd already played.** Sleeper's live-scoreboard feed marks a
+finished game with `metadata.is_over: true` and a live one with
+`metadata.is_in_progress: true` (see `normalizeGameStatus()` in
+`rumbles.html`) -- but a real TB @ CLE game that got paused for weather
+had BOTH of those false while genuinely sitting mid-4th-quarter
+(`quarter_num: 4`, `time_remaining: "2:33"`), because Sleeper's own
+top-level `status` field for it was `"suspended"`, a value the status
+-string fallback didn't recognize either, so it fell all the way through
+to the `"pre_game"` default. That default feeds
+`remainingGameClockFraction = 1` (the full game still ahead) into the
+blend above, so every TB/CLE starter who already had real, banked
+production got a FULL, undampened pregame projection stacked on top of
+it -- and, separately, skipped the DEF cap entirely, since that only
+kicks in once a game is recognized as having started. Checked against
+real rosters live: one manager's Projected total was inflated by +11.38
+points from this one game alone (their kicker read 21.47 instead of
+~17.67; their DEF, which should have been pinned to its 5.42 actual, read
+13.00 instead), and several other managers across the league were off by
+6-10 points the same way, just from owning a TB or CLE player. Recomputing
+with the fix landed within a couple hundredths of a point of Sleeper's own
+displayed live projections for every affected team. The fix: a game whose
+`quarter_num` parses to 1 or higher has demonstrably kicked off (a truly
+pregame entry's `quarter_num` is `""`, never a number) even when neither
+boolean is set and the status string is something unanticipated --
+falling back to `"in_progress"` in that case routes through the normal
+clock-derived blend instead of silently double-counting, whatever
+Sleeper's feed happens to call a paused game next time (a weather hold, a
+lightning delay, or "suspended" again). There's deliberately no separate
+"suspended" status of its own -- a paused game is still, functionally, a
+game in progress, and once it resumes or goes final the normal `is_over`/
+`is_in_progress` checks take back over immediately.
+
 **The "Pts This Week" hover tooltip's "Proj" column now shows this same
 number**, not a fixed pregame projection: a not-yet-started player still
 shows their plain pregame projection (the formula above reduces to
@@ -732,8 +770,8 @@ per-team data, just a standing explainer.
    `start_time`, which also proves the slot-order re-sort actually ran --
    the roster-mate in the other slot must display FIRST despite being
    `starters[1]`). Also confirms (via real `getComputedStyle` colors, not
-   just text content) that a live row's green highlight lands on the Name
-   and Actual cells but NOT the Proj cell, that two starters whose games
+   just text content) that a live row's green highlight lands on the Name,
+   Actual, AND Proj cells, that two starters whose games
    share the same displayed kickoff label (a second fixture game, "Sun
    1pm", added specifically for this) get the SAME per-timeslot color
    while a different label ("Mon 8pm") gets a DIFFERENT one, and that the

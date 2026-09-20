@@ -41,12 +41,17 @@ const source = [
   extract(/var PACE_DAMPENING_K_Q4 = [^;]+;/, "PACE_DAMPENING_K_Q4"),
   extract(/function blendedProjection\([^)]*\) \{[\s\S]*?\n  \}/, "blendedProjection"),
   extract(/function effectiveRemainingFraction\([^)]*\) \{[\s\S]*?\n  \}/, "effectiveRemainingFraction"),
+  extract(/function normalizeGameStatus\([^)]*\) \{[\s\S]*?\n  \}/, "normalizeGameStatus"),
 ].join("\n");
 
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(source + "\nthis.blendedProjection = blendedProjection; this.effectiveRemainingFraction = effectiveRemainingFraction;", sandbox);
-const { blendedProjection, effectiveRemainingFraction } = sandbox;
+vm.runInContext(
+  source +
+    "\nthis.blendedProjection = blendedProjection; this.effectiveRemainingFraction = effectiveRemainingFraction; this.normalizeGameStatus = normalizeGameStatus;",
+  sandbox
+);
+const { blendedProjection, effectiveRemainingFraction, normalizeGameStatus } = sandbox;
 
 let failures = 0;
 function assertClose(actual, expected, tolerance, label) {
@@ -136,6 +141,32 @@ assertEqual(effectiveRemainingFraction(null, 0.65), 0.65, "no resolvable positio
 // "projected" number also showing 13.09 -- not a penny more).
 const defActual = 13.09, defPregameProj = 9.5, defRemFrac = effectiveRemainingFraction("DEF", 0.52);
 assertEqual(blendedProjection(defActual, defPregameProj, defRemFrac), defActual, "an in-progress DEF's blend equals its actual-so-far exactly, regardless of its pregame projection or game clock");
+
+// ---- normalizeGameStatus: the real cases Sleeper's live feed sends ------
+assertEqual(normalizeGameStatus({ status: "complete", metadata: { is_over: true, is_in_progress: false, quarter_num: 4 } }), "complete", "is_over=true is authoritative, regardless of the top-level status string");
+assertEqual(normalizeGameStatus({ status: "in_game", metadata: { is_over: false, is_in_progress: true, quarter_num: 2 } }), "in_progress", "is_in_progress=true is authoritative");
+assertEqual(normalizeGameStatus({ status: "pre_game", metadata: { is_over: false, is_in_progress: false, quarter_num: "" } }), "pre_game", "a genuine pregame entry (no quarter_num yet) is still pre_game");
+assertEqual(normalizeGameStatus({ status: "post_game", metadata: {} }), "complete", "top-level status string fallback still catches \"post_game\" when metadata omits the booleans");
+// The real bug (see normalizeGameStatus's comment in rumbles.html): a
+// weather-delayed TB @ CLE game on 2026-09-20 sat with BOTH booleans
+// false while genuinely mid-4th-quarter (quarter_num 4, 2:33 left), and
+// Sleeper's own top-level "status" for it was "suspended" -- a string
+// that matched neither the "complete" nor "in_progress" checks and used
+// to fall through to "pre_game", double-counting every player on either
+// team who'd already banked real production. This is that exact payload.
+assertEqual(
+  normalizeGameStatus({ status: "suspended", metadata: { is_over: false, is_in_progress: false, quarter_num: 4, time_remaining: "2:33" } }),
+  "in_progress",
+  "a paused-but-not-final game (real \"suspended\" TB@CLE payload) resolves to in_progress, not pre_game"
+);
+// Same idea for any other not-yet-recognized status string, as long as
+// quarter_num shows the game has actually kicked off -- the fix isn't
+// specific to the literal word "suspended".
+assertEqual(
+  normalizeGameStatus({ status: "delayed", metadata: { is_over: false, is_in_progress: false, quarter_num: 1, time_remaining: "10:15" } }),
+  "in_progress",
+  "any unrecognized status string with a real quarter_num is treated as in_progress, not just \"suspended\""
+);
 
 if (failures > 0) {
   console.error(`\n${failures} FAILURE(S)`);

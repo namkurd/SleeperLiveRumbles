@@ -174,7 +174,7 @@ def get_tooltip_row_computed_colors(page, manager):
     colors as rgb() strings, one dict per visible tooltip row, in display
     order, or None if that cell has no tooltip. Computed style is needed
     here (rather than the raw inline style.color that get_matchup_colors/
-    get_pts_this_week_colors read) because the live-row Name/Actual
+    get_pts_this_week_colors read) because the live-row Name/Actual/Proj
     green-coloring is a CSS class rule (`tr.pts-tooltip-live td...`), not an
     inline style -- only the per-timeslot time-column color is actually set
     inline (see renderPtsTooltipContent), but computed style reads both
@@ -532,13 +532,15 @@ def scenario_live_blending(browser):
             )
             print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff column):", alex_rows)
 
-            # ---- Live-row coloring is scoped to Name + Actual only, NOT
-            # Proj -- Kyler Murray's row (still in progress) should have his
-            # Name and Actual cells computed-colored the same fixed green
-            # (--matchup-4, #008300 -- unchanged between light/dark mode, so
-            # this is safe to hardcode) that the CSS class rule applies,
-            # while his Proj cell must NOT be that color (it keeps the
-            # tooltip's default text color instead).
+            # ---- Live-row coloring covers Name + Actual + Proj -- Kyler
+            # Murray's row (still in progress) should have all three cells
+            # computed-colored the same fixed green (--matchup-4, #008300 --
+            # unchanged between light/dark mode, so this is safe to
+            # hardcode) that the CSS class rule applies. The Proj cell used
+            # to be deliberately excluded from this rule; it was added so an
+            # in-progress player's still-updating blended estimate reads as
+            # visibly "live" too, matching the other two cells instead of
+            # looking static next to them.
             LIVE_GREEN_RGB = "rgb(0, 131, 0)"  # #008300, i.e. var(--matchup-4)
             alex_colors = get_tooltip_row_computed_colors(page, "Alex")
             kyler_colors = next(r for r in alex_colors if r["name"] == "Kyler Murray")
@@ -548,10 +550,10 @@ def scenario_live_blending(browser):
             assert kyler_colors["actual_color"] == LIVE_GREEN_RGB, (
                 f"[{mode}] expected Kyler Murray's live-row Actual cell to be colored green ({LIVE_GREEN_RGB}), got {kyler_colors['actual_color']}"
             )
-            assert kyler_colors["proj_color"] != LIVE_GREEN_RGB, (
-                f"[{mode}] expected Kyler Murray's live-row Proj cell to NOT be colored green (only Name+Actual go green on a live row), got {kyler_colors['proj_color']}"
+            assert kyler_colors["proj_color"] == LIVE_GREEN_RGB, (
+                f"[{mode}] expected Kyler Murray's live-row Proj cell to ALSO be colored green ({LIVE_GREEN_RGB}), got {kyler_colors['proj_color']}"
             )
-            print(f"Verified live-row green coloring is scoped to Name+Actual (not Proj) for {mode} mode (Alex/Kyler Murray).")
+            print(f"Verified live-row green coloring covers Name+Actual+Proj for {mode} mode (Alex/Kyler Murray).")
 
             # ---- Per-timeslot kickoff-time-column coloring: Joe's two
             # starters (P9/DAL, P10/PHI) share the SAME game ("Sun 1pm",

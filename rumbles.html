@@ -347,14 +347,18 @@
     text-align: left;
     padding-left: 4px;
   }
-  /* A player currently in a live (in-progress) game -- their name AND
-     actual score (only those two -- not the kickoff time, which keeps its
-     own per-timeslot color, and not the projected score, which stays the
-     default text color) are colored with one of the existing manager
+  /* A player currently in a live (in-progress) game -- their name, actual
+     score, AND projected score (not the kickoff time, which keeps its own
+     per-timeslot color) are colored with one of the existing manager
      matchup-pair colors (not a new color introduced just for this) so
-     "live" reads as this page's own established green. */
+     "live" reads as this page's own established green. The projected cell
+     joined this rule so an in-progress player's still-updating blended
+     estimate (see blendedProjection in the script below) reads as visibly
+     "live" too, matching the name/actual cells instead of looking static
+     next to them. */
   .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-name,
-  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-actual {
+  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-actual,
+  .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-proj {
     color: var(--matchup-4);
   }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
@@ -1074,18 +1078,50 @@
   // omits metadata, since getting this wrong in the "still counts as
   // complete" direction would silently hide a player from the Projected
   // tooltip whose game hasn't actually ended yet.
+  //
+  // BUG FOUND AND FIXED (live, Sep 20 2026): a weather-delayed TB @ CLE
+  // game sat with BOTH is_over=false AND is_in_progress=false while it was
+  // genuinely mid-4th-quarter (quarter_num: 4, time_remaining: "2:33") --
+  // Sleeper's top-level "status" for it was "suspended", which matched
+  // none of the string checks below and fell all the way through to the
+  // "pre_game" default. That silently zeroed effectiveRemainingFraction's
+  // "already in progress" signal AND fed remainingFraction=1 (full game
+  // still ahead) into blendedProjection, so every TB/CLE starter who'd
+  // already banked real production got a full, undampened pregame
+  // projection stacked ON TOP of their actual points -- confirmed against
+  // real rosters live: one manager's Projected total was inflated by
+  // +11.38 (a kicker alone went 17.60 actual + 8.41 full pregame proj =
+  // 21.47 instead of ~17.67; that same team's DEF, which should have been
+  // pinned to its 5.42 actual by the DEF cap below, wasn't capped at all
+  // and read 13.00), and several other rosters across the league were off
+  // by 6-10 points the same way -- all from two teams' worth of players.
+  // Recomputing with the fix landed within a few hundredths of a point of
+  // Sleeper's own displayed live projections for the affected teams.
+  //
+  // The fix: a game whose quarter_num parses to >= 1 has demonstrably
+  // kicked off (a truly pre-game entry's quarter_num is "", not a number)
+  // even when neither boolean is set and the status string is something
+  // unanticipated ("suspended", or any future synonym for "paused mid-
+  // game" -- weather delays, lightning holds, whatever Sleeper's feed
+  // calls the next one). Falling back to "in_progress" in that case routes
+  // through remainingFraction()'s normal clock-derived estimate instead of
+  // silently double-counting, exactly like any other still-developing
+  // game -- there is deliberately no separate "suspended" status of its
+  // own, since a paused game is still, functionally, a game in progress.
   function normalizeGameStatus(game) {
     var meta = (game && game.metadata) || {};
     if (meta.is_over === true) return "complete";
     if (meta.is_in_progress === true) return "in_progress";
 
     var status = ((game && game.status) || "").toLowerCase();
-    if (status.indexOf("final") !== -1 || status === "complete" || status === "post_game" || (game && game.quarter === "F")) {
+    if (status.indexOf("final") !== -1 || status === "complete" || status === "post_game" || (game && game.quarter === "F") || meta.quarter === "F") {
       return "complete";
     }
-    if (status.indexOf("progress") !== -1 || status === "halftime" || status === "live") {
+    if (status.indexOf("progress") !== -1 || status === "halftime" || status === "live" || status === "in_game") {
       return "in_progress";
     }
+    var qNum = parseInt(meta.quarter_num, 10);
+    if (qNum >= 1) return "in_progress";
     return "pre_game";
   }
 
@@ -1947,7 +1983,9 @@
   // column rather than text folded into the name), then name, then a
   // header row labeling the Actual/Proj columns, then one row per player.
   // A row for a player whose game is currently live gets the
-  // .pts-tooltip-live class (green text -- see that CSS rule).
+  // .pts-tooltip-live class (green text on name/actual/proj -- see that
+  // CSS rule), which is why the proj cell below carries its own
+  // .pts-tooltip-proj class instead of being class-less like before.
   function renderPtsTooltipContent(tooltip) {
     var showStartTime = tooltip.showStartTime;
     var timeHeaderHtml = showStartTime ? '<th class="pts-tooltip-time"></th>' : "";
@@ -1958,7 +1996,7 @@
         timeCellHtml +
         '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
-        "<td>" + r.proj.toFixed(2) + "</td>" +
+        '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>" +
         "</tr>";
     }).join("");
     els.ptsTooltip.innerHTML =
