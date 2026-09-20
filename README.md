@@ -402,8 +402,8 @@ validated shortcoming of the last:
 
 This final formula was fit (least total absolute error) and then
 validated against Sleeper's own live-displayed "projected" number,
-screenshotted directly off Sleeper's real matchup pages across three
-separate live gameday reports, for 18 different real players (a mix of
+screenshotted directly off Sleeper's real matchup pages across four
+separate live gameday reports, for 30 different real players (a mix of
 QB/RB/WR/TE/K), each cross-checked against this page's own live-fetched
 actual stats, pregame projection, and the scores feed's
 `quarter_num`/`time_remaining` fields at the matching moment:
@@ -428,12 +428,24 @@ actual stats, pregame projection, and the scores feed's
 | Christian Watson (WR) | 5.80 | 15.22 | 10.40 | 11.78 | 10.51 |
 | Tetairoa McMillan (WR) | 12.80 | 15.04 | 16.67 | 19.86 | 17.17 |
 | Juwan Johnson (TE) | 6.00 | 10.32 | 7.71 | 8.93 | 8.07 |
+| D'Andre Swift (RB), wk 2 rd 2 | 9.30 | 12.78 | 10.49 | 12.06 | 11.15 |
+| Aaron Jones (RB), wk 2 rd 2 | 9.00 | 14.22 | 10.55 | 12.07 | 11.15 |
+| Dalton Schultz (TE), wk 2 rd 2 | 12.30 | 11.10 | 13.14 | 15.19 | 13.97 |
+| Ja'Marr Chase (WR), wk 2 rd 2 | 25.50 | 17.84 | 27.23 | 30.15 | 27.94 |
+| Bryce Young (QB) | 25.10 | 14.66 | 27.32 | 28.46 | 27.24 |
+| Drake Maye (QB) | 7.47 | 17.12 | 10.04 | 11.36 | 10.47 |
+| Derrick Henry (RB) | 19.20 | 15.28 | 19.61 | 21.44 | 20.43 |
+| Woody Marks (RB) | 8.40 | 9.11 | 9.15 | 10.77 | 9.86 |
+| Mark Andrews (TE) | 10.00 | 10.85 | 10.34 | 11.59 | 10.98 |
+| Colston Loveland (TE), wk 2 rd 2 | 1.30 | 12.30 | 3.74 | 3.96 | 3.78 |
+| Jayden Reed (WR) | 1.40 | 12.26 | 4.35 | 4.62 | 4.40 |
+| Tyler Loop (K) | 5.90 | 8.01 | 6.38 | 7.16 | 6.74 |
 
-Average miss: 1.49 points for the flat blend (iteration 3), 0.23 points
-for the pace-dampened version above -- about 6.5x tighter, and several
+Average miss: 1.42 points for the flat blend (iteration 3), 0.33 points
+for the pace-dampened version above -- about 4.3x tighter, and several
 players landing within a few hundredths of a point. This isn't
 believed to be a coincidence of overfitting: adding 5 new players from a
-third, later gameday report barely moved the fit at all from the one
+third gameday report barely moved the fit at all from the one
 originally tuned on just the first 13 -- and leave-one-out
 cross-validation (refitting the two constants with each player held out
 in turn) kept both in a similar range each time, with every held-out
@@ -446,8 +458,36 @@ targets, red-zone role -- almost certainly factors into Sleeper's real
 number, and none of that is available here), so this page validates
 against real examples rather than guessing at an unverified extra
 factor -- exactly the discipline the `bonus_fd_<position>` episode
-above was a lesson in. It should be revisited if a future gameday
-report shows it drifting.
+above was a lesson in.
+
+A fourth gameday report (12 more players, appended to the table above --
+the average miss ticked up from ~0.23 to ~0.33 with this batch folded in)
+was specifically checked for two things the fit might be missing:
+whether the miss tracks how much game clock is left
+(`remainingGameClockFraction`) independent of pace, and whether any one
+position's miss is consistently worse than the others. Taken by itself,
+this batch's errors do correlate fairly strongly with a small
+`remainingGameClockFraction` (most of these 12 players were deep in the
+3rd or 4th quarter) -- but refitting the two constants (and even trying
+a third, extra exponent on `remainingGameClockFraction` to bend that
+relationship) against all 30 points together always lands back within a
+few hundredths of the current 0.40/1.10, because the original batch has
+its own cluster of similarly-sized misses running the other direction
+(DeVonta Smith, Garrett Wilson, Chase McLaughlin -- all *undershoot*
+Sleeper's real number, and all also happen to have more game clock left
+than this new batch). That's a real tension in the data, not something a
+two-constant formula can resolve away, so nothing was changed here --
+tuning the constants to this one batch would just trade today's misses
+for tomorrow's. Position-by-position, the picture is similarly
+unsettled: RB is the one group that shows a repeatable, modest
+(roughly 15-20%) improvement from its own separately-fit constants, but
+even RB only has 10 validated points across all four reports (4 of them
+from this latest batch), and every other position has far fewer --
+nowhere near enough to responsibly ship a per-position split without
+real overfitting risk. Both are worth revisiting once more real examples
+accumulate, especially more RB data and more players checked earlier in
+their games (larger `remainingGameClockFraction`) to see whether that
+clock-correlation in this batch holds up or was this batch's own noise.
 
 **Team defenses are a deliberate exception to the blend above: once a
 DEF's game has started, its Projected-mode score is pinned exactly to
@@ -469,6 +509,31 @@ blend of a DEF's pregame projection tends to keep crediting expected
 future production that either never shows up or arrives all at once in
 a way no gradual blend captures well -- pinning to actual-so-far avoids
 guessing at that shape entirely.
+
+**A defense's own "Actual" number can look like it updates noticeably
+slower than a skill player's, and that's real -- but it isn't this page
+falling behind.** Every position is pulled from the exact same single
+stats-array fetch on the exact same 30-second poll (see `POLL_MS` and
+the `Promise.all(...)` in the live-fetch function in `rumbles.html`) --
+there's no separate, slower code path for DEF anywhere in this page. A
+direct check against Sleeper's real stats feed, comparing its
+per-player `last_modified` timestamp for several currently-in-progress
+games, showed DEF entries updating on the same cadence as the freshest
+skill-position players in those same games (tens of seconds to a couple
+of minutes) -- not a fixed multi-minute lag baked into the feed itself.
+What's actually going on is this league's own DEF scoring
+(`scoring_settings`): the two biggest categories, `pts_allow_<bracket>`
+and `yds_allow_<bracket>`, are flat bonuses (4.62 and 5.75 points) for
+which single bracket the defense currently sits in, backed by only tiny
+continuous terms (-0.23/point allowed, -0.02/yard allowed) -- so a
+defense's fantasy total is dominated by discrete events (a bracket
+boundary getting crossed, a sack, a turnover, a touchdown) rather than
+the smooth, every-play accrual a receiver's yardage gets. The underlying
+data is just as fresh; there are just fewer moments where a defense's
+own point total actually changes, which reads as "slower to update"
+even though it isn't. There's no client-side fix available here -- a
+faster poll interval wouldn't change how often Sleeper's own feed
+produces a new DEF number.
 
 A player whose live game status can't be resolved at all (no team
 metadata, or the live-status feed came back empty) falls back to the

@@ -70,7 +70,8 @@ assertEqual(blendedProjection(0, 12.5, 1), 12.5, "remainingFraction=1, zero actu
 assertEqual(blendedProjection(5, 0, 0.5), 5, "pregameProjPts=0 never divides by zero -- pace treated as 0, blend is just actual");
 
 // ---- blendedProjection: real validated data points (see README's table,
-// fit against 18 real Week 2 players' live-displayed Sleeper numbers) ----
+// fit against 30 real Week 2 players' live-displayed Sleeper numbers,
+// across four separate gameday reports) ----
 // Tucker Kraft: zero actual production -- dampening barely matters, blend
 // should land almost exactly on Sleeper's real shown number (7.19).
 assertClose(blendedProjection(0.00, 12.24, 0.5872), 7.19, 0.05, "Kraft (0 actual) matches Sleeper's real live number closely");
@@ -79,6 +80,17 @@ assertClose(blendedProjection(0.00, 12.24, 0.5872), 7.19, 0.05, "Kraft (0 actual
 // well below the undampened flat-blend guess of 26.80, landing near
 // Sleeper's real 23.98.
 assertClose(blendedProjection(19.10, 15.22, 0.5056), 23.98, 1.0, "Smith (already over pregame proj) lands within ~1pt of Sleeper's real live number");
+// A fourth gameday report (see README) added 12 more players, mostly deep
+// in the 3rd/4th quarter (small remainingFraction) -- this batch's misses
+// ran a bit bigger on average, but a full refit against all 30 points
+// together didn't move the shipped constants, so these are pinned down as
+// plain regression coverage rather than a formula change. Derrick Henry:
+// small remainingFraction (0.1464), pace already over 100%.
+assertClose(blendedProjection(19.20, 15.28, 0.1464), 19.61, 1.0, "Henry (late 4th quarter, over pace) lands within ~1pt of Sleeper's real live number");
+// Jayden Reed: small remainingFraction, but very low pace (barely any
+// production yet) -- dampening barely matters here either, same as Kraft
+// above, and this one matched almost exactly.
+assertClose(blendedProjection(1.40, 12.262, 0.2631), 4.35, 0.1, "Reed (low pace, late game) matches Sleeper's real live number closely");
 
 // ---- effectiveRemainingFraction: the DEF cap ----------------------------
 assertEqual(effectiveRemainingFraction("DEF", 0.65), 0, "an in-progress DEF gets its remainingFraction zeroed out (no blended future credit)");
