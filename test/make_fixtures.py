@@ -89,29 +89,11 @@ with open(os.path.join(OUT, "matchups_week2_empty.json"), "w") as f:
 # projection payloads (payloads use "def_kr_yd" and tiered "fgmiss_XX_YY"
 # fields instead). See rumbles.html's KEY_ALIASES/TIER_SUM_KEYS and the
 # roster-3 fixture stats below, which exercise both fixes.
-#
-# Also includes "bonus_fd_qb"/"bonus_fd_rb"/"bonus_fd_wr"/"bonus_fd_te" --
-# discovered via a real gameday investigation (a live Projected total
-# running well below what Sleeper's own matchup page showed) -- ALONGSIDE
-# the still-nonzero "rec_fd"/"rush_fd"/"pass_fd" weights above, so this
-# fixture exercises both the pre-existing direct fd scoring AND the new
-# position-keyed bonus derivation at once, from the same underlying raw fd
-# counts, without either interfering with the other. See rumbles.html's
-# FD_BONUS_KEYS, and:
-#   - roster 5 (Joe)'s two still-pregame starters (P9/RB, P10/WR) below,
-#     which never carry a "bonus_fd_*" field on their projection at all
-#     (matching a real pregame projection payload) -- Projected mode must
-#     derive it from their raw pass_fd/rush_fd/rec_fd counts.
-#   - roster 3 (Jake)'s already-played starter's actual stats, which DOES
-#     carry a real precomputed "bonus_fd_wr" field directly (matching a
-#     real post-game actual-stats payload) -- both Actual and Projected
-#     mode must use that precomputed value as-is, never re-derive it.
 scoring_settings = {
     "pass_yd": 0.04, "pass_td": 4, "pass_int": -2,
     "rush_yd": 0.1, "rush_td": 6,
     "rec": 0.0, "rec_yd": 0.1, "rec_td": 6,
     "rec_fd": 0.5, "rush_fd": 0.5, "pass_fd": 0.25,
-    "bonus_fd_qb": 0.2, "bonus_fd_rb": 0.5, "bonus_fd_wr": 0.5, "bonus_fd_te": 0.5,
     "fum_lost": -2,
     "kr_yd": 0.04,
     "fgmiss": -1.0,
@@ -202,19 +184,9 @@ HAND_CRAFTED_ACTUAL = {
     #     fields (scoring_settings only has one flat "fgmiss": -1 weight
     #     covering every tier) -- worth 1 * -1.0 = -1.0 if the
     #     TIER_SUM_KEYS fix is working, silently 0 if it regresses.
-    #   - "bonus_fd_wr": 3 -- a real ACTUAL stat line's own precomputed
-    #     first-down bonus field (see FD_BONUS_KEYS in rumbles.html) --
-    #     worth 3 * 0.5 = +1.5 if it's read directly as-is (the correct
-    #     behavior for an already-played player), silently dropped if a
-    #     regression stops matching it, and WRONGLY re-derived/doubled if
-    #     the isActual gate on FD_BONUS_KEYS's derivation branch ever
-    #     regresses (that branch must never fire here -- this field is
-    #     already present, so dotProduct should read it on the very first
-    #     pass and never reach the derivation fallback at all).
-    # Net: 30.0 (base) + 4.0 (kr_yd alias) - 1.0 (fgmiss tier-sum)
-    #      + 1.5 (bonus_fd_wr, used as-is) = 34.5.
+    # Net: 30.0 (base) + 4.0 (kr_yd alias) - 1.0 (fgmiss tier-sum) = 33.0.
     3: {"rec": 10, "rec_yd": 150, "rec_td": 2, "rec_fd": 6, "pts_ppr": 35.0,
-        "def_kr_yd": 100, "fgmiss_30_39": 1, "bonus_fd_wr": 3},
+        "def_kr_yd": 100, "fgmiss_30_39": 1},
     # roster 5 deliberately has NO actual-stats entry at all for anyone --
     # see ZERO_ACTUAL_ROSTERS below.
 }
@@ -408,20 +380,6 @@ with open(os.path.join(OUT, "scores_week2.json"), "w") as f:
     json.dump(scores, f, indent=2)
 
 # ---- bulk projections for week 2 : every rostered player has a projection ----
-#
-# NOTE on FD_BONUS_KEYS coverage: every generic-pattern projection below
-# (this includes roster 5/Joe's P9 and P10) carries raw "pass_fd"/
-# "rush_fd"/"rec_fd" counts but, exactly like a real pregame Sleeper
-# projection, NEVER a precomputed "bonus_fd_*" field -- there's nothing
-# special to add here for that case, since the whole point is that a
-# pregame projection is never given one. Joe's roster (5) is the one
-# where EVERY starter is still pregame (see ZERO_ACTUAL_ROSTERS), so P9
-# (RB, has real position metadata below) and P10 (WR, also has real
-# position metadata) are exactly the case FD_BONUS_KEYS exists for --
-# Projected mode must derive their "bonus_fd_rb"/"bonus_fd_wr" from
-# pass_fd(5)+rush_fd(1)+rec_fd(2)=8 each, worth +4.0 apiece at this
-# fixture's 0.5 weight (see the exact hand-verified totals in run_test.py,
-# which also checks the "Pts This Week" tooltip's own proj figures).
 projections = {}
 for rid, players in roster_players.items():
     played_pid, unplayed_pid = players[0], players[1]
