@@ -879,13 +879,66 @@
   var PACE_DAMPENING_Q4_THRESHOLD = 0.25;
   var PACE_DAMPENING_FLOOR_Q4 = 0.15;
   var PACE_DAMPENING_K_Q4 = 1.40;
+  // The same idea, at the OTHER end of the game: a real Week 2 report
+  // caught Jaxon Smith-Njigba scoring an 82-yard, first-play-of-the-game
+  // touchdown (15.20 actual off a 20.17 pregame projection, 11:08 still
+  // left in Q1 -- remainingFraction 0.9356) and Sleeper's own live
+  // "projected" number for him read 33.41, while this page -- still using
+  // the Q1-3 constants above -- showed 27.69, a 5.7-point undershoot.
+  // Solving backward for what dampening value WOULD reproduce 33.41 at
+  // that exact actual/pregame/remainingFraction shows dampening was
+  // effectively ~0.97, i.e. Sleeper applied almost NONE of the pace-based
+  // discount the Q1-3 constants call for at that pace (0.75) -- 33.41 sits
+  // only a third of a point off the fully UNDAMPENED flat blend
+  // (actual + remainingFraction*pregame = 34.07), the exact model an
+  // earlier iteration of this formula used and had to add dampening
+  // BECAUSE OF later-game overshoot (see the iteration history below).
+  // That's the same story as the Q4 finding above, just at the other end:
+  // the miss isn't really a function of pace alone, it's a function of
+  // how much of the game has actually happened yet to have SEEN that
+  // pace. A player at 75% of their full-game pregame projection after
+  // 3-4 real minutes of football is a tiny, extremely early sample --
+  // there's essentially all of the game still left for a normal share of
+  // production to arrive on top, so discounting the rest of their
+  // pregame projection nearly as hard as this page discounts a similarly-
+  // hot player deep in the 3rd quarter (who has already had most of a
+  // game to prove that pace out) was never justified. Q4 dampens hard
+  // because there's almost no game left for anything to average out or
+  // for a real trend to keep developing; Q1 barely dampens at all because
+  // the opposite is true -- there's essentially a full game left.
+  // PACE_DAMPENING_FLOOR_Q1/K_Q1 below were fit to land within about a
+  // quarter-point of this one real example (0.85/0.50 -> 33.19, vs
+  // Sleeper's real 33.41). This is a SINGLE validated data point, not the
+  // 11-point Q4/OT sample the Q4 constants above were fit and
+  // cross-validated against -- shipped anyway because the direction and
+  // rough size of the miss are unambiguous and the underlying mechanism
+  // (more game left = trust the pregame projection more, not less) is the
+  // same logic that already paid off for Q4, but these two constants
+  // specifically should be revisited and tightened as more real Q1
+  // examples come in, the same way the Q4 constants were refined across
+  // several gameday reports before landing where they are now.
+  // remainingFraction()'s own math means a value strictly above this
+  // threshold can only ever come from Q1 (Q2 tops out at exactly 0.75) --
+  // same exact-partition logic as the Q4 threshold above, just at the
+  // other boundary.
+  var PACE_DAMPENING_Q1_THRESHOLD = 0.75;
+  var PACE_DAMPENING_FLOOR_Q1 = 0.85;
+  var PACE_DAMPENING_K_Q1 = 0.50;
   function blendedProjection(actualPts, pregameProjPts, remainingFraction) {
     if (remainingFraction <= 0) return actualPts;
     var pace = pregameProjPts > 0 ? actualPts / pregameProjPts : 0;
     if (pace < 0) pace = 0;
-    var isQ4OrLater = remainingFraction <= PACE_DAMPENING_Q4_THRESHOLD;
-    var floor = isQ4OrLater ? PACE_DAMPENING_FLOOR_Q4 : PACE_DAMPENING_FLOOR;
-    var k = isQ4OrLater ? PACE_DAMPENING_K_Q4 : PACE_DAMPENING_K;
+    var floor, k;
+    if (remainingFraction > PACE_DAMPENING_Q1_THRESHOLD) {
+      floor = PACE_DAMPENING_FLOOR_Q1;
+      k = PACE_DAMPENING_K_Q1;
+    } else if (remainingFraction <= PACE_DAMPENING_Q4_THRESHOLD) {
+      floor = PACE_DAMPENING_FLOOR_Q4;
+      k = PACE_DAMPENING_K_Q4;
+    } else {
+      floor = PACE_DAMPENING_FLOOR;
+      k = PACE_DAMPENING_K;
+    }
     var dampening = floor + (1 - floor) * Math.exp(-k * pace);
     return actualPts + remainingFraction * pregameProjPts * dampening;
   }
@@ -1129,18 +1182,33 @@
   // an in-progress game, from Sleeper's live-scoreboard "quarter_num" (1-4,
   // 5+ for OT) and "time_remaining" ("M:SS"/"MM:SS") fields -- both
   // confirmed present on the real live payload, Sep 2026. Regulation
-  // quarters are 15 minutes each; overtime is modeled as one 10-minute
-  // period tacked on the end (only regular-season sudden-death OT -- good
-  // enough here, since a game already in OT is nearly decided either way).
-  // Returns 1 (treat as the full game still ahead) when quarter_num can't
-  // be parsed, and always clamps to [0, 1].
+  // quarters are 15 minutes each. Returns 1 (treat as the full game still
+  // ahead) when quarter_num can't be parsed, and always clamps to [0, 1].
+  //
+  // OVERTIME IS A HARD 0, not a 10-minute-period estimate -- confirmed
+  // live (a real Week 2 game, Garrett Wilson's, reached OT): Sleeper's own
+  // displayed "projected" number for every player in that game sat
+  // exactly on their actual-so-far the moment OT started, no extra credit
+  // for the OT period at all, matching how this page already treats a
+  // confirmed-COMPLETE game (see blendedProjection's `remainingFraction
+  // <= 0` early return -- returning 0 here routes an OT game through that
+  // exact same path, no separate OT branch needed anywhere else). This
+  // replaces an earlier version that modeled OT as one more 10-minute
+  // period tacked onto the 60-minute regulation clock and blended a
+  // (small) share of the pregame projection back in -- reasonable-
+  // sounding, but not what Sleeper's real site actually does, the same
+  // kind of guess-vs-verify mistake KEY_ALIASES's kr_yd entry made
+  // elsewhere on this page. A team already in OT is functionally decided
+  // for fantasy purposes anyway (a sudden-death score ends the game
+  // immediately), so there's very little practical upside being given up
+  // here, and it removes a case that was never actually validated against
+  // a real example until now.
   function remainingFraction(meta) {
     var qNum = parseInt(meta && meta.quarter_num, 10);
     if (!qNum || qNum < 1) return 1;
-    var quarterLength = qNum <= 4 ? 15 : 10;
-    var totalMinutes = qNum <= 4 ? 60 : 70;
-    var elapsedPriorQuarters = qNum <= 4 ? (qNum - 1) * 15 : 60;
-    var remMin = quarterLength;
+    if (qNum >= 5) return 0;
+    var elapsedPriorQuarters = (qNum - 1) * 15;
+    var remMin = 15;
     var remStr = meta && meta.time_remaining;
     if (typeof remStr === "string" && remStr.indexOf(":") !== -1) {
       var parts = remStr.split(":");
@@ -1148,8 +1216,8 @@
       var ss = parseInt(parts[1], 10);
       if (!isNaN(mm) && !isNaN(ss)) remMin = mm + ss / 60;
     }
-    var elapsedTotal = elapsedPriorQuarters + (quarterLength - remMin);
-    var frac = 1 - elapsedTotal / totalMinutes;
+    var elapsedTotal = elapsedPriorQuarters + (15 - remMin);
+    var frac = 1 - elapsedTotal / 60;
     if (frac < 0) frac = 0;
     if (frac > 1) frac = 1;
     return frac;

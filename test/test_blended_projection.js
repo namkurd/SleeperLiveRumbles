@@ -39,19 +39,23 @@ const source = [
   extract(/var PACE_DAMPENING_Q4_THRESHOLD = [^;]+;/, "PACE_DAMPENING_Q4_THRESHOLD"),
   extract(/var PACE_DAMPENING_FLOOR_Q4 = [^;]+;/, "PACE_DAMPENING_FLOOR_Q4"),
   extract(/var PACE_DAMPENING_K_Q4 = [^;]+;/, "PACE_DAMPENING_K_Q4"),
+  extract(/var PACE_DAMPENING_Q1_THRESHOLD = [^;]+;/, "PACE_DAMPENING_Q1_THRESHOLD"),
+  extract(/var PACE_DAMPENING_FLOOR_Q1 = [^;]+;/, "PACE_DAMPENING_FLOOR_Q1"),
+  extract(/var PACE_DAMPENING_K_Q1 = [^;]+;/, "PACE_DAMPENING_K_Q1"),
   extract(/function blendedProjection\([^)]*\) \{[\s\S]*?\n  \}/, "blendedProjection"),
   extract(/function effectiveRemainingFraction\([^)]*\) \{[\s\S]*?\n  \}/, "effectiveRemainingFraction"),
   extract(/function normalizeGameStatus\([^)]*\) \{[\s\S]*?\n  \}/, "normalizeGameStatus"),
+  extract(/function remainingFraction\([^)]*\) \{[\s\S]*?\n  \}/, "remainingFraction"),
 ].join("\n");
 
 const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(
   source +
-    "\nthis.blendedProjection = blendedProjection; this.effectiveRemainingFraction = effectiveRemainingFraction; this.normalizeGameStatus = normalizeGameStatus;",
+    "\nthis.blendedProjection = blendedProjection; this.effectiveRemainingFraction = effectiveRemainingFraction; this.normalizeGameStatus = normalizeGameStatus; this.remainingFraction = remainingFraction;",
   sandbox
 );
-const { blendedProjection, effectiveRemainingFraction, normalizeGameStatus } = sandbox;
+const { blendedProjection, effectiveRemainingFraction, normalizeGameStatus, remainingFraction } = sandbox;
 
 let failures = 0;
 function assertClose(actual, expected, tolerance, label) {
@@ -111,6 +115,41 @@ assertClose(blendedProjection(19.20, 15.28, 0.1464), 19.61, 0.3, "Henry (Q4, ove
 assertClose(blendedProjection(12.30, 11.095, 0.1672), 12.64, 0.3, "Schultz, re-checked later in the same game (Q4 now) lands within ~0.3pt");
 assertClose(blendedProjection(27.00, 17.838, 0.1672), 27.76, 0.05, "Chase, re-checked later in the same game (Q4 now) matches almost exactly");
 assertClose(blendedProjection(25.58, 14.6588, 0.1389), 26.07, 0.05, "Young, re-checked later in the same game (Q4 now) matches almost exactly");
+
+// A sixth gameday report caught Jaxon Smith-Njigba scoring an early Q1
+// touchdown (11:08 left in the 1st -- remainingFraction 0.9356) and found
+// the opposite problem: this formula, still on the Q1-3 constants,
+// undershot Sleeper's real live "projected" number by 5.7 points (27.69
+// vs 33.41). See PACE_DAMPENING_FLOOR_Q1/K_Q1's comment in rumbles.html --
+// this is a single validated point (not the 11-point Q4/OT sample), so
+// held to a wider tolerance than the tight Q4 checks above.
+assertClose(blendedProjection(15.20, 20.174, 0.9356), 33.41, 0.3, "Smith-Njigba (Q1, hot start) lands within ~0.3pt of Sleeper's real live number with the Q1-specific constants");
+
+// ---- blendedProjection: the Q1/Q4/OT constant switches themselves -------
+// remainingFraction()'s own math means Q2 never produces anything above
+// 0.75 and Q1 never produces anything at or below it, same exact-partition
+// idea as the Q3/Q4 boundary below -- these pin both switches down
+// directly rather than only exercising them indirectly through the real
+// data points above.
+(function () {
+  var justAtQ2 = blendedProjection(10, 20, 0.75); // still Q2 -- FLOOR/K
+  var justIntoQ1 = blendedProjection(10, 20, 0.7501); // Q1 -- FLOOR_Q1/K_Q1
+  if (justAtQ2 === justIntoQ1) {
+    failures++;
+    console.error("FAIL: Q1/Q2 boundary -- expected a visible jump in the blended value right above remainingFraction=0.75, got none (Q1-specific constants aren't being applied)");
+  } else {
+    console.log(`PASS: Q1/Q2 boundary produces a real jump (0.7500 -> ${justAtQ2.toFixed(4)}, 0.7501 -> ${justIntoQ1.toFixed(4)})`);
+  }
+})();
+
+// ---- remainingFraction: overtime is a hard 0, not a small blended
+// estimate -- confirmed live (Garrett Wilson's game reaching OT): Sleeper
+// gave zero extra projected credit the moment OT started, for every
+// player in that game, matching how a confirmed-complete game is treated.
+assertEqual(remainingFraction({ quarter_num: 5, time_remaining: "10:00" }), 0, "a game that's reached OT (quarter_num 5) has zero remaining credit, fresh OT period or not");
+assertEqual(remainingFraction({ quarter_num: 6, time_remaining: "3:20" }), 0, "a second OT period is also zero remaining credit");
+assertClose(remainingFraction({ quarter_num: 4, time_remaining: "0:01" }), 0, 0.001, "the very end of regulation (not yet OT) still resolves to ~0 as before -- unaffected by the OT change");
+assertClose(remainingFraction({ quarter_num: 1, time_remaining: "11:08" }), 0.9356, 0.001, "a real Q1 remainingFraction (Smith-Njigba's game) still computes the normal clock-derived estimate, unaffected by the OT change");
 
 // ---- blendedProjection: the Q4/OT constant switch itself ----------------
 // remainingFraction()'s own math means Q3 never produces anything below

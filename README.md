@@ -367,10 +367,18 @@ their pregame projection** -- not either one alone. The exact formula
 
 ```
 pace = actualPointsSoFar / pregameProjectionPoints        (0 if no projection, or 0 actual)
-FLOOR, K = (0.15, 1.40) if remainingGameClockFraction <= 0.25 else (0.40, 1.10)  -- Q4/OT vs Q1-Q3, see below
+FLOOR, K = (0.85, 0.50) if remainingGameClockFraction > 0.75   -- Q1, see below
+         = (0.15, 1.40) if remainingGameClockFraction <= 0.25  -- Q4/OT, see below
+         = (0.40, 1.10) otherwise                               -- Q2-Q3 (the original fit)
 dampening = FLOOR + (1 - FLOOR) * exp(-K * pace)
 points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints * dampening
 ```
+
+Overtime is a special case even beyond that: `remainingGameClockFraction`
+is forced to exactly 0 the instant a game reaches OT (`quarter_num >= 5`),
+which collapses the formula above straight to `actualPointsSoFar` --
+Sleeper gives no extra projected credit at all once a game is in OT (see
+below).
 
 `remainingGameClockFraction` runs from 1 at kickoff down to 0 at the
 final whistle (computed from Sleeper's live-scoreboard `quarter_num` /
@@ -550,6 +558,61 @@ continuously -- an accepted trade-off for a fix that's this well-
 supported by the data, and arguably a more honest reflection of a real
 discontinuity in the underlying football than a smoothed-over curve
 would be.
+
+**The same idea applies at the other end of the game too: Q1 needs its
+own, much LIGHTER dampening, not the Q1-3 default.** A live report caught
+Jaxon Smith-Njigba scoring an 82-yard touchdown on an early target, 11:08
+still left in the 1st quarter (`remainingGameClockFraction` 0.9356,
+actual 15.20 off a 20.17 pregame projection) -- and this page, still on
+the Q1-3 constants, undershot Sleeper's own live "projected" number by
+5.7 points (27.69 vs. 33.41). Solving backward for what dampening value
+Sleeper's real number implies at that exact pace shows it was barely
+dampening at all (~0.97) -- within a third of a point of the fully
+UNDAMPENED flat blend (iteration 3 above, the version that had to be
+replaced BECAUSE of later-game overshoot). That's the mirror image of
+the Q4 finding: the miss isn't really about pace on its own, it's about
+how much of the game has actually happened yet to have produced that
+pace. A player at 75% of their full-game projection after 3-4 real
+minutes of football is an extremely small sample with essentially a
+whole game still ahead for a normal share of production to arrive on top
+-- there's little reason to discount the rest of their pregame
+projection nearly as hard as this page discounts an equally-hot player
+deep in the 3rd quarter, who's already had most of a game to prove that
+pace out. Q1 now gets its own, much gentler constants
+(`PACE_DAMPENING_FLOOR_Q1` = 0.85, `PACE_DAMPENING_K_Q1` = 0.50),
+switched on whenever `remainingGameClockFraction` is above 0.25 -- 0.75,
+a threshold that, symmetrically to the Q4 one, can only ever be reached
+in Q1 (Q2 tops out at exactly 0.75). This is shipped from a SINGLE
+validated data point, not the 11-point Q4/OT sample the Q4 constants
+were fit and cross-validated against, so it's held to a lower-confidence
+bar than that fix -- but the direction and rough size of the miss are
+unambiguous, and the mechanism (more game left = trust the projection
+more, not less) is the same logic that already paid off for Q4, just
+running the other way. These two constants specifically should be
+revisited and tightened as more real Q1 examples come in, the same way
+the Q4 ones were refined across several gameday reports before landing
+where they are now.
+
+**Overtime is now a hard cutoff to actual-so-far, with zero blended
+credit for the extra period, for every position -- not just the
+DEF-only cap below.** An earlier version of this page modeled OT as one
+more 10-minute period tacked onto the 60-minute regulation clock and
+blended a (small) share of the pregame projection back in for it, the
+same shape as any other in-progress quarter. That was a reasonable-
+sounding guess that had never actually been checked against a real OT
+game until one showed up live (Garrett Wilson's) -- and Sleeper's own
+displayed "projected" number for every player in that game sat exactly
+on their actual-so-far the moment OT started, no extra credit at all.
+The guess-vs-verify lesson here is the same one `KEY_ALIASES`'s `kr_yd`
+entry taught elsewhere on this page: a plausible model of how Sleeper
+"must" work is still a guess until it's checked against something real.
+`remainingFraction()` now returns 0 the instant `quarter_num` reaches 5,
+which routes an OT game through `blendedProjection`'s existing
+`remainingFraction <= 0` early return -- the exact same path a
+confirmed-complete game takes, no separate OT branch needed anywhere
+else. A team already in OT is functionally decided for fantasy purposes
+anyway (a sudden-death score ends the game immediately), so there's very
+little practical upside being given up by this.
 
 **Team defenses are a deliberate exception to the blend above: once a
 DEF's game has started, its Projected-mode score is pinned exactly to
