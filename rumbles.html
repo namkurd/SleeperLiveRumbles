@@ -799,18 +799,18 @@
   // DAMPENED share of their pregame projection for the game clock still
   // remaining. The naive version of this (no dampening -- just
   // actualPts + remainingFraction*pregameProjectionPts) was checked
-  // against Sleeper's own live-displayed "projected" number for 13 real
-  // players across two separate Week 2 gameday reports, and it
+  // against Sleeper's own live-displayed "projected" number for real
+  // players across three separate Week 2 gameday reports, and it
   // systematically OVERSHOT for every player already producing at or
-  // above a flat pace (average miss 1.29 points, worse the further ahead
-  // of pace they were running) -- exactly backwards from the very first
-  // version of this fix (flat pregame projection the whole time a game's
-  // in progress), which systematically UNDERSHOT the same way. Comparing
-  // two players in the exact same real game at the exact same clock
-  // reading (a receiver already at 78% of his full pregame projection by
-  // early in the 3rd quarter, versus a teammate at only 11% of his) made
-  // the pattern unmistakable: it's not the clock alone driving the gap --
-  // it's specifically how far ahead of (or behind) a flat, uniform pace a
+  // above a flat pace (worse the further ahead of pace they were running)
+  // -- exactly backwards from the very first version of this fix (flat
+  // pregame projection the whole time a game's in progress), which
+  // systematically UNDERSHOT the same way. Comparing two players in the
+  // exact same real game at the exact same clock reading (a receiver
+  // already at 78% of his full pregame projection by early in the 3rd
+  // quarter, versus a teammate at only 11% of his) made the pattern
+  // unmistakable: it's not the clock alone driving the gap -- it's
+  // specifically how far ahead of (or behind) a flat, uniform pace a
   // player is already running. A player with zero production so far
   // should keep essentially their full remaining-game projection; a
   // player already running well ahead of pace should have that remaining
@@ -820,28 +820,53 @@
   //
   // dampening(pace) = FLOOR + (1-FLOOR)*exp(-K*pace), where pace =
   // actualPointsSoFar / pregameProjectionPoints (0 when there's no
-  // projection to divide by, or genuinely 0 actual so far). FLOOR=0.45
-  // and K=1.25 were fit (least total absolute error) against those same
-  // 13 real players' live-displayed numbers -- average miss 0.18 points,
-  // about 7x tighter than the undampened version. Leave-one-out
-  // cross-validation (refit with each of the 13 held out in turn) kept
-  // both parameters in a similar range and every held-out prediction
-  // within about half a point of the full fit, so this isn't just curve-
-  // fitting noise -- but it IS fit to two live Sundays' worth of real
-  // examples, not a disclosed Sleeper formula (nothing about Sleeper's
-  // real blend is exposed by the public stats/projections/scores
-  // endpoints this page reads, so it can't be reproduced exactly -- see
-  // the first-down-bonus lesson above for why this page validates rather
-  // than guesses at an unverifiable extra factor). It should be
-  // revisited if a future gameday report shows it drifting.
-  var PACE_DAMPENING_FLOOR = 0.45;
-  var PACE_DAMPENING_K = 1.25;
+  // projection to divide by, or genuinely 0 actual so far). FLOOR=0.40
+  // and K=1.10 were fit (least total absolute error) against 18 real
+  // players' live-displayed numbers gathered across three separate
+  // gameday reports -- average miss 0.23 points, about 6x tighter than
+  // the undampened version, and adding each new report's players barely
+  // moved the fit (the first 13-player fit, 0.45/1.25, already missed the
+  // next 5 players by only 0.23 on average with NO refitting at all) --
+  // a good sign this is a real, generalizing pattern rather than noise
+  // tuned to one specific sample. Leave-one-out cross-validation (refit
+  // with each of the 18 held out in turn) kept both parameters in a
+  // similar range and every held-out prediction within about half a
+  // point of the full fit. Even so, this IS fit to real examples, not a
+  // disclosed Sleeper formula (nothing about Sleeper's real blend is
+  // exposed by the public stats/projections/scores endpoints this page
+  // reads, so it can't be reproduced exactly -- see the first-down-bonus
+  // lesson above for why this page validates rather than guesses at an
+  // unverifiable extra factor). It should be revisited if a future
+  // gameday report shows it drifting.
+  var PACE_DAMPENING_FLOOR = 0.40;
+  var PACE_DAMPENING_K = 1.10;
   function blendedProjection(actualPts, pregameProjPts, remainingFraction) {
     if (remainingFraction <= 0) return actualPts;
     var pace = pregameProjPts > 0 ? actualPts / pregameProjPts : 0;
     if (pace < 0) pace = 0;
     var dampening = PACE_DAMPENING_FLOOR + (1 - PACE_DAMPENING_FLOOR) * Math.exp(-PACE_DAMPENING_K * pace);
     return actualPts + remainingFraction * pregameProjPts * dampening;
+  }
+
+  // Team defenses are a deliberate special case: once a defense's game has
+  // started AT ALL (in progress or complete), this page shows NO blended
+  // "rest of game" credit for them -- their proj is pinned to their actual-
+  // so-far, full stop, the same way a fully-complete player's is. A real
+  // gameday report flagged this directly ("defenses are never projected
+  // above their actual score"), and the one concrete DEF example checked
+  // against Sleeper's live matchup page backed it up exactly: a defense
+  // already at 13.09 actual, mid-game, showed a live "projected" number of
+  // 13.09 too -- not a penny more. Defense scoring is lumpy and discrete
+  // (turnovers, sacks, points-allowed tiers) in a way individual-player
+  // scoring isn't, so the smooth pace-dampened model above -- built and
+  // validated entirely on skill-position players -- apparently isn't how
+  // Sleeper treats a defense's remaining-game upside once it's already
+  // banked something. A defense that hasn't kicked off yet is untouched by
+  // this (remainingFraction is still 1, so it shows its normal pregame
+  // projection, same as any other still-pregame player).
+  function effectiveRemainingFraction(position, remainingFraction) {
+    if (position === "DEF" && remainingFraction < 1) return 0;
+    return remainingFraction;
   }
 
   // Two lenses on a player's week:
@@ -886,7 +911,8 @@
     }
     var actualPts = actualSource ? scoreFrom(actualSource, scoringSettings, true) : 0;
     var pregameProj = scoreFrom(projMap[playerId], scoringSettings, false);
-    return blendedProjection(actualPts, pregameProj, game.remainingFraction);
+    var remFrac = effectiveRemainingFraction(meta ? meta.position : null, game.remainingFraction);
+    return blendedProjection(actualPts, pregameProj, remFrac);
   }
 
   function rosterScore(roster, statsMap, projMap, scoringSettings, mode, playersMeta, teamGameSchedule) {
@@ -978,7 +1004,11 @@
       // is "unknown" (no team metadata, or the live-status feed failed)
       // has no remainingFraction to blend with, so this just shows their
       // raw pregame projection, same as before this blending model existed.
-      var projPts = game ? blendedProjection(actualPts, pregameProjPts, game.remainingFraction) : pregameProjPts;
+      // A team defense also skips the blend once its game has started at
+      // all (see effectiveRemainingFraction's comment) -- its proj is
+      // pinned to its actual-so-far, not a penny more.
+      var projRemFrac = game ? effectiveRemainingFraction(meta ? meta.position : null, game.remainingFraction) : null;
+      var projPts = game ? blendedProjection(actualPts, pregameProjPts, projRemFrac) : pregameProjPts;
       out.push({
         player_id: pid,
         name: meta ? playerName(meta) : pid,

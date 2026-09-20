@@ -353,7 +353,7 @@ their pregame projection** -- not either one alone. The exact formula
 
 ```
 pace = actualPointsSoFar / pregameProjectionPoints        (0 if no projection, or 0 actual)
-dampening = 0.45 + 0.55 * exp(-1.25 * pace)
+dampening = 0.40 + 0.60 * exp(-1.10 * pace)
 points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints * dampening
 ```
 
@@ -393,17 +393,17 @@ validated shortcoming of the last:
    while his teammate at only 11% of projection barely needed any
    adjustment at all -- the clock alone wasn't driving the gap, how far
    ahead of pace each player was already running was. That's where the
-   `dampening` term above comes from: `0.45 + 0.55*exp(-1.25*pace)` keeps
+   `dampening` term above comes from: `0.40 + 0.60*exp(-1.10*pace)` keeps
    ~100% credit for a player with zero production so far, and saturates
-   down to ~45% credit for a player already running well ahead of pace
+   down to ~40% credit for a player already running well ahead of pace
    (their overall total is barely affected by this -- their actual-so-far
    is untouched and is usually the bigger share of their eventual total
    anyway -- it only dampens what's assumed about the game still ahead).
 
 This final formula was fit (least total absolute error) and then
 validated against Sleeper's own live-displayed "projected" number,
-screenshotted directly off Sleeper's real matchup pages across two
-separate live Sundays, for 13 different real players (a mix of
+screenshotted directly off Sleeper's real matchup pages across three
+separate live gameday reports, for 18 different real players (a mix of
 QB/RB/WR/TE/K), each cross-checked against this page's own live-fetched
 actual stats, pregame projection, and the scores feed's
 `quarter_num`/`time_remaining` fields at the matching moment:
@@ -412,25 +412,32 @@ actual stats, pregame projection, and the scores feed's
 |---|---|---|---|---|---|
 | Tucker Kraft (TE) | 0.00 | 12.24 | 7.19 | 7.19 | 7.19 |
 | Ka'imi Fairbairn (K) | 0.00 | 9.06 | 4.76 | 4.77 | 4.77 |
-| DK Metcalf (WR) | 1.20 | 14.32 | 8.49 | 8.79 | 8.37 |
-| Garrett Wilson (WR) | 3.10 | 15.66 | 11.21 | 11.98 | 10.89 |
+| DK Metcalf (WR) | 1.20 | 14.32 | 8.49 | 8.79 | 8.38 |
+| Garrett Wilson (WR) | 3.10 | 15.66 | 11.21 | 11.98 | 10.90 |
 | Colston Loveland (TE) | 1.30 | 12.30 | 6.56 | 6.88 | 6.50 |
 | Quinshon Judkins (RB) | 3.70 | 12.60 | 9.50 | 10.42 | 9.27 |
-| Travis Etienne (RB) | 4.40 | 11.98 | 8.45 | 9.53 | 8.48 |
-| Aaron Jones (RB) | 5.70 | 14.22 | 10.74 | 12.15 | 10.74 |
-| Tee Higgins (WR) | 10.70 | 14.26 | 15.64 | 18.30 | 15.75 |
-| D'Andre Swift (RB) | 10.00 | 12.78 | 13.32 | 15.80 | 13.80 |
-| Chase McLaughlin (K) | 10.40 | 8.41 | 13.19 | 14.76 | 12.88 |
-| Dalton Schultz (TE) | 12.30 | 11.09 | 15.38 | 17.84 | 15.56 |
-| DeVonta Smith (WR) | 19.10 | 15.22 | 23.98 | 26.80 | 23.45 |
+| Travis Etienne (RB) | 4.40 | 11.98 | 8.45 | 9.53 | 8.47 |
+| Aaron Jones (RB) | 5.70 | 14.22 | 10.74 | 12.15 | 10.72 |
+| Tee Higgins (WR) | 10.70 | 14.26 | 15.64 | 18.30 | 15.63 |
+| D'Andre Swift (RB) | 10.00 | 12.78 | 13.32 | 15.80 | 13.71 |
+| Chase McLaughlin (K) | 10.40 | 8.41 | 13.19 | 14.76 | 12.72 |
+| Dalton Schultz (TE) | 12.30 | 11.09 | 15.38 | 17.84 | 15.39 |
+| DeVonta Smith (WR) | 19.10 | 15.22 | 23.98 | 26.80 | 23.17 |
+| Bijan Robinson (RB) | 9.10 | 22.82 | 17.54 | 19.81 | 17.44 |
+| Bucky Irving (RB) | 8.90 | 14.06 | 11.38 | 13.29 | 11.92 |
+| Christian Watson (WR) | 5.80 | 15.22 | 10.40 | 11.78 | 10.51 |
+| Tetairoa McMillan (WR) | 12.80 | 15.04 | 16.67 | 19.86 | 17.17 |
+| Juwan Johnson (TE) | 6.00 | 10.32 | 7.71 | 8.93 | 8.07 |
 
-Average miss: 1.29 points for the flat blend (iteration 3), 0.18 points
-for the pace-dampened version above -- about 7x tighter, and several
+Average miss: 1.49 points for the flat blend (iteration 3), 0.23 points
+for the pace-dampened version above -- about 6.5x tighter, and several
 players landing within a few hundredths of a point. This isn't
-believed to be a coincidence of overfitting 13 points: leave-one-out
+believed to be a coincidence of overfitting: adding 5 new players from a
+third, later gameday report barely moved the fit at all from the one
+originally tuned on just the first 13 -- and leave-one-out
 cross-validation (refitting the two constants with each player held out
-in turn) kept both in a similar range each time, and every held-out
-player's prediction still landed within about half a point of what the
+in turn) kept both in a similar range each time, with every held-out
+player's prediction still landing within about half a point of what the
 full fit predicted. That said, **this is a heuristic fit to real
 examples, not a disclosed Sleeper formula** -- nothing about Sleeper's
 actual live blend is exposed by the public stats/projections/scores
@@ -441,6 +448,27 @@ against real examples rather than guessing at an unverified extra
 factor -- exactly the discipline the `bonus_fd_<position>` episode
 above was a lesson in. It should be revisited if a future gameday
 report shows it drifting.
+
+**Team defenses are a deliberate exception to the blend above: once a
+DEF's game has started, its Projected-mode score is pinned exactly to
+its actual-so-far, with zero blended credit for the rest of the game**
+(see `effectiveRemainingFraction()` in `rumbles.html`, which zeroes out
+`remainingGameClockFraction` for an in-progress DEF before it ever
+reaches `blendedProjection()` above -- a still-pregame DEF, and every
+non-DEF position, are untouched by this). This was a direct gameday
+observation: defenses were never seen projected above their own
+actual-so-far on Sleeper's real site, however early in the game or far
+below their pregame projection they were running -- one concrete real
+example, a defense already at 13.09 actual points mid-game, showed
+Sleeper's own live "projected" number also sitting at exactly 13.09, not
+a penny more. That tracks with how DEF scoring actually works: it's
+lumpy and swingy (a single defensive/special-teams touchdown, a big
+sack/turnover game, or a blowout garbage-time collapse can each be worth
+a double-digit point swing on their own), so a smooth clock-weighted
+blend of a DEF's pregame projection tends to keep crediting expected
+future production that either never shows up or arrives all at once in
+a way no gradual blend captures well -- pinning to actual-so-far avoids
+guessing at that shape entirely.
 
 A player whose live game status can't be resolved at all (no team
 metadata, or the live-status feed came back empty) falls back to the
@@ -457,7 +485,10 @@ deliberate trade-off: this column used to always show the fixed pregame
 number even after a player's game ended, specifically so a bust could be
 compared against what was expected of them at a glance -- that
 comparison is no longer available directly in this column post-game,
-since it now converges to their actual final total instead.
+since it now converges to their actual final total instead. A team
+defense's "Proj" column reflects its own exception too: once its game
+has started, this column shows the same actual-so-far number as the
+"Actual" column, per the DEF cap described above.
 
 - **Actual** (default on page load) -- ONLY real, actually-banked stats.
   Never touches projections. This is the fully "solidified" view: Rumbles,

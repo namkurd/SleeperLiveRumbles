@@ -367,16 +367,17 @@ def scenario_live_blending(browser):
     #   Alex (roster 6, history PF 105.0): played starter Kyler Murray's
     #     game (MIN) is marked IN_PROGRESS in scores_week2.json, with
     #     "quarter_num": 2 / "time_remaining": "9:00" -- 21:00 elapsed of
-    #     60:00, i.e. remainingFraction = 39/60 = 0.65. His actual so far is
-    #     7.20 and his pregame projection is 21.09, so his pace is
-    #     7.20/21.09=0.3414, giving a dampening of
-    #     0.45+0.55*exp(-1.25*0.3414)=0.8089 (see blendedProjection()'s
-    #     comment in rumbles.html for why the remaining share gets
-    #     dampened at all). Blend = 7.20 + 0.65*21.09*0.8089 = 18.2895 ->
-    #     rounds to 18.29. On top of his other starter's projection (21.23,
-    #     still fully pregame, untouched by any of this) -> 18.29+21.23=
-    #     39.52.
-    #     Custom PF = 105.0+39.52=144.52.
+    #     60:00, i.e. remainingFraction = 39/60 = 0.65 (he's a QB, not a
+    #     DEF, so effectiveRemainingFraction leaves this untouched -- see
+    #     its comment). His actual so far is 7.20 and his pregame
+    #     projection is 21.09, so his pace is 7.20/21.09=0.3414, giving a
+    #     dampening of 0.40+0.60*exp(-1.10*0.3414)=0.8122 (see
+    #     blendedProjection()'s comment in rumbles.html for why the
+    #     remaining share gets dampened at all, and its current FLOOR/K
+    #     constants). Blend = 7.20 + 0.65*21.09*0.8122 = 18.3334 -> rounds
+    #     to 18.33. On top of his other starter's projection (21.23, still
+    #     fully pregame, untouched by any of this) -> 18.33+21.23=39.56.
+    #     Custom PF = 105.0+39.56=144.56.
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
@@ -395,14 +396,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 144.52, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 144.56, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
         "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 39.52, "Joe": None},
+        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 39.56, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -514,16 +515,16 @@ def scenario_live_blending(browser):
         if mode != "actual":
             alex_rows = get_thisweek_pts_tooltip(page, "Alex")
             expected_kickoff = format_game_start_label(MNF_START_UTC)
-            # Kyler Murray's "proj" is now 18.29, not his raw 21.09 pregame
+            # Kyler Murray's "proj" is now 18.33, not his raw 21.09 pregame
             # projection -- see blendedProjection()'s comment in
             # rumbles.html: actual (7.20) + 65% of pregame (21.09) *
-            # pace-dampening(7.20/21.09=0.3414) = 7.20 + 0.65*21.09*0.8089
-            # = 18.29. P12 (unresolvable game -- "unknown" status, no
+            # pace-dampening(7.20/21.09=0.3414) = 7.20 + 0.65*21.09*0.8122
+            # = 18.33. P12 (unresolvable game -- "unknown" status, no
             # remainingFraction to blend with) keeps showing his raw
             # pregame projection unchanged, same as before this change.
             assert alex_rows == [
                 {"time": "", "name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
-                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "18.29", "live": True},
+                {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "18.33", "live": True},
             ], (
                 f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live "
                 f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
@@ -599,8 +600,8 @@ def scenario_live_blending(browser):
         # at 34% of his full pregame projection (21.09) -- a well-above-
         # flat pace this early in the game -- so blendedProjection's pace
         # dampening (see its comment in rumbles.html) pulls his remaining-
-        # game share down to about 81% credit: 7.20 + 0.65*21.09*0.8089 =
-        # 18.29, +21.23 for his other (fully pregame) starter = 39.52. Joe's
+        # game share down to about 81% credit: 7.20 + 0.65*21.09*0.8122 =
+        # 18.33, +21.23 for his other (fully pregame) starter = 39.56. Joe's
         # Projected total (42.04, his own two starters are both still
         # pregame so none of this touches him) comes out ahead of that.
         winner, loser = ("Alex", "Joe") if mode == "actual" else ("Joe", "Alex")
