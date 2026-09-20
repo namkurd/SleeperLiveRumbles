@@ -336,7 +336,16 @@ with open(os.path.join(OUT, "players.json"), "w") as f:
 #     though Actual mode still shows him.
 #   - MIN (Kyler Murray / Carson Wentz, roster 6): is_in_progress=true --
 #     still being played. Projected mode's tooltip must still include
-#     Kyler Murray (in-progress is NOT "complete").
+#     Kyler Murray (in-progress is NOT "complete"), and playerPoints must
+#     blend his actual-so-far with a time-remaining-weighted share of his
+#     pregame projection (see remainingFraction()/playerPoints' comment in
+#     rumbles.html) rather than either extreme. The MIN game's
+#     "quarter_num": 2 / "time_remaining": "9:00" below is a deliberately
+#     clean number for this: 2nd quarter, 9:00 left -> 21:00 elapsed out of
+#     60:00 -> exactly 65% of the game clock still remaining
+#     (remainingFraction = 39/60 = 0.65). run_test.py re-derives this same
+#     0.65 from these two fields (rather than hardcoding it a second time)
+#     so the fixture and the expected value can never silently drift apart.
 #   - Every other team: no entry at all here, exercising the "unknown"
 #     fallback (P2/roster 1's unplayed starter has no metadata at all, so
 #     it's "unknown" regardless).
@@ -368,7 +377,10 @@ scores = [
     {
         "status": "in_progress",
         "start_time": MNF_START_MS,
-        "metadata": {"away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": True},
+        "metadata": {
+            "away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": True,
+            "quarter_num": 2, "time_remaining": "9:00",
+        },
     },
     {
         "status": "pre_game",

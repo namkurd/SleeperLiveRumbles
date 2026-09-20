@@ -310,25 +310,112 @@ revised by its providers through the week, independent of any of the
 above -- so a snapshot comparison against Sleeper's site for a still-
 pregame player will only match exactly at the instant both are captured.)
 
-**A follow-up check confirmed there's nothing further to fix here.**
-Re-derived one roster's live total from scratch, independently, and it
-matched the page's own number to the penny -- so the formula and the
-actual-vs-projection gating are both executing exactly as intended, with
-no remaining silent bug. The residual gap against Sleeper's own displayed
-number (still up to a couple of points on a roster with many still-
-pregame starters) traces to two things outside this page's control: (1)
-ordinary pregame-projection drift (documented above), which compounds
-with each additional still-pregame starter on a roster, and (2) this
-league's first-down bonus categories (`bonus_fd_qb`/`bonus_fd_wr`/
-`bonus_fd_rb`/`bonus_fd_te`) are real fields on an ACTUAL post-game stat
-line but are never present on a PREGAME projection at all (the projection
-provider simply doesn't forecast them) -- every roster's still-pregame
-starters are missing that credit equally, so it's not a bug specific to
-any one team, but it does mean Sleeper's own displayed "projected" number
-may be drawing on some additional internal blending or correction this
-page's public API access can't fully replicate. Given that, this is as
-close as this approach can get without Sleeper exposing more of its own
-internal projection math.
+**One category is deliberately left at 0 for a still-pregame player, by
+design, not by omission:** this league scores first downs through
+POSITION-KEYED `bonus_fd_qb` / `bonus_fd_rb` / `bonus_fd_wr` /
+`bonus_fd_te` fields (weighted 0.2/0.5/0.5/0.5), not the generic
+`pass_fd` / `rush_fd` / `rec_fd` fields (all weighted 0 in this league --
+they're just the raw building blocks the bonus is computed from). A real
+ACTUAL (post-game) stat line already carries the correct
+`bonus_fd_<position>` field precomputed by Sleeper, so this scores
+correctly with no extra work. A real PREGAME projection, however, never
+carries any `bonus_fd_*` field at all, only the raw `pass_fd` /
+`rush_fd` / `rec_fd` counts, so a plain key-by-key match against
+`scoring_settings` naturally scores that category as 0 for a still-
+pregame starter.
+
+A gameday report once suggested this was a bug (Projected running well
+below Sleeper's own displayed total for a heavily-pregame roster), and an
+earlier version of this page tried "fixing" it by deriving
+`bonus_fd_<position>` from a still-pregame player's raw
+`pass_fd`/`rush_fd`/`rec_fd` counts, the same way a real actual stat line
+arrives at its own precomputed value. That derivation was reverted after
+a follow-up, side-by-side live comparison against Sleeper's own matchup
+page (multiple still-pregame starters, checked individually, mid-Sunday
+Week 2): Sleeper's own displayed per-player number matched this page's
+plain, undecorated formula exactly, to the penny, for every one of them
+-- and the derived-bonus version overshot Sleeper's real number by
+2-5+ points per player. So Sleeper's own frontend does not appear to
+estimate this bonus for a still-pregame player either, and this page
+now matches that behavior deliberately rather than guessing at a number
+Sleeper itself doesn't show. (Whatever produced the originally-reported
+gap on a live, partially-in-progress roster remains only partly
+understood -- Sleeper's displayed number for a player who's *already*
+started playing can drift from a pure "actual stats so far" total for
+reasons outside this page's control, most likely an updated rest-of-game
+estimate blended into their live total rather than the frozen pregame
+projection.)
+
+**A player whose game is currently in progress is scored, in Projected
+mode, as a CLOCK-WEIGHTED BLEND of their actual-so-far stat line and
+their pregame projection** -- not either one alone. The exact formula:
+
+```
+points = actualPointsSoFar + remainingGameClockFraction * pregameProjectionPoints
+```
+
+`remainingGameClockFraction` runs from 1 at kickoff down to 0 at the
+final whistle (computed from Sleeper's live-scoreboard `quarter_num` /
+`time_remaining` fields, treating each quarter as 15 game-clock minutes
+-- see `remainingFraction()` in `rumbles.html`). So at kickoff this is
+100% pregame projection; at the final whistle it's 100% actual stats;
+in between it shifts smoothly from one to the other. Once a game is
+confirmed COMPLETE, only the real stat line counts, same as before.
+
+This replaced two earlier, cruder attempts, in order:
+
+1. Swap straight from pregame projection to actual-so-far the instant a
+   player's game merely *started*. A gameday report showed this dragged
+   a roster with several starters mid-game well below where its total
+   should sit -- one concrete example, a still-in-progress QB, went from
+   a 21-point pregame projection to under 1 real point the instant his
+   game kicked off, even though the vast majority of his likely
+   production was still ahead of him.
+2. Just keep the frozen pregame projection for the entire time a game is
+   in progress, only swapping to actual once it's confirmed complete.
+   This fixed problem 1, but has the opposite, equally real problem: it
+   never credits any actual production while a game is live, so a
+   player already *outproducing* their projection gets under-reported
+   until their game ends.
+
+The clock-weighted blend above was derived and then validated against
+Sleeper's own live-displayed "projected" number, screenshotted directly
+off Sleeper's real matchup page for 8 different real Week 2 players
+mid-game (a mix of TE/WR/RB/K), each cross-checked against this page's
+own live-fetched actual stats, pregame projection, and the scores
+feed's `quarter_num`/`time_remaining` fields at the matching moment:
+
+| Player | Actual so far | Pregame proj | Sleeper's live number | This formula |
+|---|---|---|---|---|
+| Tucker Kraft (TE) | 0.00 | 12.24 | 7.19 | 7.19 |
+| Ka'imi Fairbairn (K) | 0.00 | 9.06 | 4.76 | 4.77 |
+| DK Metcalf (WR) | 1.20 | 14.32 | 8.49 | 8.79 |
+| Garrett Wilson (WR) | 3.10 | 15.66 | 11.21 | 11.98 |
+| Quinshon Judkins (RB) | 3.70 | 12.60 | 9.50 | 10.42 |
+| DeVonta Smith (WR) | 19.10 | 15.22 | 23.98 | 26.80 |
+| Tee Higgins (WR) | 10.70 | 14.26 | 15.64 | 18.31 |
+| Chase McLaughlin (K) | 10.40 | 8.41 | 13.19 | 14.76 |
+
+The two players with zero actual production so far (a TE and a kicker)
+matched Sleeper's shown number almost exactly (within 0.01-0.03
+points). Players already on-pace-or-ahead of their pregame projection
+were the least precise, generally off by 2-3 points -- Sleeper's real
+live number for those clearly factors in something beyond
+time-remaining-and-pregame-projection alone, almost certainly a live
+usage/opportunity signal (snaps, targets, red-zone role) that isn't
+exposed by any of the public stats/projections/scores endpoints this
+page reads, so it can't be reproduced exactly without guessing at an
+unverified extra factor -- exactly the mistake the
+`bonus_fd_<position>` episode above already was. Even so, across all 8
+players this formula's average miss was about 1.1 points, versus about
+4.7 points for the flat-pregame-projection version it replaced (which
+also got the *direction* of the error backwards for half of them) -- a
+clear, validated improvement, just not a pixel-perfect reproduction of
+Sleeper's own (undisclosed) live blend.
+
+A player whose live game status can't be resolved at all (no team
+metadata, or the live-status feed came back empty) falls back to the
+plain has-actual-stats check used everywhere else on this page.
 
 - **Actual** (default on page load) -- ONLY real, actually-banked stats.
   Never touches projections. This is the fully "solidified" view: Rumbles,
@@ -341,13 +428,14 @@ internal projection math.
   This Week" keep showing that in-progress figure live regardless, they
   just never get added into the season totals until the week is actually
   over and the workflow finalizes it.
-- **Projected** -- matches the live number Sleeper itself shows on its own
-  matchup page: once a player's game is underway, their actual performance
-  so far replaces their frozen pregame projection; anyone who hasn't
-  started yet still uses Sleeper's projection. This mode DOES fold the
-  in-progress week's numbers -- Rumbles, H2H W-L, PF, PA, and Vs. Field
-  W-L -- on top of the cumulative totals, so you can see where the season
-  stands if the week ended right now.
+- **Projected** -- a player uses their pregame projection while their game
+  hasn't started, their real actual-so-far stat line once it's confirmed
+  COMPLETE, and a clock-weighted blend of both while it's in progress (see
+  the in-progress-scoring section above for the formula and how closely it
+  tracks -- but doesn't exactly reproduce -- Sleeper's own live blended
+  number). This mode DOES fold the in-progress week's numbers -- Rumbles,
+  H2H W-L, PF, PA, and Vs. Field W-L -- on top of the cumulative totals, so
+  you can see where the season stands if the week ended right now.
 
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.

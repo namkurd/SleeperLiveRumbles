@@ -712,6 +712,33 @@
   // that happens to share a prefix.
   var TIER_SUM_KEYS = { fgmiss: true };
 
+  // Confirmed via a REAL, live side-by-side comparison against Sleeper's
+  // own displayed matchup page (mid-Sunday, Week 2, with a mix of
+  // still-pregame and in-progress starters): a still-pregame player's
+  // "bonus_fd_qb"/"bonus_fd_rb"/"bonus_fd_wr"/"bonus_fd_te" first-down
+  // bonus category is genuinely scored as 0 by Sleeper's own displayed
+  // number, not silently dropped by a bug here -- Sleeper's own pregame
+  // projection provider simply doesn't forecast it, and Sleeper's own
+  // frontend does NOT synthesize/derive one either. An earlier version of
+  // this file tried deriving "bonus_fd_<position>" from a still-pregame
+  // player's raw pass_fd/rush_fd/rec_fd counts (the same fields a real
+  // ACTUAL post-game stat line uses to arrive at its own precomputed
+  // bonus_fd_<position>) on the theory that Sleeper must be doing the
+  // same thing pregame. That theory tested out fine against one earlier
+  // spot check, but a follow-up live comparison (multiple still-pregame
+  // starters, screenshotted side by side against Sleeper's own matchup
+  // page) showed it was WRONG: for every still-pregame player checked,
+  // Sleeper's own displayed number matched this file's plain, undecorated
+  // dot product exactly, to the penny, and the derived-bonus version
+  // overshot it by 2-5+ points per player. So there is no derivation here
+  // -- a still-pregame player's first-down bonus is 0, matching Sleeper's
+  // own displayed behavior, full stop. (Sleeper's number for a player
+  // who's ALREADY started playing can still drift from a pure pregame
+  // projection for unrelated reasons -- once live, Sleeper appears to
+  // blend in an updated rest-of-game estimate rather than showing the
+  // frozen pregame number verbatim -- but that's a different, currently
+  // unmodeled effect, not this bonus category.)
+
   // NOTE (known, currently-unfixed gap): scoring_settings' kicker
   // "fgm_yds_over_30" bonus (extra credit per yard past 30 on a made FG)
   // has no reliable source in either the actual-stats or projections
@@ -758,10 +785,11 @@
   // isn't standard PPR -- it uses first-down bonuses, tiered
   // points-allowed/yards-allowed defense scoring, kicker distance
   // bonuses, etc. Verified directly against Sleeper's own displayed
-  // matchup projection: summing each starter's projected stat line
-  // through this exact formula reproduced Sleeper's own number to the
-  // penny. Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic
-  // scoring system and will not match a league with custom scoring_settings.)
+  // matchup projection, live, for multiple still-pregame starters at
+  // once: summing a player's projected stat line through this exact
+  // formula reproduces Sleeper's own displayed number to the penny.
+  // Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic scoring
+  // system and will not match a league with custom scoring_settings.)
   function scoreFrom(source, scoringSettings, isActual) {
     if (!source) return 0;
     return dotProduct(source, scoringSettings, isActual);
@@ -771,35 +799,91 @@
   //   "actual" -- ONLY their actual banked stats. Never touches
   //     projections -- legitimately 0 for anyone who hasn't played, or
   //     whose box score is genuinely empty.
-  //   "custom" -- matches the live number Sleeper itself shows on its
-  //     matchup page. That's not a frozen pregame projection -- once a
-  //     player's game is underway, Sleeper swaps in their actual
-  //     performance so far and only keeps projecting the players who
-  //     haven't started yet. So here: if the player has an actual-stats
-  //     entry this week (their game has started), use their real stat
-  //     line; otherwise fall back to Sleeper's pregame projection.
-  // Note this determines `isActual` from whether a REAL actual-stats
-  // entry exists for this player (statsMap), not from which mode is
-  // selected -- a player who's already played gets the actual-only
-  // KEY_ALIASES/TIER_SUM_KEYS treatment in EITHER mode, while a
-  // still-pregame player never does, even in "custom" mode.
-  function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
+  //   "custom" -- the Projected-tab lens. A still-pregame player scores off
+  //     Sleeper's pregame projection; a fully-complete player scores off
+  //     their real stat line; and a player whose game is currently IN
+  //     PROGRESS is blended: their actual-so-far PLUS a shrinking share of
+  //     their pregame projection, that share equal to the fraction of the
+  //     game clock still remaining (see remainingFraction() above) --
+  //     actualPts + remainingFraction * pregameProjectionPts. At kickoff
+  //     that's 100% pregame projection (remainingFraction=1); at the final
+  //     whistle it's 100% actual (remainingFraction=0); in between it
+  //     shifts smoothly from one to the other as the game clock runs down.
+  //
+  //     This replaced an earlier, even simpler version of this fix (just
+  //     keep showing the frozen pregame projection for the whole time a
+  //     player's game is in progress, ignoring the clock and their actual
+  //     stats entirely). That version was a safe stopgap for the original
+  //     reported bug (in-progress players' tiny partial actual totals
+  //     dragging Projected way down), but it had an opposite, equally real
+  //     problem: it UNDER-reported anyone already outproducing their
+  //     projection, since it never credited actual production at all while
+  //     a game was still live.
+  //
+  //     The clock-blended version above was derived and validated against
+  //     Sleeper's own live in-game "projected" numbers, screenshotted
+  //     directly off Sleeper's matchup page for 8 different real Week 2
+  //     players mid-game (a mix of TE/WR/RB/K), each checked against this
+  //     page's own live-fetched actual stats, pregame projection, and the
+  //     scores feed's quarter_num/time_remaining fields at the matching
+  //     moment. Two players with zero actual production so far (a TE and a
+  //     kicker) matched Sleeper's shown number almost exactly (within
+  //     0.01-0.03 points). Players already on-pace-or-ahead of their
+  //     projection (several WRs and a kicker already past their FULL
+  //     pregame total by halftime) were the least precise, generally off
+  //     by 2-3 points -- Sleeper's real live number for those clearly
+  //     factors in something beyond time-remaining-and-pregame-projection
+  //     alone, almost certainly a live usage/opportunity signal (snaps,
+  //     targets, red-zone role) that simply isn't exposed by the public
+  //     stats/projections/scores endpoints this page reads, so it can't be
+  //     reproduced exactly (see the first-down-bonus lesson above for why
+  //     this page won't guess at an unverifiable extra factor rather than
+  //     ship one that's actually confirmed to help). Even so, across all 8
+  //     players this blended model's average miss was about 1.1 points,
+  //     versus about 4.7 points for the flat-pregame-projection version it
+  //     replaced (which also got the DIRECTION of the error backwards for
+  //     half of them) -- a clear, validated improvement, just not a pixel-
+  //     perfect reproduction.
+  //
+  //     "unknown" (no team metadata for this player, or the live-status
+  //     feed failed/doesn't cover their team) falls back to the plain
+  //     has-actual-stats check, the safest signal available when game
+  //     status genuinely can't be resolved at all.
+  //
+  // Note "actual" mode is untouched by any of this -- it always shows a
+  // player's real banked stats once they exist, complete or not, which is
+  // correct there (the whole point of Actual mode is banked production so
+  // far). A player who's already played gets the actual-only
+  // KEY_ALIASES/TIER_SUM_KEYS treatment in EITHER mode once their game
+  // has gone final; a still-pregame player never does, and an in-progress
+  // player's actual-so-far portion of the blend above does too (only their
+  // projection portion skips it, since KEY_ALIASES/TIER_SUM_KEYS only ever
+  // makes sense against a real stat line).
+  function playerPoints(playerId, statsMap, projMap, scoringSettings, mode, playersMeta, teamGameSchedule) {
     var actualSource = statsMap[playerId];
     if (mode === "actual") {
       return scoreFrom(actualSource, scoringSettings, true);
     }
-    var isActual = !!actualSource;
-    var source = actualSource || projMap[playerId];
-    return scoreFrom(source, scoringSettings, isActual);
+    var meta = playersMeta ? playersMeta[playerId] : null;
+    var team = meta ? meta.team : null;
+    var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
+    if (!game) {
+      var isActual = !!actualSource;
+      var source = actualSource || projMap[playerId];
+      return scoreFrom(source, scoringSettings, isActual);
+    }
+    var actualPts = actualSource ? scoreFrom(actualSource, scoringSettings, true) : 0;
+    var pregameProj = scoreFrom(projMap[playerId], scoringSettings, false);
+    return actualPts + game.remainingFraction * pregameProj;
   }
 
-  function rosterScore(roster, statsMap, projMap, scoringSettings, mode) {
+  function rosterScore(roster, statsMap, projMap, scoringSettings, mode, playersMeta, teamGameSchedule) {
     var starters = roster.starters || [];
     var total = 0;
     for (var i = 0; i < starters.length; i++) {
       var pid = starters[i];
       if (!pid || pid === "0") continue;
-      total += playerPoints(pid, statsMap, projMap, scoringSettings, mode);
+      total += playerPoints(pid, statsMap, projMap, scoringSettings, mode, playersMeta, teamGameSchedule);
     }
     return total;
   }
@@ -829,13 +913,20 @@
   // how render() formats/filters these rows at display time.
   //   - "actual" -- their real banked stats this week, exactly like
   //     playerPoints(mode="actual"): 0 if their game hasn't started.
-  //   - "proj" -- Sleeper's pregame projection, ALWAYS from projMap
-  //     regardless of whether they've already played (so a bench-quality
-  //     stat line from a hobbled starter can still be compared against what
-  //     was expected of them). Note this deliberately does NOT apply the
-  //     isActual-only KEY_ALIASES/TIER_SUM_KEYS treatment (scoreFrom's
-  //     3rd arg is false), matching how projections are scored everywhere
-  //     else in this file.
+  //   - "proj" -- Sleeper's RAW pregame projection, ALWAYS from projMap
+  //     regardless of whether they've already played and regardless of the
+  //     Projected-mode roster total's clock-blending (see playerPoints'
+  //     comment) -- so a bench-quality stat line from a hobbled starter can
+  //     still be compared against what was expected of them. Deliberately
+  //     left un-blended: for an in-progress player, "actual" + "proj" as
+  //     shown here will generally sum to MORE than that player's real
+  //     contribution to the Projected total, since the total only counts a
+  //     shrinking, time-remaining-weighted share of "proj" -- these two
+  //     columns are meant as the two raw inputs to inspect, not a preview
+  //     of the exact number being summed. This also deliberately does NOT
+  //     apply the isActual-only KEY_ALIASES/TIER_SUM_KEYS treatment
+  //     (scoreFrom's 3rd arg is false), matching how projections are
+  //     scored everywhere else in this file.
   //   - "played" -- true once statsMap has a real entry for them, i.e.
   //     their game has kicked off (matches the isActual check playerPoints
   //     already uses to decide whether to trust actual stats over a
@@ -849,6 +940,7 @@
   //   - "game_start_ms" -- that same game's kickoff time (epoch ms, or null
   //     if unknown) -- shown in the Projected tooltip so an upcoming
   //     player's kickoff day/time is visible at a glance.
+
   function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions) {
     var starters = roster.starters || [];
     var slots = rosterPositions || [];
@@ -903,10 +995,45 @@
     return "pre_game";
   }
 
-  // Per-team {status, startTimeMs} lookup built from Sleeper's live-
-  // scoreboard feed. startTimeMs prefers the top-level "start_time" epoch-
-  // ms field (confirmed live, Sep 2026); metadata.date_time (an ISO string)
-  // is a fallback for a payload shape that omits it.
+  // Estimates the fraction of the 60-minute game clock still remaining for
+  // an in-progress game, from Sleeper's live-scoreboard "quarter_num" (1-4,
+  // 5+ for OT) and "time_remaining" ("M:SS"/"MM:SS") fields -- both
+  // confirmed present on the real live payload, Sep 2026. Regulation
+  // quarters are 15 minutes each; overtime is modeled as one 10-minute
+  // period tacked on the end (only regular-season sudden-death OT -- good
+  // enough here, since a game already in OT is nearly decided either way).
+  // Returns 1 (treat as the full game still ahead) when quarter_num can't
+  // be parsed, and always clamps to [0, 1].
+  function remainingFraction(meta) {
+    var qNum = parseInt(meta && meta.quarter_num, 10);
+    if (!qNum || qNum < 1) return 1;
+    var quarterLength = qNum <= 4 ? 15 : 10;
+    var totalMinutes = qNum <= 4 ? 60 : 70;
+    var elapsedPriorQuarters = qNum <= 4 ? (qNum - 1) * 15 : 60;
+    var remMin = quarterLength;
+    var remStr = meta && meta.time_remaining;
+    if (typeof remStr === "string" && remStr.indexOf(":") !== -1) {
+      var parts = remStr.split(":");
+      var mm = parseInt(parts[0], 10);
+      var ss = parseInt(parts[1], 10);
+      if (!isNaN(mm) && !isNaN(ss)) remMin = mm + ss / 60;
+    }
+    var elapsedTotal = elapsedPriorQuarters + (quarterLength - remMin);
+    var frac = 1 - elapsedTotal / totalMinutes;
+    if (frac < 0) frac = 0;
+    if (frac > 1) frac = 1;
+    return frac;
+  }
+
+  // Per-team {status, startTimeMs, remainingFraction} lookup built from
+  // Sleeper's live-scoreboard feed. startTimeMs prefers the top-level
+  // "start_time" epoch-ms field (confirmed live, Sep 2026); metadata.date_time
+  // (an ISO string) is a fallback for a payload shape that omits it.
+  // remainingFraction is 1 for a game that hasn't kicked off (the full game
+  // is still "ahead"), 0 for one that's confirmed complete (nothing left to
+  // blend in), and the live clock-derived estimate (see remainingFraction()
+  // above) while a game is in progress -- see playerPoints' comment for how
+  // this gets used to blend actual-so-far with pregame projection.
   function buildTeamGameSchedule(games) {
     var map = {};
     (games || []).forEach(function (g) {
@@ -920,7 +1047,8 @@
         var parsed = new Date(meta.date_time || g.date_time).getTime();
         if (!isNaN(parsed)) startTimeMs = parsed;
       }
-      var entry = { status: status, startTimeMs: startTimeMs };
+      var remFrac = status === "complete" ? 0 : (status === "in_progress" ? remainingFraction(meta) : 1);
+      var entry = { status: status, startTimeMs: startTimeMs, remainingFraction: remFrac };
       var away = meta.away_team || g.away_team;
       var home = meta.home_team || g.home_team;
       if (away) map[away] = entry;
@@ -1230,69 +1358,79 @@
             return null;
           }
 
-          var scoresActual = {};
-          var scoresCustom = {};
-          var pairsByMatchupId = {};
+          // playersMeta has to be resolved BEFORE any scoring happens now
+          // (not just before the tooltip/QB-adjustment step, as before) --
+          // rosterScore needs each starter's NFL TEAM to look up their
+          // game status (see playerPoints' comment on why an in-progress
+          // player stays on their pregame projection). ensurePlayersMeta()
+          // only ever pays the real network cost once per page load (it
+          // caches in state.playersMeta and every later call, including
+          // every subsequent 30s poll, resolves that cached copy
+          // immediately) -- so this only adds latency to the very first
+          // load, not to the ongoing poll loop.
+          return ensurePlayersMeta().then(function (playersMeta) {
+            var scoresActual = {};
+            var scoresCustom = {};
+            var pairsByMatchupId = {};
 
-          matchups.forEach(function (m) {
-            var rid = m.roster_id;
-            scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual");
-            scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom");
-            var mid = m.matchup_id;
-            if (mid !== undefined && mid !== null) {
-              if (!pairsByMatchupId[mid]) pairsByMatchupId[mid] = [];
-              pairsByMatchupId[mid].push(rid);
-            }
-          });
-
-          var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
-          var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
-
-          var byRoster = {};
-          Object.keys(scoresActual).forEach(function (rid) {
-            byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
-          });
-
-          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
-
-          // Best-effort: also try to detect this week's QB-injury-backup
-          // adjustments live (see detectQbAdjustmentsForWeek above).
-          // Never allowed to break the main standings if it fails.
-          var managerByRosterId = {};
-          ((state.history && state.history.standings) || []).forEach(function (s) {
-            managerByRosterId[s.roster_id] = s.manager;
-          });
-          return ensurePlayersMeta()
-            .then(function (playersMeta) {
-              var teamQbIndex = state.teamQbIndex || {};
-
-              // Attach each roster's per-starter actual/projected breakdown
-              // for the "Points This Week" hover tooltip. Independent of
-              // the QB-adjustment detection below -- best-effort, and never
-              // allowed to block or break it if player names are missing.
-              matchups.forEach(function (m) {
-                var rid = m.roster_id;
-                if (state.live.byRoster[rid]) {
-                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
-                }
-              });
-
-              var prelim = detectQbAdjustmentsForWeek(
-                targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-              );
-              var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
-              var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
-              if (needsFreshCheck && stale) {
-                return fetchPlayersMeta()
-                  .then(function (freshMeta) {
-                    return detectQbAdjustmentsForWeek(
-                      targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-                    );
-                  })
-                  .catch(function () { return prelim; });
+            matchups.forEach(function (m) {
+              var rid = m.roster_id;
+              scoresActual[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "actual", playersMeta, teamGameSchedule);
+              scoresCustom[rid] = rosterScore(m, statsMap, projMap, scoringSettings, "custom", playersMeta, teamGameSchedule);
+              var mid = m.matchup_id;
+              if (mid !== undefined && mid !== null) {
+                if (!pairsByMatchupId[mid]) pairsByMatchupId[mid] = [];
+                pairsByMatchupId[mid].push(rid);
               }
-              return prelim;
-            })
+            });
+
+            var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
+            var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
+
+            var byRoster = {};
+            Object.keys(scoresActual).forEach(function (rid) {
+              byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
+            });
+
+            state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+
+            // Best-effort: also try to detect this week's QB-injury-backup
+            // adjustments live (see detectQbAdjustmentsForWeek above).
+            // Never allowed to break the main standings if it fails.
+            var managerByRosterId = {};
+            ((state.history && state.history.standings) || []).forEach(function (s) {
+              managerByRosterId[s.roster_id] = s.manager;
+            });
+
+            var teamQbIndex = state.teamQbIndex || {};
+
+            // Attach each roster's per-starter actual/projected breakdown
+            // for the "Points This Week" hover tooltip. Independent of the
+            // QB-adjustment detection below -- best-effort, and never
+            // allowed to block or break it if player names are missing.
+            matchups.forEach(function (m) {
+              var rid = m.roster_id;
+              if (state.live.byRoster[rid]) {
+                state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+              }
+            });
+
+            var prelim = detectQbAdjustmentsForWeek(
+              targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+            );
+            var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
+            var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
+            if (needsFreshCheck && stale) {
+              return fetchPlayersMeta()
+                .then(function (freshMeta) {
+                  return detectQbAdjustmentsForWeek(
+                    targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+                  );
+                })
+                .catch(function () { return prelim; });
+            }
+            return prelim;
+          })
             .then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
             })

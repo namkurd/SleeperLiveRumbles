@@ -331,34 +331,48 @@ def scenario_live_blending(browser):
 
     # Hand-verified expected totals (see make_fixtures.py's HAND_CRAFTED_*
     # and ZERO_ACTUAL_ROSTERS). "Actual" only ever uses real stats.
-    # "Projected" (formerly "Our Custom Scoring") reproduces how Sleeper
-    # itself computes its live "projected" total: a player who has an
-    # actual-stats entry (their
-    # game has started) contributes their REAL performance, not their
-    # frozen pregame projection -- only still-pregame players use the
-    # projection. This matches what Sleeper's own matchup page shows
-    # (verified directly against a real live matchup: reproduced Sleeper's
-    # own displayed number to the penny -- see rumbles.html's scoreFrom
-    # comment). Both lenses dot-product against the league's real
-    # scoring_settings -- never Sleeper's generic pts_ppr/pts_std fields,
-    # which are a different scoring system entirely for a non-PPR league
-    # like this fixture's (rec weight is 0.0, rec_fd/rush_fd/pass_fd carry
-    # the real weight instead).
-    #   Aidan (roster 1, history PF 92.5): played player has a small actual
-    #     stat line (2.5) and a much bigger pregame projection (17.0)
-    #     that's now ignored in favor of the real performance; unplayed
-    #     player only has a projection (12.5).
+    # "Projected" (formerly "Our Custom Scoring") uses a player's real stat
+    # line once their game is CONFIRMED COMPLETE, their pregame projection
+    # while it's still pregame, and while their game is CONFIRMED IN
+    # PROGRESS, a clock-weighted BLEND of both: actualPts +
+    # remainingFraction * pregameProjectionPts, where remainingFraction is
+    # the fraction of the 60-minute game clock still left (1 at kickoff, 0
+    # at the final whistle) -- see remainingFraction()/playerPoints'
+    # comment in rumbles.html for the full derivation and how it was
+    # validated against Sleeper's own live-displayed numbers for 8 real
+    # players. A player whose game status can't be resolved at all
+    # ("unknown" -- no team metadata, or the live-status feed came back
+    # empty) falls back to the plain has-actual-stats check. Both lenses
+    # dot-product against the league's real scoring_settings -- never
+    # Sleeper's generic pts_ppr/pts_std fields, which are a different
+    # scoring system entirely for a non-PPR league like this fixture's (rec
+    # weight is 0.0, rec_fd/rush_fd/pass_fd carry the real weight instead).
+    #   Aidan (roster 1, history PF 92.5): played player's game (DET) is
+    #     marked COMPLETE in scores_week2.json, so his small actual stat
+    #     line (2.5) is used, not his much bigger pregame projection
+    #     (17.0); unplayed player only has a projection (12.5).
     #     Actual PF stays frozen at history (92.5) -- Actual mode no longer
     #     folds the in-progress week into PF/PA/Vs.Field at all, only
     #     "Points This Week" shows the live 2.5 figure.
     #     Custom=2.5+12.5=15.0 folded on top of history -> PF 92.5+15.0=107.5
-    #   Jake (roster 3, history PF 97.5): played player is having a
-    #     blowout (33.0 actual -- 30.0 base plus the kr_yd-alias (+4.0) and
-    #     fgmiss-tier-sum (-1.0) regression checks, see make_fixtures.py)
-    #     that now replaces the much smaller pregame projection (7.0);
-    #     unplayed player only has a projection (4.0).
+    #   Jake (roster 3, history PF 97.5): played player has no team
+    #     metadata at all (game status resolves to "unknown"), so the
+    #     plain has-actual-stats fallback applies -- his blowout actual
+    #     (33.0 -- 30.0 base plus the kr_yd-alias (+4.0) and fgmiss-tier-sum
+    #     (-1.0) regression checks, see make_fixtures.py) replaces the much
+    #     smaller pregame projection (7.0); unplayed player only has a
+    #     projection (4.0).
     #     Actual PF stays frozen at history (97.5).
     #     Custom=33.0+4.0=37.0 folded on top of history -> PF 97.5+37.0=134.5
+    #   Alex (roster 6, history PF 105.0): played starter Kyler Murray's
+    #     game (MIN) is marked IN_PROGRESS in scores_week2.json, with
+    #     "quarter_num": 2 / "time_remaining": "9:00" -- 21:00 elapsed of
+    #     60:00, i.e. remainingFraction = 39/60 = 0.65. His actual so far is
+    #     7.20 and his pregame projection is 21.09, so the blend is
+    #     7.20 + 0.65*21.09 = 20.9085 -> rounds to 20.91. On top of his
+    #     other starter's projection (21.23, still fully pregame, untouched
+    #     by any of this) -> 20.91+21.23=42.14.
+    #     Custom PF = 105.0+42.14=147.14.
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
@@ -377,14 +391,14 @@ def scenario_live_blending(browser):
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
         "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 134.5, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "custom": {"Aidan": 107.5, "Jake": 134.5, "Alex": 147.14, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
         "actual": {"Aidan": 2.5, "Jake": 33.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 37.0, "Joe": None},
+        "custom": {"Aidan": 15.0, "Jake": 37.0, "Alex": 42.14, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -557,13 +571,20 @@ def scenario_live_blending(browser):
         # whichever mode is selected) gets both cells colored to match its
         # own manager-name color; the trailing team keeps the default
         # (uncolored -> falls back to CSS blue). Joe (roster 5) vs Alex
-        # (roster 6) are this week's H2H pair, and the two modes disagree
-        # on who's ahead -- exercising that the coloring is genuinely
-        # mode-scoped, not just "whoever won under one particular mode":
-        #   - actual: Joe 0.00 vs Alex 7.20 -> ALEX is ahead (nobody on
-        #     Joe's roster has any actual stats yet).
-        #   - custom/Projected: Joe 42.04 vs Alex 28.43 -> JOE is ahead.
-        winner, loser = ("Alex", "Joe") if mode == "actual" else ("Joe", "Alex")
+        # (roster 6) are this week's H2H pair. Alex is ahead in BOTH modes
+        # here: his only played starter, Kyler Murray, has a game that's
+        # still confirmed "in_progress" (not complete) with 65% of the game
+        # clock left (see the MIN game's quarter_num/time_remaining in
+        # make_fixtures.py), so Projected mode blends his actual-so-far
+        # (7.20) with 65% of his pregame projection (21.09) --
+        # 7.20+0.65*21.09=20.91 -- rather than using either number alone
+        # (see playerPoints' comment on why). That's still enough to nudge
+        # Alex's Projected total (20.91+21.23=42.14) very slightly ahead of
+        # Joe's (42.04, his own two starters are both still pregame so this
+        # change doesn't touch him), unlike before this fix existed when Joe
+        # led Projected mode by using Kyler Murray's tiny partial actual
+        # score directly against Alex.
+        winner, loser = ("Alex", "Joe")
         pts_colors = get_pts_this_week_colors(page)
         rumbles_colors = get_thisweek_rumbles_colors(page)
         for label, colors in (("Pts This Week", pts_colors), ("This Week", rumbles_colors)):
