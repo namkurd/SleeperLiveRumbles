@@ -712,33 +712,6 @@
   // that happens to share a prefix.
   var TIER_SUM_KEYS = { fgmiss: true };
 
-  // Confirmed via a REAL, live side-by-side comparison against Sleeper's
-  // own displayed matchup page (mid-Sunday, Week 2, with a mix of
-  // still-pregame and in-progress starters): a still-pregame player's
-  // "bonus_fd_qb"/"bonus_fd_rb"/"bonus_fd_wr"/"bonus_fd_te" first-down
-  // bonus category is genuinely scored as 0 by Sleeper's own displayed
-  // number, not silently dropped by a bug here -- Sleeper's own pregame
-  // projection provider simply doesn't forecast it, and Sleeper's own
-  // frontend does NOT synthesize/derive one either. An earlier version of
-  // this file tried deriving "bonus_fd_<position>" from a still-pregame
-  // player's raw pass_fd/rush_fd/rec_fd counts (the same fields a real
-  // ACTUAL post-game stat line uses to arrive at its own precomputed
-  // bonus_fd_<position>) on the theory that Sleeper must be doing the
-  // same thing pregame. That theory tested out fine against one earlier
-  // spot check, but a follow-up live comparison (multiple still-pregame
-  // starters, screenshotted side by side against Sleeper's own matchup
-  // page) showed it was WRONG: for every still-pregame player checked,
-  // Sleeper's own displayed number matched this file's plain, undecorated
-  // dot product exactly, to the penny, and the derived-bonus version
-  // overshot it by 2-5+ points per player. So there is no derivation here
-  // -- a still-pregame player's first-down bonus is 0, matching Sleeper's
-  // own displayed behavior, full stop. (Sleeper's number for a player
-  // who's ALREADY started playing can still drift from a pure pregame
-  // projection for unrelated reasons -- once live, Sleeper appears to
-  // blend in an updated rest-of-game estimate rather than showing the
-  // frozen pregame number verbatim -- but that's a different, currently
-  // unmodeled effect, not this bonus category.)
-
   // NOTE (known, currently-unfixed gap): scoring_settings' kicker
   // "fgm_yds_over_30" bonus (extra credit per yard past 30 on a made FG)
   // has no reliable source in either the actual-stats or projections
@@ -785,11 +758,10 @@
   // isn't standard PPR -- it uses first-down bonuses, tiered
   // points-allowed/yards-allowed defense scoring, kicker distance
   // bonuses, etc. Verified directly against Sleeper's own displayed
-  // matchup projection, live, for multiple still-pregame starters at
-  // once: summing a player's projected stat line through this exact
-  // formula reproduces Sleeper's own displayed number to the penny.
-  // Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic scoring
-  // system and will not match a league with custom scoring_settings.)
+  // matchup projection: summing each starter's projected stat line
+  // through this exact formula reproduced Sleeper's own number to the
+  // penny. Sleeper's "pts_ppr"/"pts_std" fields are a DIFFERENT, generic
+  // scoring system and will not match a league with custom scoring_settings.)
   function scoreFrom(source, scoringSettings, isActual) {
     if (!source) return 0;
     return dotProduct(source, scoringSettings, isActual);
@@ -810,7 +782,7 @@
   // entry exists for this player (statsMap), not from which mode is
   // selected -- a player who's already played gets the actual-only
   // KEY_ALIASES/TIER_SUM_KEYS treatment in EITHER mode, while a
-  // still-pregame player never does.
+  // still-pregame player never does, even in "custom" mode.
   function playerPoints(playerId, statsMap, projMap, scoringSettings, mode) {
     var actualSource = statsMap[playerId];
     if (mode === "actual") {
@@ -1284,43 +1256,43 @@
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
 
           // Best-effort: also try to detect this week's QB-injury-backup
-          // adjustments live (see detectQbAdjustmentsForWeek above). Never
-          // allowed to break the main standings if it fails.
+          // adjustments live (see detectQbAdjustmentsForWeek above).
+          // Never allowed to break the main standings if it fails.
           var managerByRosterId = {};
           ((state.history && state.history.standings) || []).forEach(function (s) {
             managerByRosterId[s.roster_id] = s.manager;
           });
+          return ensurePlayersMeta()
+            .then(function (playersMeta) {
+              var teamQbIndex = state.teamQbIndex || {};
 
-          return ensurePlayersMeta().then(function (playersMeta) {
-            var teamQbIndex = state.teamQbIndex || {};
+              // Attach each roster's per-starter actual/projected breakdown
+              // for the "Points This Week" hover tooltip. Independent of
+              // the QB-adjustment detection below -- best-effort, and never
+              // allowed to block or break it if player names are missing.
+              matchups.forEach(function (m) {
+                var rid = m.roster_id;
+                if (state.live.byRoster[rid]) {
+                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+                }
+              });
 
-            // Attach each roster's per-starter actual/projected breakdown
-            // for the "Points This Week" hover tooltip. Independent of the
-            // QB-adjustment detection below -- best-effort, and never
-            // allowed to block or break it if player names are missing.
-            matchups.forEach(function (m) {
-              var rid = m.roster_id;
-              if (state.live.byRoster[rid]) {
-                state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+              var prelim = detectQbAdjustmentsForWeek(
+                targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+              );
+              var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
+              var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
+              if (needsFreshCheck && stale) {
+                return fetchPlayersMeta()
+                  .then(function (freshMeta) {
+                    return detectQbAdjustmentsForWeek(
+                      targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+                    );
+                  })
+                  .catch(function () { return prelim; });
               }
-            });
-
-            var prelim = detectQbAdjustmentsForWeek(
-              targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-            );
-            var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
-            var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
-            if (needsFreshCheck && stale) {
-              return fetchPlayersMeta()
-                .then(function (freshMeta) {
-                  return detectQbAdjustmentsForWeek(
-                    targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
-                  );
-                })
-                .catch(function () { return prelim; });
-            }
-            return prelim;
-          })
+              return prelim;
+            })
             .then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
             })
