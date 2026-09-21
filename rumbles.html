@@ -415,7 +415,22 @@
     padding: 6px 12px 0;
   }
   @media (max-width: 640px) {
-    .scroll-hint { display: block; }
+    /* Rumble %, PF, PA, H2H and Vs. Field are hidden outright in portrait
+       (rather than left reachable by scrolling, as they still are in
+       landscape) -- #, Manager, Rumbles, This Week and Points This Week
+       are the only columns meant to be visible at all here, so there's
+       nothing left to "swipe to see more" of and the hint stays hidden
+       (its default, un-overridden here) rather than being turned on like
+       it is for the landscape breakpoint below. */
+    #standings-table thead th:nth-child(n+6), #standings-table tbody td:nth-child(n+6) {
+      display: none;
+    }
+    /* The table's normal min-width: 760px (set on the base `table` rule)
+       assumes all 10 columns are present -- with 5 of them hidden above,
+       that min-width would otherwise force the 5 remaining columns to
+       stretch out to fill 760px of empty space, right back to needing
+       horizontal scroll for no reason. */
+    #standings-table { min-width: 0; }
     /* Letting header labels wrap onto two lines (instead of the page's
        normal nowrap headers) is what actually buys back the width here --
        most of these columns hold a one- or two-digit number, so it's the
@@ -429,18 +444,17 @@
     thead th { padding: 6px 4px; font-size: 0.62rem; white-space: normal; word-break: normal; line-height: 1.2; }
     tbody td { padding: 8px 4px; font-size: 0.78rem; }
     h1 { font-size: 1.15rem; }
-    /* Explicit widths on the five columns the user wants visible without
-       any horizontal scrolling (#, Manager, Rumbles, This Week, Points
-       This Week) -- table auto-layout otherwise sizes every column to its
-       widest UNWRAPPED content, which (combined with the table's own
-       min-width: 760px) always overflows a portrait phone regardless of
-       how much the header/cell text COULD wrap. Pinning a width here is
-       what actually forces that wrap and keeps these five within the
-       viewport; Manager gets an ellipsis fallback for the rare case its
-       name plus the live " QB Inj*" suffix (see get_table_rows/render())
-       still doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs.
-       Field) keep their natural width and stay reachable by scrolling, same
-       as before -- only the first five are guaranteed scroll-free. */
+    /* Explicit widths on the five columns that remain visible in portrait
+       (#, Manager, Rumbles, This Week, Points This Week) -- table
+       auto-layout otherwise sizes every column to its widest UNWRAPPED
+       content, which always overflows a portrait phone regardless of how
+       much the header/cell text COULD wrap. Pinning a width here is what
+       actually forces that wrap and keeps these five within the viewport;
+       Manager gets an ellipsis fallback for the rare case its name plus
+       the live " QB Inj*" suffix (see get_table_rows/render()) still
+       doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs.
+       Field) are hidden outright at this breakpoint (see nth-child(n+6)
+       above), not just scrolled past. */
     table thead th:nth-child(1), table td.rank { width: 24px; min-width: 24px; padding-left: 6px; padding-right: 2px; }
     table thead th:nth-child(2), table td.manager { width: 108px; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     table thead th:nth-child(3), table td.rumbles { width: 44px; }
@@ -777,7 +791,7 @@
   <p class="howto-heading">Actual</p>
   <p>Shows the most recently completed week's real standings: Rumbles, Rumble %, PF, PA, H2H, and Vs. Field are all locked in from that finished week. Once a new week kicks off, it tracks the actual points scored so far and shows what this week's Rumbles would be if the week ended right now, without adding them to the season Rumbles total yet. Hover or tap a team's Pts This Week to see exactly which players have contributed to that score.</p>
   <p class="howto-heading">Projected</p>
-  <p>The tab to watch during a live week. It scores the week using projected points (swapping in real production once a player has started) and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
+  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
   <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
   <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
 </div>
@@ -828,7 +842,11 @@
     activeQbAdjTooltipRosterId: null, // which roster's "*" tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
-    sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
+    sort: { key: null, dir: "desc" }, // key: one of COLUMNS' keys, or null = natural standings order
+    // Once the user has clicked any column header to sort manually, mode
+    // switches (Actual <-> Projected) leave their chosen sort alone -- see
+    // setMode's DEFAULT_SORT_BY_MODE comment for what happens before that.
+    userSorted: false
   };
 
   var MODE_LABELS = { actual: "Actual", custom: "Projected" };
@@ -1533,6 +1551,44 @@
     return map;
   }
 
+  // Distinguishes "matchups are posted for this week" (the existing
+  // isLive/liveActive meaning -- Sleeper typically posts a week's matchups
+  // several days before its first kickoff) from "this week has actually
+  // KICKED OFF" -- the two are NOT the same moment, and the standings page
+  // used to conflate them: as soon as matchups posted, Projected mode
+  // would fold hypothetical, nothing-has-happened-yet projected numbers
+  // into the season's PF/PA/Rumbles/H2H totals, and the "Points This Week"
+  // LIVE badge could show before a single snap had been played. This
+  // computes the real answer from the same live-scoreboard feed
+  // buildTeamGameSchedule already reads: `hasKickedOff` is true once ANY
+  // game in the week is no longer "pre_game" (see normalizeGameStatus),
+  // with a current-time-vs-kickoff fallback in case the feed's status
+  // fields haven't flipped yet at the exact moment a game starts.
+  // `firstGameStartMs` is the earliest known kickoff in the week (used for
+  // the "Week N begins <day> <time>" pregame status text) -- null if no
+  // game in the feed has a resolvable start time.
+  function computeWeekKickoffInfo(games) {
+    var earliestStartMs = null;
+    var anyStarted = false;
+    (games || []).forEach(function (g) {
+      if (!g) return;
+      if (normalizeGameStatus(g) !== "pre_game") anyStarted = true;
+      var meta = g.metadata || {};
+      var ms = null;
+      if (typeof g.start_time === "number") {
+        ms = g.start_time;
+      } else if (meta.date_time || g.date_time) {
+        var parsed = new Date(meta.date_time || g.date_time).getTime();
+        if (!isNaN(parsed)) ms = parsed;
+      }
+      if (typeof ms === "number" && !isNaN(ms) && (earliestStartMs === null || ms < earliestStartMs)) {
+        earliestStartMs = ms;
+      }
+    });
+    var hasKickedOff = anyStarted || (earliestStartMs !== null && Date.now() >= earliestStartMs);
+    return { hasKickedOff: hasKickedOff, firstGameStartMs: earliestStartMs };
+  }
+
   // ---- QB injury-backup adjustment detection ---------------------------
   // Mirrors build_rumbles.py's compute_qb_adjustments_for_week -- see the
   // long comment above that function for the full rationale and the
@@ -1977,14 +2033,14 @@
         var eligible = seasonType !== "pre" && seasonType !== "off" && targetWeek && !weekAlreadyFinal;
 
         if (!eligible) {
-          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {}, hasKickedOff: false, firstGameStartMs: null };
           state.liveQbAdjustments = [];
           return null;
         }
 
         var leagueId = (state.history && state.history.league_id) || null;
         if (!leagueId) {
-          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+          state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {}, hasKickedOff: false, firstGameStartMs: null };
           state.liveQbAdjustments = [];
           return null;
         }
@@ -2019,12 +2075,23 @@
           state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
+          // Computed from the same SCORES_BASE feed regardless of whether
+          // fantasy matchups have posted yet -- the NFL's own game
+          // schedule is what tells us WHEN this week actually starts (see
+          // computeWeekKickoffInfo's comment), and it's available before
+          // Sleeper posts matchups too.
+          var kickoffInfo = computeWeekKickoffInfo(games);
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early
             // in the week) -- nothing to overlay, fall back to cumulative-
-            // only rather than erroring out.
-            state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {} };
+            // only rather than erroring out. Still keep the kickoff info
+            // (if the NFL schedule feed had it) so the status pill can
+            // show "Week N begins <day> <time>" even before matchups post.
+            state.live = {
+              week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {},
+              hasKickedOff: kickoffInfo.hasKickedOff, firstGameStartMs: kickoffInfo.firstGameStartMs
+            };
             state.liveQbAdjustments = [];
             return null;
           }
@@ -2102,7 +2169,10 @@
                 if (adjustmentByRoster[rid]) byRoster[rid].qbAdjustment = adjustmentByRoster[rid];
               });
 
-              state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+              state.live = {
+                week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster,
+                hasKickedOff: kickoffInfo.hasKickedOff, firstGameStartMs: kickoffInfo.firstGameStartMs
+              };
 
               // Attach each roster's per-starter actual/projected breakdown
               // for the "Points This Week" hover tooltip. Independent of
@@ -2153,6 +2223,20 @@
     var hour12 = hours % 12;
     if (hour12 === 0) hour12 = 12;
     return TOOLTIP_DAY_NAMES[d.getDay()] + " " + hour12 + (hours >= 12 ? "pm" : "am");
+  }
+
+  // Full-day-name version of the above, e.g. "Thursday 8pm" -- used by the
+  // pregame status pill ("Week N begins Thursday 8pm"), which has room for
+  // (and reads better with) the unabbreviated day name, unlike the tight
+  // tooltip column formatGameStartLabel is built for.
+  var STATUS_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  function formatWeekStartLabel(ms) {
+    if (typeof ms !== "number" || isNaN(ms)) return "";
+    var d = new Date(ms);
+    var hours = d.getHours();
+    var hour12 = hours % 12;
+    if (hour12 === 0) hour12 = 12;
+    return STATUS_DAY_NAMES[d.getDay()] + " " + hour12 + (hours >= 12 ? "pm" : "am");
   }
 
   // Assigns one color per distinct kickoff-time LABEL this week (e.g. every
@@ -2270,13 +2354,32 @@
     // "Projected" is the projection view: it DOES fold the in-progress
     // week's (projected) numbers on top of the cumulative totals for all
     // five of those columns, since the whole point there is a gameday
-    // preview of where the season stands if the week ended right now.
-    var foldCurrentWeekIntoTotals = state.mode !== "actual";
+    // preview of where the season stands if the week ended right now --
+    // but only once the week has actually KICKED OFF (see
+    // computeWeekKickoffInfo). Before that, matchups may already be
+    // posted (liveActive/liveInfo can exist) but nothing has actually
+    // happened yet, so folding in a hypothetical projected outcome would
+    // mean Rumbles/PF/PA/H2H/Vs. Field all silently move based on a game
+    // that hasn't been played -- pre-kickoff, Projected is required to
+    // match Actual for all of those (see kickoffStarted below).
+    var kickoffStarted = !!(live && live.hasKickedOff);
+    var foldCurrentWeekIntoTotals = state.mode !== "actual" && kickoffStarted;
 
     var rows = histStandings.map(function (s) {
       var rid = s.roster_id;
       var liveInfo = liveActive && live.byRoster[rid] ? live.byRoster[rid][state.mode] : null;
       var foldInfo = foldCurrentWeekIntoTotals ? liveInfo : null;
+      // Pre-kickoff, "This Week" (Rumbles earned so far) and the live H2H
+      // "who's ahead" signal both source from the ACTUAL bucket regardless
+      // of which mode is selected -- Actual mode's own numbers are always
+      // 0/tied before any game starts (nobody's outscored anybody yet),
+      // and Projected is meant to match that rather than use a
+      // hypothetical, nothing's-happened-yet projected score comparison.
+      // "Points This Week" is deliberately NOT touched by this -- it's
+      // still allowed (expected, even) to show the real pregame PROJECTED
+      // total in Projected mode; see thisWeekPoints below.
+      var actualLiveInfo = liveActive && live.byRoster[rid] ? live.byRoster[rid].actual : null;
+      var rumblesSourceInfo = kickoffStarted ? liveInfo : actualLiveInfo;
 
       var combinedRumbles = num(s.rumbles) + (foldInfo ? num(foldInfo.rumbles) : 0);
       var combinedPf = num(s.pf) + (foldInfo ? num(foldInfo.points) : 0);
@@ -2289,7 +2392,7 @@
       var weeksForPct = weeksCompleted.length + (foldInfo ? 1 : 0);
       var pct = weeksForPct ? (combinedRumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
 
-      var thisWeekRumbles = liveInfo ? liveInfo.rumbles : num(s.last_completed_week_rumbles);
+      var thisWeekRumbles = rumblesSourceInfo ? rumblesSourceInfo.rumbles : num(s.last_completed_week_rumbles);
       var thisWeekPoints = liveInfo ? liveInfo.points : num(s.last_completed_week_points);
 
       // Whether this roster still has a player (a real starter, or an
@@ -2326,17 +2429,18 @@
         // Separate flag just for the "Pts This Week" cell's own LIVE pill
         // (the "This Week" Rumbles-earned cell keeps using the plain
         // this_week_live above, unaffected) -- see hasIncompletePlayer's
-        // comment just above.
-        this_week_points_live: !!liveInfo && hasIncompletePlayer,
+        // comment just above. Also gated on kickoffStarted: a LIVE badge
+        // on a number that's just a pregame projection (nothing actually
+        // in progress yet) would be misleading.
+        this_week_points_live: !!liveInfo && hasIncompletePlayer && kickoffStarted,
         // true/false/null (tie, or no live matchup) -- whether THIS team is
-        // currently ahead in its live H2H matchup, under the CURRENTLY
-        // SELECTED mode's scoring (liveInfo is already mode-scoped). Used
-        // to color the "This Week"/"Pts This Week" cells to match the
-        // winning manager's own name color (see render()), in BOTH modes
-        // -- this is just a live "who's ahead right now" signal for the
-        // two per-week figures, independent of whether Actual mode's
-        // season-cumulative totals (PF/PA/H2H/etc) are frozen or not.
-        this_week_winning: liveInfo ? liveInfo.h2hWin : null,
+        // currently ahead in its live H2H matchup. Sourced from
+        // rumblesSourceInfo (see above), so pre-kickoff this is always
+        // based on the tied/0-0 Actual numbers -- nobody's highlighted as
+        // "ahead" before any game starts, matching Actual mode. Used to
+        // color the "This Week"/"Pts This Week" cells to match the
+        // winning manager's own name color (see render()), in BOTH modes.
+        this_week_winning: rumblesSourceInfo ? rumblesSourceInfo.h2hWin : null,
         pf: combinedPf,
         pa: combinedPa,
         h2h_w: h2hW,
@@ -2530,11 +2634,24 @@
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
     els.subtitle.textContent = "DTF Club · " + season + " season";
 
+    // "Live" (green dot) now specifically means the week has both posted
+    // matchups AND actually kicked off (see computeWeekKickoffInfo) --
+    // matchups alone (isLive) used to be enough to show this, which is
+    // what let a pregame week get badged "Live" and fold hypothetical
+    // projected numbers into the season totals days before a snap was
+    // played. Matchups-posted-but-not-kicked-off-yet, OR matchups not
+    // posted yet but the NFL schedule feed already knows the week's first
+    // kickoff, both show the grey pregame pill instead.
     var isLive = state.live && state.live.isLive;
-    els.statusDot.className = "dot" + (isLive ? " live" : "");
-    if (isLive) {
-      els.statusText.textContent = "Live — Week " + state.live.week + " in progress";
+    var kickoffStarted = !!(state.live && state.live.hasKickedOff);
+    var trulyLive = isLive && kickoffStarted;
+    els.statusDot.className = "dot" + (trulyLive ? " live" : "");
+    if (trulyLive) {
+      els.statusText.textContent = "Live: Week " + state.live.week;
       els.liveWeekLabel.textContent = "Showing live Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ")";
+    } else if (state.live && state.live.firstGameStartMs) {
+      els.statusText.textContent = "Week " + state.live.week + " begins " + formatWeekStartLabel(state.live.firstGameStartMs);
+      els.liveWeekLabel.textContent = isLive ? "Showing Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ") — not live yet" : "";
     } else if (state.live && state.live.seasonType === "off") {
       els.statusText.textContent = "Offseason";
       els.liveWeekLabel.textContent = "";
@@ -2970,6 +3087,9 @@
   window.addEventListener("resize", hideHowTo);
 
   var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely", possible: "Possible" };
+  // Display order for the QB Injury Backup Adjustments table: Likely above
+  // Possible above Confirmed. Lower number sorts first.
+  var CONFIDENCE_SORT_RANK = { likely: 0, possible: 1, confirmed: 2 };
 
   function renderQbAdjustments() {
     var body = document.getElementById("qb-adj-body");
@@ -2985,20 +3105,33 @@
     // pass between "the fix shipped" and "the file actually got
     // rewritten" -- this makes the live page correct immediately,
     // independent of when that next scheduled run happens). "A newer week
-    // has begun" here means either a genuinely later week is currently
-    // live, or a genuinely later week has already fully completed --
+    // has begun" here means either a genuinely later week has actually
+    // KICKED OFF (see computeWeekKickoffInfo -- matchups merely being
+    // POSTED isn't "begun"; this now uses the same real first-game-of-the-
+    // week signal the pregame status pill does, matching "once a week
+    // begins, with the first game generally Thursday night" exactly,
+    // rather than the coarser matchups-posted approximation this used to
+    // rely on), or a genuinely later week has already fully completed --
     // never the entry's own week alone, so a still-current week's
     // "possible" rows (the normal, intended case) are untouched.
     var weeksCompletedForFilter = (state.history && state.history.weeks_completed) || [];
     var latestKnownWeek = weeksCompletedForFilter.length ? Math.max.apply(null, weeksCompletedForFilter) : 0;
-    if (state.live && state.live.isLive && state.live.week > latestKnownWeek) {
+    if (state.live && state.live.isLive && state.live.hasKickedOff && state.live.week > latestKnownWeek) {
       latestKnownWeek = state.live.week;
     }
     histAdjustments = histAdjustments.filter(function (r) {
       return !(r.confidence === "possible" && r.week < latestKnownWeek);
     });
     var rows = histAdjustments.concat(state.liveQbAdjustments || []);
+    // Sorted by confidence tier first -- Likely above Possible above
+    // Confirmed -- since the still-unresolved/lower-certainty rows are
+    // the ones most worth a manager's attention at a glance; week
+    // (newest first) and then manager name break ties within a tier,
+    // same as before this reorder.
     rows = rows.slice().sort(function (a, b) {
+      var rankA = CONFIDENCE_SORT_RANK.hasOwnProperty(a.confidence) ? CONFIDENCE_SORT_RANK[a.confidence] : 99;
+      var rankB = CONFIDENCE_SORT_RANK.hasOwnProperty(b.confidence) ? CONFIDENCE_SORT_RANK[b.confidence] : 99;
+      if (rankA !== rankB) return rankA - rankB;
       if (b.week !== a.week) return b.week - a.week;
       return String(a.manager).localeCompare(String(b.manager));
     });
@@ -3078,10 +3211,26 @@
 
   // ---- controls ------------------------------------------------------
 
+  // Each mode's default sort -- applied on switching TO that mode, but
+  // only until the user clicks a column header themselves (see
+  // state.userSorted). Actual defaults to the natural season-standings
+  // order (key: null); Projected defaults to "Pts This Week" descending
+  // (highest live/projected score first), since that's the figure people
+  // actually watch move during a live week -- natural rank order there is
+  // still last week's standings until the fold happens.
+  var DEFAULT_SORT_BY_MODE = {
+    actual: { key: null, dir: "desc" },
+    custom: { key: "this_week_points", dir: "desc" }
+  };
+
   function setMode(mode) {
     state.mode = mode;
     els.modeActual.classList.toggle("active", mode === "actual");
     els.modeCustom.classList.toggle("active", mode === "custom");
+    if (!state.userSorted) {
+      var def = DEFAULT_SORT_BY_MODE[mode];
+      state.sort = { key: def.key, dir: def.dir };
+    }
     render();
   }
 
@@ -3104,6 +3253,7 @@
   function setSort(key) {
     var col = COLUMNS[key];
     if (!col) return;
+    state.userSorted = true;
     if (state.sort.key === key) {
       state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
     } else {

@@ -456,6 +456,51 @@ scores = [
 with open(os.path.join(OUT, "scores_week2.json"), "w") as f:
     json.dump(scores, f, indent=2)
 
+# ---- a PREGAME variant of the week-2 scores feed: matchups are posted,
+# but NOT ONE game has kicked off yet -- every game is_over=False AND
+# is_in_progress=False, with a start_time comfortably in the future
+# (computed relative to whenever this fixture generator actually runs,
+# not a fixed date, so it can never accidentally fall into the past and
+# make the "hasn't kicked off yet" premise flaky). Exercises the
+# pregame/live distinction in rumbles.html (computeWeekKickoffInfo): the
+# status pill must show grey + "Week 2 begins <day> <time>" (not the green
+# "Live" pill), and Projected mode must match Actual mode for This
+# Week/Rumbles/PF/PA/H2H (no hypothetical folding) while still showing the
+# real pregame PROJECTED "Points This Week" total. run_test.py reads this
+# same start_time back out of this file (rather than hardcoding the
+# expected day/time a second time) to compute the exact label it expects.
+PREGAME_START = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)).replace(
+    hour=20, minute=0, second=0, microsecond=0
+)
+PREGAME_START_MS = int(PREGAME_START.timestamp() * 1000)
+scores_pregame = [
+    {
+        "status": "pre_game",
+        "start_time": PREGAME_START_MS,
+        "metadata": {"away_team": "DET", "home_team": "GB", "is_over": False, "is_in_progress": False},
+    },
+    {
+        "status": "pre_game",
+        "start_time": PREGAME_START_MS,
+        "metadata": {"away_team": "MIN", "home_team": "CHI", "is_over": False, "is_in_progress": False},
+    },
+    {
+        # Deliberately the EARLIEST game in this fixture (a day before the
+        # others) -- proves the status pill picks the earliest kickoff
+        # across the whole week, not just the first entry in the array.
+        "status": "pre_game",
+        "start_time": PREGAME_START_MS - 24 * 3600 * 1000,
+        "metadata": {"away_team": "DAL", "home_team": "PHI", "is_over": False, "is_in_progress": False},
+    },
+    {
+        "status": "pre_game",
+        "start_time": PREGAME_START_MS,
+        "metadata": {"away_team": "SEA", "home_team": "ARI", "is_over": False, "is_in_progress": False},
+    },
+]
+with open(os.path.join(OUT, "scores_week2_pregame.json"), "w") as f:
+    json.dump(scores_pregame, f, indent=2)
+
 # ---- bulk projections for week 2 : every rostered player has a projection ----
 projections = {}
 for rid, players in roster_players.items():

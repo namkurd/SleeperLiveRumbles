@@ -1669,6 +1669,156 @@ def scenario_howto_tooltip(browser):
     print("\nSCENARIO 1d PASSED")
 
 
+# Mirrors rumbles.html's formatWeekStartLabel exactly (full day name + 12h
+# hour, no leading zero, no minutes) so the pregame status text's expected
+# value is derived the same way rather than hardcoded a second time.
+STATUS_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+
+def format_week_start_label(ms):
+    d = datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc)
+    hour12 = d.hour % 12
+    if hour12 == 0:
+        hour12 = 12
+    suffix = "pm" if d.hour >= 12 else "am"
+    js_day_index = (d.weekday() + 1) % 7  # Python Monday=0 -> JS Sunday=0
+    return f"{STATUS_DAY_NAMES[js_day_index]} {hour12}{suffix}"
+
+
+def scenario_pregame_week(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO 1e: Week 2's matchups are posted but NO game has kicked")
+    print("off yet -- pregame status pill + Projected mode must match Actual")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),  # weeks_completed: [1]
+        "**/v1/state/nfl": load("state.json"),  # week 2, regular
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),  # posted
+        "**/stats/nfl/2026/2*": [],  # nobody's played yet -- no stats rows at all
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),  # real pregame projections
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2_pregame.json"),  # every game still pre_game
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    # ---- Status pill: grey, "Week 2 begins <day> <time>" -- NOT the green
+    # "Live" pill, even though matchups are posted for week 2. The expected
+    # label uses the EARLIEST game in the pregame fixture (DAL/PHI, a day
+    # before the others), proving the page picks the earliest kickoff
+    # across the whole week rather than just the first game it happens to
+    # see.
+    pregame_games = load("scores_week2_pregame.json")
+    earliest_start_ms = min(g["start_time"] for g in pregame_games)
+    expected_label = format_week_start_label(earliest_start_ms)
+
+    status_text = page.text_content("#status-text")
+    print("Status text:", status_text)
+    assert status_text == f"Week 2 begins {expected_label}", (
+        f"expected the pregame status text 'Week 2 begins {expected_label}', got: {status_text!r}"
+    )
+    dot_classes = page.eval_on_selector("#status-dot", "el => el.className")
+    assert "live" not in dot_classes.split(), f"status dot must NOT be green/'live' pregame, got class={dot_classes!r}"
+    print(f"Confirmed the pregame status pill reads 'Week 2 begins {expected_label}' with a grey (non-live) dot.")
+
+    # ---- Actual mode: nobody's played (stats route returns [] -- no real
+    # production at all yet), so This Week/Rumbles and Points This Week are
+    # 0 for everyone EXCEPT Ankit, whose "Confirmed" QB-adjustment
+    # commissioner override is baked directly into matchups_week2.json
+    # (custom_points, independent of any stats) and applies regardless of
+    # whether the week has kicked off -- a commissioner keying in a
+    # correction isn't gated on live detection, so Ankit legitimately shows
+    # a nonzero actual score (the override alone) here, which in turn makes
+    # Ankit "outscore" every other (still-0) roster and win their own H2H
+    # matchup, landing on the max 20 rumbles. PF/PA/H2H/etc. (the
+    # CUMULATIVE columns) are unaffected either way -- exactly the
+    # Week-1-only history baseline, same as any other not-yet-folded state.
+    rows_actual = get_table_rows(page)
+    assert len(rows_actual) == 12, f"expected 12 rows, got {len(rows_actual)}"
+    for r in rows_actual:
+        if r[1] == "Ankit":
+            assert r[3] == "20", f"[actual] expected Ankit's This Week to be 20 (commissioner override beats every other still-0 roster), got {r[3]!r}"
+            assert r[4] == "15.00", f"[actual] expected Ankit's Points This Week to be exactly the 15.00 override (no real stats), got {r[4]!r}"
+        else:
+            assert r[3] == "0", f"[actual] expected This Week (Rumbles) to be 0 pregame for {r[1]}, got {r[3]!r}"
+            assert r[4] == "0.00", f"[actual] expected Points This Week to be 0.00 pregame for {r[1]} (nobody's played), got {r[4]!r}"
+
+    history = load("rumbles_history.json")
+    baseline_by_manager = {s["manager"]: s for s in history["standings"]}
+    for r in rows_actual:
+        base = baseline_by_manager[r[1]]
+        assert r[2] == str(base["rumbles"]), f"[actual] {r[1]}: expected cumulative Rumbles {base['rumbles']} unchanged, got {r[2]}"
+        assert abs(float(r[6]) - base["pf"]) < 0.01, f"[actual] {r[1]}: expected PF {base['pf']} unchanged pregame, got {r[6]}"
+        assert abs(float(r[7]) - base["pa"]) < 0.01, f"[actual] {r[1]}: expected PA {base['pa']} unchanged pregame, got {r[7]}"
+        assert r[8] == f"{base['h2h_w']}-{base['h2h_l']}", f"[actual] {r[1]}: expected H2H {base['h2h_w']}-{base['h2h_l']} unchanged pregame, got {r[8]}"
+    print("Confirmed Actual mode pregame: This Week/Points This Week are 0 for everyone except a legitimate, override-driven exception (Ankit), and every cumulative column matches the Week-1-only history baseline exactly.")
+
+    live_badges_actual = page.locator(".badge-live").count()
+    assert live_badges_actual == 0, f"no LIVE badges expected anywhere pregame (Actual mode), found {live_badges_actual}"
+
+    # ---- Projected mode: must match Actual EXACTLY for This Week/Rumbles
+    # (including Ankit's override-driven 20 -- proving the pregame "This
+    # Week" figure really is sourced from the Actual bucket regardless of
+    # which mode is selected, not just coincidentally 0 for everyone) and
+    # every cumulative column (PF/PA/H2H/Vs. Field) -- the whole point of
+    # this fix -- while STILL showing the real pregame PROJECTED total in
+    # Points This Week (not 0, and different from Actual's), and its
+    # tooltip.
+    page.click("#mode-custom")
+    page.wait_for_timeout(200)
+    rows_custom = get_table_rows(page)
+    assert len(rows_custom) == 12, f"expected 12 rows, got {len(rows_custom)}"
+    actual_by_manager = {r[1]: r for r in rows_actual}
+
+    nonzero_points = 0
+    for r in rows_custom:
+        actual_r = actual_by_manager[r[1]]
+        assert r[3] == actual_r[3], (
+            f"[custom] expected This Week (Rumbles) to exactly match Actual mode's {actual_r[3]!r} pregame "
+            f"(sourced from the Actual bucket, not a hypothetical projected outcome) for {r[1]}, got {r[3]!r}"
+        )
+        if float(r[4]) > 0:
+            nonzero_points += 1
+        base = baseline_by_manager[r[1]]
+        assert r[2] == str(base["rumbles"]), f"[custom] {r[1]}: expected cumulative Rumbles {base['rumbles']} NOT folded pregame, got {r[2]}"
+        assert abs(float(r[6]) - base["pf"]) < 0.01, f"[custom] {r[1]}: expected PF {base['pf']} NOT folded with a hypothetical projection pregame, got {r[6]}"
+        assert abs(float(r[7]) - base["pa"]) < 0.01, f"[custom] {r[1]}: expected PA {base['pa']} NOT folded pregame, got {r[7]}"
+        assert r[8] == f"{base['h2h_w']}-{base['h2h_l']}", f"[custom] {r[1]}: expected H2H {base['h2h_w']}-{base['h2h_l']} NOT folded pregame, got {r[8]}"
+
+    assert nonzero_points >= 10, (
+        f"expected most/all managers to show a real nonzero pregame PROJECTED 'Points This Week' total in "
+        f"Projected mode (the one thing that's allowed to differ from Actual pregame), only {nonzero_points}/12 were nonzero"
+    )
+    print(f"Confirmed Projected mode pregame: This Week/Rumbles and every cumulative column still match Actual exactly (including Ankit's override), while Points This Week shows a real nonzero projected total for {nonzero_points}/12 managers.")
+
+    live_badges_custom = page.locator(".badge-live").count()
+    assert live_badges_custom == 0, f"no LIVE badges expected anywhere pregame (Projected mode either), found {live_badges_custom}"
+
+    # A "Points This Week" tooltip should still work pregame (showing
+    # projected players), confirming the pregame/live distinction didn't
+    # accidentally break the existing tooltip feature.
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, ''))",
+    ).index("Aidan")
+    cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+    cell.hover()
+    page.wait_for_timeout(200)
+    tip = page.locator("#pts-tooltip")
+    assert tip.evaluate("el => el.classList.contains('visible')"), "Points This Week tooltip should still work pregame"
+    assert tip.inner_text().strip(), "pregame tooltip should still have real content (projected players)"
+    print("Confirmed the Points This Week tooltip still works pregame, showing projected player content.")
+
+    page.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIO 1e PASSED")
+
+
 def scenario_cumulative_only(browser):
     print("\n" + "=" * 70)
     print("SCENARIO 2: Week 1 final, Sleeper's pointer lagging, Week 2 not posted")
@@ -1774,6 +1924,7 @@ def main():
         scenario_mobile_tap_tooltip(browser)
         scenario_mobile_responsive_layout(browser)
         scenario_howto_tooltip(browser)
+        scenario_pregame_week(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
         browser.close()

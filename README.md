@@ -136,6 +136,15 @@ This log shows an entry under one of three tiers:
   awareness -- see below for why it's never allowed to affect any actual
   point total on its own.
 
+Rows in this log are sorted by confidence tier first -- **Likely** above
+**Possible** above **Confirmed** -- then by week (newest first) and manager
+name within a tier, rather than by week alone. The idea is to surface
+whatever still needs a human's attention (an uncorroborated "Possible", or
+a "Likely" still waiting on the commissioner to key in an official
+override) above the rows that are already fully resolved ("Confirmed"),
+which would otherwise just as easily be buried under a pile of older,
+settled entries. See `CONFIDENCE_SORT_RANK` in `rumbles.html`.
+
 A same-team backup QB playing with *no* signal at all -- nobody else on
 that NFL team's roster even recorded action -- is, naturally, still not
 logged; "Possible" only fires once a real backup QB has actually been
@@ -454,6 +463,18 @@ currently sorted by, is the actual VALUE in each team's own `#` cell --
 that's always their fixed season standing (by cumulative Rumbles, then
 PF), assigned once before any sort is applied.
 
+**The default sort (before you've clicked any header yourself) depends on
+which mode is selected.** Actual mode defaults to natural standings order
+(same as clicking `#`) -- the season-cumulative ranking is the point of
+that tab. Projected mode defaults to **Points This Week, highest first**
+instead -- Projected is the tab for watching a live week unfold, and
+who's actually having the best week right now is more useful there than
+season rank. Switching modes only re-applies that mode's default sort
+until you manually sort by clicking a header yourself; the instant you do,
+your choice sticks and is preserved across mode switches from then on (a
+sort chosen in one mode isn't reset when you flip to the other and back).
+See `DEFAULT_SORT_BY_MODE` / `state.userSorted` in `rumbles.html`.
+
 During a live week, each manager's name is also colored whenever they're
 one of this week's scheduled H2H matchups -- both sides of a matchup get
 the same color text (hover a name to see who they're playing), so you
@@ -633,22 +654,32 @@ shows a badge.
 **Portrait.** The standings table is intentionally wide (10 columns) and
 scrolls horizontally on narrow screens, with Rank + Manager pinned via
 `position: sticky` so you always know which row you're looking at while
-scrolling through the rest. But the five columns anyone actually needs at
-a glance -- #, Manager, Rumbles, This Week, and Points This Week -- are
-meant to all be visible up front with no scrolling required at all on a
-portrait phone. A `@media (max-width: 640px)` block gives those five
-columns explicit widths (plus a tighter header font that's allowed to wrap
-onto two lines, e.g. "This Week" -> "This" / "Week", instead of forcing
-its column wide enough to fit on one line unwrapped) so their combined
-width comfortably fits inside a ~390px-wide viewport; Manager gets an
-ellipsis fallback for the rare case a name plus the live " QB Inj*" suffix
-still doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs. Field)
-keep their natural width and stay reachable by scrolling right, same as
-before. One easy-to-miss detail: the Manager column's sticky offset
-(`left: ...`) is hardcoded to match the Rank column's width, so shrinking
-Rank's width without also shrinking Manager's sticky offset to match would
-silently make Manager overlap the column beside it -- both are updated
-together in that media query.
+scrolling through the rest -- but only on a landscape phone or wider (see
+below). On a portrait phone, the five columns anyone actually needs at a
+glance -- #, Manager, Rumbles, This Week, and Points This Week -- are the
+ONLY columns shown at all: Rumble %, PF, PA, H2H, and Vs. Field are
+removed from layout entirely (`display: none` via `#standings-table
+thead th:nth-child(n+6)` / `tbody td:nth-child(n+6)` inside the
+`@media (max-width: 640px)` block), not just scrolled out of view. Rumble
+% specifically used to end up half-cut-off at the right edge of a portrait
+screen, readable as neither "clearly visible" nor "clearly hidden" -- full
+removal reads more cleanly than a partial sliver of a column nobody's
+meant to check on a phone. The same media query also sets
+`#standings-table { min-width: 0; }` so the table's base `min-width: 760px`
+(sized for all 10 columns) doesn't force the remaining 5 to stretch out and
+reintroduce horizontal scrolling now that there's nothing left to scroll
+to -- and the `.scroll-hint` ("swipe to see more" -- see the landscape
+paragraph below) stays hidden in portrait for the same reason. Those five
+columns get explicit widths (plus a tighter header font that's allowed to
+wrap onto two lines, e.g. "This Week" -> "This" / "Week", instead of
+forcing its column wide enough to fit on one line unwrapped) so their
+combined width comfortably fits inside a ~390px-wide viewport; Manager
+gets an ellipsis fallback for the rare case a name plus the live
+" QB Inj*" suffix still doesn't fit. One easy-to-miss detail: the Manager
+column's sticky offset (`left: ...`) is hardcoded to match the Rank
+column's width, so shrinking Rank's width without also shrinking
+Manager's sticky offset to match would silently make Manager overlap the
+column beside it -- both are updated together in that media query.
 
 **Landscape.** The QB Injury Backup Adjustments table's "Backup QB(s)"
 column normally stacks multiple backups one per line
@@ -664,6 +695,41 @@ breakpoint regardless. That override is scoped to `#qb-adj-table
 reliably wins the cascade over the table's own base (always-applies)
 `.backup-list` rule, whichever one happens to appear later in the
 stylesheet.
+
+### Status indicator: pregame vs. live
+
+The status dot/text at the top of the page (next to "Refresh now") used to
+turn green and read "Live -- Week N in progress" the moment Sleeper posted
+a week's matchups -- which is often days before that week's first real
+game, since Sleeper routinely posts matchups well ahead of kickoff. That
+conflated two genuinely different things: "matchups exist to be scored"
+and "a game has actually started." The page now tracks both separately
+(`isLive` for the former, a new `hasKickedOff` for the latter -- computed
+in `computeWeekKickoffInfo()` from Sleeper's live-scoreboard feed: true if
+any game in the week has left `pre_game` status, or, as a fallback, once
+the clock has simply passed the earliest known kickoff time) and the
+status dot/text now reflect real kickoff, not just matchups being posted:
+
+- **Once the week has genuinely kicked off,** the dot turns green and the
+  text reads **"Live: Week N"** (shortened from the old "Live -- Week N in
+  progress").
+- **Before kickoff** (matchups posted, or not yet, but the first game
+  hasn't started), the dot stays grey and the text instead reads
+  **"Week N begins &lt;Day&gt; &lt;hour&gt;&lt;am/pm&gt;"** -- e.g. "Week 3
+  begins Thursday 8pm" -- computed from the earliest `start_time` across
+  that week's games (`formatWeekStartLabel()`). This also covers the
+  in-between window after one week ends and before the next week's
+  matchups have even posted yet, once Sleeper's own kickoff data for the
+  upcoming week is available.
+- Offseason and preseason keep their own separate, unchanged messages
+  ("Offseason" / "Preseason -- Rumbles start Week 1").
+
+This same `hasKickedOff` signal is also what the QB Injury Backup
+Adjustments table's stale-"possible"-entry backstop (see above) now keys
+off of, tightened from the coarser "matchups posted" signal it used
+before -- so a "Possible" entry from the prior week correctly keeps
+showing right up until the new week has actually kicked off, not just
+until its matchups appear.
 
 ### Live scoring: two modes
 
@@ -1202,9 +1268,36 @@ has started, this column shows the same actual-so-far number as the
   COMPLETE, and a pace-dampened blend of both while it's in progress (see
   the in-progress-scoring section above for the formula and how closely it
   tracks -- but doesn't exactly reproduce -- Sleeper's own live blended
-  number). This mode DOES fold the in-progress week's numbers -- Rumbles,
+  number). Once the week has genuinely kicked off (see "Pregame vs. live"
+  below), this mode DOES fold the in-progress week's numbers -- Rumbles,
   H2H W-L, PF, PA, and Vs. Field W-L -- on top of the cumulative totals, so
   you can see where the season stands if the week ended right now.
+
+**Before kickoff, Projected deliberately does NOT fold anything in yet --
+even though Sleeper has already posted the week's matchups and real
+projections exist to show.** Matchups routinely post days ahead of the
+first game, and a projection is just a guess about a game that hasn't
+happened; treating it as provisionally "real" and folding it into Rumbles/
+PF/PA/H2H/Vs. Field that early would mean the standings could swing on
+projections alone, for a week nobody has actually played a single snap of
+yet. So pregame, Projected mode's season-cumulative columns match Actual
+mode's exactly -- frozen to `rumbles_history.json`, nothing added -- and so
+does "This Week" (Rumbles earned so far): it's sourced from the same
+actual-bucket numbers Actual mode uses, regardless of which tab is
+selected, so a team correctly shows 0 Rumbles this week in both tabs alike
+before kickoff (a live commissioner override, keyed in before the game
+started, is the one thing that can still make this nonzero for a specific
+roster even pregame -- see "Commissioner score overrides" above; that's
+real, already-official points, not a live/projected distinction). The one
+thing that's still genuinely different pregame is **"Points This Week"**:
+Projected mode keeps showing each team's real projected point total (and
+the tooltip breakdown of which players are projected for what) the whole
+time, exactly as it does once the week is live -- that number was never
+folded into anything, so there's no premature-standings risk in showing
+it early, and it's useful information regardless of kickoff. Once the week
+actually kicks off, Projected mode switches over to folding the
+live/blended numbers into the season totals as described above. See
+`foldCurrentWeekIntoTotals` / `rumblesSourceInfo` in `rumbles.html`.
 
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
