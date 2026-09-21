@@ -140,9 +140,15 @@ the same two tiers as the log above:
   or dampened -- it's real points a real player already scored, so it
   counts in full toward both totals immediately, the same way any other
   player's actual points do. The manager's name in the standings table
-  gets a small blue `*` (hover on desktop, tap on mobile) with a tooltip
-  naming the injured QB, the replacement QB, and the exact number of
-  points added.
+  gets a small blue `QB Inj*` marker (hover on desktop, tap on mobile)
+  with a tooltip naming the injured QB, the replacement QB, and the exact
+  number of points added -- worded in plain terms (which QB is out, who's
+  covering, how many points, that it's pending the commissioner's official
+  adjustment), deliberately without any "IR"/"PUP" injury-status jargon or
+  "house rule" language, so it reads clearly to anyone regardless of
+  whether they know this league's rule by that name. The same backup
+  QB(s) also show up as their own row(s) in that manager's "Points This
+  Week" tooltip -- see below.
 - **Confirmed**: once the commissioner sets `custom_points`, the "likely"
   credit (`backup_points_total`) is removed and replaced with the OFFICIAL
   point delta the override represents (`custom_points - points` -- the
@@ -153,8 +159,9 @@ the same two tiers as the log above:
   override is meant to reflect the same real-world credit), a manager's
   total doesn't visibly jump or fall the instant the commissioner keys it
   in -- it just quietly switches from this page's best-effort guess to the
-  *official*, commissioner-set number. The `*`/tooltip disappear once
-  confirmed; the credit itself just changes source, seamlessly.
+  *official*, commissioner-set number. The `QB Inj*` marker/tooltip
+  disappear once confirmed; the credit itself just changes source,
+  seamlessly.
 
 The log table has a **Commissioner Adjustment** column for this exact
 comparison: it shows the official `custom_points_delta` once an override
@@ -167,10 +174,12 @@ Row text in this log table is colored to make the two "sides" of each
 adjustment easy to tell apart at a glance: the Injured QB's name and
 points are always red, the Backup QB's name and points (and the new
 Commissioner Adjustment column) are always green, and every other
-plain-text cell (Week, Status) matches that row's own manager color (the
-same color used for the Manager cell and reused from the standings table
-above) -- regardless of scoring mode or which week the row is about. The
-Confidence pill and LIVE badge keep their own fixed colors either way.
+plain-text cell (Week, Commissioner Status) matches that row's own
+manager color (the same color used for the Manager cell and reused from
+the standings table above) -- regardless of scoring mode or which week the
+row is about. The Confidence pill (labeled "Commissioner Status" -- either
+"Likely" or "Confirmed") and LIVE badge keep their own fixed colors
+either way.
 
 This only ever touches the in-progress week's own figures ("Points This
 Week" in both modes, and every season-cumulative column in Projected
@@ -182,16 +191,25 @@ all (see "Columns" below).
 Covered end-to-end by `test/run_test.py`'s live scenario, which reuses its
 existing Alex/Kyler-Murray/Carson-Wentz ("likely") and Ankit ("confirmed",
 no identifiable backup) fixtures: hand-verified PF/Points-This-Week totals
-with the credit folded in, the `*` appearing only for Alex (never Ankit or
-anyone else) with the correct tooltip content, the new Commissioner
+with the credit folded in, the `QB Inj*` marker appearing only for Alex
+(never Ankit or anyone else) with the correct tooltip content -- including
+a regression check that the wording makes no mention of "IR", "PUP", or
+"house rule" -- the "Commissioner Status" header text (checked via
+`textContent`, not `innerText`, since the header's CSS `text-transform:
+uppercase` would otherwise make a case-sensitive `innerText` comparison
+fail even though the underlying markup is correct), the new Commissioner
 Adjustment column's values (including the blank/em-dash case for Alex's
 still-"likely" row), the row text-coloring scheme (red/green/manager-color,
 resolved live via `getComputedStyle` against the actual `--good`/`--bad`
 CSS variables rather than a hardcoded hex, since those two -- unlike
-`--matchup-4` -- differ between light and dark mode), and -- on the
-touch-primary mobile context -- the same tap-to-show/tap-to-toggle/
-tap-elsewhere-dismisses behavior already established for the "Pts This
-Week" tooltip.
+`--matchup-4` -- differ between light and dark mode), Carson Wentz's
+replacement row showing up in the "Points This Week" tooltip in BOTH
+Actual and Projected mode (same slot-appended position, same actual/proj
+values as computed for any other player) colored in the distinct
+`--replacement` yellow rather than the usual live-green -- even while his
+own game is genuinely still in progress -- and, on the touch-primary
+mobile context, the same tap-to-show/tap-to-toggle/tap-elsewhere-dismisses
+behavior already established for the "Pts This Week" tooltip.
 
 ### Columns
 
@@ -312,6 +330,25 @@ rule, with Proj deliberately left uncolored on the theory that it wasn't
 player's Proj cell genuinely is live too, recomputing every 30-second poll
 right along with Actual, and leaving it the default color made it read as
 static/settled when it wasn't.)
+
+When a manager has a "likely" QB-injury-backup adjustment in effect (see
+above), the identified backup QB(s) also get appended as their own row(s)
+at the END of that manager's "Points This Week" tooltip -- after their own
+(already slot-sorted) starters, since a backup QB isn't really filling one
+of this roster's own slots, just extra context on who actually covered for
+the injured starter. Each row is computed exactly the same way as any
+other player's -- same actual/proj math (including the pace-dampened live
+blend while their game is still in progress), same Actual/Projected
+filtering rules (left out of Actual mode until they've actually played;
+left out of Projected mode once their game goes final) -- so it slots into
+the tooltip identically to a real starter in every respect except one: its
+Name, Actual, and Proj cells are colored a distinct yellow/gold
+(`--replacement`) instead of the usual colors, including instead of the
+green "live" color a genuinely-in-progress game would otherwise get (the
+yellow always wins, so this row reads as "the injury-backup credit," not
+as an ordinary live starter, even while its own game is still going). This
+shows up in both modes, since a backup QB's real stats are as "actual" as
+anyone else's.
 
 If nobody on a team's roster qualifies for the current mode -- nobody's
 played yet in Actual mode, or every starter's game is already final in

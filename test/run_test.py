@@ -80,7 +80,7 @@ def get_table_rows(page):
         "#standings-body tr",
         """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
             var text = td.innerText.trim();
-            return i === 1 ? text.replace(/\\s*\\*$/, '') : text;
+            return i === 1 ? text.replace(/\\s*QB Inj\\*$/, '') : text;
         }))""",
     )
 
@@ -185,7 +185,7 @@ def get_matchup_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
             var span = r.querySelector('td.manager .matchup-name');
             var color = span ? span.style.color : null;
             return [name, color || null];
@@ -203,7 +203,7 @@ def get_pts_this_week_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
             var cell = r.querySelector('td.thisweek-pts');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -220,7 +220,7 @@ def get_thisweek_rumbles_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
             var cell = r.querySelector('td.thisweek');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -244,7 +244,7 @@ def get_tooltip_row_computed_colors(page, manager):
     clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -307,7 +307,7 @@ def get_thisweek_pts_tooltip(page, manager):
     next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -346,7 +346,7 @@ def get_qb_adj_asterisk(page, manager):
     gets one (see applyQbAdjustmentsToScores/render())."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.replace('*', '').trim())",
+        "cells => cells.map(c => c.innerText.replace('QB Inj*', '').trim())",
     ).index(manager)
     row = page.locator("#standings-body tr").nth(idx)
     el = row.locator("span.qb-adj-asterisk")
@@ -632,9 +632,26 @@ def scenario_live_blending(browser):
         # starters[1] -- league.json's roster_positions is deliberately
         # reversed (see make_fixtures.py) so this only passes if the
         # slot-order re-sort actually ran.
+        #
+        # ---- QB-injury replacement row (Carson Wentz) in the "Points This
+        # Week" tooltip -- appended after Alex's own (slot-sorted) starters,
+        # same actual/proj math and Actual/Projected filtering as any other
+        # player (see appendQbReplacementRows), shown in BOTH modes since
+        # Carson Wentz has real actual stats recorded (played=true). His
+        # "proj" (21.90) equals his "actual" exactly -- he has no pregame
+        # projection at all (he's not a rostered player anywhere in these
+        # fixtures), so blendedProjection's remaining-game term is
+        # 0.65*0*dampening = 0, collapsing to just his actual points.
+        # "live" is False here despite his game (MIN) genuinely being
+        # in-progress -- get_thisweek_pts_tooltip reads the DOM's
+        # "pts-tooltip-live" class, and a replacement row always renders
+        # "pts-tooltip-replacement" instead (see renderPtsTooltipContent's
+        # rowClass logic), never both -- the yellow replacement color
+        # always wins over the plain live-green, by design.
+        carson_wentz_row = {"time": "", "name": "Carson Wentz", "actual": "21.90", "proj": "21.90", "live": False}
+        expected_kickoff = format_game_start_label(MNF_START_UTC)
         if mode != "actual":
             alex_rows = get_thisweek_pts_tooltip(page, "Alex")
-            expected_kickoff = format_game_start_label(MNF_START_UTC)
             # Kyler Murray's "proj" is now 18.33, not his raw 21.09 pregame
             # projection -- see blendedProjection()'s comment in
             # rumbles.html: actual (7.20) + 65% of pregame (21.09) *
@@ -645,11 +662,41 @@ def scenario_live_blending(browser):
             assert alex_rows == [
                 {"time": "", "name": "P12", "actual": "0.00", "proj": "21.23", "live": False},
                 {"time": expected_kickoff, "name": "Kyler Murray", "actual": "7.20", "proj": "18.33", "live": True},
+                dict(carson_wentz_row, time=expected_kickoff),
             ], (
                 f"[{mode}] expected Alex's Projected tooltip to list P12 first (slot re-sort), then a live "
-                f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), got {alex_rows}"
+                f"Kyler Murray with a separate kickoff-time column (MIN, in_progress -- not complete), then the "
+                f"QB-injury replacement row (Carson Wentz) appended last, got {alex_rows}"
             )
-            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff column):", alex_rows)
+            print(f"Verified Pts This Week tooltip content for {mode} mode (Alex, slot order + live color + kickoff column + replacement row):", alex_rows)
+        else:
+            # Actual mode excludes anyone who hasn't played at all (P12) --
+            # only Kyler Murray (played) and the appended Carson Wentz
+            # (also played) remain, no kickoff-time column at all in this
+            # mode.
+            alex_rows = get_thisweek_pts_tooltip(page, "Alex")
+            assert alex_rows == [
+                {"time": "", "name": "Kyler Murray", "actual": "7.20", "proj": "18.33", "live": True},
+                carson_wentz_row,
+            ], (
+                f"[actual] expected Alex's Actual tooltip to list only played starters (Kyler Murray) plus the "
+                f"QB-injury replacement row (Carson Wentz), got {alex_rows}"
+            )
+            print("Verified Pts This Week tooltip content for actual mode (Alex, replacement row included):", alex_rows)
+
+        # The replacement row's Name/Actual/Proj must be this page's
+        # distinct yellow (--replacement), not the usual live-green -- even
+        # though Carson Wentz's own game (MIN) is genuinely still in
+        # progress, same as Kyler Murray's.
+        replacement_ref = get_css_var_color(page, "replacement")
+        alex_colors_for_replacement = get_tooltip_row_computed_colors(page, "Alex")
+        wentz_colors = next(r for r in alex_colors_for_replacement if r["name"] == "Carson Wentz")
+        assert wentz_colors["name_color"] == replacement_ref, f"[{mode}] expected Carson Wentz's replacement-row Name to be yellow ({replacement_ref}), got {wentz_colors['name_color']}"
+        assert wentz_colors["actual_color"] == replacement_ref, f"[{mode}] expected Carson Wentz's replacement-row Actual to be yellow ({replacement_ref}), got {wentz_colors['actual_color']}"
+        assert wentz_colors["proj_color"] == replacement_ref, f"[{mode}] expected Carson Wentz's replacement-row Proj to be yellow ({replacement_ref}), got {wentz_colors['proj_color']}"
+        print(f"Verified the QB-injury replacement row's Name/Actual/Proj are colored yellow ({replacement_ref}) in {mode} mode, not the usual live-green.")
+
+        if mode != "actual":
 
             # ---- Live-row coloring covers Name + Actual + Proj -- Kyler
             # Murray's row (still in progress) should have all three cells
@@ -967,6 +1014,12 @@ def scenario_live_blending(browser):
     # same-position QB on a DIFFERENT team who did, must both be excluded.
     # The synthetic week-1 "Confirmed" row from rumbles_history.json must
     # also be present, sorted below week 2 (weeks sort descending).
+    # textContent, not innerText -- thead th has CSS text-transform:
+    # uppercase (a purely visual effect), which innerText would pick up
+    # (rendering-aware) and textContent doesn't (raw markup text).
+    qb_status_header = page.eval_on_selector("#qb-adj-table thead th:nth-child(8)", "el => el.textContent.trim()")
+    assert qb_status_header == "Commissioner Status", f"expected the last column header to read 'Commissioner Status', got: {qb_status_header!r}"
+
     qb_rows = get_qb_adjustment_rows(page)
     print("\n== QB Injury Backup Adjustments ==")
     for r in qb_rows:
@@ -1055,15 +1108,18 @@ def scenario_live_blending(browser):
         el = get_qb_adj_asterisk(page, manager)
         assert el is None, f"expected no manager-name '*' for {manager} (no live 'likely' QB adjustment for them), but found one"
     alex_asterisk = get_qb_adj_asterisk(page, "Alex")
-    assert alex_asterisk is not None, "expected Alex (roster 6) to have a manager-name '*' -- his live QB adjustment is still 'likely', not yet commissioner-confirmed"
-    print("Confirmed the manager-name '*' shows up ONLY for Alex (the one live 'likely' adjustment) -- not for Ankit (already 'confirmed'), nor any other manager.")
+    assert alex_asterisk is not None, "expected Alex (roster 6) to have a manager-name marker -- his live QB adjustment is still 'likely', not yet commissioner-confirmed"
+    assert alex_asterisk.inner_text() == "QB Inj*", f"expected the marker text to read 'QB Inj*' (not a bare '*'), got: {alex_asterisk.inner_text()!r}"
+    print("Confirmed the manager-name 'QB Inj*' marker shows up ONLY for Alex (the one live 'likely' adjustment) -- not for Ankit (already 'confirmed'), nor any other manager.")
 
     tooltip_text = get_qb_adj_tooltip_text(page, "Alex")
     assert tooltip_text is not None, "expected hovering Alex's '*' to show the #qb-adj-tooltip"
     assert "Kyler Murray" in tooltip_text, f"expected the tooltip to name the injured QB (Kyler Murray), got: {tooltip_text!r}"
     assert "Carson Wentz" in tooltip_text, f"expected the tooltip to name the replacement/backup QB (Carson Wentz), got: {tooltip_text!r}"
     assert "+21.90" in tooltip_text, f"expected the tooltip to state the exact points added (+21.90), got: {tooltip_text!r}"
-    print(f"Confirmed Alex's '*' tooltip names the injured QB, the replacement QB, and the exact points added: {tooltip_text!r}")
+    for banned in ("IR", "PUP", "house rule"):
+        assert banned not in tooltip_text, f"expected the tooltip wording to make no mention of {banned!r} (no injury-status jargon, no house-rule language), got: {tooltip_text!r}"
+    print(f"Confirmed Alex's '*' tooltip names the injured QB, the replacement QB, and the exact points added, with no IR/PUP/house-rule language: {tooltip_text!r}")
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
@@ -1107,7 +1163,7 @@ def scenario_mobile_tap_tooltip(browser):
 
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     assert "has-tooltip" in (cell.get_attribute("class") or ""), "Aidan's Pts This Week cell should be tappable (has-tooltip)"

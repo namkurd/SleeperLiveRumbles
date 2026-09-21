@@ -16,6 +16,14 @@
     --good: #35c26b;
     --bad: #e5484d;
     --live: #35c26b;
+    /* The "Points This Week" tooltip row for a QB-injury replacement (a
+       same-team backup QB whose points are being credited to this roster
+       -- see appendQbReplacementRows below) -- a third color, distinct
+       from both --good/--bad (already meaning "backup"/"injured" in the
+       QB Injury Backup Adjustments table) and --live/--matchup-4 (already
+       meaning "in-progress game" in this same tooltip), so a replacement
+       row reads as its own thing at a glance. */
+    --replacement: #eab308;
     --row-alt: #1c202a;
     /* Matchup-pair tagging dots -- 6 slots covers every matchup in a
        12-team league. Chosen so each of the 6 is clearly distinguishable
@@ -52,6 +60,7 @@
       --good: #1f9d52;
       --bad: #d43b40;
       --live: #1f9d52;
+      --replacement: #a16207;
       --row-alt: #f8f9fc;
       --matchup-1: #9333ea;
       --matchup-2: #eda100;
@@ -361,6 +370,18 @@
   .pts-tooltip tr.pts-tooltip-live td.pts-tooltip-proj {
     color: var(--matchup-4);
   }
+  /* A QB-injury replacement row -- a same-team backup QB appended to this
+     roster's "Points This Week" breakdown (see appendQbReplacementRows) --
+     is shown with the exact same columns/filtering as any other player,
+     except its name/actual/proj are always this distinct yellow instead of
+     the usual live-green, whether or not that backup's own game happens to
+     still be in progress (see renderPtsTooltipContent -- a replacement row
+     gets THIS class instead of .pts-tooltip-live, never both). */
+  .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-name,
+  .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-actual,
+  .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-proj {
+    color: var(--replacement);
+  }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
     position: sticky; left: 0; z-index: 2;
@@ -597,7 +618,7 @@
           <th>Injured QB Points</th>
           <th>Backup QB Points</th>
           <th>Commissioner Adjustment</th>
-          <th style="text-align:left">Status</th>
+          <th style="text-align:left">Commissioner Status</th>
         </tr>
       </thead>
       <tbody id="qb-adj-body">
@@ -1152,6 +1173,48 @@
   //     if unknown) -- shown in the Projected tooltip so an upcoming
   //     player's kickoff day/time is visible at a glance.
 
+  // The per-player computation at the heart of buildPlayerBreakdown below --
+  // factored out so a QB-injury replacement (a real NFL player who isn't
+  // one of this roster's own starters at all -- see appendQbReplacementRows
+  // just below) can get the exact same treatment: same actual/proj math,
+  // same played/game_status/game_start_ms resolution, nothing special-cased.
+  // Returns everything buildPlayerBreakdown's rows carry EXCEPT "slot" (only
+  // a roster starter has one -- see rosterPositions).
+  function computePlayerBreakdownEntry(pid, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule) {
+    var actualSource = statsMap[pid];
+    var played = !!actualSource;
+    var meta = playersMeta ? playersMeta[pid] : null;
+    var team = meta ? meta.team : null;
+    var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
+    var actualPts = played ? scoreFrom(actualSource, scoringSettings, true) : 0;
+    var pregameProjPts = scoreFrom(projMap[pid], scoringSettings, false);
+    // "proj" shows the SAME number Projected mode actually sums for this
+    // player (see playerPoints/blendedProjection): their plain pregame
+    // projection while their game hasn't started, their real stat line
+    // once it's confirmed complete, and a pace-dampened blend of both
+    // while it's in progress -- this page's best estimate of Sleeper's
+    // own live "projected" number, not a reproduction of it (see
+    // blendedProjection's comment for how close that estimate actually
+    // gets, validated against real examples). A player whose game status
+    // is "unknown" (no team metadata, or the live-status feed failed)
+    // has no remainingFraction to blend with, so this just shows their
+    // raw pregame projection, same as before this blending model existed.
+    // A team defense also skips the blend once its game has started at
+    // all (see effectiveRemainingFraction's comment) -- its proj is
+    // pinned to its actual-so-far, not a penny more.
+    var projRemFrac = game ? effectiveRemainingFraction(meta ? meta.position : null, game.remainingFraction) : null;
+    var projPts = game ? blendedProjection(actualPts, pregameProjPts, projRemFrac) : pregameProjPts;
+    return {
+      player_id: pid,
+      name: meta ? playerName(meta) : pid,
+      actual: round2(actualPts),
+      proj: round2(projPts),
+      played: played,
+      game_status: (game && game.status) || "unknown",
+      game_start_ms: (game && game.startTimeMs) || null
+    };
+  }
+
   function buildPlayerBreakdown(roster, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions) {
     var starters = roster.starters || [];
     var slots = rosterPositions || [];
@@ -1159,44 +1222,41 @@
     for (var i = 0; i < starters.length; i++) {
       var pid = starters[i];
       if (!pid || pid === "0") continue;
-      var actualSource = statsMap[pid];
-      var played = !!actualSource;
-      var meta = playersMeta ? playersMeta[pid] : null;
-      var team = meta ? meta.team : null;
-      var game = (team && teamGameSchedule && teamGameSchedule[team]) || null;
-      var actualPts = played ? scoreFrom(actualSource, scoringSettings, true) : 0;
-      var pregameProjPts = scoreFrom(projMap[pid], scoringSettings, false);
-      // "proj" shows the SAME number Projected mode actually sums for this
-      // player (see playerPoints/blendedProjection): their plain pregame
-      // projection while their game hasn't started, their real stat line
-      // once it's confirmed complete, and a pace-dampened blend of both
-      // while it's in progress -- this page's best estimate of Sleeper's
-      // own live "projected" number, not a reproduction of it (see
-      // blendedProjection's comment for how close that estimate actually
-      // gets, validated against real examples). A player whose game status
-      // is "unknown" (no team metadata, or the live-status feed failed)
-      // has no remainingFraction to blend with, so this just shows their
-      // raw pregame projection, same as before this blending model existed.
-      // A team defense also skips the blend once its game has started at
-      // all (see effectiveRemainingFraction's comment) -- its proj is
-      // pinned to its actual-so-far, not a penny more.
-      var projRemFrac = game ? effectiveRemainingFraction(meta ? meta.position : null, game.remainingFraction) : null;
-      var projPts = game ? blendedProjection(actualPts, pregameProjPts, projRemFrac) : pregameProjPts;
-      out.push({
-        player_id: pid,
-        name: meta ? playerName(meta) : pid,
-        actual: round2(actualPts),
-        proj: round2(projPts),
-        played: played,
-        game_status: (game && game.status) || "unknown",
-        game_start_ms: (game && game.startTimeMs) || null,
-        slot: slots[i] || null
-      });
+      var entry = computePlayerBreakdownEntry(pid, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule);
+      entry.slot = slots[i] || null;
+      out.push(entry);
     }
     // Stable sort -- ties (e.g. the two RB slots) keep their original
     // relative order, only the slot GROUPS get reordered.
     out.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
     return out;
+  }
+
+  // Appends a row for each identified QB-injury-backup replacement (see
+  // applyQbAdjustmentsToScores' `backup_qbs`) to a roster's "Points This
+  // Week" breakdown, computed with the exact same
+  // computePlayerBreakdownEntry used for every other player -- same
+  // actual/proj math, same played/game_status/game_start_ms, so it's
+  // filtered and formatted identically in both Actual and Projected mode
+  // (see thisWeekTooltip). The only difference is the `replacement: true`
+  // flag, which renderPtsTooltipContent uses to color the row yellow
+  // instead of the usual live-green (see .pts-tooltip-replacement above).
+  // Always appended AFTER the roster's own (already slot-sorted) starters,
+  // in whatever order findBackupQbs already ranked them (highest points
+  // first) -- deliberately not folded back into the slot sort, since these
+  // aren't really "this roster's SUPER_FLEX slot", just extra context
+  // tacked on about who actually covered for the injured starter. A no-op
+  // (returns `breakdown` unchanged) when there's no identified backup --
+  // e.g. a "Confirmed" override with no backup the stats-based heuristic
+  // could pin down (see findBackupQbs).
+  function appendQbReplacementRows(breakdown, backupQbs, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule) {
+    if (!backupQbs || !backupQbs.length) return breakdown;
+    var extra = backupQbs.map(function (b) {
+      var entry = computePlayerBreakdownEntry(b.player_id, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule);
+      entry.replacement = true;
+      return entry;
+    });
+    return breakdown.concat(extra);
   }
 
   // Normalizes one entry from Sleeper's /scores/nfl/{season_type}/{season}/{week}
@@ -1775,10 +1835,20 @@
               // for the "Points This Week" hover tooltip. Independent of
               // the QB-adjustment amount above -- best-effort, and never
               // allowed to block or break it if player names are missing.
+              // Any identified backup QB for this roster (see
+              // adjustmentByRoster/appendQbReplacementRows) gets appended
+              // to the same breakdown, so it shows up in this same
+              // tooltip -- same columns and Actual/Projected filtering as
+              // any other player, just colored yellow (see
+              // .pts-tooltip-replacement above).
               matchups.forEach(function (m) {
                 var rid = m.roster_id;
                 if (state.live.byRoster[rid]) {
-                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+                  var breakdown = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+                  var adj = adjustmentByRoster[rid];
+                  state.live.byRoster[rid].players = appendQbReplacementRows(
+                    breakdown, adj ? adj.backup_qbs : null, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule
+                  );
                 }
               });
             });
@@ -1901,7 +1971,11 @@
         timeColor: startLabel ? (state.timeSlotColorByLabel[startLabel] || null) : null,
         actual: p.actual,
         proj: p.proj,
-        live: p.game_status === "in_progress"
+        live: p.game_status === "in_progress",
+        // See appendQbReplacementRows/.pts-tooltip-replacement -- always
+        // wins over the plain "live" green when both are true (a
+        // replacement row's own game can certainly still be in progress).
+        replacement: p.replacement === true
       };
     });
     return { showStartTime: showStartTime, rows: rows };
@@ -2095,14 +2169,17 @@
         } else {
           nameHtml = escapeHtml(r.manager);
         }
-        // "*" for a live, not-yet-commissioner-confirmed QB-injury
-        // backup-points credit (see buildCombinedStandings' qb_adjustment
-        // field and applyQbAdjustmentsToScores) -- same custom-tooltip
-        // pattern as the "Pts This Week" cell (see qb-adj-tooltip show/
-        // hide/toggle below), so it works on both hover and tap.
+        // "QB Inj*" marker for a live, not-yet-commissioner-confirmed
+        // QB-injury backup-points credit (see buildCombinedStandings'
+        // qb_adjustment field and applyQbAdjustmentsToScores) -- same
+        // custom-tooltip pattern as the "Pts This Week" cell (see
+        // qb-adj-tooltip show/hide/toggle below), so it works on both
+        // hover and tap. The CSS class/element are still called
+        // "qb-adj-asterisk" (it's still an asterisk, just no longer the
+        // ENTIRE marker text) -- only the displayed text changed.
         if (r.qb_adjustment && r.qb_adjustment.confidence === "likely") {
           state.qbAdjTooltipData[r.roster_id] = buildQbAdjTooltipHtml(r.qb_adjustment);
-          nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">*</span>';
+          nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">QB Inj*</span>';
         }
         // The tooltip itself is a custom element (see pts-tooltip show/
         // hide/toggle below), not a native title attribute -- a native
@@ -2220,14 +2297,19 @@
   // A row for a player whose game is currently live gets the
   // .pts-tooltip-live class (green text on name/actual/proj -- see that
   // CSS rule), which is why the proj cell below carries its own
-  // .pts-tooltip-proj class instead of being class-less like before.
+  // .pts-tooltip-proj class instead of being class-less like before. A
+  // QB-injury replacement row (see appendQbReplacementRows) gets
+  // .pts-tooltip-replacement INSTEAD, even if it's also live -- yellow
+  // always wins there, since the point is to flag it as a replacement, not
+  // to report its own live status.
   function renderPtsTooltipContent(tooltip) {
     var showStartTime = tooltip.showStartTime;
     var timeHeaderHtml = showStartTime ? '<th class="pts-tooltip-time"></th>' : "";
     var bodyHtml = tooltip.rows.map(function (r) {
       var timeStyle = r.timeColor ? ' style="color:' + r.timeColor + '"' : "";
       var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time"' + timeStyle + ">" + escapeHtml(r.startLabel) + "</td>" : "";
-      return '<tr class="' + (r.live ? "pts-tooltip-live" : "") + '">' +
+      var rowClass = r.replacement ? "pts-tooltip-replacement" : (r.live ? "pts-tooltip-live" : "");
+      return '<tr class="' + rowClass + '">' +
         timeCellHtml +
         '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
@@ -2385,8 +2467,8 @@
       : "their backup";
     var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
     return "<strong>QB injury adjustment (likely)</strong><br>" +
-      escapeHtml(injuredName) + " is out/IR/PUP this week; " + backupNames +
-      "&rsquo;s points are being credited to this roster under the house rule.<br>" +
+      escapeHtml(injuredName) + " is out this week; " + backupNames +
+      "&rsquo;s points are being credited to this roster.<br>" +
       deltaStr + " pts added to Actual &amp; Projected, pending the commissioner&rsquo;s official adjustment.";
   }
 
