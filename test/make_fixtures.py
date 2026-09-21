@@ -39,7 +39,30 @@ history = {
             "confidence": "confirmed",
             "injury_status_at_capture": None,
             "custom_points_delta": 12.34,
-        }
+        },
+        # A STALE, never-confirmed "possible" entry from week 1 -- exercises
+        # renderQbAdjustments' own client-side backstop filter (on top of
+        # build_rumbles.py's determine_fresh_week carry-forward rule,
+        # which is what's SUPPOSED to keep this out of rumbles_history.json
+        # in the first place): a real production case showed entries like
+        # this lingering for days because the scheduled job that rewrites
+        # this file only runs once a day, so there's always a real window
+        # where the file itself is stale even after the backend fix has
+        # shipped. This row must NEVER show in the table once week 2 (a
+        # genuinely newer week) is live/known -- see the "hidden" assertion
+        # in run_test.py. Roster 3 (Jake) chosen since it has no other
+        # QB-adjustment-table involvement to disturb.
+        {
+            "week": 1,
+            "roster_id": 3,
+            "manager": "Jake",
+            "injured_qb": {"player_id": "P_STALE_INJURED", "name": "Stale Possible QB", "points": 9.0},
+            "backup_qbs": [{"player_id": "P_STALE_BACKUP", "name": "Stale Possible Backup", "points": 3.21}],
+            "backup_points_total": 3.21,
+            "confidence": "possible",
+            "injury_status_at_capture": None,
+            "custom_points_delta": None,
+        },
     ],
 }
 # Week 1: roster i beat roster i+1 within each pair (1v2, 3v4, ...), and

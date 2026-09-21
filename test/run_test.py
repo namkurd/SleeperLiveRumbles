@@ -1123,8 +1123,24 @@ def scenario_live_blending(browser):
     assert hist_row["confidence"] == "Confirmed", f"expected 'Confirmed' confidence for the historical override row, got: {hist_row['confidence']}"
     assert hist_row["commissioner_adjustment"] == "+12.34", f"expected the historical row's Commissioner Adjustment to show its own custom_points_delta (+12.34), got: {hist_row['commissioner_adjustment']}"
 
+    # A STALE, never-confirmed "possible" entry from week 1 (Jake, see
+    # make_fixtures.py) must be silently hidden -- week 2 is live now, so a
+    # newer week has clearly already begun. This is rumbles.html's own
+    # client-side backstop on top of build_rumbles.py's carry-forward rule
+    # (determine_fresh_week): real production data showed a stale
+    # "possible" entry can keep sitting in rumbles_history.json for a
+    # while even after that backend fix shipped, since the scheduled job
+    # that rewrites the file only runs once a day -- this filter makes the
+    # live page correct immediately regardless of when that next run
+    # happens, rather than waiting on it.
+    assert not any(r["manager"] == "Jake" for r in qb_rows), (
+        f"expected the stale, never-confirmed week-1 'possible' row for Jake to be hidden now that week 2 is "
+        f"live, got: {qb_rows}"
+    )
+
     assert [r["week"] for r in qb_rows] == ["2", "2", "1"], f"expected rows sorted week descending (both week-2 rows, then week-1), got weeks: {[r['week'] for r in qb_rows]}"
     assert [r["manager"] for r in qb_rows[:2]] == ["Alex", "Ankit"], f"expected the two week-2 rows sorted by manager A-Z, got: {[r['manager'] for r in qb_rows[:2]]}"
+    print("Confirmed a stale, never-confirmed 'possible' entry from an older week is hidden once a newer week is live, even though it's still sitting in the history fixture.")
 
     qb_table_live_badges = page.locator("#qb-adj-table .badge-live").count()
     assert qb_table_live_badges == 0, (

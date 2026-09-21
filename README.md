@@ -168,6 +168,20 @@ for days after a new week had clearly already started, instead of dropping
 right away. See `determine_fresh_week`/`load_previous_weeks_completed` in
 `build_rumbles.py`.
 
+That backend fix only takes effect once `build_rumbles.py` actually runs
+again and rewrites `rumbles_history.json` -- and the scheduled workflow
+that does that only runs once a day (see Setup below), so there's a real
+window, potentially most of a day, where the file on disk can still hold
+a stale "possible" entry even after the fix has shipped. Rather than make
+visitors wait on that, `rumbles.html` also filters its OWN copy of
+`state.history.qb_adjustments` at render time: an unconfirmed "possible"
+row is hidden the moment a genuinely newer week is known to the page --
+either live right now, or itself already fully completed -- computed
+fresh on every render straight from the live/history data already loaded,
+with no dependency on `build_rumbles.py` having run again. "Likely" and
+"Confirmed" rows are never touched by this -- only "possible". See the
+comment right above `histAdjustments`' filter in `renderQbAdjustments`.
+
 Confirmed against the real example that prompted this: league roster_id
 6 ("Alex"), Week 1 -- Kyler Murray left hurt, Carson Wentz (a free agent
 from Alex's own roster's perspective) came in and scored 19.47 points
@@ -187,9 +201,15 @@ kept), and `test/test_build_rumbles.py` covers `determine_fresh_week`
 across a simulated multi-run sequence (a week's first run as completed is
 fresh; a later run, with a newer week now current but not yet itself
 completed, is not; freshness moves on once that newer week itself
-finishes) plus an end-to-end check that an unconfirmed "possible" entry
+finishes), plus an end-to-end check that an unconfirmed "possible" entry
 is genuinely dropped, not just theoretically excluded, once a new week has
-started.
+started. The client-side backstop filter has its own dedicated coverage in
+`test/run_test.py`'s live scenario too: a stale, never-confirmed "possible"
+week-1 entry is deliberately planted straight into the
+`rumbles_history.json` fixture (alongside the existing "confirmed"
+historical row, which must keep showing) precisely so the fixture can
+prove `rumbles.html` hides it once week 2 is live, independent of whatever
+`build_rumbles.py` itself would have done with the same data.
 
 #### The credit now also lands in the live standings themselves
 
@@ -1181,10 +1201,27 @@ per-team data, just a standing explainer.
    "kohagan"; check the league's real `/users` response rather than
    guessing, or the override will silently never match).
 3. **Enable GitHub Pages:** repo Settings -> Pages -> Deploy from branch ->
-   `main` / root.
+   `main` / root. This repo includes an empty `.nojekyll` file at the root
+   -- make sure it's actually committed (it has no extension and no
+   visible content, so it's easy to accidentally leave out of a manual
+   file copy). Without it, GitHub Pages runs every push through a full
+   Jekyll build (installing Ruby gems, generating the site) instead of
+   just copying the files as-is, which is both much slower and gets
+   slower still as the repo picks up more files over time -- `.nojekyll`
+   tells Pages to skip that entirely and serve the files directly. Nothing
+   here uses Jekyll templating, so this is always safe. If deploys ever
+   start taking several minutes instead of well under one, check that this
+   file is still present and committed at the repo root (`git ls-files
+   .nojekyll` from a checkout, or look for it directly on github.com).
 4. **Trigger the workflow once manually** (Actions tab -> "Update Rumbles
    standings" -> Run workflow) so `rumbles_history.json` gets created for
-   the first time.
+   the first time. It also only otherwise runs once a day (see the
+   `cron` schedule in `.github/workflows/update.yml`) -- after pushing a
+   change to `build_rumbles.py` itself (as opposed to `rumbles.html`,
+   which takes effect immediately on the next page load with no workflow
+   run needed), trigger it manually the same way if you want
+   `rumbles_history.json` to pick up that change right away rather than
+   waiting for the next scheduled run.
 5. **Confirm the page loads** at
    `https://<you>.github.io/<repo>/rumbles.html`.
 6. **Embed it** in the Google Site: Insert -> Embed -> By URL, pointing at

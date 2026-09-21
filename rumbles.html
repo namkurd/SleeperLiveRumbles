@@ -2919,6 +2919,27 @@
     if (!body) return; // defensive -- shouldn't happen, but render() must never throw
 
     var histAdjustments = (state.history && state.history.qb_adjustments) || [];
+    // Client-side backstop, on top of build_rumbles.py's own carry-forward
+    // rule (see determine_fresh_week there): an unconfirmed "possible"
+    // entry from an OLDER week is never shown once a NEWER week has
+    // already begun, even if rumbles_history.json itself still has a
+    // stale one sitting in it (a real case: the scheduled job that
+    // regenerates that file only runs once a day, so a week or two can
+    // pass between "the fix shipped" and "the file actually got
+    // rewritten" -- this makes the live page correct immediately,
+    // independent of when that next scheduled run happens). "A newer week
+    // has begun" here means either a genuinely later week is currently
+    // live, or a genuinely later week has already fully completed --
+    // never the entry's own week alone, so a still-current week's
+    // "possible" rows (the normal, intended case) are untouched.
+    var weeksCompletedForFilter = (state.history && state.history.weeks_completed) || [];
+    var latestKnownWeek = weeksCompletedForFilter.length ? Math.max.apply(null, weeksCompletedForFilter) : 0;
+    if (state.live && state.live.isLive && state.live.week > latestKnownWeek) {
+      latestKnownWeek = state.live.week;
+    }
+    histAdjustments = histAdjustments.filter(function (r) {
+      return !(r.confidence === "possible" && r.week < latestKnownWeek);
+    });
     var rows = histAdjustments.concat(state.liveQbAdjustments || []);
     rows = rows.slice().sort(function (a, b) {
       if (b.week !== a.week) return b.week - a.week;
