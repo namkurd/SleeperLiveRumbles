@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-09-20T13:32:56.031650+00:00",
+  "generated_at": "2026-09-21T15:51:05.733476+00:00",
   "weeks_completed": [
     1
   ],
@@ -302,6 +302,90 @@
     }
   },
   "qb_adjustments": [
+    {
+      "week": 1,
+      "roster_id": 1,
+      "manager": "Aidan",
+      "injured_qb": {
+        "player_id": "421",
+        "name": "Matthew Stafford",
+        "points": 5.1
+      },
+      "backup_qbs": [
+        {
+          "player_id": "10857",
+          "name": "Stetson Bennett",
+          "points": 1.82
+        }
+      ],
+      "backup_points_total": 1.82,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null
+    },
+    {
+      "week": 1,
+      "roster_id": 2,
+      "manager": "Ben",
+      "injured_qb": {
+        "player_id": "4046",
+        "name": "Patrick Mahomes",
+        "points": 22.36
+      },
+      "backup_qbs": [
+        {
+          "player_id": "7591",
+          "name": "Justin Fields",
+          "points": 0.0
+        }
+      ],
+      "backup_points_total": 0.0,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null
+    },
+    {
+      "week": 1,
+      "roster_id": 3,
+      "manager": "Jake",
+      "injured_qb": {
+        "player_id": "7523",
+        "name": "Trevor Lawrence",
+        "points": 27.85
+      },
+      "backup_qbs": [
+        {
+          "player_id": "4464",
+          "name": "Nick Mullens",
+          "points": -0.3
+        }
+      ],
+      "backup_points_total": -0.3,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null
+    },
+    {
+      "week": 1,
+      "roster_id": 4,
+      "manager": "Haan",
+      "injured_qb": {
+        "player_id": "6770",
+        "name": "Joe Burrow",
+        "points": 15.31
+      },
+      "backup_qbs": [
+        {
+          "player_id": "19",
+          "name": "Joe Flacco",
+          "points": 0.0
+        }
+      ],
+      "backup_points_total": 0.0,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null
+    },
     {
       "week": 1,
       "roster_id": 6,
