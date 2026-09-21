@@ -475,23 +475,35 @@
   #qb-adj-table td.qb-name-cell, #qb-adj-table td.manager-cell { text-align: left; }
   .backup-list { display: flex; flex-direction: column; gap: 2px; }
   .backup-list span { white-space: nowrap; }
-  /* Row text color scheme: every OTHER cell in a row (Week, Status) is
-     colored to match that manager's own matchup color (an inline style on
-     the <td> itself -- see renderQbAdjustments), same as the Manager cell
-     already is. The Injured QB's name/points and the Backup (replacement)
-     QB's name/points are a deliberate exception -- always red/green
-     respectively, regardless of manager color, so the two halves of "who
-     got hurt, who covered for them" read at a glance without having to
-     parse column headers. Commissioner Adjustment (the official, keyed-in
-     delta) is always green too, once it exists, on the theory that it's
-     the same kind of "credit" the green backup-points column already
-     represents -- just the confirmed version of it. The confidence pill
-     and LIVE badge keep their own existing fixed colors either way (never
-     overridden by the row's manager color, since both already set their
-     own `color` directly rather than inheriting).*/
+  /* Row text color scheme: every OTHER cell in a row (Week, Commissioner
+     Status) is colored to match that manager's own matchup color (an
+     inline style on the <td> itself -- see renderQbAdjustments), same as
+     the Manager cell already is. The Injured QB's name/points and the
+     Backup (replacement) QB's NAME are a deliberate exception -- always
+     red/green respectively, regardless of manager color, so the two
+     halves of "who got hurt, who covered for them" read at a glance
+     without having to parse column headers. Commissioner Adjustment (the
+     official, keyed-in delta) is always green too, once it exists, on the
+     theory that it's the same kind of "credit" the green backup-name
+     color already represents -- just the confirmed version of it. The
+     confidence pill and LIVE badge keep their own existing fixed colors
+     either way (never overridden by the row's manager color, since both
+     already set their own `color` directly rather than inheriting).
+
+     The "Backup QB Points" TOTAL column (as opposed to the Backup QB(s)
+     name-list column, which stays plain green above) is the one cell that
+     tracks confidence state visually: it's still just this page's
+     best-effort estimate while "likely" (no commissioner override exists
+     yet to confirm it), so it's colored the same yellow used for the
+     replacement row in the Points This Week tooltip (--replacement) --
+     then flips to the same green as Commissioner Adjustment once
+     "confirmed", reading as "this number is now the official one." See
+     renderQbAdjustments for which class gets applied. */
   #qb-adj-table td.qb-adj-injured { color: var(--bad); }
   #qb-adj-table td.qb-adj-backup { color: var(--good); }
   #qb-adj-table td.qb-adj-commissioner { color: var(--good); }
+  #qb-adj-table td.qb-adj-backup-total-likely { color: var(--replacement); }
+  #qb-adj-table td.qb-adj-backup-total-confirmed { color: var(--good); }
   .confidence-pill {
     display: inline-block;
     font-size: 0.68rem;
@@ -501,7 +513,7 @@
     white-space: nowrap;
   }
   .confidence-confirmed { background: rgba(53, 194, 107, 0.15); color: var(--good); }
-  .confidence-likely { background: rgba(77, 159, 255, 0.15); color: var(--accent-2); }
+  .confidence-likely { background: rgba(234, 179, 8, 0.15); color: var(--replacement); }
   /* "*" shown next to a manager's name while a "likely" (not yet
      commissioner-confirmed) QB-injury backup-points credit is folded into
      their live Actual/Projected totals this week -- see
@@ -547,6 +559,12 @@
   }
   .qb-adj-tooltip.visible { opacity: 1; visibility: visible; }
   .qb-adj-tooltip strong { color: var(--accent-2); }
+  /* The points-added figure within the tooltip body (see
+     buildQbAdjTooltipHtml) -- same yellow as the replacement row in the
+     Points This Week tooltip and the "likely"-tier Backup QB Points cell
+     above, so this page's one yellow consistently means "this page's own
+     estimate, not yet commissioner-confirmed." */
+  .qb-adj-tooltip-yellow { color: var(--replacement); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -2459,17 +2477,27 @@
   // backup_qbs: [{name, points}, ...]} (see applyQbAdjustmentsToScores).
   // Only ever called for confidence === "likely" (see render()) -- a
   // "confirmed" adjustment gets no asterisk/tooltip at all.
+  // Four short lines, one idea each: what happened to the starter, who's
+  // covering, how many points that's worth (the one figure colored yellow
+  // -- .qb-adj-tooltip-yellow -- to flag it as this page's own estimate),
+  // and that it's still pending the commissioner's own official entry.
+  // Deliberately plain language throughout -- no "IR"/"PUP" injury-status
+  // jargon and no reference to this being a "house rule," so it reads
+  // clearly to anyone regardless of whether they know this league's rule
+  // by that name.
   function buildQbAdjTooltipHtml(adj) {
     var injuredName = (adj.injured_qb && adj.injured_qb.name) || "Unknown QB";
     var backups = adj.backup_qbs || [];
     var backupNames = backups.length
       ? backups.map(function (b) { return escapeHtml(b.name); }).join(", ")
-      : "their backup";
+      : "A backup QB";
+    var backupVerb = backups.length > 1 ? "are" : "is";
     var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
     return "<strong>QB injury adjustment (likely)</strong><br>" +
-      escapeHtml(injuredName) + " is out this week; " + backupNames +
-      "&rsquo;s points are being credited to this roster.<br>" +
-      deltaStr + " pts added to Actual &amp; Projected, pending the commissioner&rsquo;s official adjustment.";
+      escapeHtml(injuredName) + " was injured in-game and ruled out this week.<br>" +
+      backupNames + " " + backupVerb + " stepping in; their points will be credited to this roster.<br>" +
+      '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.<br>" +
+      "Pending the commissioner&rsquo;s official adjustment.";
   }
 
   function positionQbAdjTooltip(el) {
@@ -2642,8 +2670,8 @@
         // state.matchupColorByRosterId), so a manager's name is the same
         // color everywhere on the page -- not just when this log row
         // happens to be about the current live week. Every OTHER plain-
-        // text cell (Week, Status) gets this same color via an inline
-        // style on the <td> itself -- see the CSS comment above
+        // text cell (Week, Commissioner Status) gets this same color via
+        // an inline style on the <td> itself -- see the CSS comment above
         // #qb-adj-table td.qb-adj-injured for the full color scheme.
         var matchupColor = state.matchupColorByRosterId[r.roster_id];
         var rowColorAttr = matchupColor ? ' style="color:' + matchupColor + '"' : "";
@@ -2654,17 +2682,22 @@
         // commissioner's own custom_points override represents (already
         // computed by detectQbAdjustmentsForWeek/compute_qb_adjustments_
         // for_week as custom_points_delta) -- null for a still-"likely"
-        // row (no override exists yet), shown as an em dash.
-        var commissionerAdjHtml = (r.custom_points_delta === null || r.custom_points_delta === undefined)
-          ? "—"
-          : (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2);
+        // row (no override exists yet), shown as an em dash. Whether this
+        // exists is also what decides the Backup QB Points total's color
+        // just below -- yellow (this page's own estimate) until there's a
+        // matching commissioner adjustment to confirm it, then green.
+        var hasCommissionerAdj = r.custom_points_delta !== null && r.custom_points_delta !== undefined;
+        var commissionerAdjHtml = hasCommissionerAdj
+          ? (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2)
+          : "—";
+        var backupTotalClass = hasCommissionerAdj ? "qb-adj-backup-total-confirmed" : "qb-adj-backup-total-likely";
         return "<tr>" +
           "<td" + rowColorAttr + ">" + r.week + "</td>" +
           '<td class="manager-cell">' + managerHtml + "</td>" +
           '<td class="qb-name-cell qb-adj-injured">' + escapeHtml(r.injured_qb.name) + "</td>" +
           '<td class="qb-name-cell qb-adj-backup">' + backupsHtml + "</td>" +
           '<td class="qb-adj-injured">' + r.injured_qb.points.toFixed(2) + "</td>" +
-          '<td class="qb-adj-backup">' + r.backup_points_total.toFixed(2) + "</td>" +
+          '<td class="' + backupTotalClass + '">' + r.backup_points_total.toFixed(2) + "</td>" +
           '<td class="qb-adj-commissioner">' + commissionerAdjHtml + "</td>" +
           '<td class="qb-name-cell"' + rowColorAttr + ">" + pill + "</td>" +
           "</tr>";

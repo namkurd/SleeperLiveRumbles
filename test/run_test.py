@@ -115,10 +115,15 @@ def get_qb_adjustment_rows(page):
 def get_qb_adjustment_row_colors(page):
     """manager -> {week_color, injured_name_color, injured_points_color,
     backup_name_color, backup_points_color, commissioner_adj_color,
-    status_color} -- real COMPUTED (getComputedStyle) text colors as rgb()
-    strings for every cell in that manager's QB Injury Backup Adjustments
-    row, keyed by manager (assumes one row per manager in the fixture used,
-    same assumption get_qb_adjustment_manager_colors already makes)."""
+    status_color, pill_color} -- real COMPUTED (getComputedStyle) text
+    colors as rgb() strings for every cell in that manager's QB Injury
+    Backup Adjustments row, keyed by manager (assumes one row per manager
+    in the fixture used, same assumption get_qb_adjustment_manager_colors
+    already makes). `status_color` is the Commissioner Status <td>'s own
+    color (the row's manager color, same as week_color); `pill_color` is
+    the Likely/Confirmed pill span's own color specifically (it sets its
+    own `color` via .confidence-likely/.confidence-confirmed, so it's
+    never the same as the td's inherited manager color)."""
     pairs = page.eval_on_selector_all(
         "#qb-adj-body tr",
         """rows => rows.map(r => {
@@ -126,6 +131,7 @@ def get_qb_adjustment_row_colors(page):
             if (tds.length < 8) return null;
             var manager = tds[1].innerText.trim();
             var colorOf = (el) => getComputedStyle(el).color;
+            var pill = tds[7].querySelector('.confidence-pill');
             return [manager, {
                 manager_color: colorOf(tds[1].querySelector('.matchup-name') || tds[1]),
                 week_color: colorOf(tds[0]),
@@ -135,6 +141,7 @@ def get_qb_adjustment_row_colors(page):
                 backup_points_color: colorOf(tds[5]),
                 commissioner_adj_color: colorOf(tds[6]),
                 status_color: colorOf(tds[7]),
+                pill_color: pill ? colorOf(pill) : null,
             }];
         }).filter(p => p !== null)""",
     )
@@ -369,6 +376,27 @@ def get_qb_adj_tooltip_text(page, manager):
     page.mouse.move(0, 0)
     page.wait_for_timeout(150)
     return text
+
+
+def get_qb_adj_tooltip_points_color(page, manager):
+    """Hovers the given manager's '*' and returns the COMPUTED (getComputedStyle)
+    text color of the points-added figure inside the #qb-adj-tooltip (see
+    .qb-adj-tooltip-yellow in rumbles.html), or None if they have no
+    asterisk/tooltip to check. Same hover/move-away pattern as
+    get_qb_adj_tooltip_text."""
+    el = get_qb_adj_asterisk(page, manager)
+    if el is None:
+        return None
+    el.hover()
+    page.wait_for_timeout(150)
+    tip = page.locator("#qb-adj-tooltip")
+    is_visible = tip.evaluate("el => el.classList.contains('visible')")
+    color = tip.evaluate(
+        "el => { var s = el.querySelector('.qb-adj-tooltip-yellow'); return s ? getComputedStyle(s).color : null; }"
+    ) if is_visible else None
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    return color
 
 
 def new_page(browser, console_errors, page_errors):
@@ -1063,36 +1091,59 @@ def scenario_live_blending(browser):
     print("\nConfirmed QB Injury Backup Adjustments table: live detection (team-scoped, injury-status-corroborated) + historical merge + correct sort order.")
 
     # ---- QB Injury Backup Adjustments table: row text coloring -----------
-    # Every plain-text cell (Week, Status) matches that row's OWN manager
-    # matchup color (the same color already used for the Manager cell and
-    # the standings table); the Injured QB's name/points are always red
-    # (--bad) and the Backup QB's name/points always green (--good),
-    # regardless of manager color, and Commissioner Adjustment is green too
-    # -- see the CSS comment above #qb-adj-table td.qb-adj-injured in
-    # rumbles.html. Resolved live via getComputedStyle rather than
-    # hardcoded hex/rgb literals, since --good/--bad (unlike --matchup-4)
-    # actually differ between light/dark mode.
+    # Every plain-text cell (Week, Commissioner Status) matches that row's
+    # OWN manager matchup color (the same color already used for the
+    # Manager cell and the standings table); the Injured QB's name/points
+    # are always red (--bad) and the Backup QB(s) NAME always green
+    # (--good), regardless of manager color, and Commissioner Adjustment is
+    # green too -- see the CSS comment above #qb-adj-table td.qb-adj-injured
+    # in rumbles.html. Resolved live via getComputedStyle rather than
+    # hardcoded hex/rgb literals, since --good/--bad/--replacement (unlike
+    # --matchup-4) actually differ between light/dark mode.
+    #
+    # The Backup QB Points TOTAL and the Commissioner Status pill both
+    # instead track confidence: yellow (--replacement) while still
+    # "likely" (Alex -- no commissioner adjustment yet), green (--good)
+    # once "confirmed" (Ankit and Ben both have one, even though Ankit's
+    # has no identifiable backup NAME -- the total still falls back to the
+    # override delta and is still colored confirmed-green).
     good_ref = get_css_var_color(page, "good")
     bad_ref = get_css_var_color(page, "bad")
+    replacement_ref = get_css_var_color(page, "replacement")
     row_colors = get_qb_adjustment_row_colors(page)
+    confidence_by_manager = {"Alex": "likely", "Ankit": "confirmed", "Ben": "confirmed"}
 
     for manager in ["Alex", "Ankit", "Ben"]:
         rc = row_colors[manager]
+        tier = confidence_by_manager[manager]
+        expected_tier_color = replacement_ref if tier == "likely" else good_ref
         assert rc["week_color"] == rc["manager_color"], (
             f"{manager}: expected the Week cell to match their own manager color ({rc['manager_color']}), got {rc['week_color']}"
         )
         assert rc["injured_name_color"] == bad_ref, f"{manager}: expected the Injured QB name to be red ({bad_ref}), got {rc['injured_name_color']}"
         assert rc["injured_points_color"] == bad_ref, f"{manager}: expected the Injured QB Points to be red ({bad_ref}), got {rc['injured_points_color']}"
         assert rc["commissioner_adj_color"] == good_ref, f"{manager}: expected Commissioner Adjustment to be green ({good_ref}), got {rc['commissioner_adj_color']}"
-    # Backup QB name/points: only Alex and Ben actually have an identified
-    # backup QB to color (Ankit's override has none -- see the empty
-    # `backups` list checked above -- so there's no name/points text there
-    # to assert a color on).
+        assert rc["backup_points_color"] == expected_tier_color, (
+            f"{manager}: expected the Backup QB Points total to be "
+            f"{'yellow (' + replacement_ref + ', still likely -- no commissioner adjustment yet)' if tier == 'likely' else 'green (' + good_ref + ', commissioner-confirmed)'}"
+            f", got {rc['backup_points_color']}"
+        )
+        assert rc["pill_color"] == expected_tier_color, (
+            f"{manager}: expected the Commissioner Status pill to be "
+            f"{'yellow (' + replacement_ref + ')' if tier == 'likely' else 'green (' + good_ref + ')'}, got {rc['pill_color']}"
+        )
+    # Backup QB name: only Alex and Ben actually have an identified backup
+    # QB to color (Ankit's override has none -- see the empty `backups`
+    # list checked above -- so there's no name text there to assert a
+    # color on, even though its points TOTAL still gets checked above).
     for manager in ["Alex", "Ben"]:
         rc = row_colors[manager]
         assert rc["backup_name_color"] == good_ref, f"{manager}: expected the Backup QB name to be green ({good_ref}), got {rc['backup_name_color']}"
-        assert rc["backup_points_color"] == good_ref, f"{manager}: expected the Backup QB Points to be green ({good_ref}), got {rc['backup_points_color']}"
-    print("Confirmed QB Injury Backup Adjustments row coloring: Week/Status match the manager color, Injured QB name+points are red, Backup QB name+points and Commissioner Adjustment are green.")
+    print(
+        "Confirmed QB Injury Backup Adjustments row coloring: Week/Commissioner Status match the manager color, "
+        "Injured QB name+points are red, Backup QB name and Commissioner Adjustment are green, and the Backup QB "
+        "Points total + Commissioner Status pill both track confidence (yellow while likely, green once confirmed)."
+    )
 
     # ---- Live QB-injury-backup credit folded into the standings totals,
     # plus the manager-name "*" + tooltip for the still-"likely" case ------
@@ -1114,12 +1165,24 @@ def scenario_live_blending(browser):
 
     tooltip_text = get_qb_adj_tooltip_text(page, "Alex")
     assert tooltip_text is not None, "expected hovering Alex's '*' to show the #qb-adj-tooltip"
-    assert "Kyler Murray" in tooltip_text, f"expected the tooltip to name the injured QB (Kyler Murray), got: {tooltip_text!r}"
+    assert "Kyler Murray was injured in-game and ruled out this week" in tooltip_text, (
+        f"expected the tooltip's first line to plainly state the injured QB was injured in-game and ruled out, got: {tooltip_text!r}"
+    )
     assert "Carson Wentz" in tooltip_text, f"expected the tooltip to name the replacement/backup QB (Carson Wentz), got: {tooltip_text!r}"
+    assert "stepping in" in tooltip_text and "credited to this roster" in tooltip_text, (
+        f"expected a line stating the replacement QB(s) are stepping in and their points will be credited to this roster, got: {tooltip_text!r}"
+    )
     assert "+21.90" in tooltip_text, f"expected the tooltip to state the exact points added (+21.90), got: {tooltip_text!r}"
+    assert "pending the commissioner" in tooltip_text.lower(), f"expected a final line noting this is pending the commissioner's official adjustment, got: {tooltip_text!r}"
     for banned in ("IR", "PUP", "house rule"):
         assert banned not in tooltip_text, f"expected the tooltip wording to make no mention of {banned!r} (no injury-status jargon, no house-rule language), got: {tooltip_text!r}"
     print(f"Confirmed Alex's '*' tooltip names the injured QB, the replacement QB, and the exact points added, with no IR/PUP/house-rule language: {tooltip_text!r}")
+
+    tooltip_points_color = get_qb_adj_tooltip_points_color(page, "Alex")
+    assert tooltip_points_color == replacement_ref, (
+        f"expected the tooltip's points-added figure to be yellow ({replacement_ref}), got {tooltip_points_color}"
+    )
+    print(f"Confirmed the tooltip's points-added figure is colored yellow ({replacement_ref}).")
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
