@@ -91,9 +91,12 @@ def get_qb_adjustment_rows(page):
     cell -- "Name (7.20)", same format Backup QB(s) already used -- to
     condense the table down from 8 columns): 0=week, 1=manager, 2=injured
     QB (name+points), 3=backup QB(s), 4=backup QB points (total),
-    5=Commissioner Adjustment, 6=Commissioner Status (pill + LIVE badge).
-    `injured_qb`/`injured_points` are still split back apart here so
-    existing assertions reading them separately don't have to change."""
+    5=Commissioner Adjustment, 6=Commissioner Status (just the confidence
+    pill -- this table deliberately carries no LIVE badge at all, unlike
+    the standings table; see the no-badge-live-at-all assertion right
+    after this is called). `injured_qb`/`injured_points` are still split
+    back apart here so existing assertions reading them separately don't
+    have to change."""
     return page.eval_on_selector_all(
         "#qb-adj-body tr",
         """rows => rows.map(r => {
@@ -112,7 +115,6 @@ def get_qb_adjustment_rows(page):
                 backup_points: tds[4].innerText.trim(),
                 commissioner_adjustment: tds[5].innerText.trim(),
                 confidence: pill ? pill.innerText.trim() : null,
-                live: !!tds[6].querySelector('.badge-live'),
             };
         }).filter(r => r !== null)""",
     )
@@ -1113,18 +1115,23 @@ def scenario_live_blending(browser):
     assert live_row["injured_points"] == "7.20", f"expected Kyler Murray's own points to be 7.20, got: {live_row['injured_points']}"
     assert live_row["backup_points"] == "21.90", f"expected backup total 21.90, got: {live_row['backup_points']}"
     assert live_row["confidence"] == "Likely", f"expected 'Likely' confidence (injury_status 'Out', no override yet), got: {live_row['confidence']}"
-    assert live_row["live"], "expected the live-detected row to carry a LIVE badge"
     assert live_row["commissioner_adjustment"] == "—", f"expected the Commissioner Adjustment column to be blank (an em dash) for a still-'likely' row with no override yet, got: {live_row['commissioner_adjustment']}"
 
     hist_row = next((r for r in qb_rows if r["manager"] == "Ben"), None)
     assert hist_row is not None, f"expected the historical week-1 row for Ben, got: {qb_rows}"
     assert hist_row["week"] == "1", f"expected the historical row to be week 1, got: {hist_row['week']}"
     assert hist_row["confidence"] == "Confirmed", f"expected 'Confirmed' confidence for the historical override row, got: {hist_row['confidence']}"
-    assert not hist_row["live"], "the historical (already-finalized) row must NOT carry a LIVE badge"
     assert hist_row["commissioner_adjustment"] == "+12.34", f"expected the historical row's Commissioner Adjustment to show its own custom_points_delta (+12.34), got: {hist_row['commissioner_adjustment']}"
 
     assert [r["week"] for r in qb_rows] == ["2", "2", "1"], f"expected rows sorted week descending (both week-2 rows, then week-1), got weeks: {[r['week'] for r in qb_rows]}"
     assert [r["manager"] for r in qb_rows[:2]] == ["Alex", "Ankit"], f"expected the two week-2 rows sorted by manager A-Z, got: {[r['manager'] for r in qb_rows[:2]]}"
+
+    qb_table_live_badges = page.locator("#qb-adj-table .badge-live").count()
+    assert qb_table_live_badges == 0, (
+        f"the QB Injury Backup Adjustments table should carry NO LIVE badge at all (the confidence pill's own "
+        f"label already conveys status) -- not even for Alex's live-detected 'Likely' row, found {qb_table_live_badges}"
+    )
+    print("Confirmed the QB Injury Backup Adjustments table shows no LIVE badge anywhere, live-detected rows included.")
 
     print("\nConfirmed QB Injury Backup Adjustments table: live detection (team-scoped, injury-status-corroborated) + historical merge + correct sort order.")
 

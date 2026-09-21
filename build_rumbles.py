@@ -420,6 +420,15 @@ def find_backup_qbs(
         {"player_id": cid, "name": player_name(players_meta.get(cid)), "points": round(dot_product(stats_map.get(cid), scoring_settings), 2)}
         for cid in played_ids
     ]
+    # A backup who recorded some real action (is_played above) but ended up
+    # with EXACTLY 0.00 fantasy points isn't a meaningful "backup credit"
+    # worth surfacing -- a kneel-down, a single incomplete pass, whatever
+    # it was, it left no measurable statistical footprint. A NEGATIVE total
+    # (a pick, a lost fumble) is kept -- that's still a real, if bad,
+    # outing, unlike a flat 0.00. round()'s -0.0 still equals 0.0 in
+    # Python, so a tiny negative that rounds to -0.00 is correctly
+    # excluded too.
+    backup_entries = [b for b in backup_entries if b["points"] != 0]
     backup_entries.sort(key=lambda b: -b["points"])
     return backup_entries
 
@@ -570,6 +579,32 @@ def compute_qb_adjustments_for_week(
     return entries
 
 
+def determine_fresh_week(completed_weeks: list[int], previously_completed_weeks: set[int] | None) -> int | None:
+    """The single week (if any) that's actually worth freshly re-checking
+    injury_status for: the most-recently-completed week, but ONLY on the
+    first run since it finished -- i.e. it wasn't already in
+    `weeks_completed` as of the LAST run (see load_previous_weeks_completed).
+    Once a SECOND (or later) run sees that same week still as the max of
+    completed_weeks -- meaning a newer week has since started but hasn't
+    finished yet, which can span most of a week's own live window -- it's
+    no longer "fresh": Sleeper's injury_status feed has moved on to the new
+    week's own designations by then, so re-checking it against the old
+    week's box score would be checking the wrong week's data entirely.
+
+    Without this "first run only" guard, an unconfirmed "possible" entry
+    from the prior week would keep getting freshly re-logged (and so never
+    demoted to compute_qb_adjustments_for_week's carry-forward-likely-only
+    path) for the ENTIRE span that the new week is live but not yet itself
+    completed -- days, potentially -- instead of dropping as soon as that
+    new week starts, which is what a manager actually sees and expects (a
+    "possible" case that was never confirmed shouldn't keep lingering once
+    everyone's moved on to the next week)."""
+    freshest_week = max(completed_weeks) if completed_weeks else None
+    if freshest_week is not None and freshest_week in (previously_completed_weeks or set()):
+        return None
+    return freshest_week
+
+
 def build_history(
     league_id: str,
     season: str,
@@ -580,6 +615,7 @@ def build_history(
     team_qb_index: dict[str, list[str]] | None = None,
     scoring_settings: dict | None = None,
     old_qb_by_week: dict[int, dict[int, list[dict]]] | None = None,
+    previously_completed_weeks: set[int] | None = None,
 ) -> dict:
     weekly: dict[str, dict] = {}
     qb_adjustments: list[dict] = []
@@ -588,7 +624,7 @@ def build_history(
         for rid in manager_map
     }
     old_qb_by_week = old_qb_by_week or {}
-    freshest_week = max(completed_weeks) if completed_weeks else None
+    freshest_week = determine_fresh_week(completed_weeks, previously_completed_weeks)
     can_detect_qb_adjustments = bool(players_meta and team_qb_index and scoring_settings)
 
     for week in completed_weeks:
@@ -702,6 +738,27 @@ def load_previous_qb_adjustments() -> dict[int, dict[int, list[dict]]]:
         return {}
 
 
+def load_previous_weeks_completed() -> set[int]:
+    """Which weeks were already `weeks_completed` as of the LAST run (if
+    any) -- used by build_history to tell "this week just finished, this is
+    the first run to see it as completed" (the one moment injury_status is
+    worth freshly re-checking at all) apart from "this week has been
+    completed for a while now, possibly for days, while a NEWER week has
+    since started" (see build_history's freshest_week/is_fresh comment).
+    Never fatal: a missing/corrupt previous file just means every
+    currently-completed week looks "new" this run, same as this feature's
+    very first run."""
+    if not os.path.exists(OUTPUT_PATH):
+        return set()
+    try:
+        with open(OUTPUT_PATH) as f:
+            old = json.load(f)
+        return set(old.get("weeks_completed") or [])
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't read previous {OUTPUT_PATH} for weeks_completed carry-forward ({e})", file=sys.stderr)
+        return set()
+
+
 def main() -> None:
     state = get_json(f"{API_BASE}/state/nfl")
     season = state["season"]
@@ -757,6 +814,7 @@ def main() -> None:
             print(f"[warn] couldn't load player metadata/scoring_settings for QB-adjustment detection ({e}); standings will build without it", file=sys.stderr)
 
         old_qb_by_week = load_previous_qb_adjustments()
+        previously_completed_weeks = load_previous_weeks_completed()
         history = build_history(
             league_id,
             season,
@@ -767,6 +825,7 @@ def main() -> None:
             team_qb_index,
             scoring_settings,
             old_qb_by_week,
+            previously_completed_weeks,
         )
 
     with open(OUTPUT_PATH, "w") as f:

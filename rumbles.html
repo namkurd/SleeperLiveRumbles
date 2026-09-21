@@ -268,8 +268,17 @@
   td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 40px; min-width: 40px; }
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
-  td.thisweek { color: var(--accent-2); font-variant-numeric: tabular-nums; }
-  td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+  /* position: relative + reserved right padding (whether or not a LIVE
+     badge actually shows this row) is what keeps the number itself always
+     landing in the exact same spot column-wide -- the badge is pulled out
+     of normal text flow and pinned into that reserved strip (see
+     td.thisweek .badge-live below), instead of just being appended after
+     the number's text, which used to shift the number left/right of its
+     usual spot depending on whether that particular row had a badge (now
+     a real, common case for "Points This Week" specifically, since
+     this_week_points_live can differ row-to-row -- see
+     hasIncompletePlayer's comment). */
+  td.thisweek, td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; position: relative; padding-right: 40px; }
   /* Only added to a "Pts This Week" cell that actually has a per-player
      breakdown to show (see render()/thisWeekTooltip) -- the dotted
      underline is the only visual hint that it's interactive, since there's
@@ -430,6 +439,21 @@
     margin-left: 4px;
     vertical-align: middle;
   }
+  /* Pulls the LIVE badge out of the number's own text flow in the "This
+     Week"/"Points This Week" cells specifically, pinning it into the
+     reserved right-padding strip those two cells always carry (see
+     td.thisweek/td.thisweek-pts above) instead of letting it sit inline
+     right after the digits -- that's what keeps the number itself
+     perfectly aligned whether or not this particular row's badge is
+     showing. Every other .badge-live usage (the QB Injury Backup
+     Adjustments table, etc) is untouched by this override. */
+  td.thisweek .badge-live, td.thisweek-pts .badge-live {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 0;
+  }
   footer {
     margin-top: 14px;
     font-size: 0.72rem;
@@ -504,10 +528,13 @@
      headers. Commissioner Adjustment (the official, keyed-in delta) is
      always green too, once it exists, on the theory that a confirmed
      override is always the same "this is official" signal regardless of
-     which tier the row started at. The confidence pill and LIVE badge
-     keep their own existing fixed colors either way (never overridden by
-     the row's manager color, since both already set their own `color`
-     directly rather than inheriting).
+     which tier the row started at. The confidence pill keeps its own
+     existing fixed colors either way (never overridden by the row's
+     manager color, since it already sets its own `color` directly rather
+     than inheriting) -- this table deliberately carries no LIVE badge at
+     all (unlike the standings table's This Week/Pts This Week cells); the
+     pill's own label (Possible/Likely/Confirmed) is enough to convey
+     status without it.
 
      The Backup QB(s) NAME column and the "Backup QB Points" TOTAL column
      both instead track confidence state, using the exact same
@@ -1555,6 +1582,13 @@
           injury_status: cMeta ? (cMeta.injury_status || null) : null
         };
       })
+      // A backup who recorded some real action (isPlayed above) but ended
+      // up with EXACTLY 0.00 fantasy points isn't a meaningful "backup
+      // credit" worth surfacing -- a kneel-down, a single incomplete pass,
+      // whatever it was, it left no measurable statistical footprint. A
+      // NEGATIVE total (a pick, a lost fumble) is kept -- that's still a
+      // real, if bad, outing, unlike a flat 0.00.
+      .filter(function (b) { return b.points !== 0; })
       .sort(function (a, b) { return b.points - a.points; });
   }
 
@@ -2899,8 +2933,12 @@
           return "<span>" + escapeHtml(b.name) + " (" + b.points.toFixed(2) + ")</span>";
         }).join("") + "</div>";
         var confidenceLabel = CONFIDENCE_LABELS[r.confidence] || r.confidence;
-        var pill = '<span class="confidence-pill confidence-' + r.confidence + '">' + confidenceLabel + "</span>" +
-          (r.live ? '<span class="badge-live">LIVE</span>' : "");
+        // No LIVE badge here (unlike the standings table's This Week/Pts
+        // This Week cells) -- the confidence pill (Possible/Likely/
+        // Confirmed) itself already communicates this row's status, and a
+        // week is either "live" for every not-yet-confirmed row in it or
+        // it isn't, so the badge added noise without adding information.
+        var pill = '<span class="confidence-pill confidence-' + r.confidence + '">' + confidenceLabel + "</span>";
         // Same per-manager matchup color as the standings table above (see
         // state.matchupColorByRosterId), so a manager's name is the same
         // color everywhere on the page -- not just when this log row

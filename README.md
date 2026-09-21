@@ -139,7 +139,34 @@ This log shows an entry under one of three tiers:
 A same-team backup QB playing with *no* signal at all -- nobody else on
 that NFL team's roster even recorded action -- is, naturally, still not
 logged; "Possible" only fires once a real backup QB has actually been
-identified.
+identified. Neither is a backup who DID record action but ended up with
+EXACTLY 0.00 fantasy points -- a kneel-down, a single incomplete pass,
+whatever it was, left no measurable statistical footprint, so listing them
+as "the backup" would be misleading (real production cases: Justin Fields
+0.00, Joe Flacco 0.00). A NEGATIVE total is different and stays listed --
+a pick or a lost fumble is still a real, if bad, outing, unlike a flat
+0.00. This is enforced once, inside `findBackupQbs`/`find_backup_qbs`
+itself, so it applies everywhere a backup is identified -- the override
+branch's candidate-picking heuristic included, not just the plain
+"Likely"/"Possible" detection path.
+
+Once a new week has started being played, an unconfirmed "Possible" entry
+from an OLDER week is dropped from the table entirely rather than
+lingering there indefinitely -- it was never corroborated or confirmed, so
+once everyone's attention has moved on to the current week there's nothing
+left to flag it for. This only affects "Possible"; a "Likely" (corroborated
+by a real `injury_status` read) or "Confirmed" (a commissioner override)
+entry still persists in `rumbles_history.json` forever, exactly as before.
+The subtlety this fixes: `build_rumbles.py`'s history builder only ever
+treats the most-recently-COMPLETED week as "fresh" (worth checking
+`injury_status` for at all) on the FIRST run after that week finishes --
+without that "first run only" guard, a week stays the max of
+`completed_weeks` (and so keeps getting freshly re-evaluated) for the
+ENTIRE span that the NEXT week is live but not yet itself completed, which
+can be most of a week -- so a stale "Possible" case would keep reappearing
+for days after a new week had clearly already started, instead of dropping
+right away. See `determine_fresh_week`/`load_previous_weeks_completed` in
+`build_rumbles.py`.
 
 Confirmed against the real example that prompted this: league roster_id
 6 ("Alex"), Week 1 -- Kyler Murray left hurt, Carson Wentz (a free agent
@@ -152,6 +179,17 @@ backup, proving it still logs rather than silently vanishing) and
 `test/run_test.py` (the live, client-side detector in the browser,
 including the team-scoping: a same-team QB who didn't play, and a
 same-position QB on a *different* team who did, must both be excluded).
+The 0.00-point-backup exclusion and the "first run only" freshness window
+are each covered on both sides too: `test/test_qb_adj_detection.js` and
+`test/test_build_rumbles.py` both directly test that a backup who played
+but scored exactly 0.00 is excluded (while a negative-point backup is
+kept), and `test/test_build_rumbles.py` covers `determine_fresh_week`
+across a simulated multi-run sequence (a week's first run as completed is
+fresh; a later run, with a newer week now current but not yet itself
+completed, is not; freshness moves on once that newer week itself
+finishes) plus an end-to-end check that an unconfirmed "possible" entry
+is genuinely dropped, not just theoretically excluded, once a new week has
+started.
 
 #### The credit now also lands in the live standings themselves
 
@@ -268,8 +306,10 @@ manager-marker tooltip's points figure and the replacement row in the
 commissioner adjustment yet to confirm it, then green (matching
 Commissioner Adjustment) once "confirmed" -- blue meaning "flagged for
 awareness only, not counted anywhere yet", yellow meaning "counted
-provisionally", green meaning "counted, and official." The LIVE badge
-keeps its own fixed color either way.
+provisionally", green meaning "counted, and official." This table
+deliberately carries no LIVE badge at all (unlike the standings table's
+"This Week"/"Points This Week" cells, described below) -- the confidence
+pill's own label already says everything a badge would.
 
 This only ever touches the in-progress week's own figures ("Points This
 Week" in both modes, and every season-cumulative column in Projected
@@ -543,6 +583,19 @@ never assumed done just because nothing says otherwise. This includes any
 QB-injury-backup replacement row appended to a roster's breakdown -- a
 lingering in-progress or unresolved backup keeps that manager's badge on
 too, exactly like a real starter would.
+
+Because that badge can now be present for some rosters and absent for
+others in the very same "Points This Week" column (previously it was
+always present-or-absent in lockstep for every row, whenever the week was
+live at all), the badge is pulled out of the number's own text flow and
+pinned to a fixed, reserved strip at the right edge of the cell (see
+`td.thisweek`/`td.thisweek-pts`'s `position: relative` + reserved
+`padding-right`, and the `.badge-live` override right after it in
+rumbles.html) rather than just being appended inline after the digits --
+otherwise the number itself would visibly shift left or right depending on
+whether that particular row's badge happened to be showing, instead of
+lining up column-wide regardless. This applies to both "This Week" and
+"Points This Week" (either can, in principle, differ row to row).
 
 ### Live scoring: two modes
 

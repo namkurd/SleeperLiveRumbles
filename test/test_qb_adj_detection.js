@@ -50,10 +50,11 @@ vm.createContext(sandbox);
 vm.runInContext(
   source + "\nthis.detectQbAdjustmentsForWeek = detectQbAdjustmentsForWeek;" +
     "\nthis.applyQbAdjustmentsToScores = applyQbAdjustmentsToScores;" +
-    "\nthis.buildTeamQbIndex = buildTeamQbIndex;",
+    "\nthis.buildTeamQbIndex = buildTeamQbIndex;" +
+    "\nthis.findBackupQbs = findBackupQbs;",
   sandbox
 );
-const { detectQbAdjustmentsForWeek, applyQbAdjustmentsToScores, buildTeamQbIndex } = sandbox;
+const { detectQbAdjustmentsForWeek, applyQbAdjustmentsToScores, buildTeamQbIndex, findBackupQbs } = sandbox;
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -284,6 +285,41 @@ const SUPERFLEX_MANAGERS = { 1: "Alex", 2: "Ben" };
   var teamQbIndex = buildTeamQbIndex(meta);
   var entries = detectQbAdjustmentsForWeek(2, matchups, meta, teamQbIndex, stats, SCORING, { 1: "Alex" }, true);
   ok("neither deliberately-started same-team QB is logged as the other's 'backup'", entries.length === 0);
+})();
+
+// ---- A backup QB who played (isPlayed) but scored EXACTLY 0.00 fantasy
+// points isn't a meaningful "backup credit" -- excluded from the list.
+// A negative total (a pick, a lost fumble) is still a real outing and
+// stays listed; only an exact 0.00 is filtered. Mirrors
+// test_build_rumbles.py's test_find_backup_qbs_excludes_exactly_zero_point_backups
+// / test_find_backup_qbs_keeps_negative_point_backups. -----------------------
+(function () {
+  var meta = playersMeta(null);
+  var zeroStats = Object.assign({}, STATS, {
+    QB_BACKUP: { pass_att: 2, pass_yd: 0, pass_td: 0, pass_int: 0 }, // dot-products to 0.00
+  });
+  var backups = findBackupQbs("QB_STARTER", meta.QB_STARTER, meta, buildTeamQbIndex(meta), zeroStats, SCORING);
+  ok("a backup QB who played but scored exactly 0.00 points is excluded from the backup list", backups.length === 0);
+})();
+
+(function () {
+  var meta = playersMeta(null);
+  var negativeStats = Object.assign({}, STATS, {
+    QB_BACKUP: { pass_att: 5, pass_yd: 10, pass_td: 0, pass_int: 1 }, // 10*.04 - 2 = -1.6
+  });
+  var backups = findBackupQbs("QB_STARTER", meta.QB_STARTER, meta, buildTeamQbIndex(meta), negativeStats, SCORING);
+  ok("a backup QB with negative (but nonzero) points is still listed", backups.length === 1 && Math.abs(backups[0].points - -1.6) < 1e-9);
+})();
+
+// ---- End-to-end: when the ONLY candidate backup scored exactly 0.00, no
+// adjustment entry should be logged at all (same as "no backup found"). ----
+(function () {
+  var meta = playersMeta(null);
+  var zeroStats = Object.assign({}, STATS, {
+    QB_BACKUP: { pass_att: 1, pass_yd: 0, pass_td: 0, pass_int: 0 },
+  });
+  var entries = detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), zeroStats, SCORING, MANAGERS, true);
+  ok("no adjustment entry when the only candidate backup QB scored exactly 0.00 points", entries.length === 0);
 })();
 
 console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL QB-adjustment detection/scoring UNIT TESTS PASSED");

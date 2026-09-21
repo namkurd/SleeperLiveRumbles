@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_rumbles import (  # noqa: E402
     build_team_qb_index,
     compute_qb_adjustments_for_week,
+    determine_fresh_week,
     dot_product,
+    find_backup_qbs,
     is_played,
     official_points,
     score_week,
@@ -345,6 +347,42 @@ def test_compute_qb_adjustments_no_entry_without_a_backup():
     print("PASS: no adjustment entry when no same-team backup QB recorded any action")
 
 
+def test_find_backup_qbs_excludes_exactly_zero_point_backups():
+    # QB_BACKUP records real action (pass_att >= 1, per is_played) but the
+    # stat line dot-products to exactly 0.00 -- a kneel-down or a single
+    # incompletion, no measurable statistical footprint. Not a meaningful
+    # "backup credit" worth surfacing, unlike a genuinely bad (negative)
+    # outing -- see the next test.
+    meta = dict(QB_PLAYERS_META, QB_BACKUP={**QB_PLAYERS_META["QB_BACKUP"]})
+    stats = dict(QB_STATS_MAP, QB_BACKUP={"pass_att": 2, "pass_yd": 0, "pass_td": 0, "pass_int": 0})
+    team_qb_index = build_team_qb_index(meta)
+    backups = find_backup_qbs("QB_STARTER", meta["QB_STARTER"], meta, team_qb_index, stats, QB_SCORING_SETTINGS)
+    assert backups == [], f"expected a 0.00-point backup to be excluded entirely, got {backups}"
+    print("PASS: a backup QB who played but scored exactly 0.00 points is excluded from the backup list")
+
+
+def test_find_backup_qbs_keeps_negative_point_backups():
+    # A genuinely bad outing (e.g. a pick-six) is still a real, meaningful
+    # backup credit -- only an exact 0.00 gets filtered, never a negative.
+    meta = dict(QB_PLAYERS_META, QB_BACKUP={**QB_PLAYERS_META["QB_BACKUP"]})
+    stats = dict(QB_STATS_MAP, QB_BACKUP={"pass_att": 5, "pass_yd": 10, "pass_td": 0, "pass_int": 1})  # 10*.04 - 2 = -1.6
+    team_qb_index = build_team_qb_index(meta)
+    backups = find_backup_qbs("QB_STARTER", meta["QB_STARTER"], meta, team_qb_index, stats, QB_SCORING_SETTINGS)
+    assert len(backups) == 1 and backups[0]["points"] == -1.6, f"expected the negative-point backup to still be listed, got {backups}"
+    print("PASS: a backup QB with negative (but nonzero) points is still listed")
+
+
+def test_compute_qb_adjustments_no_entry_when_only_backup_scored_exactly_zero():
+    matchups_zero_backup = [{"roster_id": 1, "matchup_id": 1, "starters": ["QB_STARTER"], "points": 100.0}]
+    stats_zero_backup = dict(QB_STATS_MAP, QB_BACKUP={"pass_att": 1, "pass_yd": 0, "pass_td": 0, "pass_int": 0})
+    entries = compute_qb_adjustments_for_week(
+        2, matchups_zero_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_zero_backup,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert entries == [], f"the only candidate backup scored exactly 0.00 -- there must be no adjustment entry at all, got {entries}"
+    print("PASS: no adjustment entry when the only candidate backup QB scored exactly 0.00 points")
+
+
 # ---------------------------------------------------------------------------
 # SUPER_FLEX / multi-started-QB regression -- this league's real
 # roster_positions has TWO SUPER_FLEX slots and no dedicated QB slot, so a
@@ -423,6 +461,99 @@ def test_superflex_two_deliberately_started_same_team_qbs_are_not_backups_of_eac
     print("PASS: two deliberately-started same-team QBs are never mistaken for one another's backup")
 
 
+# ---- determine_fresh_week: the "was this week's completion just noticed
+# THIS run" guard that build_history uses to decide whether a completed
+# week's injury_status is worth freshly re-checking at all. Regression-
+# tests a real reported case: once a new week starts being played (state's
+# current week has already moved on), a previous week's unconfirmed
+# "possible" QB-adjustment entries kept reappearing in the persisted
+# history for the ENTIRE span the new week was live-but-not-yet-completed,
+# because completed_weeks' max (the just-finished week) never itself
+# changes again until that NEW week also finishes -- these tests exercise
+# the "previously_completed_weeks" carry-forward that fixes it.
+def test_determine_fresh_week_first_time_a_week_completes_is_fresh():
+    # Week 1 has never appeared in a previous run's weeks_completed -- this
+    # is the first run to see it as completed, so it's fresh.
+    assert determine_fresh_week([1], previously_completed_weeks=set()) == 1
+    print("PASS: a week's very first run as 'completed' is fresh")
+
+
+def test_determine_fresh_week_already_seen_before_is_not_fresh():
+    # Week 1 was ALREADY in weeks_completed as of the last run -- a later
+    # run (week 2 now live but not yet itself completed, so completed_weeks
+    # is still just [1]) must NOT keep treating week 1 as fresh, even
+    # though it's still the max of completed_weeks.
+    assert determine_fresh_week([1], previously_completed_weeks={1}) is None
+    print("PASS: a week already seen as completed in a prior run is no longer fresh, even while it's still completed_weeks' max")
+
+
+def test_determine_fresh_week_advances_once_a_newer_week_completes():
+    # Week 2 itself has now finished too (completed_weeks == [1, 2]) and
+    # this is the first run to see IT as completed -- week 2 becomes the
+    # fresh one; week 1 (already-seen) stays not-fresh.
+    assert determine_fresh_week([1, 2], previously_completed_weeks={1}) == 2
+    print("PASS: freshness moves to the newly-completed week once it finishes, not stuck on the old one")
+
+
+def test_determine_fresh_week_no_completed_weeks_yet():
+    assert determine_fresh_week([], previously_completed_weeks=set()) is None
+    print("PASS: no completed weeks at all -> no fresh week")
+
+
+def test_determine_fresh_week_missing_previous_data_defaults_to_fresh():
+    # A missing/corrupt previous history file (load_previous_weeks_completed
+    # returns an empty set/None) must never crash and should behave like
+    # this feature's very first run -- every currently-completed week looks
+    # "new".
+    assert determine_fresh_week([3], previously_completed_weeks=None) == 3
+    print("PASS: missing previous weeks_completed data defaults to treating the week as fresh, not crashing")
+
+
+def test_possible_tier_dropped_once_a_new_week_has_started_end_to_end():
+    """The full reported scenario, exercised through compute_qb_adjustments_for_week
+    directly the way build_history actually drives it across two simulated
+    runs: run 1 (week 1 just completed) logs an unconfirmed 'possible' case
+    fresh; run 2 (week 2 now live/current but not yet itself completed --
+    completed_weeks is still just [1]) must NOT re-log it, and since it was
+    never 'likely'/confirmed, carrying forward finds nothing -- the entry
+    is gone."""
+    meta = {
+        "QB1": {"position": "QB", "team": "SF", "full_name": "Started QB", "injury_status": None},
+        "QB1B": {"position": "QB", "team": "SF", "full_name": "Backup QB", "injury_status": None},
+    }
+    stats = {
+        "QB1": {"pass_att": 20, "pass_yd": 150, "pass_td": 1, "pass_int": 0},
+        "QB1B": {"pass_att": 5, "pass_yd": 30, "pass_td": 0, "pass_int": 0},
+    }
+    matchups = [{"roster_id": 1, "matchup_id": 1, "starters": ["QB1"], "points": 12.0}]
+    team_qb_index = build_team_qb_index(meta)
+
+    # Run 1: week 1 just completed for the first time -- fresh.
+    is_fresh_run1 = determine_fresh_week([1], previously_completed_weeks=set()) == 1
+    run1_entries = compute_qb_adjustments_for_week(
+        1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
+        is_fresh=is_fresh_run1, carried_by_roster={},
+    )
+    assert len(run1_entries) == 1 and run1_entries[0]["confidence"] == "possible", (
+        f"expected run 1 to freshly log an unconfirmed 'possible' entry, got {run1_entries}"
+    )
+
+    # Run 2: week 2 has started (it's now the current week per Sleeper's
+    # state) but hasn't itself finished, so completed_weeks is STILL just
+    # [1] -- the real-world bug case. previously_completed_weeks now
+    # contains {1} (from run 1's own output).
+    is_fresh_run2 = determine_fresh_week([1], previously_completed_weeks={1}) == 1
+    carried = {1: run1_entries}  # what load_previous_qb_adjustments would hand back from run 1's file
+    run2_entries = compute_qb_adjustments_for_week(
+        1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
+        is_fresh=is_fresh_run2, carried_by_roster=carried,
+    )
+    assert run2_entries == [], (
+        f"expected the unconfirmed 'possible' entry to be dropped once a new week has started, got {run2_entries}"
+    )
+    print("PASS: an unconfirmed 'possible' entry from a prior week is dropped as soon as a new week starts, not carried for the newer week's entire live span")
+
+
 def main():
     test_official_points_prefers_custom_points_when_set()
     test_score_week_applies_override_to_pf()
@@ -441,9 +572,18 @@ def main():
     test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
     test_compute_qb_adjustments_no_entry_without_a_backup()
+    test_find_backup_qbs_excludes_exactly_zero_point_backups()
+    test_find_backup_qbs_keeps_negative_point_backups()
+    test_compute_qb_adjustments_no_entry_when_only_backup_scored_exactly_zero()
     test_superflex_only_the_qb_with_a_real_backup_is_logged()
     test_superflex_both_started_qbs_can_log_separately()
     test_superflex_two_deliberately_started_same_team_qbs_are_not_backups_of_each_other()
+    test_determine_fresh_week_first_time_a_week_completes_is_fresh()
+    test_determine_fresh_week_already_seen_before_is_not_fresh()
+    test_determine_fresh_week_advances_once_a_newer_week_completes()
+    test_determine_fresh_week_no_completed_weeks_yet()
+    test_determine_fresh_week_missing_previous_data_defaults_to_fresh()
+    test_possible_tier_dropped_once_a_new_week_has_started_end_to_end()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 
