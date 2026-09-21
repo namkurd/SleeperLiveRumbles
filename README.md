@@ -118,6 +118,81 @@ backup, proving it still logs rather than silently vanishing) and
 including the team-scoping: a same-team QB who didn't play, and a
 same-position QB on a *different* team who did, must both be excluded).
 
+#### The credit now also lands in the live standings themselves
+
+Originally, everything above only ever fed a separate, purely
+informational log table -- `rosterScore`/`playerPoints` (the functions
+behind every live Actual/Projected total on the page) never looked at
+`m.points`/`m.custom_points` at all, so the house rule never actually
+moved a manager's live PF, Points This Week, Rumbles, H2H, PA, or Vs.
+Field until the week finalized and `build_rumbles.py`'s
+`official_points()` picked up `custom_points` for good, days later. Per a
+follow-up request, the live totals now reflect it in real time too, in
+the same two tiers as the log above:
+
+- **Likely**: the same-team backup QB's own already-scored points
+  (`backup_points_total`) are added onto BOTH the roster's live Actual
+  total and its Custom/Projected total, before Rumbles/H2H/PA/Vs. Field
+  are computed from them -- so a manager's live standing can actually
+  flip on this, not just their log entry (see `test/run_test.py`'s Alex-
+  vs-Joe matchup, where the 21.90-point credit is what puts Alex ahead of
+  Joe in Projected mode, not just Actual). It's added flat, not projected
+  or dampened -- it's real points a real player already scored, so it
+  counts in full toward both totals immediately, the same way any other
+  player's actual points do. The manager's name in the standings table
+  gets a small blue `*` (hover on desktop, tap on mobile) with a tooltip
+  naming the injured QB, the replacement QB, and the exact number of
+  points added.
+- **Confirmed**: once the commissioner sets `custom_points`, the "likely"
+  credit (`backup_points_total`) is removed and replaced with the OFFICIAL
+  point delta the override represents (`custom_points - points` -- the
+  same number the log table's new "Commissioner Adjustment" column shows,
+  see below). Per Ben's own framing, this is meant to be an invisible
+  accounting swap, not a visible change: since the official delta is
+  normally very close to the "likely" estimate it's replacing (the
+  override is meant to reflect the same real-world credit), a manager's
+  total doesn't visibly jump or fall the instant the commissioner keys it
+  in -- it just quietly switches from this page's best-effort guess to the
+  *official*, commissioner-set number. The `*`/tooltip disappear once
+  confirmed; the credit itself just changes source, seamlessly.
+
+The log table has a **Commissioner Adjustment** column for this exact
+comparison: it shows the official `custom_points_delta` once an override
+exists (blank -- an em dash -- for a still-"likely" row with none yet),
+right next to "Backup QB Points" so the two are easy to eyeball against
+each other -- did the commissioner's manual number land close to what this
+page detected on its own?
+
+Row text in this log table is colored to make the two "sides" of each
+adjustment easy to tell apart at a glance: the Injured QB's name and
+points are always red, the Backup QB's name and points (and the new
+Commissioner Adjustment column) are always green, and every other
+plain-text cell (Week, Status) matches that row's own manager color (the
+same color used for the Manager cell and reused from the standings table
+above) -- regardless of scoring mode or which week the row is about. The
+Confidence pill and LIVE badge keep their own fixed colors either way.
+
+This only ever touches the in-progress week's own figures ("Points This
+Week" in both modes, and every season-cumulative column in Projected
+mode) -- Actual mode's season-cumulative PF/Rumbles/H2H/PA/Vs. Field stay
+frozen to whatever's already final in `rumbles_history.json`, exactly as
+before, since Actual mode never folds the in-progress week into those at
+all (see "Columns" below).
+
+Covered end-to-end by `test/run_test.py`'s live scenario, which reuses its
+existing Alex/Kyler-Murray/Carson-Wentz ("likely") and Ankit ("confirmed",
+no identifiable backup) fixtures: hand-verified PF/Points-This-Week totals
+with the credit folded in, the `*` appearing only for Alex (never Ankit or
+anyone else) with the correct tooltip content, the new Commissioner
+Adjustment column's values (including the blank/em-dash case for Alex's
+still-"likely" row), the row text-coloring scheme (red/green/manager-color,
+resolved live via `getComputedStyle` against the actual `--good`/`--bad`
+CSS variables rather than a hardcoded hex, since those two -- unlike
+`--matchup-4` -- differ between light and dark mode), and -- on the
+touch-primary mobile context -- the same tap-to-show/tap-to-toggle/
+tap-elsewhere-dismisses behavior already established for the "Pts This
+Week" tooltip.
+
 ### Columns
 
 Rank (`#`), Manager, Rumbles, This Week (Rumbles earned so far this week),
@@ -616,6 +691,41 @@ time-since-kickoff-aware model once enough independent Q1 examples
 accumulate to fit one responsibly, the same way Q4's step-function
 insight only became clear once enough points existed to bucket by
 quarter in the first place.
+
+**A same-day follow-up brought 4 more real points, this time from
+mid-Q2 -- a real signal, but not (yet) enough to act on.** Jeremiyah
+Love (6.40 actual off 12.83 pregame, `remainingGameClockFraction`
+0.6211), Jaxon Smith-Njigba (15.20 off 20.17, same 0.6211 -- same
+broadcast window as Love) and Brock Purdy (13.60 off 18.50, 0.5900) were
+all still on the plain Q2-3 baseline (0.40 / 1.10, untouched by the Q1
+work above), and all three undershot Sleeper's real live number, by
+0.35-0.66 points each -- noticeably more consistent, and a bit larger on
+average, than the roughly-symmetric small miss the original 30-point fit
+found across Q2-3 as a whole. That's the same DIRECTION as the Q1
+finding, which raises a real question: does the "less game has happened
+yet, dampen less" effect actually fade out smoothly across Q1 into Q2,
+rather than snapping cleanly to the Q2-3 baseline right at the 0.75
+threshold? (The fourth point, Stefon Diggs, was zero actual -- the same
+pace=0 no-op case as before, an exact match regardless of any constants
+and not informative either way.)
+
+This page is deliberately NOT retuning anything off this batch alone.
+Three informative points, all pulled from the same few minutes of the
+same Sunday's early game window, is a correlated sample, not an
+independent one -- exactly the kind of thin, same-day batch this project
+has specifically avoided overreacting to before (see the two earlier
+"real signal, not (yet) fixable" rounds above the Q4 discovery, both of
+which turned out to need a broader, less-correlated sample before a
+genuine fix became clear rather than a coincidence). The already-shipped
+Q2-3 baseline was fit and leave-one-out cross-validated against roughly
+ten times as many points spanning a full slate of games, so a handful of
+same-morning results shouldn't move it. If a future, independent gameday
+report keeps showing the same early-Q2 undershoot, that would be the
+signal to actually extend the lighter-dampening treatment past the Q1
+boundary (or, more likely by then, replace the hard Q1/Q2/Q4 buckets
+with one continuous, time-since-kickoff-aware curve instead of three
+separate flat ones) -- logged here so that evidence doesn't have to be
+rediscovered from scratch next time.
 
 **Overtime is now a hard cutoff to actual-so-far, with zero blended
 credit for the extra period, for every position -- not just the

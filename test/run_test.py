@@ -70,21 +70,33 @@ def install_routes(page, routes):
 
 
 def get_table_rows(page):
+    # The manager cell (column 1) can carry a trailing " *" (see
+    # qb-adj-asterisk in rumbles.html -- a live, still-"likely" QB-injury
+    # adjustment) -- stripped back out here so every manager-name-keyed
+    # dict built from these rows elsewhere in this file keeps working off
+    # the plain manager name. get_qb_adj_asterisk/get_qb_adj_tooltip_text
+    # above are what actually test the "*" itself.
     return page.eval_on_selector_all(
         "#standings-body tr",
-        "rows => rows.map(r => Array.from(r.querySelectorAll('td')).map(td => td.innerText.trim()))",
+        """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
+            var text = td.innerText.trim();
+            return i === 1 ? text.replace(/\\s*\\*$/, '') : text;
+        }))""",
     )
 
 
 def get_qb_adjustment_rows(page):
-    """One dict per row of the QB Injury Backup Adjustments table."""
+    """One dict per row of the QB Injury Backup Adjustments table. Column
+    order: 0=week, 1=manager, 2=injured QB, 3=backup QB(s), 4=injured QB
+    points, 5=backup QB points, 6=Commissioner Adjustment, 7=Status (pill +
+    LIVE badge)."""
     return page.eval_on_selector_all(
         "#qb-adj-body tr",
         """rows => rows.map(r => {
             var tds = Array.from(r.querySelectorAll('td'));
-            if (tds.length < 7) return null; // the empty-state placeholder row
+            if (tds.length < 8) return null; // the empty-state placeholder row
             var backups = Array.from(tds[3].querySelectorAll('.backup-list span')).map(s => s.innerText.trim());
-            var pill = tds[6].querySelector('.confidence-pill');
+            var pill = tds[7].querySelector('.confidence-pill');
             return {
                 week: tds[0].innerText.trim(),
                 manager: tds[1].innerText.trim(),
@@ -92,10 +104,60 @@ def get_qb_adjustment_rows(page):
                 backups: backups,
                 injured_points: tds[4].innerText.trim(),
                 backup_points: tds[5].innerText.trim(),
+                commissioner_adjustment: tds[6].innerText.trim(),
                 confidence: pill ? pill.innerText.trim() : null,
-                live: !!tds[6].querySelector('.badge-live'),
+                live: !!tds[7].querySelector('.badge-live'),
             };
         }).filter(r => r !== null)""",
+    )
+
+
+def get_qb_adjustment_row_colors(page):
+    """manager -> {week_color, injured_name_color, injured_points_color,
+    backup_name_color, backup_points_color, commissioner_adj_color,
+    status_color} -- real COMPUTED (getComputedStyle) text colors as rgb()
+    strings for every cell in that manager's QB Injury Backup Adjustments
+    row, keyed by manager (assumes one row per manager in the fixture used,
+    same assumption get_qb_adjustment_manager_colors already makes)."""
+    pairs = page.eval_on_selector_all(
+        "#qb-adj-body tr",
+        """rows => rows.map(r => {
+            var tds = Array.from(r.querySelectorAll('td'));
+            if (tds.length < 8) return null;
+            var manager = tds[1].innerText.trim();
+            var colorOf = (el) => getComputedStyle(el).color;
+            return [manager, {
+                manager_color: colorOf(tds[1].querySelector('.matchup-name') || tds[1]),
+                week_color: colorOf(tds[0]),
+                injured_name_color: colorOf(tds[2]),
+                injured_points_color: colorOf(tds[4]),
+                backup_name_color: colorOf(tds[3].querySelector('.backup-list span') || tds[3]),
+                backup_points_color: colorOf(tds[5]),
+                commissioner_adj_color: colorOf(tds[6]),
+                status_color: colorOf(tds[7]),
+            }];
+        }).filter(p => p !== null)""",
+    )
+    return dict(pairs)
+
+
+def get_css_var_color(page, var_name):
+    """The real COMPUTED (getComputedStyle) color a plain element gets from
+    `color: var(--{var_name})`, as an rgb() string -- resolved live in
+    whichever light/dark scheme this browser context actually prefers
+    (--good/--bad, unlike --matchup-4, differ between the two -- see
+    :root's @media (prefers-color-scheme: light) override in rumbles.html),
+    rather than hardcoding one scheme's hex value and hoping it matches."""
+    return page.evaluate(
+        """(varName) => {
+            var probe = document.createElement('div');
+            probe.style.color = 'var(--' + varName + ')';
+            document.body.appendChild(probe);
+            var c = getComputedStyle(probe).color;
+            document.body.removeChild(probe);
+            return c;
+        }""",
+        var_name,
     )
 
 
@@ -123,7 +185,7 @@ def get_matchup_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim();
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
             var span = r.querySelector('td.manager .matchup-name');
             var color = span ? span.style.color : null;
             return [name, color || null];
@@ -141,7 +203,7 @@ def get_pts_this_week_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim();
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
             var cell = r.querySelector('td.thisweek-pts');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -158,7 +220,7 @@ def get_thisweek_rumbles_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim();
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*\\*$/, '');
             var cell = r.querySelector('td.thisweek');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -182,7 +244,7 @@ def get_tooltip_row_computed_colors(page, manager):
     clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim())",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -245,7 +307,7 @@ def get_thisweek_pts_tooltip(page, manager):
     next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim())",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -275,6 +337,38 @@ def get_thisweek_pts_tooltip(page, manager):
     page.mouse.move(0, 0)
     page.wait_for_timeout(150)
     return rows
+
+
+def get_qb_adj_asterisk(page, manager):
+    """Locator for the given manager's manager-name '*' (see qb-adj-
+    asterisk in rumbles.html), or None if they don't have one -- only a
+    "likely" (not yet commissioner-confirmed) live QB-injury adjustment
+    gets one (see applyQbAdjustmentsToScores/render())."""
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.replace('*', '').trim())",
+    ).index(manager)
+    row = page.locator("#standings-body tr").nth(idx)
+    el = row.locator("span.qb-adj-asterisk")
+    return el if el.count() else None
+
+
+def get_qb_adj_tooltip_text(page, manager):
+    """Hovers the given manager's '*' (real mouse hover, same pattern as
+    get_thisweek_pts_tooltip above) and returns the #qb-adj-tooltip's
+    visible inner text, or None if they have no asterisk to hover. Moves
+    the mouse away afterward so the next check starts clean."""
+    el = get_qb_adj_asterisk(page, manager)
+    if el is None:
+        return None
+    el.hover()
+    page.wait_for_timeout(150)
+    tip = page.locator("#qb-adj-tooltip")
+    is_visible = tip.evaluate("el => el.classList.contains('visible')")
+    text = tip.inner_text() if is_visible else None
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    return text
 
 
 def new_page(browser, console_errors, page_errors):
@@ -378,7 +472,32 @@ def scenario_live_blending(browser):
     #     constants). Blend = 7.20 + 0.65*21.09*0.8122 = 18.3334 -> rounds
     #     to 18.33. On top of his other starter's projection (21.23, still
     #     fully pregame, untouched by any of this) -> 18.33+21.23=39.56.
-    #     Custom PF = 105.0+39.56=144.56.
+    #     ON TOP OF THAT: Kyler Murray is a live, "likely" QB-injury-backup
+    #     scenario (injury_status "Out", same-team backup Carson Wentz
+    #     scored 21.90 -- see the QB Injury Backup Adjustments checks
+    #     below) -- applyQbAdjustmentsToScores now folds that 21.90 credit
+    #     into BOTH his Actual and Custom live totals before Rumbles/PF/etc
+    #     are computed, so: Actual this week = 7.20+0+21.90=29.10 (his
+    #     other starter, P12, hasn't played), Custom this week =
+    #     39.56+21.90=61.46 -> Custom PF = 105.0+61.46=166.46. Actual mode's
+    #     PF itself stays frozen at history (105.0) regardless -- the QB
+    #     credit only ever shows up in "Points This Week" and (in Custom
+    #     mode) the season-cumulative columns, exactly like any other live
+    #     point, never in Actual mode's frozen PF/Rumbles/H2H/PA/Vs.Field.
+    #   Ankit (roster 8, history PF 110.0): a CONFIRMED live QB adjustment
+    #     (the commissioner already set custom_points -- see the QB Injury
+    #     Backup Adjustments checks below) with no identifiable backup QB
+    #     in these fixtures. His one played starter (generic-pattern stats,
+    #     no hand-crafted override) actually scores 34.42, and his
+    #     unplayed starter's projection is 21.51 -- but applyQbAdjustments
+    #     ToScores uses the OFFICIAL override delta (custom_points - points
+    #     = 15.0 - 0 = 15.0) here, not an estimated backup total, per its
+    #     "confirmed" tier. Actual this week = 34.42+15.0=49.42 (his
+    #     second starter has an unresolvable game status, same as Jake's,
+    #     so his actual stat line is used as-is rather than blended).
+    #     Custom this week = 34.42+21.51+15.0=70.93 -> Custom PF =
+    #     110.0+70.93=180.93. No asterisk/tooltip for Ankit -- that UI cue
+    #     is "likely"-tier only (see render()).
     #   Joe (roster 5, history PF 102.5): entire roster is still pregame,
     #     zero actual stats recorded for anyone -- nothing to swap in, so
     #     Actual PF stays frozen at 102.5 (same number Custom's fallback
@@ -396,15 +515,15 @@ def scenario_live_blending(browser):
     # Actual mode: PF is frozen to history, full stop (no more history + this
     # week's actual points -- that only happens in Custom/Projected mode now).
     expected = {
-        "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5},
-        "custom": {"Aidan": 107.5, "Jake": 130.5, "Alex": 144.56, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
+        "actual": {"Aidan": 92.5, "Jake": 97.5, "Joe": 102.5, "Alex": 105.0},  # Alex's is unchanged by the live QB credit -- Actual mode's PF never folds the in-progress week in at all
+        "custom": {"Aidan": 107.5, "Jake": 130.5, "Alex": 166.46, "Ankit": 180.93, "Joe": None},  # Joe's custom PF depends on generic-pattern math; checked separately below
     }
     # "Points This Week" is the raw score for just this week (not the
     # cumulative PF) -- i.e. exactly liveInfo.points for the selected mode.
     # Displayed to 2 decimal places now (was 1).
     expected_points_this_week = {
-        "actual": {"Aidan": 2.5, "Jake": 29.0, "Joe": 0.0},
-        "custom": {"Aidan": 15.0, "Jake": 33.0, "Alex": 39.56, "Joe": None},
+        "actual": {"Aidan": 2.5, "Jake": 29.0, "Joe": 0.0, "Alex": 29.10},
+        "custom": {"Aidan": 15.0, "Jake": 33.0, "Alex": 61.46, "Ankit": 70.93, "Joe": None},
     }
 
     mode_buttons = {"actual": None, "custom": "#mode-custom"}
@@ -592,22 +711,29 @@ def scenario_live_blending(browser):
         # mode is selected) gets both cells colored to match its own
         # manager-name color; the trailing team keeps the default
         # (uncolored -> falls back to CSS blue). Joe (roster 5) vs Alex
-        # (roster 6) are this week's H2H pair. The winner is DIFFERENT per
-        # mode here, deliberately: in Actual mode Alex leads 7.20-0.00 (his
-        # only played starter, Kyler Murray, has SOME real production;
-        # Joe's whole roster is still pregame with zero actual stats
-        # recorded for anyone). In Projected mode Joe leads instead: Kyler
-        # Murray's game is "in_progress" with 65% of the game clock left
-        # (see the MIN game's quarter_num/time_remaining in
-        # make_fixtures.py) and his actual-so-far (7.20) is already running
-        # at 34% of his full pregame projection (21.09) -- a well-above-
-        # flat pace this early in the game -- so blendedProjection's pace
-        # dampening (see its comment in rumbles.html) pulls his remaining-
-        # game share down to about 81% credit: 7.20 + 0.65*21.09*0.8122 =
-        # 18.33, +21.23 for his other (fully pregame) starter = 39.56. Joe's
-        # Projected total (42.04, his own two starters are both still
-        # pregame so none of this touches him) comes out ahead of that.
-        winner, loser = ("Alex", "Joe") if mode == "actual" else ("Joe", "Alex")
+        # (roster 6) are this week's H2H pair. Alex leads in BOTH modes:
+        # in Actual mode 29.10-0.00 (his played starter Kyler Murray's 7.20
+        # PLUS the live 21.90 QB-injury-backup credit -- see
+        # expected_points_this_week's comment above -- against Joe's whole
+        # roster, still pregame with zero actual stats recorded for
+        # anyone). In Projected mode Kyler Murray's game is "in_progress"
+        # with 65% of the game clock left (see the MIN game's
+        # quarter_num/time_remaining in make_fixtures.py) and his actual-
+        # so-far (7.20) is already running at 34% of his full pregame
+        # projection (21.09) -- a well-above-flat pace this early in the
+        # game -- so blendedProjection's pace dampening (see its comment in
+        # rumbles.html) pulls his remaining-game share down to about 81%
+        # credit: 7.20 + 0.65*21.09*0.8122 = 18.33, +21.23 for his other
+        # (fully pregame) starter = 39.56, +21.90 for the same live QB
+        # credit = 61.46. That's well clear of Joe's Projected total (42.04,
+        # his own two starters are both still pregame so none of this
+        # touches him) -- before the QB-injury-backup-points feature added
+        # that 21.90 credit to the live totals, Joe used to lead here
+        # instead (42.04 vs 39.56); this scenario is what regression-tests
+        # that the credit actually flows through detectQbAdjustmentsForWeek
+        # -> applyQbAdjustmentsToScores -> computeRumblesForWeek and flips
+        # who's actually ahead, not just a cosmetic log-table entry.
+        winner, loser = "Alex", "Joe"
         pts_colors = get_pts_this_week_colors(page)
         rumbles_colors = get_thisweek_rumbles_colors(page)
         for label, colors in (("Pts This Week", pts_colors), ("This Week", rumbles_colors)):
@@ -858,6 +984,7 @@ def scenario_live_blending(browser):
     assert override_only_row["confidence"] == "Confirmed", f"expected 'Confirmed', got: {override_only_row['confidence']}"
     assert override_only_row["backups"] == [], f"no backup could be identified -- expected an empty backup list, got: {override_only_row['backups']}"
     assert override_only_row["backup_points"] == "15.00", f"expected the backup total to fall back to the override delta (15.00), got: {override_only_row['backup_points']}"
+    assert override_only_row["commissioner_adjustment"] == "+15.00", f"expected the new Commissioner Adjustment column to show the override delta (+15.00), got: {override_only_row['commissioner_adjustment']}"
 
     live_row = next((r for r in qb_rows if r["manager"] == "Alex"), None)
     assert live_row is not None, f"expected a live QB-adjustment row for Alex (roster 6), got: {qb_rows}"
@@ -868,17 +995,75 @@ def scenario_live_blending(browser):
     assert live_row["backup_points"] == "21.90", f"expected backup total 21.90, got: {live_row['backup_points']}"
     assert live_row["confidence"] == "Likely", f"expected 'Likely' confidence (injury_status 'Out', no override yet), got: {live_row['confidence']}"
     assert live_row["live"], "expected the live-detected row to carry a LIVE badge"
+    assert live_row["commissioner_adjustment"] == "—", f"expected the Commissioner Adjustment column to be blank (an em dash) for a still-'likely' row with no override yet, got: {live_row['commissioner_adjustment']}"
 
     hist_row = next((r for r in qb_rows if r["manager"] == "Ben"), None)
     assert hist_row is not None, f"expected the historical week-1 row for Ben, got: {qb_rows}"
     assert hist_row["week"] == "1", f"expected the historical row to be week 1, got: {hist_row['week']}"
     assert hist_row["confidence"] == "Confirmed", f"expected 'Confirmed' confidence for the historical override row, got: {hist_row['confidence']}"
     assert not hist_row["live"], "the historical (already-finalized) row must NOT carry a LIVE badge"
+    assert hist_row["commissioner_adjustment"] == "+12.34", f"expected the historical row's Commissioner Adjustment to show its own custom_points_delta (+12.34), got: {hist_row['commissioner_adjustment']}"
 
     assert [r["week"] for r in qb_rows] == ["2", "2", "1"], f"expected rows sorted week descending (both week-2 rows, then week-1), got weeks: {[r['week'] for r in qb_rows]}"
     assert [r["manager"] for r in qb_rows[:2]] == ["Alex", "Ankit"], f"expected the two week-2 rows sorted by manager A-Z, got: {[r['manager'] for r in qb_rows[:2]]}"
 
     print("\nConfirmed QB Injury Backup Adjustments table: live detection (team-scoped, injury-status-corroborated) + historical merge + correct sort order.")
+
+    # ---- QB Injury Backup Adjustments table: row text coloring -----------
+    # Every plain-text cell (Week, Status) matches that row's OWN manager
+    # matchup color (the same color already used for the Manager cell and
+    # the standings table); the Injured QB's name/points are always red
+    # (--bad) and the Backup QB's name/points always green (--good),
+    # regardless of manager color, and Commissioner Adjustment is green too
+    # -- see the CSS comment above #qb-adj-table td.qb-adj-injured in
+    # rumbles.html. Resolved live via getComputedStyle rather than
+    # hardcoded hex/rgb literals, since --good/--bad (unlike --matchup-4)
+    # actually differ between light/dark mode.
+    good_ref = get_css_var_color(page, "good")
+    bad_ref = get_css_var_color(page, "bad")
+    row_colors = get_qb_adjustment_row_colors(page)
+
+    for manager in ["Alex", "Ankit", "Ben"]:
+        rc = row_colors[manager]
+        assert rc["week_color"] == rc["manager_color"], (
+            f"{manager}: expected the Week cell to match their own manager color ({rc['manager_color']}), got {rc['week_color']}"
+        )
+        assert rc["injured_name_color"] == bad_ref, f"{manager}: expected the Injured QB name to be red ({bad_ref}), got {rc['injured_name_color']}"
+        assert rc["injured_points_color"] == bad_ref, f"{manager}: expected the Injured QB Points to be red ({bad_ref}), got {rc['injured_points_color']}"
+        assert rc["commissioner_adj_color"] == good_ref, f"{manager}: expected Commissioner Adjustment to be green ({good_ref}), got {rc['commissioner_adj_color']}"
+    # Backup QB name/points: only Alex and Ben actually have an identified
+    # backup QB to color (Ankit's override has none -- see the empty
+    # `backups` list checked above -- so there's no name/points text there
+    # to assert a color on).
+    for manager in ["Alex", "Ben"]:
+        rc = row_colors[manager]
+        assert rc["backup_name_color"] == good_ref, f"{manager}: expected the Backup QB name to be green ({good_ref}), got {rc['backup_name_color']}"
+        assert rc["backup_points_color"] == good_ref, f"{manager}: expected the Backup QB Points to be green ({good_ref}), got {rc['backup_points_color']}"
+    print("Confirmed QB Injury Backup Adjustments row coloring: Week/Status match the manager color, Injured QB name+points are red, Backup QB name+points and Commissioner Adjustment are green.")
+
+    # ---- Live QB-injury-backup credit folded into the standings totals,
+    # plus the manager-name "*" + tooltip for the still-"likely" case ------
+    # This is the actual feature: the log table above is purely
+    # informational, but applyQbAdjustmentsToScores (called from loadLive,
+    # BEFORE computeRumblesForWeek) now also folds the credit into the live
+    # Actual/Projected totals themselves, which is what the
+    # expected/expected_points_this_week dicts and the Alex-vs-Joe winner
+    # checks above already exercised. This section checks the other half:
+    # the "*" UI cue itself, and that it appears for the "likely" case
+    # (Alex) but NOT the "confirmed" one (Ankit) or anyone else.
+    for manager in ["Aidan", "Ben", "Jake", "Rohaan", "Joe", "Steven", "Ankit", "Christian", "Ryan", "Kaitlyn", "Stephanie"]:
+        el = get_qb_adj_asterisk(page, manager)
+        assert el is None, f"expected no manager-name '*' for {manager} (no live 'likely' QB adjustment for them), but found one"
+    alex_asterisk = get_qb_adj_asterisk(page, "Alex")
+    assert alex_asterisk is not None, "expected Alex (roster 6) to have a manager-name '*' -- his live QB adjustment is still 'likely', not yet commissioner-confirmed"
+    print("Confirmed the manager-name '*' shows up ONLY for Alex (the one live 'likely' adjustment) -- not for Ankit (already 'confirmed'), nor any other manager.")
+
+    tooltip_text = get_qb_adj_tooltip_text(page, "Alex")
+    assert tooltip_text is not None, "expected hovering Alex's '*' to show the #qb-adj-tooltip"
+    assert "Kyler Murray" in tooltip_text, f"expected the tooltip to name the injured QB (Kyler Murray), got: {tooltip_text!r}"
+    assert "Carson Wentz" in tooltip_text, f"expected the tooltip to name the replacement/backup QB (Carson Wentz), got: {tooltip_text!r}"
+    assert "+21.90" in tooltip_text, f"expected the tooltip to state the exact points added (+21.90), got: {tooltip_text!r}"
+    print(f"Confirmed Alex's '*' tooltip names the injured QB, the replacement QB, and the exact points added: {tooltip_text!r}")
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
@@ -922,7 +1107,7 @@ def scenario_mobile_tap_tooltip(browser):
 
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim())",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*\\*$/, \'\'))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     assert "has-tooltip" in (cell.get_attribute("class") or ""), "Aidan's Pts This Week cell should be tappable (has-tooltip)"
@@ -957,6 +1142,37 @@ def scenario_mobile_tap_tooltip(browser):
     page.wait_for_timeout(200)
     assert not tip.evaluate("el => el.classList.contains('visible')"), "tapping elsewhere on the page should dismiss an open tooltip"
     print("Tapping elsewhere on the page correctly dismissed the open tooltip.")
+
+    # ---- Manager-name "*" (live QB-injury adjustment): same tap-to-toggle
+    # behavior as the Pts This Week tooltip above -- Alex (roster 6) has a
+    # live "likely" adjustment in this same fixture, so his "*" is present.
+    qb_asterisk = get_qb_adj_asterisk(page, "Alex")
+    assert qb_asterisk is not None, "expected Alex to have a manager-name '*' in this mobile context too"
+    qb_tip = page.locator("#qb-adj-tooltip")
+    assert not qb_tip.evaluate("el => el.classList.contains('visible')"), "qb-adj tooltip should start out hidden"
+
+    qb_asterisk.hover(force=True)
+    page.wait_for_timeout(200)
+    assert not qb_tip.evaluate("el => el.classList.contains('visible')"), "a hover-only event must not show the qb-adj tooltip on a touch-primary device"
+
+    qb_asterisk.tap()
+    page.wait_for_timeout(200)
+    assert qb_tip.evaluate("el => el.classList.contains('visible')"), "tapping the '*' should show the qb-adj tooltip"
+    assert "Kyler Murray" in qb_tip.inner_text(), f"expected the injured QB's name in the tooltip, got: {qb_tip.inner_text()!r}"
+    print("QB-adj '*': tap #1 correctly showed the tooltip.")
+
+    qb_asterisk.tap()
+    page.wait_for_timeout(200)
+    assert not qb_tip.evaluate("el => el.classList.contains('visible')"), "tapping the same '*' again should toggle the tooltip closed"
+    print("QB-adj '*': tap #2 on the same element correctly toggled it closed.")
+
+    qb_asterisk.tap()
+    page.wait_for_timeout(200)
+    assert qb_tip.evaluate("el => el.classList.contains('visible')"), "qb-adj tooltip should be showing again after re-tapping"
+    page.locator("#subtitle").tap()
+    page.wait_for_timeout(200)
+    assert not qb_tip.evaluate("el => el.classList.contains('visible')"), "tapping elsewhere on the page should dismiss an open qb-adj tooltip"
+    print("QB-adj '*': tapping elsewhere on the page correctly dismissed the open tooltip.")
 
     # ---- "How to Use" button: same tap-to-toggle behavior on a touch-
     # primary device (a plain hover must do nothing here, only a real tap).

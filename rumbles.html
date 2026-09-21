@@ -454,6 +454,23 @@
   #qb-adj-table td.qb-name-cell, #qb-adj-table td.manager-cell { text-align: left; }
   .backup-list { display: flex; flex-direction: column; gap: 2px; }
   .backup-list span { white-space: nowrap; }
+  /* Row text color scheme: every OTHER cell in a row (Week, Status) is
+     colored to match that manager's own matchup color (an inline style on
+     the <td> itself -- see renderQbAdjustments), same as the Manager cell
+     already is. The Injured QB's name/points and the Backup (replacement)
+     QB's name/points are a deliberate exception -- always red/green
+     respectively, regardless of manager color, so the two halves of "who
+     got hurt, who covered for them" read at a glance without having to
+     parse column headers. Commissioner Adjustment (the official, keyed-in
+     delta) is always green too, once it exists, on the theory that it's
+     the same kind of "credit" the green backup-points column already
+     represents -- just the confirmed version of it. The confidence pill
+     and LIVE badge keep their own existing fixed colors either way (never
+     overridden by the row's manager color, since both already set their
+     own `color` directly rather than inheriting).*/
+  #qb-adj-table td.qb-adj-injured { color: var(--bad); }
+  #qb-adj-table td.qb-adj-backup { color: var(--good); }
+  #qb-adj-table td.qb-adj-commissioner { color: var(--good); }
   .confidence-pill {
     display: inline-block;
     font-size: 0.68rem;
@@ -464,6 +481,51 @@
   }
   .confidence-confirmed { background: rgba(53, 194, 107, 0.15); color: var(--good); }
   .confidence-likely { background: rgba(77, 159, 255, 0.15); color: var(--accent-2); }
+  /* "*" shown next to a manager's name while a "likely" (not yet
+     commissioner-confirmed) QB-injury backup-points credit is folded into
+     their live Actual/Projected totals this week -- see
+     applyQbAdjustmentsToScores and buildCombinedStandings' qb_adjustment
+     field. Colored to match .confidence-likely's blue (the same "not yet
+     official" signal already used in the QB Injury Backup Adjustments log
+     table below the standings), with the same cursor:help + dotted
+     underline hint that td.thisweek-pts.has-tooltip uses for "this is
+     interactive, tap/hover for detail". Disappears once the commissioner
+     sets custom_points and the entry moves to "confirmed" -- the credit
+     itself stays (see applyQbAdjustmentsToScores' comment on why), just
+     this speculative-adjustment cue goes away. */
+  .qb-adj-asterisk {
+    color: var(--accent-2);
+    font-weight: 700;
+    cursor: help;
+    margin-left: 2px;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--accent-2);
+    text-underline-offset: 2px;
+  }
+  /* Tooltip for .qb-adj-asterisk -- same fixed-position, JS-driven,
+     hover(desktop)/tap(mobile) pattern as .pts-tooltip above (see that
+     rule's comment for why position:fixed specifically). Kept as its own
+     element/class rather than reusing #pts-tooltip so the two can never
+     show mismatched content if a user triggers both in quick succession. */
+  .qb-adj-tooltip {
+    position: fixed;
+    z-index: 50;
+    width: max-content;
+    max-width: min(320px, 92vw);
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .qb-adj-tooltip.visible { opacity: 1; visibility: visible; }
+  .qb-adj-tooltip strong { color: var(--accent-2); }
 </style>
 </head>
 <body>
@@ -534,19 +596,21 @@
           <th style="text-align:left">Backup QB(s)</th>
           <th>Injured QB Points</th>
           <th>Backup QB Points</th>
+          <th>Commissioner Adjustment</th>
           <th style="text-align:left">Status</th>
         </tr>
       </thead>
       <tbody id="qb-adj-body">
-        <tr><td colspan="7"><div class="empty-state">Loading…</div></td></tr>
+        <tr><td colspan="8"><div class="empty-state">Loading…</div></td></tr>
       </tbody>
     </table>
     </div>
   </div>
-  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current).</p>
+  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current). <strong>Commissioner Adjustment</strong> is the exact point delta the commissioner's own override represents (blank until one exists) -- compare it directly against Backup QB Points to see how closely this page's own live estimate matched what the commissioner actually keyed in.</p>
 </div>
 
 <div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
+<div id="qb-adj-tooltip" class="qb-adj-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
@@ -599,6 +663,8 @@
     thisWeekTooltipData: {}, // roster_id -> {showStartTime, rows} "Pts This Week" tooltip data (set by render(), read by the pts-tooltip show/toggle handlers)
     timeSlotColorByLabel: {}, // "Mon 1pm" etc -> "var(--matchup-N)" (set by loadLive() via buildTimeSlotColors, read by thisWeekTooltip)
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
+    qbAdjTooltipData: {}, // roster_id -> {html} for the manager-name "*" tooltip (set by render(), read by the qb-adj-tooltip show/toggle handlers) -- only populated for "likely"-tier live QB adjustments, see buildCombinedStandings' qb_adjustment field
+    activeQbAdjTooltipRosterId: null, // which roster's "*" tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
     sort: { key: null, dir: "desc" } // key: one of COLUMNS' keys, or null = natural standings order
@@ -637,6 +703,7 @@
     refreshBtn: document.getElementById("refresh-btn"),
     liveWeekLabel: document.getElementById("live-week-label"),
     ptsTooltip: document.getElementById("pts-tooltip"),
+    qbAdjTooltip: document.getElementById("qb-adj-tooltip"),
     howtoBtn: document.getElementById("howto-btn"),
     howtoTooltip: document.getElementById("howto-tooltip"),
     headerCells: {} // filled in by attachSortHandlers(): column key -> <th>
@@ -1399,6 +1466,68 @@
     return entries;
   }
 
+  // ---- QB injury backup-points: applying it to the LIVE totals -----------
+  // detectQbAdjustmentsForWeek above only ever produced entries for the
+  // separate, informational "QB Injury Backup Adjustments" log table below
+  // the standings -- rosterScore/playerPoints (which produce scoresActual/
+  // scoresCustom, i.e. the live standings' own point totals) never
+  // consumed m.points/m.custom_points at all, so the house rule never
+  // actually showed up in Actual/Custom/Rumbles/H2H/PA/vs-Field until a
+  // week finalized and build_rumbles.py's official_points() picked up
+  // custom_points for good.
+  //
+  // Per Ben's request, the live totals themselves should now reflect it
+  // too, in two tiers:
+  //   - "likely" (injury_status out/IR/PUP, no commissioner override yet):
+  //     add the same-team backup QB's own already-scored points
+  //     (backup_points_total) onto BOTH the roster's live actual total and
+  //     its custom/projected total. This is flat, not projected/dampened --
+  //     it's real points already scored by a real player, so it counts in
+  //     full toward both totals, the same way any other player's actual
+  //     points already do (and per Ben's own framing: "add in the
+  //     replacement QB points to that managers actual point total (and
+  //     which would also functionally increase their projected total since
+  //     actual is part of that)"). The manager's name gets a "*" and a
+  //     tooltip -- see render()/renderManagerAsterisk below.
+  //   - "confirmed" (the commissioner has set custom_points): add
+  //     custom_points_delta -- the OFFICIAL point delta the override
+  //     represents (custom_points - points), already computed by
+  //     detectQbAdjustmentsForWeek -- instead of the estimated
+  //     backup_points_total. This is a deliberate choice, not just "stop
+  //     adding the likely-phase credit": dropping the credit to zero the
+  //     instant the commissioner does the right thing would make the
+  //     manager's total visibly FALL, which reads as a bug, not a
+  //     resolution. Using the official delta instead keeps the total
+  //     continuous (it's normally very close to the "likely" estimate,
+  //     since the override is meant to reflect the same real-world credit)
+  //     while making sure the *official*, commissioner-set number -- not
+  //     our own best-effort guess -- is what the standings ultimately
+  //     carry. No asterisk/tooltip once confirmed (that's the "likely"-only
+  //     UI cue going away, per Ben's instruction).
+  //
+  // Returns {roster_id -> {delta, confidence, injured_qb, backup_qbs}} so
+  // the caller can both apply the delta to the score totals it already has
+  // in hand and stash the same info on state.live.byRoster for the
+  // asterisk tooltip.
+  function applyQbAdjustmentsToScores(qbAdjustments, scoresActual, scoresCustom) {
+    var byRoster = {};
+    (qbAdjustments || []).forEach(function (entry) {
+      var rid = entry.roster_id;
+      var delta = entry.confidence === "confirmed" ? entry.custom_points_delta : entry.backup_points_total;
+      delta = round2(delta || 0);
+      if (scoresActual[rid] !== undefined) scoresActual[rid] = round2(scoresActual[rid] + delta);
+      if (scoresCustom[rid] !== undefined) scoresCustom[rid] = round2(scoresCustom[rid] + delta);
+      if (!delta) return; // nothing to show a badge for either
+      byRoster[rid] = {
+        delta: delta,
+        confidence: entry.confidence,
+        injured_qb: entry.injured_qb,
+        backup_qbs: entry.backup_qbs
+      };
+    });
+    return byRoster;
+  }
+
   function fetchPlayersMeta() {
     return fetchJson(PLAYERS_URL).then(function (data) {
       state.playersMeta = data || {};
@@ -1593,19 +1722,17 @@
               }
             });
 
-            var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
-            var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
-
-            var byRoster = {};
-            Object.keys(scoresActual).forEach(function (rid) {
-              byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
-            });
-
-            state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
-
             // Best-effort: also try to detect this week's QB-injury-backup
-            // adjustments live (see detectQbAdjustmentsForWeek above).
-            // Never allowed to break the main standings if it fails.
+            // adjustments live (see detectQbAdjustmentsForWeek above). This
+            // now has to run BEFORE computeRumblesForWeek (not after, as
+            // originally) so that applyQbAdjustmentsToScores can fold the
+            // adjustment into scoresActual/scoresCustom first -- otherwise
+            // Rumbles/H2H/PA/vs-Field, all of which are derived from those
+            // two score maps, would never see it. Never allowed to break
+            // the main standings if it fails -- the qbAdjustmentsPromise
+            // chain below always resolves (falls back to `prelim`, or to
+            // an empty list), it never rejects, so the .then() after it is
+            // guaranteed to run.
             var managerByRosterId = {};
             ((state.history && state.history.standings) || []).forEach(function (s) {
               managerByRosterId[s.roster_id] = s.manager;
@@ -1613,40 +1740,49 @@
 
             var teamQbIndex = state.teamQbIndex || {};
 
-            // Attach each roster's per-starter actual/projected breakdown
-            // for the "Points This Week" hover tooltip. Independent of the
-            // QB-adjustment detection below -- best-effort, and never
-            // allowed to block or break it if player names are missing.
-            matchups.forEach(function (m) {
-              var rid = m.roster_id;
-              if (state.live.byRoster[rid]) {
-                state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
-              }
-            });
-
             var prelim = detectQbAdjustmentsForWeek(
               targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
             );
             var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
             var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
-            if (needsFreshCheck && stale) {
-              return fetchPlayersMeta()
+            var qbAdjustmentsPromise = (needsFreshCheck && stale)
+              ? fetchPlayersMeta()
                 .then(function (freshMeta) {
                   return detectQbAdjustmentsForWeek(
                     targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
                   );
                 })
-                .catch(function () { return prelim; });
-            }
-            return prelim;
-          })
-            .then(function (qbAdjustments) {
+                .catch(function () { return prelim; })
+              : Promise.resolve(prelim);
+
+            return qbAdjustmentsPromise.then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
-            })
-            .catch(function (err) {
-              console.warn("[rumbles] live QB-adjustment detection failed:", err);
-              state.liveQbAdjustments = state.liveQbAdjustments || [];
+
+              var adjustmentByRoster = applyQbAdjustmentsToScores(qbAdjustments, scoresActual, scoresCustom);
+
+              var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
+              var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
+
+              var byRoster = {};
+              Object.keys(scoresActual).forEach(function (rid) {
+                byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
+                if (adjustmentByRoster[rid]) byRoster[rid].qbAdjustment = adjustmentByRoster[rid];
+              });
+
+              state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster };
+
+              // Attach each roster's per-starter actual/projected breakdown
+              // for the "Points This Week" hover tooltip. Independent of
+              // the QB-adjustment amount above -- best-effort, and never
+              // allowed to block or break it if player names are missing.
+              matchups.forEach(function (m) {
+                var rid = m.roster_id;
+                if (state.live.byRoster[rid]) {
+                  state.live.byRoster[rid].players = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
+                }
+              });
             });
+          });
         });
       })
       .catch(function (err) {
@@ -1841,7 +1977,16 @@
         // hover tooltip -- independent of state.mode (the same underlying
         // per-player numbers back both the Actual and Projected toggle);
         // render() decides how to format/filter them for display.
-        this_week_player_breakdown: liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null
+        this_week_player_breakdown: liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null,
+        // The live QB-injury backup-points adjustment for this roster this
+        // week, if any -- {delta, confidence, injured_qb, backup_qbs} (see
+        // applyQbAdjustmentsToScores). Not mode-scoped: the same delta was
+        // folded into both the Actual and Projected totals, so it applies
+        // here regardless of state.mode. render() only shows the "*" +
+        // tooltip while confidence is "likely" -- once the commissioner
+        // confirms it, the credit stays (as the official override delta)
+        // but the speculative-adjustment UI cue goes away.
+        qb_adjustment: liveActive && live.byRoster[rid] ? live.byRoster[rid].qbAdjustment : null
       };
     });
 
@@ -1932,6 +2077,7 @@
     updateHeaderSortIndicators();
 
     state.thisWeekTooltipData = {};
+    state.qbAdjTooltipData = {};
     if (!rows.length) {
       var emptyMsg;
       if (state.historyError) {
@@ -1948,6 +2094,15 @@
           nameHtml = '<span class="matchup-name" style="color:' + r.matchup_color + '" title="' + title + '">' + escapeHtml(r.manager) + "</span>";
         } else {
           nameHtml = escapeHtml(r.manager);
+        }
+        // "*" for a live, not-yet-commissioner-confirmed QB-injury
+        // backup-points credit (see buildCombinedStandings' qb_adjustment
+        // field and applyQbAdjustmentsToScores) -- same custom-tooltip
+        // pattern as the "Pts This Week" cell (see qb-adj-tooltip show/
+        // hide/toggle below), so it works on both hover and tap.
+        if (r.qb_adjustment && r.qb_adjustment.confidence === "likely") {
+          state.qbAdjTooltipData[r.roster_id] = buildQbAdjTooltipHtml(r.qb_adjustment);
+          nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">*</span>';
         }
         // The tooltip itself is a custom element (see pts-tooltip show/
         // hide/toggle below), not a native title attribute -- a native
@@ -1992,6 +2147,7 @@
       }).join("");
     }
     refreshOrHidePtsTooltip();
+    refreshOrHideQbAdjTooltip();
 
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
     els.subtitle.textContent = "DTF Club · " + season + " season";
@@ -2164,6 +2320,40 @@
     });
   }
 
+  // Same hover/tap split as the Pts tooltip above, reusing the same
+  // `supportsHover` check, wired independently since these two tooltips
+  // key off different elements (a manager-name "*" here vs. a "Pts This
+  // Week" cell above) and must never toggle each other.
+  if (supportsHover) {
+    els.body.addEventListener("mouseover", function (e) {
+      var el = qbAdjElFromEvent(e);
+      if (el) showQbAdjTooltip(el);
+    });
+    els.body.addEventListener("mouseout", function (e) {
+      var el = qbAdjElFromEvent(e);
+      if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hideQbAdjTooltip();
+    });
+  } else {
+    els.body.addEventListener("click", function (e) {
+      var el = qbAdjElFromEvent(e);
+      if (!el) return;
+      e.stopPropagation();
+      var rid = el.getAttribute("data-roster-id");
+      if (state.activeQbAdjTooltipRosterId === rid) {
+        hideQbAdjTooltip();
+      } else {
+        showQbAdjTooltip(el);
+      }
+    });
+    document.addEventListener("click", function (e) {
+      if (state.activeQbAdjTooltipRosterId != null && (!e.target.closest || !e.target.closest("span.qb-adj-asterisk"))) {
+        hideQbAdjTooltip();
+      }
+    });
+  }
+  window.addEventListener("scroll", hideQbAdjTooltip, true);
+  window.addEventListener("resize", hideQbAdjTooltip);
+
   // A position: fixed tooltip is anchored to viewport coordinates captured
   // at show-time -- if the page (or the table's own horizontal scroller)
   // scrolls afterward without re-showing it, it would be left floating
@@ -2173,6 +2363,90 @@
   // scroll events don't bubble, but they do propagate in the capture phase.
   window.addEventListener("scroll", hidePtsTooltip, true);
   window.addEventListener("resize", hidePtsTooltip);
+
+  // ---- manager-name "*" hover/tap tooltip (live QB-injury adjustment) ----
+  // Same reusable-element, hover(desktop)/tap(mobile) pattern as the Pts
+  // This Week tooltip just above (see that section's comment for the
+  // position:fixed rationale) -- kept as its own #qb-adj-tooltip element
+  // rather than reusing #pts-tooltip so the two can never show mismatched
+  // content if a user triggers both in quick succession, and reusing the
+  // same `supportsHover` capability check (declared below) rather than
+  // re-detecting it.
+
+  // r.qb_adjustment shape: {delta, confidence, injured_qb: {name, points},
+  // backup_qbs: [{name, points}, ...]} (see applyQbAdjustmentsToScores).
+  // Only ever called for confidence === "likely" (see render()) -- a
+  // "confirmed" adjustment gets no asterisk/tooltip at all.
+  function buildQbAdjTooltipHtml(adj) {
+    var injuredName = (adj.injured_qb && adj.injured_qb.name) || "Unknown QB";
+    var backups = adj.backup_qbs || [];
+    var backupNames = backups.length
+      ? backups.map(function (b) { return escapeHtml(b.name); }).join(", ")
+      : "their backup";
+    var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
+    return "<strong>QB injury adjustment (likely)</strong><br>" +
+      escapeHtml(injuredName) + " is out/IR/PUP this week; " + backupNames +
+      "&rsquo;s points are being credited to this roster under the house rule.<br>" +
+      deltaStr + " pts added to Actual &amp; Projected, pending the commissioner&rsquo;s official adjustment.";
+  }
+
+  function positionQbAdjTooltip(el) {
+    var tip = els.qbAdjTooltip;
+    var elRect = el.getBoundingClientRect();
+    var margin = 6;
+    var tipRect = tip.getBoundingClientRect();
+    var left = elRect.left;
+    var maxLeft = window.innerWidth - tipRect.width - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    var top = elRect.bottom + margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = elRect.top - tipRect.height - margin;
+      if (top < margin) top = margin;
+    }
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function showQbAdjTooltip(el) {
+    var rid = el.getAttribute("data-roster-id");
+    var html = state.qbAdjTooltipData[rid];
+    if (!html) return;
+    state.activeQbAdjTooltipRosterId = rid;
+    els.qbAdjTooltip.innerHTML = html;
+    els.qbAdjTooltip.setAttribute("aria-hidden", "false");
+    els.qbAdjTooltip.classList.add("visible");
+    positionQbAdjTooltip(el);
+  }
+
+  function hideQbAdjTooltip() {
+    if (state.activeQbAdjTooltipRosterId == null) return;
+    state.activeQbAdjTooltipRosterId = null;
+    els.qbAdjTooltip.classList.remove("visible");
+    els.qbAdjTooltip.setAttribute("aria-hidden", "true");
+  }
+
+  // Called at the end of every render() (see refreshOrHidePtsTooltip's own
+  // comment for why -- same reasoning: a tap-triggered tooltip has no
+  // "pointer left" moment of its own, so keep it open with fresh content on
+  // a poll, or close it if this roster no longer has a "likely" adjustment
+  // (e.g. the commissioner just confirmed it).
+  function refreshOrHideQbAdjTooltip() {
+    var rid = state.activeQbAdjTooltipRosterId;
+    if (rid == null) return;
+    var html = state.qbAdjTooltipData[rid];
+    var el = els.body.querySelector('span.qb-adj-asterisk[data-roster-id="' + rid + '"]');
+    if (!html || !el) {
+      hideQbAdjTooltip();
+      return;
+    }
+    els.qbAdjTooltip.innerHTML = html;
+    positionQbAdjTooltip(el);
+  }
+
+  function qbAdjElFromEvent(e) {
+    return e.target && e.target.closest ? e.target.closest("span.qb-adj-asterisk") : null;
+  }
 
   // ---- "How to Use" hover/click tooltip ----------------------------------
   // Static explainer content (not per-row data, unlike the Pts tooltip
@@ -2273,7 +2547,7 @@
     });
 
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="8"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
     } else {
       body.innerHTML = rows.map(function (r) {
         var backupsHtml = '<div class="backup-list">' + r.backup_qbs.map(function (b) {
@@ -2285,19 +2559,32 @@
         // Same per-manager matchup color as the standings table above (see
         // state.matchupColorByRosterId), so a manager's name is the same
         // color everywhere on the page -- not just when this log row
-        // happens to be about the current live week.
+        // happens to be about the current live week. Every OTHER plain-
+        // text cell (Week, Status) gets this same color via an inline
+        // style on the <td> itself -- see the CSS comment above
+        // #qb-adj-table td.qb-adj-injured for the full color scheme.
         var matchupColor = state.matchupColorByRosterId[r.roster_id];
+        var rowColorAttr = matchupColor ? ' style="color:' + matchupColor + '"' : "";
         var managerHtml = matchupColor
           ? '<span class="matchup-name" style="color:' + matchupColor + '">' + escapeHtml(r.manager) + "</span>"
           : escapeHtml(r.manager);
+        // Commissioner Adjustment: the OFFICIAL point delta the
+        // commissioner's own custom_points override represents (already
+        // computed by detectQbAdjustmentsForWeek/compute_qb_adjustments_
+        // for_week as custom_points_delta) -- null for a still-"likely"
+        // row (no override exists yet), shown as an em dash.
+        var commissionerAdjHtml = (r.custom_points_delta === null || r.custom_points_delta === undefined)
+          ? "—"
+          : (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2);
         return "<tr>" +
-          "<td>" + r.week + "</td>" +
+          "<td" + rowColorAttr + ">" + r.week + "</td>" +
           '<td class="manager-cell">' + managerHtml + "</td>" +
-          '<td class="qb-name-cell">' + escapeHtml(r.injured_qb.name) + "</td>" +
-          '<td class="qb-name-cell">' + backupsHtml + "</td>" +
-          "<td>" + r.injured_qb.points.toFixed(2) + "</td>" +
-          "<td>" + r.backup_points_total.toFixed(2) + "</td>" +
-          '<td class="qb-name-cell">' + pill + "</td>" +
+          '<td class="qb-name-cell qb-adj-injured">' + escapeHtml(r.injured_qb.name) + "</td>" +
+          '<td class="qb-name-cell qb-adj-backup">' + backupsHtml + "</td>" +
+          '<td class="qb-adj-injured">' + r.injured_qb.points.toFixed(2) + "</td>" +
+          '<td class="qb-adj-backup">' + r.backup_points_total.toFixed(2) + "</td>" +
+          '<td class="qb-adj-commissioner">' + commissionerAdjHtml + "</td>" +
+          '<td class="qb-name-cell"' + rowColorAttr + ">" + pill + "</td>" +
           "</tr>";
       }).join("");
     }
