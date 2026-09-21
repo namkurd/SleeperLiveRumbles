@@ -498,38 +498,36 @@
   /* Row text color scheme: every OTHER cell in a row (Week, Commissioner
      Status) is colored to match that manager's own matchup color (an
      inline style on the <td> itself -- see renderQbAdjustments), same as
-     the Manager cell already is. The Injured QB's name/points and the
-     Backup (replacement) QB's NAME are a deliberate exception -- always
-     red/green respectively, regardless of manager color, so the two
-     halves of "who got hurt, who covered for them" read at a glance
-     without having to parse column headers. Commissioner Adjustment (the
-     official, keyed-in delta) is always green too, once it exists, on the
-     theory that it's the same kind of "credit" the green backup-name
-     color already represents -- just the confirmed version of it. The
-     confidence pill and LIVE badge keep their own existing fixed colors
-     either way (never overridden by the row's manager color, since both
-     already set their own `color` directly rather than inheriting).
+     the Manager cell already is. The Injured QB's name/points is a
+     deliberate exception -- always red, regardless of manager color, so
+     it reads as "who got hurt" at a glance without having to parse column
+     headers. Commissioner Adjustment (the official, keyed-in delta) is
+     always green too, once it exists, on the theory that a confirmed
+     override is always the same "this is official" signal regardless of
+     which tier the row started at. The confidence pill and LIVE badge
+     keep their own existing fixed colors either way (never overridden by
+     the row's manager color, since both already set their own `color`
+     directly rather than inheriting).
 
-     The "Backup QB Points" TOTAL column (as opposed to the Backup QB(s)
-     name-list column, which stays plain green above) is the one cell that
-     tracks confidence state visually: it's still just this page's
-     best-effort estimate while "likely" (no commissioner override exists
-     yet to confirm it), so it's colored the same yellow used for the
-     replacement row in the Points This Week tooltip (--replacement) --
-     then flips to the same green as Commissioner Adjustment once
-     "confirmed", reading as "this number is now the official one." See
-     renderQbAdjustments for which class gets applied. */
+     The Backup QB(s) NAME column and the "Backup QB Points" TOTAL column
+     both instead track confidence state, using the exact same
+     qb-adj-tier-* class on both cells so the two always match: yellow
+     (--replacement, the same yellow used for the replacement row in the
+     Points This Week tooltip) while "likely" (this page's own estimate,
+     corroborated by a live injury_status but no commissioner override
+     yet); blue (--accent-2, this page's existing "not yet corroborated,
+     purely informational" blue -- see .qb-adj-asterisk and
+     .confidence-possible) while merely "possible" (nothing corroborates
+     it and these points are never folded into the live totals -- see
+     applyQbAdjustmentsToScores -- so blue also reads as "not part of
+     either total right now"); green (--good, matching Commissioner
+     Adjustment) once "confirmed", reading as "this is now the official
+     credit." See renderQbAdjustments for which class gets applied. */
   #qb-adj-table td.qb-adj-injured { color: var(--bad); }
-  #qb-adj-table td.qb-adj-backup { color: var(--good); }
   #qb-adj-table td.qb-adj-commissioner { color: var(--good); }
-  #qb-adj-table td.qb-adj-backup-total-likely { color: var(--replacement); }
-  #qb-adj-table td.qb-adj-backup-total-confirmed { color: var(--good); }
-  /* "possible" -- blue, same as .confidence-possible below and
-     .qb-adj-asterisk's already-established "not yet corroborated, purely
-     informational" blue. These points are never folded into the live
-     totals (see applyQbAdjustmentsToScores), so this color also reads as
-     "not part of either total right now". */
-  #qb-adj-table td.qb-adj-backup-total-possible { color: var(--accent-2); }
+  #qb-adj-table td.qb-adj-tier-likely { color: var(--replacement); }
+  #qb-adj-table td.qb-adj-tier-confirmed { color: var(--good); }
+  #qb-adj-table td.qb-adj-tier-possible { color: var(--accent-2); }
   .confidence-pill {
     display: inline-block;
     font-size: 0.68rem;
@@ -2679,17 +2677,15 @@
     var activeBackups = backups.filter(function (b) { return !isOutStatus(b.injury_status); });
 
     if (!backups.length) {
-      lines.push("A backup QB is stepping in; their points will be credited to this roster.");
+      lines.push("A backup QB came in; their points will be credited to this roster.");
     } else if (!injuredBackups.length) {
-      var verb = backups.length > 1 ? "are" : "is";
-      lines.push(joinNamesForSentence(backups) + " " + verb + " stepping in; their points will be credited to this roster.");
+      lines.push(joinNamesForSentence(backups) + " came in; their points will be credited to this roster.");
     } else {
       injuredBackups.forEach(function (b) {
         lines.push(escapeHtml(b.name) + " was also injured in-game and ruled out this week.");
       });
       if (activeBackups.length) {
-        var activeVerb = activeBackups.length > 1 ? "are" : "is";
-        lines.push(joinNamesForSentence(activeBackups) + " " + activeVerb + " stepping in; their points will be credited to this roster.");
+        lines.push(joinNamesForSentence(activeBackups) + " came in; their points will be credited to this roster.");
       } else {
         // Everyone who's played at QB for this team is now also hurt.
         // With only 2 QBs on the roster (the original starter plus this
@@ -2901,10 +2897,11 @@
         var commissionerAdjHtml = hasCommissionerAdj
           ? (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2)
           : "—";
-        // Backup QB Points total's color tracks confidence directly now
-        // that there are three tiers, not just "confirmed or not" -- see
-        // the CSS rules for qb-adj-backup-total-confirmed/likely/possible.
-        var backupTotalClass = "qb-adj-backup-total-" + r.confidence;
+        // Both the Backup QB(s) name column and the Backup QB Points total
+        // column share this same tier class, so their color always
+        // matches -- see the CSS rules for qb-adj-tier-confirmed/likely/
+        // possible.
+        var tierClass = "qb-adj-tier-" + r.confidence;
         // Injured QB name + points folded into one cell -- "Name (7.20)" --
         // same format Backup QB(s) already used, so this table needs one
         // fewer column (was two separate cells) and fits without side
@@ -2914,8 +2911,8 @@
           "<td" + rowColorAttr + ">" + r.week + "</td>" +
           '<td class="manager-cell">' + managerHtml + "</td>" +
           '<td class="qb-name-cell qb-adj-injured">' + injuredHtml + "</td>" +
-          '<td class="qb-name-cell qb-adj-backup">' + backupsHtml + "</td>" +
-          '<td class="' + backupTotalClass + '">' + r.backup_points_total.toFixed(2) + "</td>" +
+          '<td class="qb-name-cell ' + tierClass + '">' + backupsHtml + "</td>" +
+          '<td class="' + tierClass + '">' + r.backup_points_total.toFixed(2) + "</td>" +
           '<td class="qb-adj-commissioner">' + commissionerAdjHtml + "</td>" +
           '<td class="qb-name-cell"' + rowColorAttr + ">" + pill + "</td>" +
           "</tr>";

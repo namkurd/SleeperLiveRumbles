@@ -250,24 +250,26 @@ word like "COMMISSIONER ADJUSTMENT" on one line.
 
 Row text in this log table is colored to make the two "sides" of each
 adjustment easy to tell apart at a glance: the Injured QB's name and
-points are always red, the Backup QB(s) name and the Commissioner
-Adjustment column are always green, and every other plain-text cell
-(Week, Commissioner Status) matches that row's own manager color (the
-same color used for the Manager cell and reused from the standings table
-above) -- regardless of scoring mode or which week the row is about.
+points are always red, the Commissioner Adjustment column is always
+green, and every other plain-text cell (Week, Commissioner Status) matches
+that row's own manager color (the same color used for the Manager cell
+and reused from the standings table above) -- regardless of scoring mode
+or which week the row is about.
 
-The **Backup QB Points** total and the **Commissioner Status** pill (the
-last column: "Possible", "Likely", or "Confirmed") are the two cells that
-track confidence state rather than a fixed color: blue (`--accent-2` --
-the same blue already used for the `QB Inj*` marker itself) for a still-
-uncorroborated "possible" row, this page's own yellow (`--replacement` --
-the same yellow used for the manager-marker tooltip's points figure and
-the replacement row in the "Points This Week" tooltip below) once it's
-"likely" and there's no commissioner adjustment yet to confirm it, then
-green once "confirmed" -- blue meaning "flagged for awareness only, not
-counted anywhere yet", yellow meaning "counted provisionally", green
-meaning "counted, and official." The LIVE badge keeps its own fixed color
-either way.
+The **Backup QB(s)** name, the **Backup QB Points** total, and the
+**Commissioner Status** pill (the last column: "Possible", "Likely", or
+"Confirmed") all track confidence state together, in the same color,
+rather than the backup name being a fixed color independent of the rest
+of the row: blue (`--accent-2` -- the same blue already used for the `QB
+Inj*` marker itself) for a still-uncorroborated "possible" row, this
+page's own yellow (`--replacement` -- the same yellow used for the
+manager-marker tooltip's points figure and the replacement row in the
+"Points This Week" tooltip below) once it's "likely" and there's no
+commissioner adjustment yet to confirm it, then green (matching
+Commissioner Adjustment) once "confirmed" -- blue meaning "flagged for
+awareness only, not counted anywhere yet", yellow meaning "counted
+provisionally", green meaning "counted, and official." The LIVE badge
+keeps its own fixed color either way.
 
 This only ever touches the in-progress week's own figures ("Points This
 Week" in both modes, and every season-cumulative column in Projected
@@ -282,22 +284,23 @@ existing Alex/Kyler-Murray/Carson-Wentz ("likely") and Ankit/Ben
 credit folded in, the `QB Inj*` marker appearing only for Alex (never
 Ankit or anyone else) with the correct tooltip content -- including that
 the injured-QB line reads "was injured in-game and ruled out this week," a
-line naming the backup(s) as "stepping in" and crediting this roster, the
-points-added figure colored yellow, a closing line noting it's pending the
-commissioner's official adjustment, and a regression check that the
+line naming the backup(s) as having "came in" and crediting this roster,
+the points-added figure colored yellow, a closing line noting it's pending
+the commissioner's official adjustment, and a regression check that the
 wording makes no mention of "IR", "PUP", or "house rule" -- the
 "Commissioner Status" header text (checked via `textContent`, not
 `innerText`, since the header's CSS `text-transform: uppercase` would
 otherwise make a case-sensitive `innerText` comparison fail even though
 the underlying markup is correct), the Commissioner Adjustment column's
 values (including the blank/em-dash case for Alex's still-"likely" row),
-the row text-coloring scheme (red for the Injured QB, green for the Backup
-QB name and Commissioner Adjustment, resolved live via `getComputedStyle`
-against the actual `--good`/`--bad` CSS variables rather than a hardcoded
-hex, since those differ between light and dark mode), the Backup QB Points
-total and Commissioner Status pill both tracking confidence (yellow for
-Alex's still-"likely" row, green for Ankit's and Ben's "confirmed" ones,
-against `--replacement`), Carson Wentz's replacement row showing up in the
+the row text-coloring scheme (red for the Injured QB, green for
+Commissioner Adjustment, resolved live via `getComputedStyle` against the
+actual `--good`/`--bad` CSS variables rather than a hardcoded hex, since
+those differ between light and dark mode), the Backup QB name, Backup QB
+Points total, and Commissioner Status pill all tracking confidence
+together (yellow for Alex's still-"likely" row -- name AND total both --
+green for Ankit's and Ben's "confirmed" ones, against `--replacement`),
+Carson Wentz's replacement row showing up in the
 "Points This Week" tooltip in BOTH Actual and Projected mode (same
 slot-appended position, same actual/proj values as computed for any other
 player) colored in that same distinct `--replacement` yellow rather than
@@ -326,7 +329,7 @@ and exercises it directly against hand-built `backup_qbs`/`injury_status`/
 regression guard shared with the Playwright scenario above), multiple
 healthy backups (pluralized wording), no identifiable backup at all (the
 existing fallback wording), a backup who's also hurt with a further backup
-correctly named as stepping in (including the pluralized case), a
+correctly named as having "came in" (including the pluralized case), a
 2-QB-deep team where that backup is now the last one and nobody else is
 available, a deeper team where nobody else has recorded action yet
 (distinct wording from the "nobody else available" case), and that names

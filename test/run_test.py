@@ -1102,19 +1102,20 @@ def scenario_live_blending(browser):
     # Every plain-text cell (Week, Commissioner Status) matches that row's
     # OWN manager matchup color (the same color already used for the
     # Manager cell and the standings table); the Injured QB's name/points
-    # are always red (--bad) and the Backup QB(s) NAME always green
-    # (--good), regardless of manager color, and Commissioner Adjustment is
-    # green too -- see the CSS comment above #qb-adj-table td.qb-adj-injured
-    # in rumbles.html. Resolved live via getComputedStyle rather than
-    # hardcoded hex/rgb literals, since --good/--bad/--replacement (unlike
-    # --matchup-4) actually differ between light/dark mode.
+    # are always red (--bad) regardless of manager color, and Commissioner
+    # Adjustment is always green -- see the CSS comment above
+    # #qb-adj-table td.qb-adj-injured in rumbles.html. Resolved live via
+    # getComputedStyle rather than hardcoded hex/rgb literals, since
+    # --good/--bad/--replacement (unlike --matchup-4) actually differ
+    # between light/dark mode.
     #
-    # The Backup QB Points TOTAL and the Commissioner Status pill both
-    # instead track confidence: yellow (--replacement) while still
-    # "likely" (Alex -- no commissioner adjustment yet), green (--good)
-    # once "confirmed" (Ankit and Ben both have one, even though Ankit's
-    # has no identifiable backup NAME -- the total still falls back to the
-    # override delta and is still colored confirmed-green).
+    # The Backup QB(s) NAME column, the Backup QB Points TOTAL, and the
+    # Commissioner Status pill all instead track confidence, using the
+    # SAME color for all three within a row: yellow (--replacement) while
+    # still "likely" (Alex -- no commissioner adjustment yet), green
+    # (--good) once "confirmed" (Ankit and Ben both have one, even though
+    # Ankit's has no identifiable backup NAME -- the total still falls back
+    # to the override delta and is still colored confirmed-green).
     good_ref = get_css_var_color(page, "good")
     bad_ref = get_css_var_color(page, "bad")
     replacement_ref = get_css_var_color(page, "replacement")
@@ -1142,14 +1143,22 @@ def scenario_live_blending(browser):
     # Backup QB name: only Alex and Ben actually have an identified backup
     # QB to color (Ankit's override has none -- see the empty `backups`
     # list checked above -- so there's no name text there to assert a
-    # color on, even though its points TOTAL still gets checked above).
+    # color on, even though its points TOTAL still gets checked above). The
+    # name now tracks confidence the SAME way the total does (they share
+    # one class -- see qb-adj-tier-* in rumbles.html), so Alex's ("likely")
+    # is yellow, not the fixed green this used to be.
     for manager in ["Alex", "Ben"]:
         rc = row_colors[manager]
-        assert rc["backup_name_color"] == good_ref, f"{manager}: expected the Backup QB name to be green ({good_ref}), got {rc['backup_name_color']}"
+        tier = confidence_by_manager[manager]
+        expected_name_color = replacement_ref if tier == "likely" else good_ref
+        assert rc["backup_name_color"] == expected_name_color, (
+            f"{manager}: expected the Backup QB name to track confidence like the total does "
+            f"({'yellow, ' + replacement_ref if tier == 'likely' else 'green, ' + good_ref}), got {rc['backup_name_color']}"
+        )
     print(
         "Confirmed QB Injury Backup Adjustments row coloring: Week/Commissioner Status match the manager color, "
-        "Injured QB name+points are red, Backup QB name and Commissioner Adjustment are green, and the Backup QB "
-        "Points total + Commissioner Status pill both track confidence (yellow while likely, green once confirmed)."
+        "Injured QB name+points are red and Commissioner Adjustment is green, and the Backup QB name + Backup QB "
+        "Points total + Commissioner Status pill all track confidence together (yellow while likely, green once confirmed)."
     )
 
     # ---- Live QB-injury-backup credit folded into the standings totals,
@@ -1176,8 +1185,8 @@ def scenario_live_blending(browser):
         f"expected the tooltip's first line to plainly state the injured QB was injured in-game and ruled out, got: {tooltip_text!r}"
     )
     assert "Carson Wentz" in tooltip_text, f"expected the tooltip to name the replacement/backup QB (Carson Wentz), got: {tooltip_text!r}"
-    assert "stepping in" in tooltip_text and "credited to this roster" in tooltip_text, (
-        f"expected a line stating the replacement QB(s) are stepping in and their points will be credited to this roster, got: {tooltip_text!r}"
+    assert "came in" in tooltip_text and "credited to this roster" in tooltip_text, (
+        f"expected a line stating the replacement QB(s) came in and their points will be credited to this roster, got: {tooltip_text!r}"
     )
     assert "+21.90" in tooltip_text, f"expected the tooltip to state the exact points added (+21.90), got: {tooltip_text!r}"
     assert "pending the commissioner" in tooltip_text.lower(), f"expected a final line noting this is pending the commissioner's official adjustment, got: {tooltip_text!r}"

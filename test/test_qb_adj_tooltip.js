@@ -83,7 +83,7 @@ check(
   })),
   [
     "Kyler Murray was injured in-game and ruled out this week.",
-    "Carson Wentz is stepping in; their points will be credited to this roster.",
+    "Carson Wentz came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+21.90 pts</span> added to Actual &amp; Projected.',
     "Pending the commissioner&rsquo;s official adjustment.",
   ]
@@ -103,7 +103,7 @@ check(
   })),
   [
     "Starter One was injured in-game and ruled out this week.",
-    "Backup A, Backup B are stepping in; their points will be credited to this roster.",
+    "Backup A, Backup B came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+15.00 pts</span> added to Actual &amp; Projected.',
     "Pending the commissioner&rsquo;s official adjustment.",
   ]
@@ -120,7 +120,7 @@ check(
   })),
   [
     "Starter One was injured in-game and ruled out this week.",
-    "A backup QB is stepping in; their points will be credited to this roster.",
+    "A backup QB came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+12.00 pts</span> added to Actual &amp; Projected.',
     "Pending the commissioner&rsquo;s official adjustment.",
   ]
@@ -142,7 +142,7 @@ check(
   [
     "Starter One was injured in-game and ruled out this week.",
     "Backup One was also injured in-game and ruled out this week.",
-    "Backup Two is stepping in; their points will be credited to this roster.",
+    "Backup Two came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+22.00 pts</span> added to Actual &amp; Projected.',
     "Pending the commissioner&rsquo;s official adjustment.",
   ]
@@ -165,7 +165,7 @@ check(
   [
     "Starter One was injured in-game and ruled out this week.",
     "Backup One was also injured in-game and ruled out this week.",
-    "Backup Two, Backup Three are stepping in; their points will be credited to this roster.",
+    "Backup Two, Backup Three came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+25.00 pts</span> added to Actual &amp; Projected.',
     "Pending the commissioner&rsquo;s official adjustment.",
   ]
