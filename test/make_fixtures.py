@@ -330,6 +330,21 @@ players = {
     QB_OTHER_TEAM_PID: {"position": "QB", "team": "KC", "full_name": "Some Other QB", "injury_status": None},
     "P9": {"position": "RB", "team": "DAL", "full_name": "Joe Starter One", "injury_status": None},
     "P10": {"position": "WR", "team": "PHI", "full_name": "Joe Starter Two", "injury_status": None},
+    # Steven's roster (roster 7) -- both starters get real metadata on a
+    # brand-new team code ("SEA", not used by any other fixture roster) so
+    # their game can be marked fully final (is_over=true, like DET above)
+    # in scores_week2.json below. This is what regression-tests the
+    # "Points This Week" column's own LIVE pill turning off once EVERY
+    # player on a roster is positively confirmed "complete" -- P14 never
+    # gets a stats.json entry (deliberately still "not played" per
+    # HAND_CRAFTED_ACTUAL/the generic stats loop above), proving
+    # game_status comes purely from the team's game state, never from
+    # whether the player individually has a stats row. Every OTHER
+    # fixture roster still has at least one starter whose team is either
+    # unresolvable ("unknown") or still in_progress/pre_game, so this is
+    # the only roster where hasIncompletePlayer should ever be false.
+    "P13": {"position": "RB", "team": "SEA", "full_name": "Steven Starter One", "injury_status": None},
+    "P14": {"position": "WR", "team": "SEA", "full_name": "Steven Starter Two", "injury_status": None},
 }
 with open(os.path.join(OUT, "players.json"), "w") as f:
     json.dump(players, f, indent=2)
@@ -403,6 +418,16 @@ scores = [
         "status": "pre_game",
         "start_time": SUN_START_MS,
         "metadata": {"away_team": "DAL", "home_team": "PHI", "is_over": False, "is_in_progress": False},
+    },
+    {
+        # SEA (P13/P14, roster 7/Steven): fully final, like DET above --
+        # both of Steven's starters resolve to game_status "complete", so
+        # this is the one fixture roster where the "Points This Week"
+        # column's LIVE pill should disappear while the "This Week"
+        # (Rumbles) column's pill stays on (see this_week_points_live's
+        # comment in rumbles.html).
+        "status": "post_game",
+        "metadata": {"away_team": "SEA", "home_team": "ARI", "is_over": True, "is_in_progress": False},
     },
 ]
 with open(os.path.join(OUT, "scores_week2.json"), "w") as f:

@@ -1038,8 +1038,38 @@ def scenario_live_blending(browser):
 
     live_badges = page.locator("#standings-body .badge-live").count()
     # Both the "This Week" and "Points This Week" cells carry a LIVE badge
-    # now, so it's 2 per roster.
-    assert live_badges == 24, f"expected 24 LIVE badges (2 per roster x 12 rosters), got {live_badges}"
+    # for every roster EXCEPT Steven's (roster 7): his two starters (P13/
+    # P14, "SEA" in the fixtures) are the only ones in this whole fixture
+    # set whose team's game is positively confirmed "complete" -- see
+    # hasIncompletePlayer's comment in rumbles.html. So the "Points This
+    # Week" LIVE pill drops off for Steven specifically, while the "This
+    # Week" (Rumbles) pill stays on for everyone including him (that
+    # column is deliberately unaffected -- the user only asked to remove
+    # the pill from "points this week"). That's 2 badges x 12 rosters,
+    # minus the one that's now missing = 23.
+    assert live_badges == 23, f"expected 23 LIVE badges (2 per roster x 12 rosters, minus Steven's now-absent Points This Week one), got {live_badges}"
+
+    steven_row = next(r for r in current_rows() if r[1] == "Steven")
+    assert "LIVE" in steven_row[3], (
+        f"expected Steven's 'This Week' (Rumbles) cell to still show LIVE (that column is unaffected by the "
+        f"per-player-completeness check), got {steven_row[3]!r}"
+    )
+    assert "LIVE" not in steven_row[4], (
+        f"expected Steven's 'Points This Week' cell to have NO LIVE badge -- both his starters' games "
+        f"(SEA, fixture-marked is_over=true) are positively confirmed complete, got {steven_row[4]!r}"
+    )
+    other_managers_missing_points_live = [
+        r[1] for r in current_rows() if r[1] != "Steven" and "LIVE" not in r[4]
+    ]
+    assert not other_managers_missing_points_live, (
+        f"expected every OTHER manager to still show LIVE in 'Points This Week' (none of their rosters have "
+        f"every player positively confirmed complete), but these were missing it: {other_managers_missing_points_live}"
+    )
+    print(
+        "Confirmed the 'Points This Week' LIVE pill disappears once every one of a manager's players is "
+        "positively confirmed complete (Steven), while the 'This Week' (Rumbles) pill and every other "
+        "manager's 'Points This Week' pill are unaffected."
+    )
 
     # ---- QB Injury Backup Adjustments table --------------------------
     # Roster 6 (Alex)'s started QB ("Kyler Murray", stats/players fixtures

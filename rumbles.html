@@ -2201,6 +2201,29 @@
       var thisWeekRumbles = liveInfo ? liveInfo.rumbles : num(s.last_completed_week_rumbles);
       var thisWeekPoints = liveInfo ? liveInfo.points : num(s.last_completed_week_points);
 
+      // Whether this roster still has a player (a real starter, or an
+      // appended QB-injury replacement -- both are in the same `players`
+      // breakdown, see loadLive) whose game HASN'T been positively
+      // confirmed complete yet. Deliberately the inverse of "is anyone
+      // pre_game/in_progress": "unknown" (a bye week, or the live-status
+      // feed just failed to resolve that player -- see
+      // computePlayerBreakdownEntry) is treated as NOT complete here too,
+      // same as thisWeekTooltip's own Projected-mode filter already does
+      // -- a player is never wrongly treated as "done" just because their
+      // status couldn't be confirmed. Only once EVERY player on this
+      // roster is positively "complete" does this manager's Points This
+      // Week figure count as fully locked in for the week (even though the
+      // week overall may still be live for OTHER managers), so only then
+      // does its own LIVE pill turn off -- see this_week_points_live
+      // below. If the breakdown itself is missing entirely (a rare
+      // best-effort failure -- see loadLive's comment), this fails open
+      // (treated as "still incomplete") rather than guessing the pill
+      // should disappear.
+      var playersBreakdown = liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null;
+      var hasIncompletePlayer = playersBreakdown
+        ? playersBreakdown.some(function (p) { return p.game_status !== "complete"; })
+        : true;
+
       return {
         roster_id: rid,
         manager: s.manager,
@@ -2209,6 +2232,11 @@
         this_week: thisWeekRumbles,
         this_week_points: thisWeekPoints,
         this_week_live: !!liveInfo,
+        // Separate flag just for the "Pts This Week" cell's own LIVE pill
+        // (the "This Week" Rumbles-earned cell keeps using the plain
+        // this_week_live above, unaffected) -- see hasIncompletePlayer's
+        // comment just above.
+        this_week_points_live: !!liveInfo && hasIncompletePlayer,
         // true/false/null (tie, or no live matchup) -- whether THIS team is
         // currently ahead in its live H2H matchup, under the CURRENTLY
         // SELECTED mode's scoring (liveInfo is already mode-scoped). Used
@@ -2396,7 +2424,7 @@
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
-          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +
           "<td>" + r.pa.toFixed(2) + "</td>" +

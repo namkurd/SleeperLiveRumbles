@@ -526,6 +526,24 @@ matter which mode is selected. Whether the in-progress week's numbers get
 folded into the season totals -- Rumbles, H2H W-L, PF, PA, and Vs. Field
 W-L, all five -- depends on the mode toggle, described next.
 
+**The "Points This Week" LIVE badge is per-manager, not per-week.** "This
+Week" keeps its LIVE badge for every roster as long as the week overall is
+live -- that column is about the week, not any one manager's players.
+"Points This Week" is different: once a manager's own players are ALL
+positively confirmed to have finished their games, that manager's own
+score for the week is locked in and won't change again, so their "Points
+This Week" LIVE badge drops off individually -- even while the week is
+still live for everyone else and "This Week" keeps showing LIVE for that
+same manager. "Positively confirmed" means Sleeper's live-scoreboard feed
+actually marked that player's NFL game `is_over` -- a player on a bye, or
+one whose team/game status the feed couldn't resolve (`game_status:
+"unknown"`), is deliberately treated as NOT yet finished (fails open, same
+precedent as the "Pts This Week" tooltip's own Projected-mode filter),
+never assumed done just because nothing says otherwise. This includes any
+QB-injury-backup replacement row appended to a roster's breakdown -- a
+lingering in-progress or unresolved backup keeps that manager's badge on
+too, exactly like a real starter would.
+
 ### Live scoring: two modes
 
 While a week is in progress, `rumbles.html` fetches every starter's actual
@@ -1137,7 +1155,15 @@ per-team data, just a standing explainer.
    double-counted (a "poison-pill" fixture also plants the same fields
    on a still-pregame projection to prove neither ever fires there), a
    check that every column -- `#` included -- sorts correctly in both
-   directions while each team's own `#` value never changes, a check
+   directions while each team's own `#` value never changes, a check that
+   the standings table carries exactly 23 (not the naive 24 = 2 x 12) LIVE
+   badges -- one roster (Steven, whose two starters both have a
+   fixture-marked-`is_over` NFL game) has EVERY player positively
+   confirmed complete, so his "Points This Week" LIVE badge is
+   individually absent while his "This Week" (Rumbles) badge and every
+   other manager's "Points This Week" badge still show LIVE, proving the
+   two columns' LIVE badges are genuinely independent per manager rather
+   than both just mirroring whether the week overall is live, a check
    that this week's H2H matchup pairs share a name color (every pair gets
    a distinct one, and the colors stay identical between Actual and
    Projected mode), and a check of the live QB Injury Backup
