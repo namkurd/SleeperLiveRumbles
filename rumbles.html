@@ -472,9 +472,29 @@
     margin: 10px 2px 0;
     line-height: 1.5;
   }
+  /* This table gets its own, denser layout rather than inheriting the
+     standings table's (min-width: 760px, nowrap headers/cells, 0.85rem)
+     rules -- it only has 7 columns' worth of real content once the
+     Injured QB's own points are folded into its name cell (see
+     renderQbAdjustments), but long uppercase header words forced onto one
+     line ("COMMISSIONER ADJUSTMENT") were what actually needed the extra
+     width, not the data itself. Letting headers wrap onto two lines and
+     tightening padding/font-size is enough for this table to fit without
+     horizontal scrolling at both a real desktop width and a landscape
+     phone -- verified directly at 640px and up. The standings table above
+     keeps its own wider, scroll-to-see-more behavior; this one just
+     doesn't need it. */
+  #qb-adj-table { min-width: 0; width: 100%; font-size: 0.78rem; }
+  #qb-adj-table thead th {
+    white-space: normal;
+    word-break: normal;
+    padding: 8px 6px;
+    line-height: 1.25;
+  }
+  #qb-adj-table tbody td { padding: 8px 6px; white-space: normal; }
   #qb-adj-table td.qb-name-cell, #qb-adj-table td.manager-cell { text-align: left; }
   .backup-list { display: flex; flex-direction: column; gap: 2px; }
-  .backup-list span { white-space: nowrap; }
+  .backup-list span { white-space: normal; }
   /* Row text color scheme: every OTHER cell in a row (Week, Commissioner
      Status) is colored to match that manager's own matchup color (an
      inline style on the <td> itself -- see renderQbAdjustments), same as
@@ -543,8 +563,17 @@
   .qb-adj-tooltip {
     position: fixed;
     z-index: 50;
+    /* width: max-content sizes the box to whichever of its own lines
+       (each <br>-separated sentence in buildQbAdjTooltipHtml) is widest,
+       rather than a fixed box that wraps every line onto two -- as long
+       as that widest line fits under max-width, nothing wraps mid-
+       sentence. The cap is generous enough for the longest realistic line
+       here (a couple of full player names in one sentence) while staying
+       well under a landscape phone's width; a truly pathological case (a
+       long injury chain with several long names) still wraps gracefully
+       rather than overflowing off-screen. */
     width: max-content;
-    max-width: min(320px, 92vw);
+    max-width: min(92vw, 440px);
     background: var(--panel);
     color: var(--text);
     border: 1px solid var(--panel-border);
@@ -633,14 +662,13 @@
           <th style="text-align:left">Manager</th>
           <th style="text-align:left">Injured QB</th>
           <th style="text-align:left">Backup QB(s)</th>
-          <th>Injured QB Points</th>
           <th>Backup QB Points</th>
           <th>Commissioner Adjustment</th>
           <th style="text-align:left">Commissioner Status</th>
         </tr>
       </thead>
       <tbody id="qb-adj-body">
-        <tr><td colspan="8"><div class="empty-state">Loading…</div></td></tr>
+        <tr><td colspan="7"><div class="empty-state">Loading…</div></td></tr>
       </tbody>
     </table>
     </div>
@@ -1467,6 +1495,17 @@
     return null;
   }
 
+  // "Out"/"IR"/"PUP" is the one signal this page trusts for "currently
+  // ruled out" (Sleeper's injury_status is a live, current-only snapshot
+  // -- see detectQbAdjustmentsForWeek's comment) -- shared by the started
+  // QB's own likely-tier check below and by findBackupQbs' chain
+  // detection (a backup QB carrying this same status means THEY got hurt
+  // too, not just that the started QB did).
+  function isOutStatus(status) {
+    var s = (status || "").toLowerCase();
+    return s === "out" || s === "ir" || s === "pup";
+  }
+
   function findBackupQbs(startedPid, meta, playersMeta, teamQbIndex, statsMap, scoringSettings) {
     var team = meta.team;
     if (!team) return [];
@@ -1475,7 +1514,17 @@
     });
     return candidates
       .map(function (cid) {
-        return { player_id: cid, name: playerName(playersMeta[cid]), points: round2(qbScore(statsMap[cid], scoringSettings)) };
+        var cMeta = playersMeta[cid];
+        return {
+          player_id: cid,
+          name: playerName(cMeta),
+          points: round2(qbScore(statsMap[cid], scoringSettings)),
+          // Whether THIS backup is also currently ruled out -- i.e. they
+          // came in, played, and then went down too -- so the manager-
+          // marker tooltip can explain the full chain, not just the
+          // original starter's injury. See buildQbAdjTooltipHtml.
+          injury_status: cMeta ? (cMeta.injury_status || null) : null
+        };
       })
       .sort(function (a, b) { return b.points - a.points; });
   }
@@ -1510,6 +1559,12 @@
           injured_qb: { player_id: started ? started.pid : null, name: injuredName, points: injuredPoints },
           backup_qbs: backupEntries,
           backup_points_total: backupTotal,
+          // How many QBs Sleeper lists for this NFL team at all -- used by
+          // the manager-marker tooltip to say whether a further backup
+          // could even exist once the ones who've played are also hurt
+          // (see buildQbAdjTooltipHtml). Only meaningful when a started QB
+          // (and therefore a team) was actually identified.
+          team_qb_count: started && started.meta.team ? (teamQbIndex[started.meta.team] || []).length : null,
           confidence: "confirmed",
           injury_status_at_capture: null,
           custom_points_delta: overrideDelta,
@@ -1525,8 +1580,7 @@
       if (!startedNoOverride) return;
       var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
       if (!backups.length) return;
-      var status = (startedNoOverride.meta.injury_status || "").toLowerCase();
-      if (status !== "out" && status !== "ir" && status !== "pup") return;
+      if (!isOutStatus(startedNoOverride.meta.injury_status)) return;
 
       entries.push({
         week: week,
@@ -1535,6 +1589,7 @@
         injured_qb: { player_id: startedNoOverride.pid, name: playerName(startedNoOverride.meta), points: round2(qbScore(statsMap[startedNoOverride.pid], scoringSettings)) },
         backup_qbs: backups,
         backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
+        team_qb_count: (teamQbIndex[startedNoOverride.meta.team] || []).length,
         confidence: "likely",
         injury_status_at_capture: startedNoOverride.meta.injury_status || null,
         custom_points_delta: null,
@@ -2474,30 +2529,75 @@
   // re-detecting it.
 
   // r.qb_adjustment shape: {delta, confidence, injured_qb: {name, points},
-  // backup_qbs: [{name, points}, ...]} (see applyQbAdjustmentsToScores).
-  // Only ever called for confidence === "likely" (see render()) -- a
-  // "confirmed" adjustment gets no asterisk/tooltip at all.
-  // Four short lines, one idea each: what happened to the starter, who's
-  // covering, how many points that's worth (the one figure colored yellow
-  // -- .qb-adj-tooltip-yellow -- to flag it as this page's own estimate),
-  // and that it's still pending the commissioner's own official entry.
+  // backup_qbs: [{name, points, injury_status}, ...], team_qb_count} (see
+  // applyQbAdjustmentsToScores). Only ever called for confidence ===
+  // "likely" (see render()) -- a "confirmed" adjustment gets no
+  // asterisk/tooltip at all.
+  //
+  // One idea per line: what happened to the starter, who's covering (and,
+  // if THAT backup also went down mid-game, the exact same "was injured
+  // and ruled out" treatment for them too, then who covers next -- or, if
+  // nobody else on the team's roster was left to credit, a plain line
+  // saying so, rather than the tooltip just quietly stopping short), how
+  // many points that's worth (the one figure colored yellow --
+  // .qb-adj-tooltip-yellow -- to flag it as this page's own estimate), and
+  // that it's still pending the commissioner's own official entry.
   // Deliberately plain language throughout -- no "IR"/"PUP" injury-status
   // jargon and no reference to this being a "house rule," so it reads
   // clearly to anyone regardless of whether they know this league's rule
   // by that name.
+  function joinNamesForSentence(entries) {
+    return entries.map(function (b) { return escapeHtml(b.name); }).join(", ");
+  }
+
   function buildQbAdjTooltipHtml(adj) {
     var injuredName = (adj.injured_qb && adj.injured_qb.name) || "Unknown QB";
     var backups = adj.backup_qbs || [];
-    var backupNames = backups.length
-      ? backups.map(function (b) { return escapeHtml(b.name); }).join(", ")
-      : "A backup QB";
-    var backupVerb = backups.length > 1 ? "are" : "is";
     var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
-    return "<strong>QB injury adjustment (likely)</strong><br>" +
-      escapeHtml(injuredName) + " was injured in-game and ruled out this week.<br>" +
-      backupNames + " " + backupVerb + " stepping in; their points will be credited to this roster.<br>" +
-      '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.<br>" +
-      "Pending the commissioner&rsquo;s official adjustment.";
+    var lines = [escapeHtml(injuredName) + " was injured in-game and ruled out this week."];
+
+    // Normally at most one QB is actually in the game for a team at a
+    // time -- so among the backups who recorded action, the ones who
+    // ALSO carry an "Out"/"IR"/"PUP" status now are prior relief QBs who
+    // themselves went down, and whichever one DOESN'T carry that status
+    // is presumably the one currently in. This can't reconstruct a true
+    // play-by-play order (Sleeper has no such history -- see
+    // detectQbAdjustmentsForWeek's comment), but it's enough to state each
+    // injury as its own fact and name whoever's left to credit.
+    var injuredBackups = backups.filter(function (b) { return isOutStatus(b.injury_status); });
+    var activeBackups = backups.filter(function (b) { return !isOutStatus(b.injury_status); });
+
+    if (!backups.length) {
+      lines.push("A backup QB is stepping in; their points will be credited to this roster.");
+    } else if (!injuredBackups.length) {
+      var verb = backups.length > 1 ? "are" : "is";
+      lines.push(joinNamesForSentence(backups) + " " + verb + " stepping in; their points will be credited to this roster.");
+    } else {
+      injuredBackups.forEach(function (b) {
+        lines.push(escapeHtml(b.name) + " was also injured in-game and ruled out this week.");
+      });
+      if (activeBackups.length) {
+        var activeVerb = activeBackups.length > 1 ? "are" : "is";
+        lines.push(joinNamesForSentence(activeBackups) + " " + activeVerb + " stepping in; their points will be credited to this roster.");
+      } else {
+        // Everyone who's played at QB for this team is now also hurt.
+        // With only 2 QBs on the roster (the original starter plus this
+        // one), there's genuinely nobody left; with more listed, nobody
+        // else has recorded any action to earn points from either way --
+        // both read the same to a manager checking this tooltip: nothing
+        // more is coming.
+        lines.push(
+          adj.team_qb_count && adj.team_qb_count <= 2
+            ? "No other QB was available to step in."
+            : "No other QB has recorded action to step in."
+        );
+      }
+    }
+
+    lines.push('<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.");
+    lines.push("Pending the commissioner&rsquo;s official adjustment.");
+
+    return "<strong>QB injury adjustment (likely)</strong><br>" + lines.join("<br>");
   }
 
   function positionQbAdjTooltip(el) {
@@ -2657,7 +2757,7 @@
     });
 
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="8"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
     } else {
       body.innerHTML = rows.map(function (r) {
         var backupsHtml = '<div class="backup-list">' + r.backup_qbs.map(function (b) {
@@ -2691,12 +2791,16 @@
           ? (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2)
           : "—";
         var backupTotalClass = hasCommissionerAdj ? "qb-adj-backup-total-confirmed" : "qb-adj-backup-total-likely";
+        // Injured QB name + points folded into one cell -- "Name (7.20)" --
+        // same format Backup QB(s) already used, so this table needs one
+        // fewer column (was two separate cells) and fits without side
+        // scrolling on a real desktop width or a landscape phone.
+        var injuredHtml = escapeHtml(r.injured_qb.name) + " (" + r.injured_qb.points.toFixed(2) + ")";
         return "<tr>" +
           "<td" + rowColorAttr + ">" + r.week + "</td>" +
           '<td class="manager-cell">' + managerHtml + "</td>" +
-          '<td class="qb-name-cell qb-adj-injured">' + escapeHtml(r.injured_qb.name) + "</td>" +
+          '<td class="qb-name-cell qb-adj-injured">' + injuredHtml + "</td>" +
           '<td class="qb-name-cell qb-adj-backup">' + backupsHtml + "</td>" +
-          '<td class="qb-adj-injured">' + r.injured_qb.points.toFixed(2) + "</td>" +
           '<td class="' + backupTotalClass + '">' + r.backup_points_total.toFixed(2) + "</td>" +
           '<td class="qb-adj-commissioner">' + commissionerAdjHtml + "</td>" +
           '<td class="qb-name-cell"' + rowColorAttr + ">" + pill + "</td>" +

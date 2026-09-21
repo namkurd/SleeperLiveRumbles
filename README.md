@@ -141,18 +141,36 @@ the same two tiers as the log above:
   counts in full toward both totals immediately, the same way any other
   player's actual points do. The manager's name in the standings table
   gets a small blue `QB Inj*` marker (hover on desktop, tap on mobile)
-  with a tooltip that spells the whole thing out in four short, plain-
-  language lines: which QB got hurt ("Kyler Murray was injured in-game and
-  ruled out this week"), who's covering for them and that their points
-  will be credited to this roster, the exact number of points that
-  represents (colored yellow -- the same yellow used everywhere else on
-  the page for "this page's own estimate, not yet official" -- see below),
-  and a final line noting it's pending the commissioner's official
-  adjustment. Deliberately no "IR"/"PUP" injury-status jargon and no
-  "house rule" language anywhere in it, so it reads clearly to anyone
-  regardless of whether they know this league's rule by that name. The
-  same backup QB(s) also show up as their own row(s) in that manager's
-  "Points This Week" tooltip -- see below.
+  with a tooltip that spells the whole thing out in short, plain-language
+  lines: which QB got hurt ("Kyler Murray was injured in-game and ruled
+  out this week"), who's covering for them and that their points will be
+  credited to this roster, the exact number of points that represents
+  (colored yellow -- the same yellow used everywhere else on the page for
+  "this page's own estimate, not yet official" -- see below), and a final
+  line noting it's pending the commissioner's official adjustment.
+  Deliberately no "IR"/"PUP" injury-status jargon and no "house rule"
+  language anywhere in it, so it reads clearly to anyone regardless of
+  whether they know this league's rule by that name. The same backup
+  QB(s) also show up as their own row(s) in that manager's "Points This
+  Week" tooltip -- see below.
+
+  If the backup who came in is later ALSO ruled out mid-game (Sleeper's
+  live injury_status reads "Out"/"IR"/"PUP" for them too, same signal used
+  for the original starter), the tooltip explains the whole chain rather
+  than quietly showing an incomplete picture: one more "was also injured
+  in-game and ruled out this week" line for that backup, then either who's
+  covering next (if a further same-team QB recorded action) or a plain
+  closing line saying nobody else is available -- worded differently
+  depending on why: "No other QB was available to step in" when the NFL
+  team's roster genuinely only lists that many QBs at all (2, per the
+  example that prompted this), versus "No other QB has recorded action to
+  step in" when more are listed but nobody else has actually played yet.
+  This can't reconstruct a true play-by-play order (Sleeper has no
+  historical record of who entered a game when), so it reasons from
+  which backup(s) currently carry that live "Out"/"IR"/"PUP" status
+  themselves (prior relief QBs who also went down) versus which one
+  doesn't (presumably whoever's in now) -- see `buildQbAdjTooltipHtml` in
+  `rumbles.html`.
 - **Confirmed**: once the commissioner sets `custom_points`, the "likely"
   credit (`backup_points_total`) is removed and replaced with the OFFICIAL
   point delta the override represents (`custom_points - points` -- the
@@ -173,6 +191,16 @@ exists (blank -- an em dash -- for a still-"likely" row with none yet),
 right next to "Backup QB Points" so the two are easy to eyeball against
 each other -- did the commissioner's manual number land close to what this
 page detected on its own?
+
+The table is deliberately condensed to fit without horizontal scrolling
+on both a real desktop width and a landscape-oriented phone (checked down
+to 640px wide) -- unlike the wider, 10-column standings table above,
+which keeps its own scroll-to-see-more behavior by design. The Injured
+QB's own points are folded into its name cell ("Kyler Murray (7.20)"),
+the same "Name (points)" format the Backup QB(s) column already used, so
+the table needs one fewer column; its headers are also allowed to wrap
+onto two lines instead of forcing extra column width just to keep a long
+word like "COMMISSIONER ADJUSTMENT" on one line.
 
 Row text in this log table is colored to make the two "sides" of each
 adjustment easy to tell apart at a glance: the Injured QB's name and
@@ -205,13 +233,13 @@ Covered end-to-end by `test/run_test.py`'s live scenario, which reuses its
 existing Alex/Kyler-Murray/Carson-Wentz ("likely") and Ankit/Ben
 ("confirmed") fixtures: hand-verified PF/Points-This-Week totals with the
 credit folded in, the `QB Inj*` marker appearing only for Alex (never
-Ankit or anyone else) with the correct four-line tooltip content --
-including that the injured-QB line reads "was injured in-game and ruled
-out this week," a line naming the backup(s) as "stepping in" and crediting
-this roster, the points-added figure colored yellow, a closing line noting
-it's pending the commissioner's official adjustment, and a regression
-check that the wording makes no mention of "IR", "PUP", or "house rule" --
-the "Commissioner Status" header text (checked via `textContent`, not
+Ankit or anyone else) with the correct tooltip content -- including that
+the injured-QB line reads "was injured in-game and ruled out this week," a
+line naming the backup(s) as "stepping in" and crediting this roster, the
+points-added figure colored yellow, a closing line noting it's pending the
+commissioner's official adjustment, and a regression check that the
+wording makes no mention of "IR", "PUP", or "house rule" -- the
+"Commissioner Status" header text (checked via `textContent`, not
 `innerText`, since the header's CSS `text-transform: uppercase` would
 otherwise make a case-sensitive `innerText` comparison fail even though
 the underlying markup is correct), the Commissioner Adjustment column's
@@ -229,7 +257,33 @@ player) colored in that same distinct `--replacement` yellow rather than
 the usual live-green -- even while his own game is genuinely still in
 progress -- and, on the touch-primary mobile context, the same
 tap-to-show/tap-to-toggle/tap-elsewhere-dismisses behavior already
-established for the "Pts This Week" tooltip.
+established for the "Pts This Week" tooltip. The same live scenario also
+measures, directly: that the log table's `.table-scroll` container never
+needs to scroll horizontally at 1280/980/700/640px wide (a real desktop
+width down through a conservative landscape-phone floor), and that the
+manager-marker tooltip's own `<br>`-separated lines each render as
+exactly one visual line at its default width (via a `Range` over the
+tooltip's contents, comparing distinct rendered line-box positions against
+the number of logical lines in its HTML) -- catching a regression to
+mid-sentence wrapping either way, not just eyeballing a screenshot.
+
+The chain scenario -- a replacement QB who's ALSO ruled out mid-game, both
+with and without a further backup left to credit -- is unit-tested
+separately in `test/test_qb_adj_tooltip.js` (`node
+test/test_qb_adj_tooltip.js`, no browser or fixtures needed): it
+regex-extracts `buildQbAdjTooltipHtml` and its small helpers straight out
+of `rumbles.html`'s real source (the same technique
+`test/test_blended_projection.js` already used for the live-blending math)
+and exercises it directly against hand-built `backup_qbs`/`injury_status`/
+`team_qb_count` inputs, covering: a single healthy backup (no chain, and a
+regression guard shared with the Playwright scenario above), multiple
+healthy backups (pluralized wording), no identifiable backup at all (the
+existing fallback wording), a backup who's also hurt with a further backup
+correctly named as stepping in (including the pluralized case), a
+2-QB-deep team where that backup is now the last one and nobody else is
+available, a deeper team where nobody else has recorded action yet
+(distinct wording from the "nobody else available" case), and that names
+get HTML-escaped the same as everywhere else on the page.
 
 ### Columns
 
@@ -1079,6 +1133,17 @@ carry-forward-when-stale behavior, and -- the exact bug this log design
 fixes -- that a commissioner override always produces a log entry even
 when no backup QB can be independently identified from the stats.
 
+`test/test_blended_projection.js` (`node test/test_blended_projection.js`,
+no server/browser needed) and `test/test_qb_adj_tooltip.js` (`node
+test/test_qb_adj_tooltip.js`, likewise) are both standalone unit tests
+that regex-extract specific pure functions straight out of `rumbles.html`
+and exercise them in isolation -- the live-blending pace-dampening math for
+the former, the QB-injury manager-marker tooltip's wording (including the
+"a replacement QB is also injured" chain scenarios) for the latter. Both
+exist specifically to cover logic that would otherwise need a lot of
+fixture plumbing to reach through the full Playwright scenario for what's
+really pure string/number-crunching with no DOM or live-fetch involved.
+
 Useful if you ever touch the scoring or live-detection logic and want to
 check it without waiting for a live NFL window:
 
@@ -1089,6 +1154,8 @@ python test/make_fixtures.py
 python -m http.server 8123 &   # serve the repo root
 python test/run_test.py
 python test/test_build_rumbles.py   # no server/browser needed for this one
+node test/test_blended_projection.js   # ditto
+node test/test_qb_adj_tooltip.js       # ditto
 ```
 
 ## Source of truth

@@ -87,60 +87,68 @@ def get_table_rows(page):
 
 def get_qb_adjustment_rows(page):
     """One dict per row of the QB Injury Backup Adjustments table. Column
-    order: 0=week, 1=manager, 2=injured QB, 3=backup QB(s), 4=injured QB
-    points, 5=backup QB points, 6=Commissioner Adjustment, 7=Status (pill +
-    LIVE badge)."""
+    order (7, since the Injured QB's own points were folded into its name
+    cell -- "Name (7.20)", same format Backup QB(s) already used -- to
+    condense the table down from 8 columns): 0=week, 1=manager, 2=injured
+    QB (name+points), 3=backup QB(s), 4=backup QB points (total),
+    5=Commissioner Adjustment, 6=Commissioner Status (pill + LIVE badge).
+    `injured_qb`/`injured_points` are still split back apart here so
+    existing assertions reading them separately don't have to change."""
     return page.eval_on_selector_all(
         "#qb-adj-body tr",
         """rows => rows.map(r => {
             var tds = Array.from(r.querySelectorAll('td'));
-            if (tds.length < 8) return null; // the empty-state placeholder row
+            if (tds.length < 7) return null; // the empty-state placeholder row
             var backups = Array.from(tds[3].querySelectorAll('.backup-list span')).map(s => s.innerText.trim());
-            var pill = tds[7].querySelector('.confidence-pill');
+            var pill = tds[6].querySelector('.confidence-pill');
+            var injuredText = tds[2].innerText.trim();
+            var im = injuredText.match(/^(.*) \\(([-\\d.]+)\\)$/);
             return {
                 week: tds[0].innerText.trim(),
                 manager: tds[1].innerText.trim(),
-                injured_qb: tds[2].innerText.trim(),
+                injured_qb: im ? im[1] : injuredText,
+                injured_points: im ? im[2] : null,
                 backups: backups,
-                injured_points: tds[4].innerText.trim(),
-                backup_points: tds[5].innerText.trim(),
-                commissioner_adjustment: tds[6].innerText.trim(),
+                backup_points: tds[4].innerText.trim(),
+                commissioner_adjustment: tds[5].innerText.trim(),
                 confidence: pill ? pill.innerText.trim() : null,
-                live: !!tds[7].querySelector('.badge-live'),
+                live: !!tds[6].querySelector('.badge-live'),
             };
         }).filter(r => r !== null)""",
     )
 
 
 def get_qb_adjustment_row_colors(page):
-    """manager -> {week_color, injured_name_color, injured_points_color,
-    backup_name_color, backup_points_color, commissioner_adj_color,
-    status_color, pill_color} -- real COMPUTED (getComputedStyle) text
-    colors as rgb() strings for every cell in that manager's QB Injury
-    Backup Adjustments row, keyed by manager (assumes one row per manager
-    in the fixture used, same assumption get_qb_adjustment_manager_colors
-    already makes). `status_color` is the Commissioner Status <td>'s own
-    color (the row's manager color, same as week_color); `pill_color` is
-    the Likely/Confirmed pill span's own color specifically (it sets its
-    own `color` via .confidence-likely/.confidence-confirmed, so it's
-    never the same as the td's inherited manager color)."""
+    """manager -> {week_color, injured_color, backup_name_color,
+    backup_points_color, commissioner_adj_color, status_color, pill_color}
+    -- real COMPUTED (getComputedStyle) text colors as rgb() strings for
+    every cell in that manager's QB Injury Backup Adjustments row, keyed
+    by manager (assumes one row per manager in the fixture used, same
+    assumption get_qb_adjustment_manager_colors already makes).
+    `injured_color` covers the whole merged "Name (points)" cell (one
+    color for both, same as the merged cell itself -- see
+    get_qb_adjustment_rows). `status_color` is the Commissioner Status
+    <td>'s own color (the row's manager color, same as week_color);
+    `pill_color` is the Likely/Confirmed pill span's own color
+    specifically (it sets its own `color` via
+    .confidence-likely/.confidence-confirmed, so it's never the same as
+    the td's inherited manager color)."""
     pairs = page.eval_on_selector_all(
         "#qb-adj-body tr",
         """rows => rows.map(r => {
             var tds = Array.from(r.querySelectorAll('td'));
-            if (tds.length < 8) return null;
+            if (tds.length < 7) return null;
             var manager = tds[1].innerText.trim();
             var colorOf = (el) => getComputedStyle(el).color;
-            var pill = tds[7].querySelector('.confidence-pill');
+            var pill = tds[6].querySelector('.confidence-pill');
             return [manager, {
                 manager_color: colorOf(tds[1].querySelector('.matchup-name') || tds[1]),
                 week_color: colorOf(tds[0]),
-                injured_name_color: colorOf(tds[2]),
-                injured_points_color: colorOf(tds[4]),
+                injured_color: colorOf(tds[2]),
                 backup_name_color: colorOf(tds[3].querySelector('.backup-list span') || tds[3]),
-                backup_points_color: colorOf(tds[5]),
-                commissioner_adj_color: colorOf(tds[6]),
-                status_color: colorOf(tds[7]),
+                backup_points_color: colorOf(tds[4]),
+                commissioner_adj_color: colorOf(tds[5]),
+                status_color: colorOf(tds[6]),
                 pill_color: pill ? colorOf(pill) : null,
             }];
         }).filter(p => p !== null)""",
@@ -1045,7 +1053,7 @@ def scenario_live_blending(browser):
     # textContent, not innerText -- thead th has CSS text-transform:
     # uppercase (a purely visual effect), which innerText would pick up
     # (rendering-aware) and textContent doesn't (raw markup text).
-    qb_status_header = page.eval_on_selector("#qb-adj-table thead th:nth-child(8)", "el => el.textContent.trim()")
+    qb_status_header = page.eval_on_selector("#qb-adj-table thead th:nth-child(7)", "el => el.textContent.trim()")
     assert qb_status_header == "Commissioner Status", f"expected the last column header to read 'Commissioner Status', got: {qb_status_header!r}"
 
     qb_rows = get_qb_adjustment_rows(page)
@@ -1120,8 +1128,7 @@ def scenario_live_blending(browser):
         assert rc["week_color"] == rc["manager_color"], (
             f"{manager}: expected the Week cell to match their own manager color ({rc['manager_color']}), got {rc['week_color']}"
         )
-        assert rc["injured_name_color"] == bad_ref, f"{manager}: expected the Injured QB name to be red ({bad_ref}), got {rc['injured_name_color']}"
-        assert rc["injured_points_color"] == bad_ref, f"{manager}: expected the Injured QB Points to be red ({bad_ref}), got {rc['injured_points_color']}"
+        assert rc["injured_color"] == bad_ref, f"{manager}: expected the Injured QB name+points cell to be red ({bad_ref}), got {rc['injured_color']}"
         assert rc["commissioner_adj_color"] == good_ref, f"{manager}: expected Commissioner Adjustment to be green ({good_ref}), got {rc['commissioner_adj_color']}"
         assert rc["backup_points_color"] == expected_tier_color, (
             f"{manager}: expected the Backup QB Points total to be "
@@ -1183,6 +1190,67 @@ def scenario_live_blending(browser):
         f"expected the tooltip's points-added figure to be yellow ({replacement_ref}), got {tooltip_points_color}"
     )
     print(f"Confirmed the tooltip's points-added figure is colored yellow ({replacement_ref}).")
+
+    # ---- QB-adj tooltip auto-sizes to keep each line on one line ---------
+    # Each sentence in buildQbAdjTooltipHtml's output is its own <br>-
+    # separated "logical" line -- counting distinct rendered line-box
+    # top-coordinates (via a Range over the tooltip's whole contents) and
+    # comparing that to the number of <br>-separated segments in its HTML
+    # catches the one failure mode that matters here: a logical line
+    # wrapping onto two visual lines because max-width was too tight (see
+    # .qb-adj-tooltip in rumbles.html). Re-hover manually (rather than
+    # reusing get_qb_adj_tooltip_text, which hides it again immediately)
+    # so the tooltip is still open to measure.
+    alex_el = get_qb_adj_asterisk(page, "Alex")
+    alex_el.hover()
+    page.wait_for_timeout(150)
+    tip_html = page.eval_on_selector("#qb-adj-tooltip", "el => el.innerHTML")
+    expected_logical_lines = tip_html.count("<br>") + 1
+    rendered_line_count = page.evaluate(
+        """() => {
+            var tip = document.getElementById('qb-adj-tooltip');
+            var range = document.createRange();
+            range.selectNodeContents(tip);
+            var rects = range.getClientRects();
+            var tops = new Set();
+            for (var i = 0; i < rects.length; i++) tops.add(Math.round(rects[i].top));
+            return tops.size;
+        }"""
+    )
+    assert rendered_line_count == expected_logical_lines, (
+        f"expected the tooltip's {expected_logical_lines} logical (<br>-separated) lines to each render as exactly "
+        f"one visual line (no mid-sentence wrapping), but measured {rendered_line_count} distinct rendered lines -- "
+        f"the tooltip's max-width may be too tight for its content"
+    )
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    print(f"Confirmed the QB-adj tooltip's {expected_logical_lines} lines each render on their own line (no mid-sentence wrapping).")
+
+    # ---- QB Injury Backup Adjustments table needs no horizontal scroll ---
+    # on a real desktop width or a landscape phone -- unlike the wider (10-
+    # column) standings table above, which keeps its own scroll-to-see-more
+    # behavior by design. Checked at the page's own max content width
+    # (980px, see .wrap) and down through a conservative landscape-phone
+    # floor (640px) -- if the table's own scroll container ever needs to
+    # scroll at any of these, its content is too wide again.
+    original_viewport = page.viewport_size
+    for width in (1280, 980, 700, 640):
+        page.set_viewport_size({"width": width, "height": 800})
+        page.wait_for_timeout(50)
+        overflow = page.evaluate(
+            """() => {
+                var table = document.getElementById('qb-adj-table');
+                var scroller = table.closest('.table-scroll');
+                return { scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth };
+            }"""
+        )
+        assert overflow["scrollWidth"] <= overflow["clientWidth"] + 1, (
+            f"expected the QB Injury Backup Adjustments table to fit without horizontal scrolling at {width}px wide, "
+            f"but its content ({overflow['scrollWidth']}px) exceeds its container ({overflow['clientWidth']}px)"
+        )
+    if original_viewport:
+        page.set_viewport_size(original_viewport)
+    print("Confirmed the QB Injury Backup Adjustments table needs no horizontal scrolling at 1280/980/700/640px wide (desktop through landscape-phone widths).")
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
