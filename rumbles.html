@@ -524,6 +524,12 @@
   #qb-adj-table td.qb-adj-commissioner { color: var(--good); }
   #qb-adj-table td.qb-adj-backup-total-likely { color: var(--replacement); }
   #qb-adj-table td.qb-adj-backup-total-confirmed { color: var(--good); }
+  /* "possible" -- blue, same as .confidence-possible below and
+     .qb-adj-asterisk's already-established "not yet corroborated, purely
+     informational" blue. These points are never folded into the live
+     totals (see applyQbAdjustmentsToScores), so this color also reads as
+     "not part of either total right now". */
+  #qb-adj-table td.qb-adj-backup-total-possible { color: var(--accent-2); }
   .confidence-pill {
     display: inline-block;
     font-size: 0.68rem;
@@ -534,6 +540,12 @@
   }
   .confidence-confirmed { background: rgba(53, 194, 107, 0.15); color: var(--good); }
   .confidence-likely { background: rgba(234, 179, 8, 0.15); color: var(--replacement); }
+  /* "possible" -- a same-team backup recorded action but nothing yet
+     corroborates the starter is actually out (see detectQbAdjustments
+     ForWeek). Blue like .qb-adj-asterisk/--accent-2, this page's existing
+     "not yet corroborated" color, kept distinct from "likely"'s yellow
+     (which does carry a live points credit) and "confirmed"'s green. */
+  .confidence-possible { background: rgba(77, 159, 255, 0.15); color: var(--accent-2); }
   /* "*" shown next to a manager's name while a "likely" (not yet
      commissioner-confirmed) QB-injury backup-points credit is folded into
      their live Actual/Projected totals this week -- see
@@ -1573,14 +1585,24 @@
         return;
       }
 
-      // No override -- only ever log via the fresh, injury-status
-      // corroborated "likely" tier.
-      if (!isFresh) return;
+      // No override -- log via the fresh, injury-status corroborated
+      // "likely" tier when the starter's own status actually confirms
+      // they're out, or the weaker "possible" tier when a same-team
+      // backup recorded real action but nothing yet corroborates the
+      // starter is out at all (a normal in-game substitution -- a
+      // banged-up starter resting a series, a blowout, etc -- looks
+      // identical to a real injury from the box score alone). "possible"
+      // exists purely to surface this for awareness (see the comment on
+      // applyQbAdjustmentsToScores for why it never affects the live
+      // totals): most of these resolve themselves once the starter's own
+      // injury_status either confirms it (promoting the same case to
+      // "likely" on a later refresh) or the starter just comes back next
+      // week and nothing further ever happens.
       var startedNoOverride = findStartedQb(m, playersMeta);
       if (!startedNoOverride) return;
       var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
       if (!backups.length) return;
-      if (!isOutStatus(startedNoOverride.meta.injury_status)) return;
+      var corroborated = isFresh && isOutStatus(startedNoOverride.meta.injury_status);
 
       entries.push({
         week: week,
@@ -1590,7 +1612,7 @@
         backup_qbs: backups,
         backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
         team_qb_count: (teamQbIndex[startedNoOverride.meta.team] || []).length,
-        confidence: "likely",
+        confidence: corroborated ? "likely" : "possible",
         injury_status_at_capture: startedNoOverride.meta.injury_status || null,
         custom_points_delta: null,
         live: true
@@ -1610,7 +1632,19 @@
   // custom_points for good.
   //
   // Per Ben's request, the live totals themselves should now reflect it
-  // too, in two tiers:
+  // too, in three tiers:
+  //   - "possible" (a same-team backup recorded real action, but nothing
+  //     yet corroborates the starter is actually out -- see the comment
+  //     on detectQbAdjustmentsForWeek): NEVER adds anything to either
+  //     total. This tier exists purely so the log table below can flag
+  //     "something happened here worth a look" -- most of these are just
+  //     a normal in-game substitution, not a real injury, so crediting
+  //     points automatically would be wrong more often than not. Only a
+  //     commissioner deciding it's a real case (by setting custom_points,
+  //     which promotes the entry to "confirmed") ever adds points for a
+  //     "possible" case. No asterisk/tooltip either -- delta is always 0,
+  //     so the `if (!delta) return;` below already keeps it out of
+  //     byRoster entirely.
   //   - "likely" (injury_status out/IR/PUP, no commissioner override yet):
   //     add the same-team backup QB's own already-scored points
   //     (backup_points_total) onto BOTH the roster's live actual total and
@@ -1646,7 +1680,9 @@
     var byRoster = {};
     (qbAdjustments || []).forEach(function (entry) {
       var rid = entry.roster_id;
-      var delta = entry.confidence === "confirmed" ? entry.custom_points_delta : entry.backup_points_total;
+      var delta = entry.confidence === "confirmed" ? entry.custom_points_delta
+        : entry.confidence === "likely" ? entry.backup_points_total
+        : 0; // "possible" -- never applied automatically, see comment above
       delta = round2(delta || 0);
       if (scoresActual[rid] !== undefined) scoresActual[rid] = round2(scoresActual[rid] + delta);
       if (scoresCustom[rid] !== undefined) scoresCustom[rid] = round2(scoresCustom[rid] + delta);
@@ -2743,7 +2779,7 @@
   window.addEventListener("scroll", hideHowTo, true);
   window.addEventListener("resize", hideHowTo);
 
-  var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely" };
+  var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely", possible: "Possible" };
 
   function renderQbAdjustments() {
     var body = document.getElementById("qb-adj-body");
@@ -2790,7 +2826,10 @@
         var commissionerAdjHtml = hasCommissionerAdj
           ? (r.custom_points_delta >= 0 ? "+" : "") + r.custom_points_delta.toFixed(2)
           : "—";
-        var backupTotalClass = hasCommissionerAdj ? "qb-adj-backup-total-confirmed" : "qb-adj-backup-total-likely";
+        // Backup QB Points total's color tracks confidence directly now
+        // that there are three tiers, not just "confirmed or not" -- see
+        // the CSS rules for qb-adj-backup-total-confirmed/likely/possible.
+        var backupTotalClass = "qb-adj-backup-total-" + r.confidence;
         // Injured QB name + points folded into one cell -- "Name (7.20)" --
         // same format Backup QB(s) already used, so this table needs one
         // fewer column (was two separate cells) and fits without side

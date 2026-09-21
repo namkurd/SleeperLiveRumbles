@@ -451,15 +451,29 @@ def compute_qb_adjustments_for_week(
             )
             continue
 
-        # No override -- only ever log via the fresh, injury-status
-        # corroborated "likely" tier (or by carrying forward a "likely"
-        # entry captured in an earlier run, before this week's window to
-        # check injury_status fresh had already passed).
+        # No override -- while this week's injury_status snapshot is still
+        # fresh (i.e. this IS the current week being scored live), log
+        # every same-team backup QB who recorded real action: "likely" when
+        # the starter's own injury_status actually corroborates them being
+        # out, or the weaker "possible" tier when nothing corroborates that
+        # yet -- a normal in-game substitution (a banged-up starter resting
+        # a series, a blowout, etc) looks identical to a real injury from
+        # the box score alone, so this is purely an awareness flag: it
+        # never gets a custom_points_delta and the live page never folds
+        # its points into anyone's total (see rumbles.html's
+        # applyQbAdjustmentsToScores). Once the week is no longer fresh
+        # (see the "carried" fallback below), an unconfirmed "possible"
+        # entry is intentionally NOT carried forward -- most of these
+        # resolve themselves as non-events, so only "likely" (a real,
+        # corroborated injury) and "confirmed" (a commissioner decided it
+        # WAS a real case, handled unconditionally above regardless of
+        # freshness) persist in history.
         pid, meta = find_started_qb(m, players_meta)
         if is_fresh and pid:
             backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings)
             status = (meta.get("injury_status") or "").strip().lower()
-            if backup_entries and status in ("out", "ir", "pup"):
+            if backup_entries:
+                confidence = "likely" if status in ("out", "ir", "pup") else "possible"
                 entries.append(
                     {
                         "week": week,
@@ -468,7 +482,7 @@ def compute_qb_adjustments_for_week(
                         "injured_qb": {"player_id": pid, "name": player_name(meta), "points": round(dot_product(stats_map.get(pid), scoring_settings), 2)},
                         "backup_qbs": backup_entries,
                         "backup_points_total": round(sum(b["points"] for b in backup_entries), 2),
-                        "confidence": "likely",
+                        "confidence": confidence,
                         "injury_status_at_capture": meta.get("injury_status"),
                         "custom_points_delta": None,
                     }

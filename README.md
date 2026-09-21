@@ -76,8 +76,7 @@ team QB played, that's the trigger -- the started QB's own individual
 score is "Injured QB Points", and the sum of every OTHER team QB's score
 that week is "Backup QB Points".
 
-This log only ever shows an entry under one of two tiers -- deliberately
-no vague "might have happened" middle ground:
+This log shows an entry under one of three tiers:
 
 - **Confirmed** -- the commissioner has already keyed in a matching
   `custom_points` override for that roster/week. The strongest possible
@@ -99,12 +98,28 @@ no vague "might have happened" middle ground:
   `rumbles_history.json`, never re-derived later from what's by then a
   stale, unrelated snapshot. (`build_rumbles.py` reads its own previous
   output each run specifically to preserve this.)
+- **Possible** -- no override, and nothing corroborates the started QB
+  actually being out (their `injury_status` is missing, or reads something
+  short of "Out"/"IR"/"PUP" -- "Questionable", healthy, whatever), but a
+  same-team backup QB still recorded real action and points. Added because
+  of a real case that slipped through the cracks: Week ?, Caleb Williams
+  (Bears) got hurt in-game and Tyler Bagent came in and scored, but
+  Sleeper's `injury_status` was never updated to reflect Williams being
+  ruled out, so the "Likely" tier's corroboration check never fired and the
+  case went completely unlogged. Most of the time a same-team backup
+  scoring without a corroborated starter injury is a false alarm -- a
+  banged-up starter resting a series, a blowout benching, a spot start --
+  and the starter is back the following week with nothing further to see.
+  But sometimes, like the Caleb Williams case, it's a real injury that
+  Sleeper's status feed simply never caught in time. Rather than silently
+  dropping either possibility, "Possible" logs it either way, purely for
+  awareness -- see below for why it's never allowed to affect any actual
+  point total on its own.
 
-A same-team backup QB playing with *neither* signal present (no override,
-and injury_status wasn't caught as "Out" while it was still fresh) is not
-logged at all -- there's no way to tell that apart from an ordinary
-blowout benching, and this log is meant to only ever contain confirmed or
-well-corroborated cases, not speculation.
+A same-team backup QB playing with *no* signal at all -- nobody else on
+that NFL team's roster even recorded action -- is, naturally, still not
+logged; "Possible" only fires once a real backup QB has actually been
+identified.
 
 Confirmed against the real example that prompted this: league roster_id
 6 ("Alex"), Week 1 -- Kyler Murray left hurt, Carson Wentz (a free agent
@@ -127,9 +142,20 @@ behind every live Actual/Projected total on the page) never looked at
 moved a manager's live PF, Points This Week, Rumbles, H2H, PA, or Vs.
 Field until the week finalized and `build_rumbles.py`'s
 `official_points()` picked up `custom_points` for good, days later. Per a
-follow-up request, the live totals now reflect it in real time too, in
-the same two tiers as the log above:
+follow-up request, the live totals now reflect it in real time too -- but
+only for two of the three tiers above:
 
+- **Possible**: never adds anything to either total, ever. This tier
+  exists purely so the log table can flag "something happened here worth a
+  look" -- since a "Possible" case has no corroboration at all (that's
+  exactly what makes it "Possible" and not "Likely"), most of them are a
+  routine in-game substitution rather than a real injury, so crediting
+  points automatically would be wrong more often than it'd be right. Only
+  a commissioner who looks at a "Possible" case and decides it's real (by
+  keying in a matching `custom_points` override, the same override that
+  produces a "Confirmed" entry for any tier) ever moves its points onto a
+  manager's total. No `QB Inj*` marker or tooltip either -- there's
+  nothing provisional showing up in the live totals to explain.
 - **Likely**: the same-team backup QB's own already-scored points
   (`backup_points_total`) are added onto BOTH the roster's live Actual
   total and its Custom/Projected total, before Rumbles/H2H/PA/Vs. Field
@@ -211,16 +237,17 @@ same color used for the Manager cell and reused from the standings table
 above) -- regardless of scoring mode or which week the row is about.
 
 The **Backup QB Points** total and the **Commissioner Status** pill (the
-last column, either "Likely" or "Confirmed") are the two cells that track
-confidence state rather than a fixed color: both show this page's own
-yellow (`--replacement` -- the same yellow used for the manager-marker
-tooltip's points figure and the replacement row in the "Points This Week"
-tooltip below) while the row is still "likely" and there's no
-commissioner adjustment yet to confirm it, then flip to green once
-"confirmed" -- the same visual cue, in the same yellow-then-green
-sequence, that a manager's own `QB Inj*` marker/tooltip go through as an
-adjustment moves from provisional to official. The LIVE badge keeps its
-own fixed color either way.
+last column: "Possible", "Likely", or "Confirmed") are the two cells that
+track confidence state rather than a fixed color: blue (`--accent-2` --
+the same blue already used for the `QB Inj*` marker itself) for a still-
+uncorroborated "possible" row, this page's own yellow (`--replacement` --
+the same yellow used for the manager-marker tooltip's points figure and
+the replacement row in the "Points This Week" tooltip below) once it's
+"likely" and there's no commissioner adjustment yet to confirm it, then
+green once "confirmed" -- blue meaning "flagged for awareness only, not
+counted anywhere yet", yellow meaning "counted provisionally", green
+meaning "counted, and official." The LIVE badge keeps its own fixed color
+either way.
 
 This only ever touches the in-progress week's own figures ("Points This
 Week" in both modes, and every season-cumulative column in Projected
@@ -284,6 +311,30 @@ correctly named as stepping in (including the pluralized case), a
 available, a deeper team where nobody else has recorded action yet
 (distinct wording from the "nobody else available" case), and that names
 get HTML-escaped the same as everywhere else on the page.
+
+The "possible" tier's detection and scoring logic (`detectQbAdjustments
+ForWeek` picking "possible" over "likely" when nothing corroborates the
+starter being out, and `applyQbAdjustmentsToScores` treating "possible" as
+a strict no-op on both totals and on the marker/tooltip map) is unit-tested
+the same way, in `test/test_qb_adj_detection.js` (`node
+test/test_qb_adj_detection.js`): a null `injury_status` and a real
+non-out one ("Questionable") both correctly yield "possible" rather than
+"likely" or nothing at all; "Out"/"IR"/"PUP" still correctly yields
+"likely" (regression guard); a would-be-"likely" case falls back to
+"possible" rather than silently disappearing when the freshness check
+itself fails; a "possible" entry leaves both the Actual and Projected
+totals completely untouched and never populates the manager-marker map
+(while an otherwise-identical "likely" entry still does, confirming the
+new three-way branch didn't regress the existing behavior); and a
+commissioner override still always wins as "confirmed" regardless of what
+the stats-only heuristic would have said. `test/test_build_rumbles.py`
+covers the equivalent server-side logic in `compute_qb_adjustments_for_
+week` (the historical/nightly-build detector), including that an
+unconfirmed "possible" entry is deliberately NOT carried forward once its
+week is no longer the freshest one being checked -- unlike "likely", which
+is -- so a "possible" flag that nobody ever confirmed quietly fades out of
+history rather than accumulating permanently, matching its purpose as a
+live-awareness signal rather than a permanent record.
 
 ### Columns
 
@@ -1128,21 +1179,29 @@ correctly flows through to PF, the opponent's PA, H2H result, and the
 vs.-the-field outscored/outscored-by counts. It also covers the QB
 injury-backup detector: the dot-product QB scoring, team-scoping (same
 scenario as above -- excludes a non-playing same-team QB and a playing
-different-team QB), both confidence tiers including the
-carry-forward-when-stale behavior, and -- the exact bug this log design
-fixes -- that a commissioner override always produces a log entry even
-when no backup QB can be independently identified from the stats.
+different-team QB), all three confidence tiers -- including that
+"possible" fires whenever fresh but uncorroborated (a `None` status and a
+real non-out one like "Questionable" are both checked) and, unlike
+"likely", is deliberately NOT carried forward once its week goes stale --
+and, the exact bug this log design fixes, that a commissioner override
+always produces a log entry even when no backup QB can be independently
+identified from the stats.
 
 `test/test_blended_projection.js` (`node test/test_blended_projection.js`,
-no server/browser needed) and `test/test_qb_adj_tooltip.js` (`node
-test/test_qb_adj_tooltip.js`, likewise) are both standalone unit tests
-that regex-extract specific pure functions straight out of `rumbles.html`
-and exercise them in isolation -- the live-blending pace-dampening math for
-the former, the QB-injury manager-marker tooltip's wording (including the
-"a replacement QB is also injured" chain scenarios) for the latter. Both
-exist specifically to cover logic that would otherwise need a lot of
-fixture plumbing to reach through the full Playwright scenario for what's
-really pure string/number-crunching with no DOM or live-fetch involved.
+no server/browser needed), `test/test_qb_adj_tooltip.js` (`node
+test/test_qb_adj_tooltip.js`, likewise), and `test/test_qb_adj_detection.js`
+(`node test/test_qb_adj_detection.js`, likewise) are all standalone unit
+tests that regex-extract specific pure functions straight out of
+`rumbles.html` and exercise them in isolation -- the live-blending
+pace-dampening math for the first, the QB-injury manager-marker tooltip's
+wording (including the "a replacement QB is also injured" chain scenarios)
+for the second, and `detectQbAdjustmentsForWeek`/`applyQbAdjustmentsToScores`
+(the client-side confidence-tier detector and how it feeds the live
+totals -- including the "possible" tier never moving either total or
+populating the marker/tooltip map) for the third. All three exist
+specifically to cover logic that would otherwise need a lot of fixture
+plumbing to reach through the full Playwright scenario for what's really
+pure string/number-crunching with no DOM or live-fetch involved.
 
 Useful if you ever touch the scoring or live-detection logic and want to
 check it without waiting for a live NFL window:
@@ -1156,6 +1215,7 @@ python test/run_test.py
 python test/test_build_rumbles.py   # no server/browser needed for this one
 node test/test_blended_projection.js   # ditto
 node test/test_qb_adj_tooltip.js       # ditto
+node test/test_qb_adj_detection.js     # ditto
 ```
 
 ## Source of truth

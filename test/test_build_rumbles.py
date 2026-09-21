@@ -211,6 +211,66 @@ def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
     print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out', with correct team-scoped backup detection")
 
 
+def test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated():
+    # Exactly Ben's own Caleb Williams/Tyler Bagent example: a same-team
+    # backup QB recorded real action, but the started QB's live
+    # injury_status never corroborated "Out"/"IR"/"PUP" (here: None, as if
+    # it was never marked). This must still surface as an entry -- just the
+    # weaker "possible" tier, not "likely", and with no custom_points_delta
+    # since nothing but a commissioner override can ever set one.
+    meta_not_corroborated = dict(QB_PLAYERS_META, QB_STARTER=dict(QB_PLAYERS_META["QB_STARTER"], injury_status=None))
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, meta_not_corroborated, build_team_qb_index(meta_not_corroborated), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert len(entries) == 1, f"a backup QB recording action should still log an entry even without corroboration, got {len(entries)}"
+    e = entries[0]
+    assert e["confidence"] == "possible", f"fresh + uncorroborated injury_status should be 'possible', got {e['confidence']}"
+    assert e["backup_qbs"] == [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}]
+    assert approx(e["backup_points_total"], 21.9), "backup_points_total is still recorded for awareness, even though it's never auto-applied to any live/official total"
+    assert e["custom_points_delta"] is None
+    assert e["injury_status_at_capture"] is None
+    print("PASS: 'possible' tier fires when fresh but the started QB's injury_status doesn't corroborate 'Out'/'IR'/'PUP'")
+
+
+def test_compute_qb_adjustments_possible_tier_also_fires_for_questionable():
+    # Same idea, but with an actual (non-null) status that still isn't
+    # Out/IR/PUP -- "Questionable" is the single most common real-world
+    # case this tier exists for (a starter who's banged up but still
+    # active, comes out for a series, and a backup scores in relief).
+    meta_questionable = dict(QB_PLAYERS_META, QB_STARTER=dict(QB_PLAYERS_META["QB_STARTER"], injury_status="Questionable"))
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, meta_questionable, build_team_qb_index(meta_questionable), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert entries[0]["confidence"] == "possible", f"'Questionable' shouldn't corroborate an out/IR/PUP case, got {entries[0]['confidence']}"
+    assert entries[0]["injury_status_at_capture"] == "Questionable"
+    print("PASS: 'possible' tier also fires for a non-out status like 'Questionable', not just a missing one")
+
+
+def test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale():
+    # Once a week is no longer the freshest one, an unconfirmed "possible"
+    # entry must NOT be carried forward the way "likely" is -- most of
+    # these are just normal in-game substitutions that resolve themselves,
+    # so they're meant to fade away rather than accumulate permanently in
+    # history. Only "likely" (a real, corroborated injury) and "confirmed"
+    # (the commissioner explicitly decided it was a real case, which is
+    # handled unconditionally regardless of freshness) persist.
+    carried_possible = {
+        1: {
+            "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+            "confidence": "possible",
+            "injury_status_at_capture": None,
+        }
+    }
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster=carried_possible,
+    )
+    assert entries == [], f"a stale, never-confirmed 'possible' entry must not be carried forward, got {entries}"
+    print("PASS: an unconfirmed 'possible' entry is not carried forward once its week is no longer fresh")
+
+
 def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
     matchups_with_override = [dict(QB_MATCHUPS[0], custom_points=129.1), QB_MATCHUPS[1]]
     entries = compute_qb_adjustments_for_week(
@@ -292,6 +352,9 @@ def main():
     test_build_team_qb_index_scopes_by_team()
     test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing()
     test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
+    test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated()
+    test_compute_qb_adjustments_possible_tier_also_fires_for_questionable()
+    test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale()
     test_compute_qb_adjustments_confirmed_tier_beats_everything_else()
     test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
