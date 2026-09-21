@@ -439,7 +439,11 @@ Rank (`#`), Manager, Rumbles, This Week (Rumbles earned so far this week),
 Points This Week (the raw score for this week, to 2 decimal places),
 Rumble % (Rumbles earned / max possible so far), PF, PA, H2H, and Vs.
 Field. On a narrow screen the table scrolls horizontally (Rank and
-Manager stay pinned) rather than squeezing or clipping any column.
+Manager stay pinned) rather than squeezing or clipping any column -- the
+first five columns (#, Manager, Rumbles, This Week, Points This Week) are
+specifically sized to all fit on a portrait phone with no scrolling
+needed at all; only Rumble % onward requires scrolling right. See "Mobile
+layout" below.
 
 Every column, including `#`, is **sortable** -- click a header to sort by
 it (numbers/records default to biggest-first, Manager defaults to A-Z;
@@ -580,42 +584,86 @@ empty table.
 The standings table always shows the season's cumulative numbers -- it's
 never blank. Outside of a live window (off game days, or the gap between
 one week ending and the next one's games starting) it's just
-`rumbles_history.json` as-is, no LIVE badge. Once a week goes live, "This
-Week" and "Points This Week" refresh every 30 seconds with a LIVE badge no
-matter which mode is selected. Whether the in-progress week's numbers get
-folded into the season totals -- Rumbles, H2H W-L, PF, PA, and Vs. Field
-W-L, all five -- depends on the mode toggle, described next.
+`rumbles_history.json` as-is, no LIVE badge. Once a week goes live, "Points
+This Week" refreshes every 30 seconds with a LIVE badge no matter which
+mode is selected. Whether the in-progress week's numbers get folded into
+the season totals -- Rumbles, H2H W-L, PF, PA, and Vs. Field W-L, all five
+-- depends on the mode toggle, described next.
 
-**The "Points This Week" LIVE badge is per-manager, not per-week.** "This
-Week" keeps its LIVE badge for every roster as long as the week overall is
-live -- that column is about the week, not any one manager's players.
-"Points This Week" is different: once a manager's own players are ALL
-positively confirmed to have finished their games, that manager's own
-score for the week is locked in and won't change again, so their "Points
-This Week" LIVE badge drops off individually -- even while the week is
-still live for everyone else and "This Week" keeps showing LIVE for that
-same manager. "Positively confirmed" means Sleeper's live-scoreboard feed
-actually marked that player's NFL game `is_over` -- a player on a bye, or
-one whose team/game status the feed couldn't resolve (`game_status:
-"unknown"`), is deliberately treated as NOT yet finished (fails open, same
-precedent as the "Pts This Week" tooltip's own Projected-mode filter),
-never assumed done just because nothing says otherwise. This includes any
+**Only "Points This Week" ever shows a LIVE badge -- "This Week" (the
+Rumbles-earned column) never does.** Earlier versions of this page put a
+LIVE badge on both columns; it was removed from "This Week" entirely,
+since a manager's Rumbles-this-week figure moving live is already implied
+by "Points This Week" showing LIVE right beside it, and the freed-up
+column width is what lets a portrait phone show #, Manager, Rumbles, This
+Week and Points This Week all at once with no horizontal scrolling (see
+"Mobile layout" below).
+
+**The "Points This Week" LIVE badge is per-manager, not per-week.** Once a
+manager's own players are ALL positively confirmed to have finished their
+games, that manager's own score for the week is locked in and won't change
+again, so their "Points This Week" LIVE badge drops off individually --
+even while the week is still live for everyone else. "Positively
+confirmed" means Sleeper's live-scoreboard feed actually marked that
+player's NFL game `is_over` -- a player on a bye, or one whose team/game
+status the feed couldn't resolve (`game_status: "unknown"`), is
+deliberately treated as NOT yet finished (fails open, same precedent as
+the "Pts This Week" tooltip's own Projected-mode filter), never assumed
+done just because nothing says otherwise. This includes any
 QB-injury-backup replacement row appended to a roster's breakdown -- a
 lingering in-progress or unresolved backup keeps that manager's badge on
 too, exactly like a real starter would.
 
-Because that badge can now be present for some rosters and absent for
-others in the very same "Points This Week" column (previously it was
-always present-or-absent in lockstep for every row, whenever the week was
-live at all), the badge is pulled out of the number's own text flow and
-pinned to a fixed, reserved strip at the right edge of the cell (see
-`td.thisweek`/`td.thisweek-pts`'s `position: relative` + reserved
+Because that badge can be present for some rosters and absent for others
+in the very same "Points This Week" column, the badge is pulled out of the
+number's own text flow and pinned to a fixed, reserved strip at the right
+edge of the cell (see `td.thisweek-pts`'s `position: relative` + reserved
 `padding-right`, and the `.badge-live` override right after it in
 rumbles.html) rather than just being appended inline after the digits --
 otherwise the number itself would visibly shift left or right depending on
 whether that particular row's badge happened to be showing, instead of
-lining up column-wide regardless. This applies to both "This Week" and
-"Points This Week" (either can, in principle, differ row to row).
+lining up column-wide regardless. That reserved strip is intentionally
+tight (the badge sits right up against the number, just clear of actually
+touching it) rather than the wider gap earlier versions used. "This Week"
+carries none of this -- it's a plain centered cell now, since it never
+shows a badge.
+
+### Mobile layout
+
+**Portrait.** The standings table is intentionally wide (10 columns) and
+scrolls horizontally on narrow screens, with Rank + Manager pinned via
+`position: sticky` so you always know which row you're looking at while
+scrolling through the rest. But the five columns anyone actually needs at
+a glance -- #, Manager, Rumbles, This Week, and Points This Week -- are
+meant to all be visible up front with no scrolling required at all on a
+portrait phone. A `@media (max-width: 640px)` block gives those five
+columns explicit widths (plus a tighter header font that's allowed to wrap
+onto two lines, e.g. "This Week" -> "This" / "Week", instead of forcing
+its column wide enough to fit on one line unwrapped) so their combined
+width comfortably fits inside a ~390px-wide viewport; Manager gets an
+ellipsis fallback for the rare case a name plus the live " QB Inj*" suffix
+still doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs. Field)
+keep their natural width and stay reachable by scrolling right, same as
+before. One easy-to-miss detail: the Manager column's sticky offset
+(`left: ...`) is hardcoded to match the Rank column's width, so shrinking
+Rank's width without also shrinking Manager's sticky offset to match would
+silently make Manager overlap the column beside it -- both are updated
+together in that media query.
+
+**Landscape.** The QB Injury Backup Adjustments table's "Backup QB(s)"
+column normally stacks multiple backups one per line
+(`.backup-list { flex-direction: column }`). In landscape phone
+orientation (`@media (max-height: 500px) and (orientation: landscape)`,
+the same breakpoint used elsewhere on the page for landscape-specific
+compacting), that switches to a row layout instead, so backups read on one
+line (comma-separated) rather than stacking -- wrapping to a second line
+only if a row genuinely has more backups than fit, and never triggering
+horizontal scrolling, since `#qb-adj-table` stays `width: 100%` at this
+breakpoint regardless. That override is scoped to `#qb-adj-table
+.backup-list` rather than the bare `.backup-list` class specifically so it
+reliably wins the cascade over the table's own base (always-applies)
+`.backup-list` rule, whichever one happens to appear later in the
+stylesheet.
 
 ### Live scoring: two modes
 
@@ -1231,7 +1279,7 @@ per-team data, just a standing explainer.
 
 `test/make_fixtures.py` builds mock Sleeper API responses, and
 `test/run_test.py` runs a headless-browser end-to-end test of the real
-`rumbles.html` against those mocks, across four scenarios:
+`rumbles.html` against those mocks, across six scenarios:
 
 1. **A week genuinely live** -- hand-verified PF checks across both
    scoring modes (Actual / Projected), including a fully-pregame
@@ -1246,14 +1294,13 @@ per-team data, just a standing explainer.
    on a still-pregame projection to prove neither ever fires there), a
    check that every column -- `#` included -- sorts correctly in both
    directions while each team's own `#` value never changes, a check that
-   the standings table carries exactly 23 (not the naive 24 = 2 x 12) LIVE
-   badges -- one roster (Steven, whose two starters both have a
-   fixture-marked-`is_over` NFL game) has EVERY player positively
-   confirmed complete, so his "Points This Week" LIVE badge is
-   individually absent while his "This Week" (Rumbles) badge and every
-   other manager's "Points This Week" badge still show LIVE, proving the
-   two columns' LIVE badges are genuinely independent per manager rather
-   than both just mirroring whether the week overall is live, a check
+   the standings table carries exactly 11 (not the naive 12 = 1 x 12) LIVE
+   badges, all of them in the "Points This Week" column -- "This Week"
+   (Rumbles) never shows one, for any roster -- and that the one missing
+   badge belongs to Steven specifically (whose two starters both have a
+   fixture-marked-`is_over` NFL game, so EVERY player on his roster is
+   positively confirmed complete) while every other manager's "Points
+   This Week" badge still shows LIVE, a check
    that this week's H2H matchup pairs share a name color (every pair gets
    a distinct one, and the colors stay identical between Actual and
    Projected mode), and a check of the live QB Injury Backup
@@ -1304,7 +1351,21 @@ per-team data, just a standing explainer.
    dismisses an open one. Also confirms the "How to Use" button's tooltip
    behaves the same way on a touch device (tap-to-toggle, tap-elsewhere
    dismisses, a plain hover does nothing).
-3. **The "How to Use" button, on a real-hover (desktop) context** --
+3. **Mobile responsive layout** -- two checks, at two different
+   viewports. Portrait (390px wide): confirms the table starts at
+   `scrollLeft: 0` and that #, Manager, Rumbles, This Week, and Points
+   This Week's combined right edge fits inside the visible container with
+   no horizontal scrolling needed to see any of them, confirms the
+   "Points This Week" LIVE badge sits strictly to the right of the
+   number's own text with a positive (non-overlapping) gap, and confirms
+   "This Week" shows zero LIVE badges anywhere in the table. Landscape
+   (844x390, matching the page's own landscape-mobile breakpoint):
+   confirms the QB Injury Backup Adjustments table's `.backup-list`
+   actually computes to `flex-direction: row` at this breakpoint (not the
+   default stacked `column`), and that the page's overall width still
+   doesn't exceed the viewport (no horizontal scrolling introduced by the
+   row layout).
+4. **The "How to Use" button, on a real-hover (desktop) context** --
    confirms hovering shows the explainer tooltip (and moving the mouse
    away hides it again), that its content actually explains both the
    Actual and Projected tabs with no em dashes and no mention of the QB
@@ -1317,11 +1378,11 @@ per-team data, just a standing explainer.
    click would immediately re-close what hover had just opened -- click
    there needs to PIN the tooltip open instead (see `howtoPinned` in
    `rumbles.html`).
-4. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
+5. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
    Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
    matchups aren't posted. The page must show Week 1's cumulative
    standings, never a blank table.
-5. **`rumbles_history.json` fails to load** -- the page must show a clear,
+6. **`rumbles_history.json` fails to load** -- the page must show a clear,
    diagnosable message instead of a silent blank table.
 
 `test/test_build_rumbles.py` is a separate, plain-Python unit test (no

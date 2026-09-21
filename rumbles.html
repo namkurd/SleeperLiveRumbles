@@ -268,17 +268,21 @@
   td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 40px; min-width: 40px; }
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  /* "This Week" (the Rumbles-earned column) never carries a LIVE badge --
+     only "Points This Week" does -- so it needs none of the reserved-strip
+     treatment below and stays a plain centered cell. */
+  td.thisweek { color: var(--accent-2); font-variant-numeric: tabular-nums; }
   /* position: relative + reserved right padding (whether or not a LIVE
      badge actually shows this row) is what keeps the number itself always
      landing in the exact same spot column-wide -- the badge is pulled out
      of normal text flow and pinned into that reserved strip (see
-     td.thisweek .badge-live below), instead of just being appended after
-     the number's text, which used to shift the number left/right of its
-     usual spot depending on whether that particular row had a badge (now
-     a real, common case for "Points This Week" specifically, since
+     td.thisweek-pts .badge-live below), instead of just being appended
+     after the number's text, which used to shift the number left/right of
+     its usual spot depending on whether that particular row had a badge
+     (a real, common case for "Points This Week" specifically, since
      this_week_points_live can differ row-to-row -- see
      hasIncompletePlayer's comment). */
-  td.thisweek, td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; position: relative; padding-right: 40px; }
+  td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; position: relative; padding-right: 33px; }
   /* Only added to a "Pts This Week" cell that actually has a per-player
      breakdown to show (see render()/thisWeekTooltip) -- the dotted
      underline is the only visual hint that it's interactive, since there's
@@ -412,9 +416,47 @@
   }
   @media (max-width: 640px) {
     .scroll-hint { display: block; }
-    thead th { padding: 8px 8px; font-size: 0.68rem; }
-    tbody td { padding: 8px 8px; font-size: 0.78rem; }
+    /* Letting header labels wrap onto two lines (instead of the page's
+       normal nowrap headers) is what actually buys back the width here --
+       most of these columns hold a one- or two-digit number, so it's the
+       header text ("PTS THIS WEEK", "THIS WEEK", "RUMBLES"), not the data,
+       that was forcing each column wider than it needs to be. Freeing that
+       up, together with dropping the "This Week" LIVE badge's reserved
+       space entirely and tightening "Points This Week"'s, is what gets #,
+       Manager, Rumbles, This Week and Points This Week to all fit in the
+       viewport with no horizontal scroll needed on a portrait phone --
+       verified at 390px wide. */
+    thead th { padding: 6px 4px; font-size: 0.62rem; white-space: normal; word-break: normal; line-height: 1.2; }
+    tbody td { padding: 8px 4px; font-size: 0.78rem; }
     h1 { font-size: 1.15rem; }
+    /* Explicit widths on the five columns the user wants visible without
+       any horizontal scrolling (#, Manager, Rumbles, This Week, Points
+       This Week) -- table auto-layout otherwise sizes every column to its
+       widest UNWRAPPED content, which (combined with the table's own
+       min-width: 760px) always overflows a portrait phone regardless of
+       how much the header/cell text COULD wrap. Pinning a width here is
+       what actually forces that wrap and keeps these five within the
+       viewport; Manager gets an ellipsis fallback for the rare case its
+       name plus the live " QB Inj*" suffix (see get_table_rows/render())
+       still doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs.
+       Field) keep their natural width and stay reachable by scrolling, same
+       as before -- only the first five are guaranteed scroll-free. */
+    table thead th:nth-child(1), table td.rank { width: 24px; min-width: 24px; padding-left: 6px; padding-right: 2px; }
+    table thead th:nth-child(2), table td.manager { width: 108px; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table thead th:nth-child(3), table td.rumbles { width: 44px; }
+    table thead th:nth-child(4), table td.thisweek { width: 48px; }
+    /* Widened enough to fit both the number (up to a few digits) and the
+       reserved LIVE-badge strip without the two overlapping -- the badge
+       itself (~27px incl. border) can't shrink below its own content, so
+       the reserved padding-right (inherited from td.thisweek-pts above)
+       sets a floor on how far this column can be tightened. */
+    table thead th:nth-child(5), table td.thisweek-pts { width: 76px; }
+    /* The Manager column's sticky offset is normally a fixed 40px (see
+       "thead th:nth-child(2), td.manager" above), matching the Rank
+       column's fixed 40px width on desktop -- since Rank shrinks to 24px
+       here, Manager's sticky offset has to shrink to match or it visually
+       overlaps/hides the start of the Rumbles column beside it. */
+    table thead th:nth-child(2), table td.manager { left: 24px; }
   }
   /* Landscape phones are wide enough (often 700-950px) to miss the
      max-width breakpoint above but short enough that the table still
@@ -427,6 +469,20 @@
     tbody td { padding: 6px 7px; font-size: 0.76rem; }
     h1 { font-size: 1.1rem; }
     header { margin-bottom: 8px; }
+    /* QB Injury Backup Adjustments table: with the extra vertical room
+       landscape orientation is short on, stacking each backup QB on its
+       own line (the default .backup-list layout) forces the whole table
+       taller than it needs to be. Laying them out in a row instead --
+       wrapping only if a row genuinely can't fit them all, never
+       triggering horizontal scroll since #qb-adj-table itself stays
+       min-width: 0 / width: 100% -- keeps every backup QB and their
+       points readable on one line. The #qb-adj-table prefix (rather than
+       bare .backup-list) is deliberate -- it out-specifies the base
+       .backup-list rule defined further down the file, which would
+       otherwise win the cascade at this breakpoint too and silently
+       cancel this override. */
+    #qb-adj-table .backup-list { flex-direction: row; flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
+    #qb-adj-table .backup-list span:not(:last-child)::after { content: ","; }
   }
   .badge-live {
     display: inline-block;
@@ -439,17 +495,18 @@
     margin-left: 4px;
     vertical-align: middle;
   }
-  /* Pulls the LIVE badge out of the number's own text flow in the "This
-     Week"/"Points This Week" cells specifically, pinning it into the
-     reserved right-padding strip those two cells always carry (see
-     td.thisweek/td.thisweek-pts above) instead of letting it sit inline
-     right after the digits -- that's what keeps the number itself
-     perfectly aligned whether or not this particular row's badge is
-     showing. Every other .badge-live usage (the QB Injury Backup
-     Adjustments table, etc) is untouched by this override. */
-  td.thisweek .badge-live, td.thisweek-pts .badge-live {
+  /* Pulls the LIVE badge out of the number's own text flow in the "Points
+     This Week" cell specifically, pinning it into the reserved
+     right-padding strip that cell always carries (see td.thisweek-pts
+     above) instead of letting it sit inline right after the digits --
+     that's what keeps the number itself perfectly aligned whether or not
+     this particular row's badge is showing, while sitting as close to the
+     value as the strip allows. Every other .badge-live usage (the QB
+     Injury Backup Adjustments table, etc) is untouched by this override;
+     "This Week" no longer shows a LIVE badge at all. */
+  td.thisweek-pts .badge-live {
     position: absolute;
-    right: 6px;
+    right: 3px;
     top: 50%;
     transform: translateY(-50%);
     margin-left: 0;
@@ -2457,7 +2514,7 @@
           '<td class="rank">' + r.rank + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
-          '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + (r.this_week_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +

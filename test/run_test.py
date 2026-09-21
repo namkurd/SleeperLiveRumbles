@@ -1039,22 +1039,28 @@ def scenario_live_blending(browser):
     print("\nConfirmed column sorting works (including '#' itself) and every team's '#' value never changes.")
 
     live_badges = page.locator("#standings-body .badge-live").count()
-    # Both the "This Week" and "Points This Week" cells carry a LIVE badge
-    # for every roster EXCEPT Steven's (roster 7): his two starters (P13/
-    # P14, "SEA" in the fixtures) are the only ones in this whole fixture
-    # set whose team's game is positively confirmed "complete" -- see
-    # hasIncompletePlayer's comment in rumbles.html. So the "Points This
-    # Week" LIVE pill drops off for Steven specifically, while the "This
-    # Week" (Rumbles) pill stays on for everyone including him (that
-    # column is deliberately unaffected -- the user only asked to remove
-    # the pill from "points this week"). That's 2 badges x 12 rosters,
-    # minus the one that's now missing = 23.
-    assert live_badges == 23, f"expected 23 LIVE badges (2 per roster x 12 rosters, minus Steven's now-absent Points This Week one), got {live_badges}"
+    # The "This Week" (Rumbles) column never carries a LIVE badge at all
+    # any more -- it was removed entirely so mobile portrait view has room
+    # to show #/Manager/Rumbles/This Week/Points This Week without
+    # horizontal scrolling. Only "Points This Week" still shows one, for
+    # every roster EXCEPT Steven's (roster 7): his two starters (P13/P14,
+    # "SEA" in the fixtures) are the only ones in this whole fixture set
+    # whose team's game is positively confirmed "complete" -- see
+    # hasIncompletePlayer's comment in rumbles.html. That's 1 badge x 12
+    # rosters, minus the one that's now missing = 11.
+    assert live_badges == 11, f"expected 11 LIVE badges (1 per roster x 12 rosters, minus Steven's now-absent Points This Week one), got {live_badges}"
 
     steven_row = next(r for r in current_rows() if r[1] == "Steven")
-    assert "LIVE" in steven_row[3], (
-        f"expected Steven's 'This Week' (Rumbles) cell to still show LIVE (that column is unaffected by the "
-        f"per-player-completeness check), got {steven_row[3]!r}"
+    assert "LIVE" not in steven_row[3], (
+        f"expected Steven's 'This Week' (Rumbles) cell to never show LIVE -- that column no longer carries a "
+        f"LIVE badge for any roster, got {steven_row[3]!r}"
+    )
+    other_managers_missing_thisweek_live = [
+        r[1] for r in current_rows() if "LIVE" in r[3]
+    ]
+    assert not other_managers_missing_thisweek_live, (
+        f"expected NO manager's 'This Week' (Rumbles) cell to show a LIVE badge (removed entirely), but "
+        f"these still had one: {other_managers_missing_thisweek_live}"
     )
     assert "LIVE" not in steven_row[4], (
         f"expected Steven's 'Points This Week' cell to have NO LIVE badge -- both his starters' games "
@@ -1068,9 +1074,9 @@ def scenario_live_blending(browser):
         f"every player positively confirmed complete), but these were missing it: {other_managers_missing_points_live}"
     )
     print(
-        "Confirmed the 'Points This Week' LIVE pill disappears once every one of a manager's players is "
-        "positively confirmed complete (Steven), while the 'This Week' (Rumbles) pill and every other "
-        "manager's 'Points This Week' pill are unaffected."
+        "Confirmed the 'This Week' (Rumbles) column never shows a LIVE badge for any roster, and the "
+        "'Points This Week' LIVE pill disappears only once every one of a manager's players is positively "
+        "confirmed complete (Steven), while every other manager's 'Points This Week' pill is unaffected."
     )
 
     # ---- QB Injury Backup Adjustments table --------------------------
@@ -1456,9 +1462,133 @@ def scenario_mobile_tap_tooltip(browser):
     print("\nSCENARIO 1b PASSED")
 
 
+def scenario_mobile_responsive_layout(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO 1c: mobile portrait column visibility + landscape")
+    print("QB Injury Backup Adjustments one-line layout")
+    print("=" * 70)
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/state/nfl": load("state.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+
+    # ---- Portrait: #, Manager, Rumbles, This Week, Points This Week must
+    # all be visible with zero horizontal scrolling -- the whole point of
+    # dropping the "This Week" LIVE badge and tightening "Points This
+    # Week"'s. Checked at a common, fairly narrow portrait width (390px,
+    # same viewport new_mobile_page uses elsewhere in this file).
+    console_errors, page_errors = [], []
+    page = new_mobile_page(browser, console_errors, page_errors)
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    layout = page.evaluate("""() => {
+        var container = document.querySelector('.table-scroll');
+        var cRect = container.getBoundingClientRect();
+        var rows = Array.from(document.querySelectorAll('#standings-body tr'));
+        var maxRight = 0;
+        var overlaps = [];
+        rows.forEach(r => {
+            var cells = Array.from(r.querySelectorAll('td')).slice(0, 5);
+            cells.forEach(c => { maxRight = Math.max(maxRight, c.getBoundingClientRect().right); });
+            var pts = r.querySelector('td.thisweek-pts');
+            var badge = pts && pts.querySelector('.badge-live');
+            if (badge) {
+                var range = document.createRange();
+                range.selectNodeContents(pts);
+                range.setEndBefore(badge);
+                var textRect = range.getBoundingClientRect();
+                overlaps.push(badge.getBoundingClientRect().left - textRect.right);
+            }
+        });
+        return {
+            containerRight: cRect.right,
+            scrollLeft: container.scrollLeft,
+            maxRightOfFirstFiveCols: maxRight,
+            minBadgeGap: overlaps.length ? Math.min.apply(null, overlaps) : null,
+        };
+    }""")
+    assert layout["scrollLeft"] == 0, f"table shouldn't need any initial scroll, got scrollLeft={layout['scrollLeft']}"
+    assert layout["maxRightOfFirstFiveCols"] <= layout["containerRight"], (
+        f"#, Manager, Rumbles, This Week and Points This Week must all fit within the viewport with no "
+        f"horizontal scrolling -- rightmost edge {layout['maxRightOfFirstFiveCols']} exceeds the visible "
+        f"container's right edge {layout['containerRight']}"
+    )
+    assert layout["minBadgeGap"] is not None and layout["minBadgeGap"] > 0, (
+        f"the 'Points This Week' LIVE badge must sit closer to the number without actually overlapping it, "
+        f"got a minimum gap of {layout['minBadgeGap']}"
+    )
+    print(
+        f"Confirmed #, Manager, Rumbles, This Week and Points This Week are all fully visible with no "
+        f"horizontal scroll on a 390px portrait viewport (rightmost edge {layout['maxRightOfFirstFiveCols']:.1f} "
+        f"<= {layout['containerRight']:.1f}), and the Points This Week LIVE badge sits close to its number "
+        f"(min gap {layout['minBadgeGap']:.1f}px) without overlapping it."
+    )
+
+    # "This Week" (Rumbles) must never show a LIVE badge, on any viewport --
+    # already covered in depth by scenario_live_blending's desktop-width
+    # assertions, but confirmed here too since this is the mobile-specific
+    # layout that motivated removing it.
+    thisweek_badges = page.locator("#standings-body td.thisweek .badge-live").count()
+    assert thisweek_badges == 0, f"'This Week' column must never show a LIVE badge, found {thisweek_badges}"
+
+    page.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+
+    # ---- Landscape: the QB Injury Backup Adjustments table's backup-list
+    # must lay out in a row (not stacked) at this breakpoint, and must not
+    # force the page to grow wider than the viewport (no horizontal
+    # scrolling introduced).
+    console_errors, page_errors = [], []
+    context = browser.new_context(viewport={"width": 844, "height": 390}, is_mobile=True, has_touch=True, timezone_id="UTC")
+    page = context.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    landscape_info = page.evaluate("""() => {
+        var matches = window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
+        var bl = document.querySelector('.backup-list');
+        return {
+            mediaMatches: matches,
+            flexDirection: bl ? getComputedStyle(bl).flexDirection : null,
+            bodyOverflowsViewport: document.body.scrollWidth > window.innerWidth,
+        };
+    }""")
+    assert landscape_info["mediaMatches"], "this viewport should match the landscape-mobile media query -- the test setup itself is wrong if not"
+    assert landscape_info["flexDirection"] == "row", (
+        f"expected .backup-list to lay out in a row (one line) at the landscape-mobile breakpoint, got "
+        f"flex-direction: {landscape_info['flexDirection']!r}"
+    )
+    assert not landscape_info["bodyOverflowsViewport"], (
+        "the QB Injury Backup Adjustments table's one-line backup layout must not introduce horizontal "
+        "scrolling on a landscape phone"
+    )
+    print(
+        "Confirmed the QB Injury Backup Adjustments table's backup-list lays out in a row (one line) in "
+        "landscape mobile orientation, with no horizontal scrolling introduced."
+    )
+
+    page.close()
+    context.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIO 1c PASSED")
+
+
 def scenario_howto_tooltip(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO 1c: 'How to Use' button, on a real-hover (desktop) device")
+    print("SCENARIO 1d: 'How to Use' button, on a real-hover (desktop) device")
     print("=" * 70)
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
@@ -1536,7 +1666,7 @@ def scenario_howto_tooltip(browser):
     page.close()
     assert not console_errors, f"console errors found: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
-    print("\nSCENARIO 1c PASSED")
+    print("\nSCENARIO 1d PASSED")
 
 
 def scenario_cumulative_only(browser):
@@ -1642,6 +1772,7 @@ def main():
         )
         scenario_live_blending(browser)
         scenario_mobile_tap_tooltip(browser)
+        scenario_mobile_responsive_layout(browser)
         scenario_howto_tooltip(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
