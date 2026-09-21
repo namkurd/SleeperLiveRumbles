@@ -76,6 +76,26 @@ team QB played, that's the trigger -- the started QB's own individual
 score is "Injured QB Points", and the sum of every OTHER team QB's score
 that week is "Backup QB Points".
 
+This league's `roster_positions` has two SUPER_FLEX slots and no dedicated
+single QB slot (see "Columns"/the tooltip slot-order section below), so a
+manager can -- and regularly does -- start TWO QBs in the same week, not
+just one. Every started QB is checked independently for its own backup
+situation, so a roster can log more than one adjustment entry in the same
+week if more than one of its started QBs has a real same-team backup (each
+check also excludes this roster's OTHER started QB from counting as "a
+backup" for the other, since starting two QBs from the same NFL team on
+purpose is the manager's own lineup choice, not injury relief). This
+matters in practice, not just in theory: a manager started both Carson
+Wentz (MIN) and Caleb Williams (CHI) the same week, Williams got hurt and
+Tyson Bagent (also CHI) came in to relieve him, and it went completely
+undetected at first -- the original version of this logic only ever
+checked the FIRST started QB found on a roster, which happened to be
+Wentz, so Williams (and therefore Bagent) was never even considered.
+Fixed by checking every started QB, not just the first one; see
+`findStartedQbs`/`find_started_qbs` in `rumbles.html`/`build_rumbles.py`
+and the SUPER_FLEX regression tests in `test/test_qb_adj_detection.js` and
+`test/test_build_rumbles.py`.
+
 This log shows an entry under one of three tiers:
 
 - **Confirmed** -- the commissioner has already keyed in a matching
@@ -335,6 +355,20 @@ week is no longer the freshest one being checked -- unlike "likely", which
 is -- so a "possible" flag that nobody ever confirmed quietly fades out of
 history rather than accumulating permanently, matching its purpose as a
 live-awareness signal rather than a permanent record.
+
+The SUPER_FLEX/multi-started-QB fix (every started QB checked
+independently, not just the first one found) has its own dedicated
+regression tests in both `test/test_qb_adj_detection.js` and
+`test/test_build_rumbles.py`, built around the exact real scenario that
+caught the bug (Carson Wentz + Caleb Williams both started at once, Wentz
+listed first): a roster where only the SECOND started QB has a real
+backup correctly produces exactly one entry about THAT QB (not the first
+one, and not zero entries); a roster where BOTH started QBs independently
+qualify produces two separate entries in the same week, each with its own
+correctly-scoped backup (never crossing over to the other QB's team); and
+a roster that deliberately starts two QBs from the SAME NFL team (not an
+injury situation at all) correctly logs nothing, proving the other started
+QB is excluded from counting as "a backup" for its counterpart.
 
 ### Columns
 

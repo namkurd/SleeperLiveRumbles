@@ -1496,15 +1496,28 @@
     return index;
   }
 
-  function findStartedQb(m, playersMeta) {
+  // Every QB this roster actually started this week -- plural, because
+  // this league's roster_positions has TWO SUPER_FLEX slots and no
+  // dedicated single QB slot, so a manager can (and regularly does) start
+  // two QBs at once. Returning only the FIRST one found (the original,
+  // single-QB-league assumption this was written under) silently ignored
+  // any injury/backup situation involving whichever started QB didn't
+  // happen to come first in the starters array -- see the real case that
+  // caught this: a manager who started both Carson Wentz (MIN) and Caleb
+  // Williams (CHI) in the same week, where Williams got hurt and Tyson
+  // Bagent came in to relieve him, and it went completely undetected
+  // because Wentz -- listed earlier in `starters` -- was the only one
+  // ever checked.
+  function findStartedQbs(m, playersMeta) {
     var starters = m.starters || [];
+    var result = [];
     for (var i = 0; i < starters.length; i++) {
       var pid = starters[i];
       if (!pid || pid === "0") continue;
       var meta = playersMeta[pid];
-      if (meta && meta.position === "QB") return { pid: pid, meta: meta };
+      if (meta && meta.position === "QB") result.push({ pid: pid, meta: meta });
     }
-    return null;
+    return result;
   }
 
   // "Out"/"IR"/"PUP" is the one signal this page trusts for "currently
@@ -1518,10 +1531,16 @@
     return s === "out" || s === "ir" || s === "pup";
   }
 
-  function findBackupQbs(startedPid, meta, playersMeta, teamQbIndex, statsMap, scoringSettings) {
+  function findBackupQbs(startedPid, meta, playersMeta, teamQbIndex, statsMap, scoringSettings, otherStartedPids) {
     var team = meta.team;
     if (!team) return [];
     var candidates = (teamQbIndex[team] || []).filter(function (cid) {
+      // Exclude this roster's OTHER started QB(s) too, not just this one --
+      // in a SUPER_FLEX league a manager can deliberately start two QBs
+      // from the same NFL team at once (rare, but possible), and that's
+      // the manager's own lineup choice, not a backup coming off the
+      // bench to relieve an injury.
+      if (otherStartedPids && otherStartedPids.indexOf(cid) !== -1) return false;
       return cid !== startedPid && isPlayed(statsMap[cid]);
     });
     return candidates
@@ -1553,22 +1572,56 @@
         // running log of confirmed rule applications, not a speculative
         // feed. Identifying the specific backup QB(s) is best-effort on
         // top of that, never a gate on logging the override itself.
-        var started = findStartedQb(m, playersMeta);
+        //
+        // This roster may have started more than one QB at once (this
+        // league's two SUPER_FLEX slots allow it -- see findStartedQbs), but
+        // custom_points is a single override for the whole roster/week, so
+        // at most one "confirmed" entry can ever be logged here. Compute
+        // each started QB's own would-be backup credit and pick whichever
+        // one the override is most plausibly about: the one started QB
+        // with a real backup this week if only one has one; if more than
+        // one does (two separate in-game situations for the same roster in
+        // the same week), whichever backup total is numerically closest to
+        // the override itself; if none has an identifiable backup at all,
+        // fall back to the first started QB with the override amount as
+        // "Backup QB Points" and no names, same as this always did in a
+        // single-QB league.
+        var startedList = findStartedQbs(m, playersMeta);
+        var startedPids = startedList.map(function (s) { return s.pid; });
         var overrideDelta = round2(m.custom_points - (m.points || 0));
-        var injuredPoints = 0, injuredName = "Unknown", backupEntries = [];
-        if (started) {
-          injuredPoints = round2(qbScore(statsMap[started.pid], scoringSettings));
-          injuredName = playerName(started.meta);
-          backupEntries = findBackupQbs(started.pid, started.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
+        var candidates = startedList.map(function (s) {
+          var backups = findBackupQbs(s.pid, s.meta, playersMeta, teamQbIndex, statsMap, scoringSettings, startedPids);
+          return {
+            started: s,
+            backups: backups,
+            backupTotal: backups.length ? round2(backups.reduce(function (sum, b) { return sum + b.points; }, 0)) : 0
+          };
+        });
+        var withBackups = candidates.filter(function (c) { return c.backups.length > 0; });
+        var chosen = null;
+        if (withBackups.length === 1) {
+          chosen = withBackups[0];
+        } else if (withBackups.length > 1) {
+          chosen = withBackups.reduce(function (best, c) {
+            return Math.abs(c.backupTotal - overrideDelta) < Math.abs(best.backupTotal - overrideDelta) ? c : best;
+          });
+        } else if (candidates.length) {
+          chosen = candidates[0];
         }
-        var backupTotal = backupEntries.length
-          ? round2(backupEntries.reduce(function (s, b) { return s + b.points; }, 0))
-          : overrideDelta;
+        var injuredPoints = 0, injuredName = "Unknown", backupEntries = [], chosenPid = null, chosenTeam = null;
+        if (chosen) {
+          injuredPoints = round2(qbScore(statsMap[chosen.started.pid], scoringSettings));
+          injuredName = playerName(chosen.started.meta);
+          backupEntries = chosen.backups;
+          chosenPid = chosen.started.pid;
+          chosenTeam = chosen.started.meta.team;
+        }
+        var backupTotal = backupEntries.length ? chosen.backupTotal : overrideDelta;
         entries.push({
           week: week,
           roster_id: rosterId,
           manager: manager,
-          injured_qb: { player_id: started ? started.pid : null, name: injuredName, points: injuredPoints },
+          injured_qb: { player_id: chosenPid, name: injuredName, points: injuredPoints },
           backup_qbs: backupEntries,
           backup_points_total: backupTotal,
           // How many QBs Sleeper lists for this NFL team at all -- used by
@@ -1576,7 +1629,7 @@
           // could even exist once the ones who've played are also hurt
           // (see buildQbAdjTooltipHtml). Only meaningful when a started QB
           // (and therefore a team) was actually identified.
-          team_qb_count: started && started.meta.team ? (teamQbIndex[started.meta.team] || []).length : null,
+          team_qb_count: chosenTeam ? (teamQbIndex[chosenTeam] || []).length : null,
           confidence: "confirmed",
           injury_status_at_capture: null,
           custom_points_delta: overrideDelta,
@@ -1586,9 +1639,9 @@
       }
 
       // No override -- log via the fresh, injury-status corroborated
-      // "likely" tier when the starter's own status actually confirms
+      // "likely" tier when a started QB's own status actually confirms
       // they're out, or the weaker "possible" tier when a same-team
-      // backup recorded real action but nothing yet corroborates the
+      // backup recorded real action but nothing yet corroborates that
       // starter is out at all (a normal in-game substitution -- a
       // banged-up starter resting a series, a blowout, etc -- looks
       // identical to a real injury from the box score alone). "possible"
@@ -1598,24 +1651,37 @@
       // injury_status either confirms it (promoting the same case to
       // "likely" on a later refresh) or the starter just comes back next
       // week and nothing further ever happens.
-      var startedNoOverride = findStartedQb(m, playersMeta);
-      if (!startedNoOverride) return;
-      var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings);
-      if (!backups.length) return;
-      var corroborated = isFresh && isOutStatus(startedNoOverride.meta.injury_status);
+      //
+      // A roster can have started MORE THAN ONE QB at once (two
+      // SUPER_FLEX slots, no dedicated QB slot -- see findStartedQbs), so
+      // every started QB is checked independently here, and a roster CAN
+      // log more than one separate entry in the same week if more than
+      // one of its started QBs has its own same-team backup who recorded
+      // action -- each one excludes this roster's OTHER started QB(s)
+      // from counting as "a backup" (see findBackupQbs), since starting
+      // two QBs from different teams (or even, deliberately, the same
+      // team) is the manager's own lineup choice, not injury relief.
+      var startedList = findStartedQbs(m, playersMeta);
+      if (!startedList.length) return;
+      var startedPids = startedList.map(function (s) { return s.pid; });
+      startedList.forEach(function (startedNoOverride) {
+        var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings, startedPids);
+        if (!backups.length) return;
+        var corroborated = isFresh && isOutStatus(startedNoOverride.meta.injury_status);
 
-      entries.push({
-        week: week,
-        roster_id: rosterId,
-        manager: manager,
-        injured_qb: { player_id: startedNoOverride.pid, name: playerName(startedNoOverride.meta), points: round2(qbScore(statsMap[startedNoOverride.pid], scoringSettings)) },
-        backup_qbs: backups,
-        backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
-        team_qb_count: (teamQbIndex[startedNoOverride.meta.team] || []).length,
-        confidence: corroborated ? "likely" : "possible",
-        injury_status_at_capture: startedNoOverride.meta.injury_status || null,
-        custom_points_delta: null,
-        live: true
+        entries.push({
+          week: week,
+          roster_id: rosterId,
+          manager: manager,
+          injured_qb: { player_id: startedNoOverride.pid, name: playerName(startedNoOverride.meta), points: round2(qbScore(statsMap[startedNoOverride.pid], scoringSettings)) },
+          backup_qbs: backups,
+          backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
+          team_qb_count: (teamQbIndex[startedNoOverride.meta.team] || []).length,
+          confidence: corroborated ? "likely" : "possible",
+          injury_status_at_capture: startedNoOverride.meta.injury_status || null,
+          custom_points_delta: null,
+          live: true
+        });
       });
     });
     return entries;
@@ -1687,6 +1753,15 @@
       if (scoresActual[rid] !== undefined) scoresActual[rid] = round2(scoresActual[rid] + delta);
       if (scoresCustom[rid] !== undefined) scoresCustom[rid] = round2(scoresCustom[rid] + delta);
       if (!delta) return; // nothing to show a badge for either
+      // Every entry's delta above is still added to BOTH totals regardless
+      // -- but this assignment (not +=) means that if a roster somehow has
+      // TWO simultaneous nonzero-delta entries in the same week (this
+      // league's SUPER_FLEX format means a manager can start two QBs at
+      // once -- see findStartedQbs -- so it's theoretically possible for
+      // both to independently become "likely"/"confirmed" in the same
+      // week), only the LAST one processed gets the marker/tooltip. The
+      // point totals themselves stay fully correct either way; only the
+      // tooltip's story could be incomplete in that rare compound case.
       byRoster[rid] = {
         delta: delta,
         confidence: entry.confidence,

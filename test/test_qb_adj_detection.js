@@ -38,7 +38,7 @@ const source = [
   extract(/function isPlayed\([^)]*\) \{[\s\S]*?\n  \}/, "isPlayed"),
   extract(/function playerName\([^)]*\) \{[\s\S]*?\n  \}/, "playerName"),
   extract(/function buildTeamQbIndex\([^)]*\) \{[\s\S]*?\n  \}/, "buildTeamQbIndex"),
-  extract(/function findStartedQb\([^)]*\) \{[\s\S]*?\n  \}/, "findStartedQb"),
+  extract(/function findStartedQbs\([^)]*\) \{[\s\S]*?\n  \}/, "findStartedQbs"),
   extract(/function isOutStatus\([^)]*\) \{[\s\S]*?\n  \}/, "isOutStatus"),
   extract(/function findBackupQbs\([^)]*\) \{[\s\S]*?\n  \}/, "findBackupQbs"),
   extract(/function detectQbAdjustmentsForWeek\([^)]*\) \{[\s\S]*?\n  \}/, "detectQbAdjustmentsForWeek"),
@@ -200,6 +200,90 @@ function detect(starterStatus, isFresh) {
   var byRoster = applyQbAdjustmentsToScores(entries, scoresActual, scoresCustom);
   ok("confirmed tier: Actual total increased by the official delta (29.1)", Math.abs(scoresActual[1] - 129.1) < 1e-9);
   ok("confirmed tier: byRoster entry exists", byRoster[1] !== undefined);
+})();
+
+// ---- SUPER_FLEX / multi-started-QB regression: this league's real
+// roster_positions has TWO SUPER_FLEX slots and no dedicated QB slot, so a
+// manager can start two QBs at once. This is the exact real bug report:
+// Alex started BOTH Carson Wentz (MIN) and Caleb Williams (CHI) the same
+// week; Williams got hurt and Tyson Bagent (also CHI) came in to relieve
+// him, but findStartedQb (singular, old code) only ever checked the FIRST
+// QB found in `starters` (Wentz, since he came first), so Bagent's case
+// was silently never even considered. findStartedQbs (plural) now checks
+// every started QB independently. -----------------------------------------
+const SUPERFLEX_PLAYERS_META = {
+  WENTZ: { position: "QB", team: "MIN", full_name: "Carson Wentz", injury_status: null },
+  WILLIAMS: { position: "QB", team: "CHI", full_name: "Caleb Williams", injury_status: null },
+  BAGENT: { position: "QB", team: "CHI", full_name: "Tyson Bagent", injury_status: null },
+  MIN_OTHER: { position: "QB", team: "MIN", full_name: "MIN 3rd String", injury_status: null }, // didn't play
+};
+const SUPERFLEX_STATS = {
+  WENTZ: { pass_att: 30, pass_yd: 260, pass_td: 2, pass_int: 1 }, // 10.4+8-2 = 16.4, played the whole game, no backup
+  WILLIAMS: { pass_att: 15, pass_yd: 100, pass_td: 0, pass_int: 0 }, // 4.0, left early
+  BAGENT: { pass_att: 9, pass_yd: 54, pass_td: 0, pass_int: 0 }, // 2.16 -- close to the real 2.31 (real stat line has a couple more scored categories not modeled in this simplified fixture)
+};
+// Wentz listed FIRST in starters (this is exactly what made the old
+// singular findStartedQb miss Williams entirely).
+const SUPERFLEX_MATCHUPS = [
+  { roster_id: 1, matchup_id: 1, starters: ["WENTZ", "WILLIAMS"], points: 20.4 },
+  { roster_id: 2, matchup_id: 1, starters: ["WR2"], points: 90.0 },
+];
+const SUPERFLEX_MANAGERS = { 1: "Alex", 2: "Ben" };
+
+(function () {
+  var teamQbIndex = buildTeamQbIndex(SUPERFLEX_PLAYERS_META);
+  var entries = detectQbAdjustmentsForWeek(2, SUPERFLEX_MATCHUPS, SUPERFLEX_PLAYERS_META, teamQbIndex, SUPERFLEX_STATS, SCORING, SUPERFLEX_MANAGERS, true);
+  ok("exactly one entry logged -- Wentz (no backup) produces none, only Williams/Bagent does", entries.length === 1);
+  var e = entries[0];
+  check("the logged entry is about Caleb Williams, not Carson Wentz", e.injured_qb.name, "Caleb Williams");
+  check("Tyson Bagent is correctly identified as the backup", e.backup_qbs.map(function (b) { return b.name; }), ["Tyson Bagent"]);
+  check("confidence is 'possible' (uncorroborated injury_status)", e.confidence, "possible");
+})();
+
+// ---- Same roster, but now BOTH started QBs independently qualify (Wentz
+// also picks up a real same-team backup this week) -- both must be logged
+// as SEPARATE entries, and each one's backup list must exclude the OTHER
+// started QB, not just itself. ---------------------------------------------
+(function () {
+  var meta = Object.assign({}, SUPERFLEX_PLAYERS_META, {
+    MIN_OTHER: Object.assign({}, SUPERFLEX_PLAYERS_META.MIN_OTHER), // still MIN, QB
+  });
+  var stats = Object.assign({}, SUPERFLEX_STATS, {
+    MIN_OTHER: { pass_att: 5, pass_yd: 40, pass_td: 0, pass_int: 0 }, // 1.6 -- now "played" too
+  });
+  var teamQbIndex = buildTeamQbIndex(meta);
+  var entries = detectQbAdjustmentsForWeek(2, SUPERFLEX_MATCHUPS, meta, teamQbIndex, stats, SCORING, SUPERFLEX_MANAGERS, true);
+  ok("two separate entries logged for the same roster/week (one per started QB)", entries.length === 2);
+  var wentzEntry = entries.find(function (e) { return e.injured_qb.name === "Carson Wentz"; });
+  var williamsEntry = entries.find(function (e) { return e.injured_qb.name === "Caleb Williams"; });
+  ok("Wentz's own entry exists", !!wentzEntry);
+  ok("Williams's own entry exists", !!williamsEntry);
+  check("Wentz's backup is the MIN 3rd-stringer, not Williams (a different team anyway) or Bagent", wentzEntry.backup_qbs.map(function (b) { return b.name; }), ["MIN 3rd String"]);
+  check("Williams's backup is still just Bagent", williamsEntry.backup_qbs.map(function (b) { return b.name; }), ["Tyson Bagent"]);
+  // Both entries' deltas must still land on the SAME roster's totals
+  // (applyQbAdjustmentsToScores accumulates via +=, not assignment).
+  var scoresActual = { 1: 100.0, 2: 90.0 };
+  var scoresCustom = { 1: 110.0, 2: 95.0 };
+  applyQbAdjustmentsToScores(entries, scoresActual, scoresCustom);
+  ok("both entries are 'possible' (delta 0), so totals are untouched by either", scoresActual[1] === 100.0 && scoresCustom[1] === 110.0);
+})();
+
+// ---- A manager deliberately starting TWO QBs from the SAME NFL team
+// (both legally started, neither one relieving an injury) must NOT have
+// one miscounted as the other's "backup". -----------------------------------
+(function () {
+  var meta = {
+    A: { position: "QB", team: "CHI", full_name: "Started QB A", injury_status: null },
+    B: { position: "QB", team: "CHI", full_name: "Started QB B", injury_status: null },
+  };
+  var stats = {
+    A: { pass_att: 20, pass_yd: 150, pass_td: 1, pass_int: 0 },
+    B: { pass_att: 18, pass_yd: 140, pass_td: 1, pass_int: 0 },
+  };
+  var matchups = [{ roster_id: 1, matchup_id: 1, starters: ["A", "B"], points: 20.0 }];
+  var teamQbIndex = buildTeamQbIndex(meta);
+  var entries = detectQbAdjustmentsForWeek(2, matchups, meta, teamQbIndex, stats, SCORING, { 1: "Alex" }, true);
+  ok("neither deliberately-started same-team QB is logged as the other's 'backup'", entries.length === 0);
 })();
 
 console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL QB-adjustment detection/scoring UNIT TESTS PASSED");

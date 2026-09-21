@@ -367,28 +367,55 @@ def build_team_qb_index(players_meta: dict[str, dict]) -> dict[str, list[str]]:
     return index
 
 
-def find_started_qb(m: dict, players_meta: dict[str, dict]) -> tuple[str, dict] | tuple[None, None]:
-    """The first player in this roster's `starters` whose position is QB
-    (per Sleeper's player metadata) -- identifying WHO was started doesn't
+def find_started_qbs(m: dict, players_meta: dict[str, dict]) -> list[tuple[str, dict]]:
+    """EVERY player in this roster's `starters` whose position is QB (per
+    Sleeper's player metadata) -- plural, because this league's
+    roster_positions has TWO SUPER_FLEX slots and no dedicated single QB
+    slot, so a manager can (and regularly does) start two QBs at once.
+    Returning only the first one found silently ignored any injury/backup
+    situation involving whichever started QB didn't happen to come first in
+    `starters` -- the real case that caught this: a manager who started
+    both Carson Wentz (MIN) and Caleb Williams (CHI) in the same week,
+    where Williams got hurt and Tyson Bagent came in to relieve him, went
+    completely undetected because Wentz -- listed earlier in `starters` --
+    was the only one ever checked. Identifying WHO was started doesn't
     depend at all on whether a backup can also be found, so this is kept
     separate from the backup-detection below."""
+    result = []
     for pid in m.get("starters") or []:
         if not pid or pid == "0":
             continue
         meta = players_meta.get(pid)
         if meta and meta.get("position") == "QB":
-            return pid, meta
-    return None, None
+            result.append((pid, meta))
+    return result
 
 
-def find_backup_qbs(started_pid: str, meta: dict, players_meta: dict[str, dict], team_qb_index: dict[str, list[str]], stats_map: dict[str, dict], scoring_settings: dict) -> list[dict]:
+def find_backup_qbs(
+    started_pid: str,
+    meta: dict,
+    players_meta: dict[str, dict],
+    team_qb_index: dict[str, list[str]],
+    stats_map: dict[str, dict],
+    scoring_settings: dict,
+    other_started_pids: set[str] | None = None,
+) -> list[dict]:
     """Every OTHER quarterback on the started QB's NFL team who recorded
     real action (per is_played) in this week's actual stats -- sorted
-    highest-scoring first. Empty if nobody else on that team played."""
+    highest-scoring first. Empty if nobody else on that team played.
+    `other_started_pids` excludes this roster's OTHER started QB(s) too (see
+    find_started_qbs) -- in a SUPER_FLEX league a manager can deliberately
+    start two QBs from the same NFL team at once, and that's the manager's
+    own lineup choice, not a backup coming off the bench to relieve an
+    injury."""
     team = meta.get("team")
     if not team:
         return []
-    played_ids = [cid for cid in team_qb_index.get(team, []) if cid != started_pid and is_played(stats_map.get(cid))]
+    excluded = other_started_pids or set()
+    played_ids = [
+        cid for cid in team_qb_index.get(team, [])
+        if cid != started_pid and cid not in excluded and is_played(stats_map.get(cid))
+    ]
     backup_entries = [
         {"player_id": cid, "name": player_name(players_meta.get(cid)), "points": round(dot_product(stats_map.get(cid), scoring_settings), 2)}
         for cid in played_ids
@@ -406,7 +433,7 @@ def compute_qb_adjustments_for_week(
     scoring_settings: dict,
     manager_map: dict[int, str],
     is_fresh: bool,
-    carried_by_roster: dict[int, dict],
+    carried_by_roster: dict[int, list[dict]],
 ) -> list[dict]:
     entries: list[dict] = []
     for m in matchups:
@@ -421,17 +448,49 @@ def compute_qb_adjustments_for_week(
             # speculative feed. Identifying the specific injured/backup
             # QBs via the stats heuristic is best-effort on top of that,
             # never a gate on whether the override itself gets logged.
-            pid, meta = find_started_qb(m, players_meta)
+            #
+            # This roster may have started more than one QB at once (see
+            # find_started_qbs), but custom_points is a single override for
+            # the whole roster/week, so at most one "confirmed" entry can
+            # ever be logged here. Compute each started QB's own would-be
+            # backup credit and pick whichever one the override is most
+            # plausibly about: the one started QB with a real backup this
+            # week if only one has one; if more than one does (two separate
+            # in-game situations for the same roster in the same week),
+            # whichever backup total is numerically closest to the override
+            # itself; if none has an identifiable backup at all, fall back
+            # to the first started QB with the override amount as "Backup
+            # QB Points" and no names, same as this always did in a
+            # single-QB league.
+            started_list = find_started_qbs(m, players_meta)
+            started_pids = {pid for pid, _ in started_list}
             override_delta = round(official_points(m) - (m.get("points") or 0.0), 2)
-            if pid:
+            candidates = []
+            for pid, meta in started_list:
+                backups = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings, started_pids)
+                backup_total = round(sum(b["points"] for b in backups), 2) if backups else 0.0
+                candidates.append({"pid": pid, "meta": meta, "backups": backups, "backup_total": backup_total})
+            with_backups = [c for c in candidates if c["backups"]]
+            if len(with_backups) == 1:
+                chosen = with_backups[0]
+            elif len(with_backups) > 1:
+                chosen = min(with_backups, key=lambda c: abs(c["backup_total"] - override_delta))
+            elif candidates:
+                chosen = candidates[0]
+            else:
+                chosen = None
+
+            if chosen:
+                pid = chosen["pid"]
                 injured_points = round(dot_product(stats_map.get(pid), scoring_settings), 2)
-                injured_name = player_name(meta)
-                backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings)
+                injured_name = player_name(chosen["meta"])
+                backup_entries = chosen["backups"]
             else:
                 # Couldn't even identify a started QB (unexpected, but
                 # don't let that swallow a real commissioner override) --
                 # log it with the override amount as the best-available
                 # number and no names.
+                pid = None
                 injured_points = 0.0
                 injured_name = "Unknown"
                 backup_entries = []
@@ -468,11 +527,22 @@ def compute_qb_adjustments_for_week(
         # corroborated injury) and "confirmed" (a commissioner decided it
         # WAS a real case, handled unconditionally above regardless of
         # freshness) persist in history.
-        pid, meta = find_started_qb(m, players_meta)
-        if is_fresh and pid:
-            backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings)
-            status = (meta.get("injury_status") or "").strip().lower()
-            if backup_entries:
+        #
+        # This roster may have started more than one QB at once (see
+        # find_started_qbs), so every started QB is checked independently,
+        # and a roster CAN log more than one separate entry in the same
+        # week if more than one of its started QBs has its own same-team
+        # backup who recorded action -- each one excludes this roster's
+        # OTHER started QB(s) from counting as "a backup" (see
+        # find_backup_qbs).
+        started_list = find_started_qbs(m, players_meta)
+        started_pids = {pid for pid, _ in started_list}
+        if is_fresh and started_list:
+            for pid, meta in started_list:
+                backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings, started_pids)
+                if not backup_entries:
+                    continue
+                status = (meta.get("injury_status") or "").strip().lower()
                 confidence = "likely" if status in ("out", "ir", "pup") else "possible"
                 entries.append(
                     {
@@ -489,9 +559,14 @@ def compute_qb_adjustments_for_week(
                 )
             continue
 
-        carried = carried_by_roster.get(roster_id)
-        if carried and carried.get("confidence") == "likely" and (not pid or carried.get("injured_qb", {}).get("player_id") == pid):
-            entries.append(dict(carried, week=week, manager=manager))
+        # Not fresh -- carry forward every previously-captured "likely"
+        # entry for this roster/week whose injured QB is still one this
+        # roster has started (or couldn't be freshly re-checked at all).
+        # carried_by_roster maps roster_id -> a LIST now, not a single
+        # entry, for the same multi-QB reason as everywhere else above.
+        for carried in carried_by_roster.get(roster_id, []):
+            if carried.get("confidence") == "likely" and (not started_pids or carried.get("injured_qb", {}).get("player_id") in started_pids):
+                entries.append(dict(carried, week=week, manager=manager))
     return entries
 
 
@@ -504,7 +579,7 @@ def build_history(
     players_meta: dict[str, dict] | None = None,
     team_qb_index: dict[str, list[str]] | None = None,
     scoring_settings: dict | None = None,
-    old_qb_by_week: dict[int, dict[int, dict]] | None = None,
+    old_qb_by_week: dict[int, dict[int, list[dict]]] | None = None,
 ) -> dict:
     weekly: dict[str, dict] = {}
     qb_adjustments: list[dict] = []
@@ -601,21 +676,26 @@ def build_history(
     }
 
 
-def load_previous_qb_adjustments() -> dict[int, dict[int, dict]]:
+def load_previous_qb_adjustments() -> dict[int, dict[int, list[dict]]]:
     """roster_id-by-week lookup of whatever this script wrote for
     qb_adjustments LAST run (if any) -- used to carry forward a "likely"
     confidence tier captured while a week's injury_status snapshot was
     still fresh, rather than re-deriving it later from a now-stale one.
-    Never fatal: a missing/corrupt previous file just means no carry-forward
-    data, same as this feature's very first run."""
+    Each roster_id maps to a LIST of entries, not a single one, since this
+    league's SUPER_FLEX format lets a manager start more than one QB at
+    once (see find_started_qbs) -- a roster/week can genuinely have more
+    than one adjustment entry, and overwriting by roster_id would silently
+    drop all but the last one read. Never fatal: a missing/corrupt previous
+    file just means no carry-forward data, same as this feature's very
+    first run."""
     if not os.path.exists(OUTPUT_PATH):
         return {}
     try:
         with open(OUTPUT_PATH) as f:
             old = json.load(f)
-        out: dict[int, dict[int, dict]] = {}
+        out: dict[int, dict[int, list[dict]]] = {}
         for entry in old.get("qb_adjustments") or []:
-            out.setdefault(entry["week"], {})[entry["roster_id"]] = entry
+            out.setdefault(entry["week"], {}).setdefault(entry["roster_id"], []).append(entry)
         return out
     except Exception as e:  # noqa: BLE001
         print(f"[warn] couldn't read previous {OUTPUT_PATH} for QB-adjustment carry-forward ({e})", file=sys.stderr)

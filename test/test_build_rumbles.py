@@ -257,11 +257,13 @@ def test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale():
     # (the commissioner explicitly decided it was a real case, which is
     # handled unconditionally regardless of freshness) persist.
     carried_possible = {
-        1: {
-            "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
-            "confidence": "possible",
-            "injury_status_at_capture": None,
-        }
+        1: [
+            {
+                "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+                "confidence": "possible",
+                "injury_status_at_capture": None,
+            }
+        ]
     }
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
@@ -315,11 +317,13 @@ def test_compute_qb_adjustments_carries_forward_stale_likely_tier():
     # current injury_status snapshot (which has since moved on) can't
     # corroborate it anymore.
     carried = {
-        1: {
-            "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
-            "confidence": "likely",
-            "injury_status_at_capture": "Out",
-        }
+        1: [
+            {
+                "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+                "confidence": "likely",
+                "injury_status_at_capture": "Out",
+            }
+        ]
     }
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
@@ -341,6 +345,84 @@ def test_compute_qb_adjustments_no_entry_without_a_backup():
     print("PASS: no adjustment entry when no same-team backup QB recorded any action")
 
 
+# ---------------------------------------------------------------------------
+# SUPER_FLEX / multi-started-QB regression -- this league's real
+# roster_positions has TWO SUPER_FLEX slots and no dedicated QB slot, so a
+# manager can start two QBs at once. This is the exact real bug report: a
+# manager started BOTH Carson Wentz (MIN) and Caleb Williams (CHI) the same
+# week; Williams got hurt and Tyson Bagent (also CHI) came in to relieve
+# him, but find_started_qb (singular, old code) only ever checked the FIRST
+# QB found in `starters` (Wentz, since he was listed first), so Bagent's
+# case was silently never even considered. find_started_qbs (plural) now
+# checks every started QB independently, mirroring rumbles.html's JS fix.
+# ---------------------------------------------------------------------------
+
+SUPERFLEX_PLAYERS_META = {
+    "WENTZ": {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": None},
+    "WILLIAMS": {"position": "QB", "team": "CHI", "full_name": "Caleb Williams", "injury_status": None},
+    "BAGENT": {"position": "QB", "team": "CHI", "full_name": "Tyson Bagent", "injury_status": None},
+    "MIN_OTHER": {"position": "QB", "team": "MIN", "full_name": "MIN 3rd String", "injury_status": None},
+}
+SUPERFLEX_STATS = {
+    "WENTZ": {"pass_att": 30, "pass_yd": 260, "pass_td": 2, "pass_int": 1},  # 16.4 -- played the whole game, no backup
+    "WILLIAMS": {"pass_att": 15, "pass_yd": 100, "pass_td": 0, "pass_int": 0},  # 4.0 -- left early
+    "BAGENT": {"pass_att": 9, "pass_yd": 54, "pass_td": 0, "pass_int": 0},  # 2.16
+}
+# Wentz listed FIRST in starters -- exactly what made the old singular
+# find_started_qb miss Williams entirely.
+SUPERFLEX_MATCHUPS = [{"roster_id": 1, "matchup_id": 1, "starters": ["WENTZ", "WILLIAMS"], "points": 20.4}]
+SUPERFLEX_MANAGER_MAP = {1: "Alex"}
+
+
+def test_superflex_only_the_qb_with_a_real_backup_is_logged():
+    team_qb_index = build_team_qb_index(SUPERFLEX_PLAYERS_META)
+    entries = compute_qb_adjustments_for_week(
+        2, SUPERFLEX_MATCHUPS, SUPERFLEX_PLAYERS_META, team_qb_index, SUPERFLEX_STATS,
+        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert len(entries) == 1, f"Wentz (no backup) should log nothing, only Williams/Bagent should, got {len(entries)}"
+    e = entries[0]
+    assert e["injured_qb"]["name"] == "Caleb Williams", f"expected the logged entry to be about Caleb Williams, got {e['injured_qb']['name']}"
+    assert [b["name"] for b in e["backup_qbs"]] == ["Tyson Bagent"], f"expected Tyson Bagent as the identified backup, got {e['backup_qbs']}"
+    assert e["confidence"] == "possible", f"expected 'possible' (uncorroborated injury_status), got {e['confidence']}"
+    print("PASS: a SUPER_FLEX roster's second started QB (not the first one checked) is correctly detected")
+
+
+def test_superflex_both_started_qbs_can_log_separately():
+    meta = dict(SUPERFLEX_PLAYERS_META)
+    stats = dict(SUPERFLEX_STATS, MIN_OTHER={"pass_att": 5, "pass_yd": 40, "pass_td": 0, "pass_int": 0})  # 1.6 -- now "played" too
+    team_qb_index = build_team_qb_index(meta)
+    entries = compute_qb_adjustments_for_week(
+        2, SUPERFLEX_MATCHUPS, meta, team_qb_index, stats,
+        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+    )
+    assert len(entries) == 2, f"expected two separate entries (one per started QB), got {len(entries)}"
+    by_name = {e["injured_qb"]["name"]: e for e in entries}
+    assert set(by_name) == {"Carson Wentz", "Caleb Williams"}
+    assert [b["name"] for b in by_name["Carson Wentz"]["backup_qbs"]] == ["MIN 3rd String"], "Wentz's backup should be the MIN 3rd-stringer, not Williams or Bagent"
+    assert [b["name"] for b in by_name["Caleb Williams"]["backup_qbs"]] == ["Tyson Bagent"], "Williams's backup should still just be Bagent"
+    print("PASS: both started QBs on a SUPER_FLEX roster can independently log their own entry in the same week")
+
+
+def test_superflex_two_deliberately_started_same_team_qbs_are_not_backups_of_each_other():
+    meta = {
+        "A": {"position": "QB", "team": "CHI", "full_name": "Started QB A", "injury_status": None},
+        "B": {"position": "QB", "team": "CHI", "full_name": "Started QB B", "injury_status": None},
+    }
+    stats = {
+        "A": {"pass_att": 20, "pass_yd": 150, "pass_td": 1, "pass_int": 0},
+        "B": {"pass_att": 18, "pass_yd": 140, "pass_td": 1, "pass_int": 0},
+    }
+    matchups = [{"roster_id": 1, "matchup_id": 1, "starters": ["A", "B"], "points": 20.0}]
+    team_qb_index = build_team_qb_index(meta)
+    entries = compute_qb_adjustments_for_week(
+        2, matchups, meta, team_qb_index, stats,
+        QB_SCORING_SETTINGS, {1: "Alex"}, is_fresh=True, carried_by_roster={},
+    )
+    assert entries == [], f"neither deliberately-started same-team QB should be logged as the other's 'backup', got {entries}"
+    print("PASS: two deliberately-started same-team QBs are never mistaken for one another's backup")
+
+
 def main():
     test_official_points_prefers_custom_points_when_set()
     test_score_week_applies_override_to_pf()
@@ -359,6 +441,9 @@ def main():
     test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
     test_compute_qb_adjustments_no_entry_without_a_backup()
+    test_superflex_only_the_qb_with_a_real_backup_is_logged()
+    test_superflex_both_started_qbs_can_log_separately()
+    test_superflex_two_deliberately_started_same_team_qbs_are_not_backups_of_each_other()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 
