@@ -1507,6 +1507,118 @@ checked directly against the same number shown in his own tooltip; Ben's
 already-"confirmed" backup is confirmed NOT added a second time, staying
 at the official `last_completed_week_points` value alone.
 
+**A yellow asterisk on "Pts Last Week" itself flags when a still-"likely"
+estimate is folded into that number, and disappears the moment it's
+confirmed.** The previous paragraph's folded-in estimate was, until now,
+invisible in the number itself -- you'd only discover it by hovering the
+tooltip. Now, whenever a roster's displayed "Pts Last Week" total includes
+a still-"likely" (uncommissioner-confirmed) QB-adjustment estimate, a small
+yellow `*` appears right after the number, using the exact same asterisk
+element/tooltip mechanism as the manager-name `QB Inj*` marker (down to
+reusing `#qb-adj-tooltip`, `showQbAdjTooltip`/`hideQbAdjTooltip`, and the
+same hover-on-desktop/tap-on-mobile behavior) rather than a second,
+parallel tooltip system -- it's keyed into `state.qbAdjTooltipData` under a
+`"lw-" + roster_id` lookup key (instead of the live marker's plain
+`roster_id`) purely so the two can never collide for the same roster, and
+given its own `.pts-lastweek-yellow` CSS class so it renders in this page's
+"likely" yellow (`--replacement`) rather than the manager-marker's usual
+blue. Its own tooltip reuses `buildQbAdjTooltipHtml` with `{ isLastWeek:
+true }` -- the same past-tense, "Pts Last Week"-labeled wording already
+described in "Hovering 'Pts Last Week'..." above. The moment the
+commissioner confirms the adjustment, the entry's tier flips to
+"confirmed" in `rumbles_history.json`, `pointsDeltaByRoster` no longer
+counts it (see above), and this asterisk simply stops rendering --
+identical lifecycle to the folded-in number itself, no separate cleanup
+needed. Covered end-to-end by `test/run_test.py`'s pregame scenario (1e):
+the asterisk shows up only for Rohaan (still-"likely"), never for Ben
+(already-"confirmed"), is colored the correct yellow, and its own tooltip
+uses the last-week-tensed wording.
+
+**"This Week" (the Rumbles column) also relabels to "Last Week" pregame,
+in Actual mode, showing each roster's real last-completed-week Rumbles
+total -- the same pregame relabel pattern as "Pts This Week"/"Pts Last
+Week" above, applied to its neighboring column.** Before kickoff, Actual
+mode's "This Week" used to just show 0 Rumbles for everyone (or a live
+commissioner override's already-official value for one roster, same as
+described in the paragraph above this section) -- accurate, but no more
+useful than the old flat-0.00 "Points This Week" was. It now shows
+`last_completed_week_rumbles` instead, unconditionally (no override
+special-case needed here, since a roster's own last-week Rumbles total is
+already whatever it finished with). Like the Pts relabel, this is
+Actual-mode-only: Projected mode's pregame "This Week" is deliberately
+untouched, still showing the old (pre-relabel) value, including a live
+override where one exists -- mirroring exactly how "Pts This Week"/"Pts
+Last Week" already draws that same Actual-only line. See
+`COLUMNS.this_week.label` in `render()`, and the `thisWeekRumbles`
+branch in `buildCombinedStandings`, in `rumbles.html`. Covered end-to-end
+by `test/run_test.py`'s pregame scenario (1e): the header reads "Last
+Week" and every roster's value matches `last_completed_week_rumbles`
+exactly in Actual mode, reverting to "This Week" with the old
+Actual-bucket values (Ankit's override included) the instant Projected
+mode is selected.
+
+**A green " W" or red " L" appears right after a manager's name, in the
+same Manager column, showing last week's real head-to-head result --
+Actual mode, pregame only.** Sourced from `rumbles_history.json`'s own
+`history.weekly[<last completed week>][<roster_id>].h2h_win` (a field
+that's been sitting in the history file, unused, since it was first
+written by `build_rumbles.py`'s `score_week()`) -- `true` renders a green
+`W`, `false` a red `L`, and a bye/malformed pairing (`h2h_win` is neither
+boolean, i.e. `None` server-side) renders nothing at all rather than a
+misleading badge either way. This sits right alongside the existing live
+`QB Inj*` marker in the same name cell -- both can show at once -- and,
+like every other pregame-only feature on this page, only appears in
+Actual mode before the target week has kicked off; Projected mode's
+manager names, and any manager name once the week is actually live, are
+untouched. See `last_week_h2h_win` in `buildCombinedStandings` and the
+`.lastweek-h2h-badge`/`.lastweek-h2h-win`/`.lastweek-h2h-loss` CSS classes
+in `rumbles.html`. Covered end-to-end by `test/run_test.py`'s pregame
+scenario (1e): Kaitlyn (who won her week-1 matchup) shows a green "W",
+Ben (who lost his) shows a red "L", both colors hand-verified against the
+real `--good`/`--bad` CSS custom properties.
+
+**The "Pts Last Week" tooltip's "Proj" column becomes a "Diff" column --
+actual minus last week's real pregame projection, colored green when the
+actual beat the projection and red when it fell short -- or the column is
+omitted entirely if last week's real pregame projections can't be found
+at all.** The old "Proj" column in this particular tooltip was always
+identical to "Actual" (there's nothing left to project for a finished
+week), which made it pure redundancy. `loadLastWeekBreakdown` now also
+fetches Sleeper's real `/projections/nfl/{season}/{week}` payload for the
+last completed week -- confirmed, directly against the live Sleeper API,
+that this endpoint still serves the genuine, untouched PRE-GAME
+projection for an already-finished week, not just future ones -- and
+feeds it through the exact same `computePlayerBreakdownEntry` path
+already used for the live tooltip's own Proj column, with no changes to
+that function itself (`loadLastWeekBreakdown` always passes an empty
+`teamGameSchedule`, so that function's own live-blending branch never
+engages here -- `entry.proj` lands on the raw pregame number, unblended,
+exactly what a real "last week's projection" should mean). Each tooltip
+row's `diff` (`actual - proj`, to 2 decimals) is then colored green
+(`--good`) when positive/actual-beat-the-projection or red (`--bad`) when
+negative -- **except** a QB-injury-replacement row (the yellow "likely" or
+green "confirmed" rows described above), which always keeps its OWN tier
+color regardless of what its diff's sign would otherwise call for -- a
+replacement row's whole point is signaling confidence tier, not whether
+the backup outperformed a projection nobody made for them stepping in.
+If the projections fetch comes back empty (Sleeper genuinely has nothing
+for that week -- confirmed by a real, tested fallback, not just a network
+failure), the column is dropped entirely -- no header, no cells, rather
+than showing a misleading "Diff" of nothing-vs-actual. This only ever
+applies to the "Pts Last Week" tooltip specifically; the live week's
+"Points This Week" tooltip keeps its ordinary "Proj" column exactly as
+before. See `showDiffColumn`/`r.diff` in `thisWeekTooltip`, and
+`projCellHtml`/`showProjColumn` in `renderPtsTooltipContent`, in
+`rumbles.html`. Covered end-to-end by `test/run_test.py`: the pregame
+scenario (1e) confirms the header reads "Diff" (not "Proj"), that plain
+rows are colored by their own diff sign while both replacement rows keep
+their tier color even where it disagrees with the diff's sign (a
+deliberately adversarial fixture -- Ben's confirmed backup has a negative
+diff but stays green, Rohaan's likely backup has a positive diff but
+stays yellow), and a separate no-projections-available scenario (2)
+confirms the column -- header and every row -- is omitted entirely rather
+than showing something misleading.
+
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
 
@@ -1682,29 +1794,43 @@ per-team data, just a standing explainer.
 5. **Week 2's matchups are posted but no game has kicked off yet
    (pregame)** -- confirms the grey (non-live) status pill reads "Week 2
    begins &lt;day&gt; &lt;time&gt;" using the EARLIEST kickoff across the
-   whole week (not just the first fixture game), that Actual mode's
-   "Points This Week" header relabels to "Pts Last Week" and every
-   roster's value is their real last-completed-week PF -- untouched even
-   by a commissioner's live QB-adjustment override on a still-pregame
-   roster (Ankit) -- EXCEPT that Rohaan's still-"likely" backup's real
-   20.00 points ARE folded on top of his history baseline (cross-checked
-   directly against the same number shown in his own tooltip), while
-   Ben's already-"confirmed" backup is confirmed NOT double-added -- while
-   "This Week" (Rumbles) and every cumulative column stay exactly as
-   `rumbles_history.json` already has them, that hovering "Pts Last Week"
-   shows week 1's real per-player breakdown -- a plain player row (Aidan),
-   an injured starter plus a GREEN "confirmed" replacement row (Ben), and
-   an injured starter plus a YELLOW "likely" replacement row (Rohaan), the
-   last two hand-verified against the real `--good`/`--replacement` CSS
-   colors -- that the header reverts to "Pts This Week" the moment
-   Projected mode is selected, that Projected
-   mode's "This Week"/Rumbles and every cumulative column still match
-   Actual exactly (Ankit's override included) while "Points This Week"
-   shows a real nonzero projected total instead, that the "Points This
-   Week" tooltip still works pregame, and that a stale week-1 "possible"
-   QB-adjustment entry (Jake) is still correctly showing (week 2 hasn't
-   kicked off yet, so it isn't stale YET) with its Injured QB cell colored
-   blue rather than the usual red.
+   whole week (not just the first fixture game), that both headers relabel
+   in Actual mode ("Points This Week" -> "Pts Last Week", "This Week" ->
+   "Last Week"), that "Last Week" shows every roster's real
+   last-completed-week Rumbles total unconditionally (Ankit's override no
+   longer a special case now that the whole column is last-week-sourced),
+   that "Pts Last Week" is every roster's real last-completed-week PF --
+   EXCEPT that Rohaan's still-"likely" backup's real 20.00 points ARE
+   folded on top of his history baseline (cross-checked directly against
+   the same number shown in his own tooltip) with a yellow `*` appearing
+   right after his number, while Ben's already-"confirmed" backup is
+   confirmed NOT double-added and shows no asterisk -- while every
+   cumulative column stays exactly as `rumbles_history.json` already has
+   them, that a green "W" (Kaitlyn) or red "L" (Ben) badge appears right
+   after the manager name showing last week's real H2H result, that
+   hovering "Pts Last Week" shows week 1's real per-player breakdown with
+   a "Diff" column (not "Proj") -- a plain player row with its own
+   actual-vs-pregame-projection diff colored by sign (Aidan), an injured
+   starter plus a GREEN "confirmed" replacement row that keeps its tier
+   color despite a negative diff (Ben), and an injured starter plus a
+   YELLOW "likely" replacement row that keeps its tier color despite a
+   positive diff (Rohaan), all colors hand-verified against the real
+   `--good`/`--bad`/`--replacement` CSS custom properties -- that the
+   asterisk's own tooltip uses last-week-tensed wording naming "Pts Last
+   Week" -- that both headers revert to "This Week"/"Pts This Week" the
+   moment Projected mode is selected, that Projected mode's "This
+   Week"/Rumbles keeps its OLD pre-relabel value (Ankit's override
+   included, every cumulative column staying unfolded) while "Points This
+   Week" shows a real nonzero projected total instead, that the "Points
+   This Week" tooltip still works pregame, and that a stale week-1
+   "possible" QB-adjustment entry (Jake) is still correctly showing (week
+   2 hasn't kicked off yet, so it isn't stale YET) with its Injured QB
+   cell colored blue rather than the usual red. A companion check in
+   scenario 2 (Week 1 final, Week 2 not yet posted, no projections fixture
+   supplied) confirms the "Pts Last Week" tooltip's Diff column -- header
+   and every row -- is omitted entirely rather than showing something
+   misleading, when last week's real pregame projections aren't
+   available.
 6. **Sleeper's `state.week` pointer has advanced AHEAD of
    `rumbles_history.json`** -- the exact reported production bug: Week 2
    has genuinely ended and Sleeper's own pointer already says week 3, but

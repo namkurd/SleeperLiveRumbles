@@ -82,15 +82,24 @@ def install_routes(page, routes):
 def get_table_rows(page):
     # The manager cell (column 1) can carry a trailing " *" (see
     # qb-adj-asterisk in rumbles.html -- a live, still-"likely" QB-injury
-    # adjustment) -- stripped back out here so every manager-name-keyed
-    # dict built from these rows elsewhere in this file keeps working off
-    # the plain manager name. get_qb_adj_asterisk/get_qb_adj_tooltip_text
-    # above are what actually test the "*" itself.
+    # adjustment) and/or a trailing " W"/" L" (see lastweek-h2h-badge --
+    # last week's H2H result, shown only pregame in Actual mode) --
+    # stripped back out here so every manager-name-keyed dict built from
+    # these rows elsewhere in this file keeps working off the plain
+    # manager name. The "Pts This Week"/"Pts Last Week" cell (column 4) can
+    # similarly carry a trailing " *" of its own (pts-lastweek-yellow -- a
+    # still-"likely" QB-injury adjustment folded into THAT number, pregame
+    # only), stripped the same way so numeric comparisons against this
+    # column keep working. get_qb_adj_asterisk/get_qb_adj_tooltip_text,
+    # get_lastweek_h2h_badge, and get_lastweek_pts_asterisk above/below are
+    # what actually test those markers themselves.
     return page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
             var text = td.innerText.trim();
-            return i === 1 ? text.replace(/\\s*QB Inj\\*$/, '') : text;
+            if (i === 1) return text.replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
+            if (i === 4) return text.replace(/\\s*\\*$/, '');
+            return text;
         }))""",
     )
 
@@ -212,7 +221,7 @@ def get_matchup_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
             var span = r.querySelector('td.manager .matchup-name');
             var color = span ? span.style.color : null;
             return [name, color || null];
@@ -230,7 +239,7 @@ def get_pts_this_week_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
             var cell = r.querySelector('td.thisweek-pts');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -247,7 +256,7 @@ def get_thisweek_rumbles_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
             var cell = r.querySelector('td.thisweek');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -271,7 +280,7 @@ def get_tooltip_row_computed_colors(page, manager):
     clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -334,7 +343,7 @@ def get_thisweek_pts_tooltip(page, manager):
     next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -375,7 +384,7 @@ def get_thisweek_pts_tooltip_header(page, manager):
     Moves the mouse away afterward so the next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, ''))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -494,6 +503,7 @@ def scenario_live_blending(browser):
         # assertion at the end of each scenario.
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         # Real Sleeper requires ?season_type=... on these two or it 400s --
         # match with a trailing "*" rather than a literal "?" (Playwright
         # glob patterns treat "?" as "any one character", not literally).
@@ -1415,6 +1425,7 @@ def scenario_mobile_tap_tooltip(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -1432,7 +1443,7 @@ def scenario_mobile_tap_tooltip(browser):
 
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     assert "has-tooltip" in (cell.get_attribute("class") or ""), "Aidan's Pts This Week cell should be tappable (has-tooltip)"
@@ -1545,6 +1556,7 @@ def scenario_mobile_responsive_layout(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -1779,6 +1791,7 @@ def scenario_howto_tooltip(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
         "**/scores/nfl/regular/2026/2": [],
@@ -1875,6 +1888,7 @@ def scenario_pregame_week(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),  # posted
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/stats/nfl/2026/2*": [],  # nobody's played yet -- no stats rows at all
         "**/projections/nfl/2026/2*": load("projections_week2.json"),  # real pregame projections
         "**/v1/players/nfl": load("players.json"),
@@ -1903,43 +1917,46 @@ def scenario_pregame_week(browser):
     assert "live" not in dot_classes.split(), f"status dot must NOT be green/'live' pregame, got class={dot_classes!r}"
     print(f"Confirmed the pregame status pill reads 'Week 2 begins {expected_label}' with a grey (non-live) dot.")
 
-    # ---- Actual mode: nobody's played (stats route returns [] -- no real
-    # production at all yet), so This Week (Rumbles) is 0 for everyone
-    # EXCEPT Ankit, whose "Confirmed" QB-adjustment commissioner override is
-    # baked directly into matchups_week2.json (custom_points, independent
-    # of any stats) and applies regardless of whether the week has kicked
-    # off -- a commissioner keying in a correction isn't gated on live
-    # detection, so Ankit legitimately "outscores" every other (still-0)
-    # roster and wins their own H2H matchup, landing on the max 20 rumbles
-    # in the This Week (Rumbles) column specifically.
-    #
-    # "Points This Week" itself is a different story now: per the reported
-    # spec, once Actual mode's target week hasn't actually kicked off yet,
-    # that column is repurposed to "Pts Last Week" and shows each roster's
-    # real, final PF from the last COMPLETED week (last_completed_week_points
-    # in rumbles_history.json) -- a plain historical figure, deliberately
-    # UNAFFECTED by anything happening in the not-yet-started week, Ankit's
-    # live override included. (Ankit's override still shows up exactly
-    # where it always has: in the This Week (Rumbles) column above, and
-    # once the week actually kicks off, back in Points This Week too -- see
-    # scenario_live_blending's Ankit assertions.)
+    # ---- Actual mode pregame: both "This Week" (Rumbles) and "Points This
+    # Week" are repurposed to show last week's real, FINAL numbers instead
+    # of the not-yet-started target week's own (0/still-0, a live QB-
+    # adjustment commissioner override aside) figures -- "This Week"
+    # becomes "Last Week"/last_completed_week_rumbles, "Points This Week"
+    # becomes "Pts Last Week"/last_completed_week_points, both headers
+    # relabeled to match (render()). This is deliberately UNCONDITIONAL:
+    # even Ankit's live "confirmed" QB-adjustment commissioner override --
+    # baked directly into matchups_week2.json (custom_points), independent
+    # of any stats, and previously the one exception that still showed up
+    # in "This Week" pregame -- no longer affects either column here, since
+    # both are now sourced purely from last week's history, not the
+    # not-yet-started target week at all. (That override still shows up
+    # once the week actually kicks off -- see scenario_live_blending's
+    # Ankit assertions -- just not before then.)
     header_text_actual = page.text_content("#th-points")
     assert header_text_actual == "Pts Last Week", (
         f"expected the 'Pts This Week' header to read 'Pts Last Week' in Actual mode once the target week hasn't "
         f"kicked off yet, got: {header_text_actual!r}"
     )
-    print("Confirmed the header reads 'Pts Last Week' in Actual mode pregame.")
+    header_text_rumbles = page.text_content("#th-thisweek")
+    assert header_text_rumbles == "Last Week", (
+        f"expected the 'This Week' header to read 'Last Week' in Actual mode once the target week hasn't kicked "
+        f"off yet, got: {header_text_rumbles!r}"
+    )
+    print("Confirmed the headers read 'Last Week'/'Pts Last Week' in Actual mode pregame.")
 
     rows_actual = get_table_rows(page)
     assert len(rows_actual) == 12, f"expected 12 rows, got {len(rows_actual)}"
     history = load("rumbles_history.json")
     baseline_by_manager = {s["manager"]: s for s in history["standings"]}
+    weekly_wk1 = history["weekly"]["1"]
+    roster_id_by_manager = {s["manager"]: s["roster_id"] for s in history["standings"]}
     for r in rows_actual:
         base = baseline_by_manager[r[1]]
-        if r[1] == "Ankit":
-            assert r[3] == "20", f"[actual] expected Ankit's This Week to be 20 (commissioner override beats every other still-0 roster), got {r[3]!r}"
-        else:
-            assert r[3] == "0", f"[actual] expected This Week (Rumbles) to be 0 pregame for {r[1]}, got {r[3]!r}"
+        assert r[3] == str(base["last_completed_week_rumbles"]), (
+            f"[actual] expected 'Last Week' to show {r[1]}'s real last-week Rumbles total "
+            f"({base['last_completed_week_rumbles']}), unconditionally (Ankit's live override included -- it no "
+            f"longer applies here at all), got {r[3]!r}"
+        )
         # Rohaan's Week-1 QB-adjustment is still "likely" (unconfirmed) --
         # his backup's real 20.00 (Week1 Rohaan Backup QB, asserted in the
         # tooltip below) is folded on TOP of the frozen history baseline,
@@ -1960,7 +1977,22 @@ def scenario_pregame_week(browser):
         assert abs(float(r[6]) - base["pf"]) < 0.01, f"[actual] {r[1]}: expected PF {base['pf']} unchanged pregame, got {r[6]}"
         assert abs(float(r[7]) - base["pa"]) < 0.01, f"[actual] {r[1]}: expected PA {base['pa']} unchanged pregame, got {r[7]}"
         assert r[8] == f"{base['h2h_w']}-{base['h2h_l']}", f"[actual] {r[1]}: expected H2H {base['h2h_w']}-{base['h2h_l']} unchanged pregame, got {r[8]}"
-    print("Confirmed Actual mode pregame: This Week (Rumbles) is 0 for everyone except a legitimate, override-driven exception (Ankit); 'Pts Last Week' shows each roster's real last-completed-week PF untouched by that override; and every cumulative column matches the Week-1-only history baseline exactly.")
+        # "W"/"L" badge (see get_lastweek_h2h_badge below for a dedicated,
+        # element-level check) -- cross-checked here too against
+        # rumbles_history.json's own week-1 weekly log, straight off the
+        # same manager-cell text get_table_rows already strips it from.
+        wk1_entry = weekly_wk1.get(str(roster_id_by_manager[r[1]]))
+        expected_badge_text = ""
+        if wk1_entry and wk1_entry["h2h_win"] is True:
+            expected_badge_text = " W"
+        elif wk1_entry and wk1_entry["h2h_win"] is False:
+            expected_badge_text = " L"
+        # (get_table_rows already strips the badge back out of r[1] itself
+        # -- this just documents that every manager here has SOME
+        # resolvable week-1 result, i.e. expected_badge_text is never ""
+        # for this fixture's fully-paired 12-team week.)
+        assert expected_badge_text, f"expected a resolvable week-1 H2H result for {r[1]}, got: {wk1_entry}"
+    print("Confirmed Actual mode pregame: 'Last Week' shows each roster's real last-completed-week Rumbles total unconditionally (Ankit's override no longer an exception); 'Pts Last Week' shows each roster's real last-completed-week PF plus any still-'likely' QB-adjustment estimate; and every cumulative column matches the Week-1-only history baseline exactly.")
 
     live_badges_actual = page.locator(".badge-live").count()
     assert live_badges_actual == 0, f"no LIVE badges expected anywhere pregame (Actual mode), found {live_badges_actual}"
@@ -1973,28 +2005,83 @@ def scenario_pregame_week(browser):
     # QB-injury cases below); Ben and Rohaan each also get a QB-injury
     # replacement row, colored by their OWN confidence tier -- Ben's is
     # "confirmed" (green), Rohaan's is still "likely" (yellow) -- so both
-    # colors are exercised in the same scenario. "proj" always equals
-    # "actual" here (see loadLastWeekBreakdown's own comment: no
-    # projections fetch for a week that's already over).
+    # colors are exercised in the same scenario. get_thisweek_pts_tooltip's
+    # "proj" key holds whichever the tooltip's third column actually shows
+    # -- for the LIVE tooltip that's a real Proj number, but here (see
+    # thisWeekTooltip's isLastWeek branch) it's the Actual-minus-real-
+    # pregame-projection DIFFERENCE instead (signed, "+"/"-" prefix), fed
+    # by projections_week1.json (make_fixtures.py) -- see that fixture's
+    # own comment for exactly which numbers were chosen and why (it
+    # deliberately makes BOTH replacement rows' raw diff sign disagree with
+    # their own tier color, to prove the tier color wins -- see the
+    # dedicated color assertions further below).
     aidan_last_week_rows = get_thisweek_pts_tooltip(page, "Aidan")
     assert aidan_last_week_rows == [
-        {"time": "", "name": "Week1 Aidan Starter", "actual": "16.00", "proj": "16.00", "live": False},
-    ], f"expected Aidan's 'Pts Last Week' tooltip to show his one real week-1 player row, got {aidan_last_week_rows}"
-    print("Confirmed Aidan's 'Pts Last Week' tooltip shows a plain, real week-1 player row:", aidan_last_week_rows)
+        {"time": "", "name": "Week1 Aidan Starter", "actual": "16.00", "proj": "+4.00", "live": False},
+    ], f"expected Aidan's 'Pts Last Week' tooltip to show his one real week-1 player row (16.00 actual vs 12.00 pregame proj = +4.00), got {aidan_last_week_rows}"
+    print("Confirmed Aidan's 'Pts Last Week' tooltip shows a plain, real week-1 player row with its actual-vs-pregame-proj Diff:", aidan_last_week_rows)
 
     ben_last_week_rows = get_thisweek_pts_tooltip(page, "Ben")
     assert ben_last_week_rows == [
-        {"time": "", "name": "Test Injured QB", "actual": "10.00", "proj": "10.00", "live": False},
-        {"time": "", "name": "Test Backup QB", "actual": "15.00", "proj": "15.00", "live": False},
-    ], f"expected Ben's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the confirmed backup, got {ben_last_week_rows}"
-    print("Confirmed Ben's 'Pts Last Week' tooltip shows his injured starter plus a 'confirmed' replacement row:", ben_last_week_rows)
+        {"time": "", "name": "Test Injured QB", "actual": "10.00", "proj": "-4.00", "live": False},
+        {"time": "", "name": "Test Backup QB", "actual": "15.00", "proj": "-5.00", "live": False},
+    ], f"expected Ben's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the confirmed backup, each with its own Diff, got {ben_last_week_rows}"
+    print("Confirmed Ben's 'Pts Last Week' tooltip shows his injured starter plus a 'confirmed' replacement row, with Diff values:", ben_last_week_rows)
 
     rohaan_last_week_rows = get_thisweek_pts_tooltip(page, "Rohaan")
     assert rohaan_last_week_rows == [
-        {"time": "", "name": "Week1 Rohaan Injured QB", "actual": "7.00", "proj": "7.00", "live": False},
-        {"time": "", "name": "Week1 Rohaan Backup QB", "actual": "20.00", "proj": "20.00", "live": False},
-    ], f"expected Rohaan's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the still-likely backup, got {rohaan_last_week_rows}"
-    print("Confirmed Rohaan's 'Pts Last Week' tooltip shows his injured starter plus a 'likely' replacement row:", rohaan_last_week_rows)
+        {"time": "", "name": "Week1 Rohaan Injured QB", "actual": "7.00", "proj": "-2.00", "live": False},
+        {"time": "", "name": "Week1 Rohaan Backup QB", "actual": "20.00", "proj": "+10.00", "live": False},
+    ], f"expected Rohaan's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the still-likely backup, each with its own Diff, got {rohaan_last_week_rows}"
+    print("Confirmed Rohaan's 'Pts Last Week' tooltip shows his injured starter plus a 'likely' replacement row, with Diff values:", rohaan_last_week_rows)
+
+    # Diff header + coloring: header says "Diff" (not "Proj") for this
+    # tooltip; a PLAIN row's Diff cell is colored by its own sign (green
+    # positive, red negative -- Aidan's +4.00 green, both injured-QB rows'
+    # negative diffs red), while EACH replacement row keeps its own tier
+    # color regardless of what its diff's sign would otherwise call for
+    # (Ben's confirmed backup: -5.00 but still GREEN; Rohaan's likely
+    # backup: +10.00 but still YELLOW) -- proving the tier color always
+    # wins over the diff's own sign, per renderPtsTooltipContent.
+    diff_header = page.evaluate("() => { var th = document.querySelectorAll('#pts-tooltip thead th'); return th[th.length - 1].textContent.trim(); }")
+    assert diff_header == "Diff", f"expected the 'Pts Last Week' tooltip's second column header to read 'Diff', got: {diff_header!r}"
+    print("Confirmed the 'Pts Last Week' tooltip's column header reads 'Diff' (not 'Proj').")
+
+    good_ref_diff = get_css_var_color(page, "good")
+    bad_ref_diff = get_css_var_color(page, "bad")
+    replacement_ref_diff = get_css_var_color(page, "replacement")
+
+    def get_last_week_diff_color(manager, player_name):
+        idx = page.eval_on_selector_all(
+            "#standings-body tr td.manager",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        ).index(manager)
+        cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+        cell.hover()
+        page.wait_for_timeout(150)
+        color = page.evaluate(
+            """(name) => {
+                var trs = document.querySelectorAll('#pts-tooltip tbody tr');
+                for (var tr of trs) {
+                    var tds = tr.querySelectorAll('td');
+                    if (tds[0].innerText.trim() === name) {
+                        return getComputedStyle(tds[tds.length - 1]).color;
+                    }
+                }
+                return null;
+            }""",
+            player_name,
+        )
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(150)
+        return color
+
+    assert get_last_week_diff_color("Aidan", "Week1 Aidan Starter") == good_ref_diff, "expected Aidan's plain +4.00 Diff cell to be green"
+    assert get_last_week_diff_color("Ben", "Test Injured QB") == bad_ref_diff, "expected Ben's plain -4.00 Diff cell (his own injured starter, not the replacement) to be red"
+    assert get_last_week_diff_color("Ben", "Test Backup QB") == good_ref_diff, "expected Ben's CONFIRMED replacement row's Diff cell to stay green (tier color), even though its raw diff (-5.00) would otherwise be red"
+    assert get_last_week_diff_color("Rohaan", "Week1 Rohaan Injured QB") == bad_ref_diff, "expected Rohaan's plain -2.00 Diff cell (his own injured starter, not the replacement) to be red"
+    assert get_last_week_diff_color("Rohaan", "Week1 Rohaan Backup QB") == replacement_ref_diff, "expected Rohaan's LIKELY replacement row's Diff cell to stay yellow (tier color), even though its raw diff (+10.00) would otherwise be green"
+    print("Confirmed Diff-cell coloring: plain rows follow their own sign (green/red), while both replacement rows keep their own tier color regardless of their diff's sign.")
 
     # Ben's replacement row (Test Backup QB, "confirmed") must be GREEN
     # (--good) -- the whole point of this round's fix: a confirmed
@@ -2017,6 +2104,79 @@ def scenario_pregame_week(browser):
     assert rohaan_backup_colors["actual_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Actual to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['actual_color']}"
     assert rohaan_backup_colors["proj_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Proj to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['proj_color']}"
     print(f"Confirmed 'Pts Last Week' replacement-row coloring: Ben's confirmed backup is green ({good_ref_lastweek}), Rohaan's still-likely backup is yellow ({replacement_ref_lastweek}).")
+
+    # ---- Yellow "*" on "Pts Last Week" itself for a still-"likely"
+    # QB-injury adjustment (buildCombinedStandings' last_week_qb_adjustment)
+    # -- Rohaan's is still "likely" so he gets one; Ben's is already
+    # "confirmed" so he must NOT (see render()'s ptsAsteriskHtml). Reuses
+    # the exact same qb-adj-asterisk mechanism as the manager-name "QB
+    # Inj*" marker (get_qb_adj_asterisk's own pattern), just scoped to the
+    # "Pts Last Week" cell and keyed "lw-<roster_id>" instead.
+    def get_lastweek_pts_asterisk(page, manager):
+        idx = page.eval_on_selector_all(
+            "#standings-body tr td.manager",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        ).index(manager)
+        row = page.locator("#standings-body tr").nth(idx)
+        el = row.locator("td.thisweek-pts span.pts-lastweek-yellow")
+        return el if el.count() else None
+
+    rohaan_lw_asterisk = get_lastweek_pts_asterisk(page, "Rohaan")
+    assert rohaan_lw_asterisk is not None, "expected a yellow '*' on Rohaan's 'Pts Last Week' cell (still-'likely' QB adjustment)"
+    assert rohaan_lw_asterisk.inner_text() == "*", f"expected the marker text to read a bare '*', got: {rohaan_lw_asterisk.inner_text()!r}"
+    ben_lw_asterisk = get_lastweek_pts_asterisk(page, "Ben")
+    assert ben_lw_asterisk is None, "expected NO '*' on Ben's 'Pts Last Week' cell (his QB adjustment is already 'confirmed')"
+    print("Confirmed the yellow 'Pts Last Week' '*' shows up ONLY for Rohaan (still-'likely') -- not for Ben (already 'confirmed').")
+
+    # Its color must be yellow (--replacement, matching the tier convention
+    # everywhere else), not the manager-name marker's usual blue.
+    rohaan_lw_asterisk_color = rohaan_lw_asterisk.evaluate("el => getComputedStyle(el).color")
+    assert rohaan_lw_asterisk_color == replacement_ref_lastweek, (
+        f"expected the 'Pts Last Week' '*' to be yellow ({replacement_ref_lastweek}), got {rohaan_lw_asterisk_color!r}"
+    )
+    print(f"Confirmed the 'Pts Last Week' '*' is colored yellow ({replacement_ref_lastweek}), not the manager-name marker's usual blue.")
+
+    # Hovering it shows the SAME #qb-adj-tooltip element (reused wholesale,
+    # see render()'s comment), but with "last week"-tensed wording and a
+    # "Pts Last Week" points-added line instead of "Actual & Projected".
+    rohaan_lw_asterisk.hover()
+    page.wait_for_timeout(150)
+    lw_tip_text = page.locator("#qb-adj-tooltip").inner_text()
+    assert lw_tip_text == (
+        "QB injury adjustment (likely)\n"
+        "Week1 Rohaan Injured QB was injured in-game and ruled out last week.\n"
+        "Week1 Rohaan Backup QB came in; their points were credited to this roster.\n"
+        "+20.00 pts added to Pts Last Week.\n"
+        "Pending the commissioner’s official adjustment."
+    ), f"unexpected 'Pts Last Week' '*' tooltip content: {lw_tip_text!r}"
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    print("Confirmed the 'Pts Last Week' '*' tooltip uses last-week-tensed wording ('ruled out last week', 'were credited') and names 'Pts Last Week' in its points-added line, reusing #qb-adj-tooltip.")
+
+    # ---- "W"/"L" badge for last week's real H2H result, next to the
+    # manager name -- pregame Actual mode only (buildCombinedStandings'
+    # last_week_h2h_win). Kaitlyn (roster 11, the odd/winning half of the
+    # 11-vs-12 pair) beat Stephanie in week 1 (see make_fixtures.py's H2H
+    # pairing); Ben (roster 2, the even/losing half of the 1-vs-2 pair)
+    # lost to Aidan.
+    def get_lastweek_h2h_badge(page, manager):
+        idx = page.eval_on_selector_all(
+            "#standings-body tr td.manager",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        ).index(manager)
+        row = page.locator("#standings-body tr").nth(idx)
+        el = row.locator("span.lastweek-h2h-badge")
+        return el if el.count() else None
+
+    good_ref_badge = get_css_var_color(page, "good")
+    bad_ref_badge = get_css_var_color(page, "bad")
+    kaitlyn_badge = get_lastweek_h2h_badge(page, "Kaitlyn")
+    assert kaitlyn_badge is not None and kaitlyn_badge.inner_text() == "W", f"expected Kaitlyn's manager-name badge to read 'W', got {kaitlyn_badge.inner_text() if kaitlyn_badge else None!r}"
+    assert kaitlyn_badge.evaluate("el => getComputedStyle(el).color") == good_ref_badge, "expected Kaitlyn's 'W' badge to be green"
+    ben_badge = get_lastweek_h2h_badge(page, "Ben")
+    assert ben_badge is not None and ben_badge.inner_text() == "L", f"expected Ben's manager-name badge to read 'L', got {ben_badge.inner_text() if ben_badge else None!r}"
+    assert ben_badge.evaluate("el => getComputedStyle(el).color") == bad_ref_badge, "expected Ben's 'L' badge to be red"
+    print("Confirmed the manager-name 'W'/'L' badge shows last week's real H2H result, colored green/red (Kaitlyn 'W', Ben 'L').")
 
     # ---- "Pts Last Week" point-folding: a still-"likely" (unconfirmed)
     # QB-injury replacement's estimated points get added into the
@@ -2046,22 +2206,23 @@ def scenario_pregame_week(browser):
     )
     print(f"Confirmed Ben's already-'confirmed' backup's points are NOT double-added to his displayed 'Pts Last Week' total (stays at the official {ben_base['last_completed_week_points']}).")
 
-    # ---- Projected mode: must match Actual EXACTLY for This Week/Rumbles
-    # (including Ankit's override-driven 20 -- proving the pregame "This
-    # Week" figure really is sourced from the Actual bucket regardless of
-    # which mode is selected, not just coincidentally 0 for everyone) and
-    # every cumulative column (PF/PA/H2H/Vs. Field) -- the whole point of
-    # this fix -- while STILL showing the real pregame PROJECTED total in
-    # Points This Week (not 0, and different from Actual's), and its
-    # tooltip.
+    # ---- Projected mode: the "Last Week"/"Pts Last Week" relabels AND the
+    # value swaps behind them are Actual-mode-only (per the reported spec,
+    # mirrored for both columns -- Projected mode's whole point pregame is
+    # showing a live/pregame PROJECTED total, never a frozen historical
+    # one) -- so Projected mode's own "This Week" (Rumbles) pregame value
+    # is UNCHANGED from before this round of fixes: still sourced from the
+    # Actual bucket's not-yet-started-week numbers (0 for everyone except
+    # Ankit's override-driven 20), which is why it no longer matches Actual
+    # mode's own "This Week" column now that Actual's shows last week's
+    # real Rumbles instead (Ankit: 7 there, 20 here) -- these two columns
+    # are deliberately NOT required to match anymore. Every cumulative
+    # column (PF/PA/H2H/Vs. Field) still must NOT be folded pregame either
+    # way, and Points This Week still shows the real pregame PROJECTED
+    # total (not 0, and different from Actual's), with its tooltip intact.
     page.click("#mode-custom")
     page.wait_for_timeout(200)
 
-    # The "Pts Last Week" relabel is Actual-mode-only (per the reported
-    # spec, Projected mode's whole point is showing a live/pregame
-    # PROJECTED total, never a frozen historical one) -- confirm the header
-    # reverts to its normal "Pts This Week" wording the moment the mode
-    # switches, pregame or not.
     header_text_custom = page.text_content("#th-points")
     # Projected mode's default sort is by this_week_points itself, so the
     # header can carry a trailing sort arrow (" ▼") -- strip it before
@@ -2071,19 +2232,22 @@ def scenario_pregame_week(browser):
         f"expected the header to read 'Pts This Week' again in Projected mode (the relabel is Actual-mode-only), "
         f"got: {header_text_custom!r}"
     )
-    print("Confirmed the header reverts to 'Pts This Week' in Projected mode pregame.")
+    header_text_thisweek_custom = page.text_content("#th-thisweek")
+    assert header_text_thisweek_custom == "This Week", (
+        f"expected the 'This Week' header to read 'This Week' again in Projected mode (the relabel is "
+        f"Actual-mode-only, same as 'Pts This Week'), got: {header_text_thisweek_custom!r}"
+    )
+    print("Confirmed both headers revert to 'This Week'/'Pts This Week' in Projected mode pregame.")
 
     rows_custom = get_table_rows(page)
     assert len(rows_custom) == 12, f"expected 12 rows, got {len(rows_custom)}"
-    actual_by_manager = {r[1]: r for r in rows_actual}
 
     nonzero_points = 0
     for r in rows_custom:
-        actual_r = actual_by_manager[r[1]]
-        assert r[3] == actual_r[3], (
-            f"[custom] expected This Week (Rumbles) to exactly match Actual mode's {actual_r[3]!r} pregame "
-            f"(sourced from the Actual bucket, not a hypothetical projected outcome) for {r[1]}, got {r[3]!r}"
-        )
+        if r[1] == "Ankit":
+            assert r[3] == "20", f"[custom] expected Ankit's This Week to still be 20 pregame (commissioner override beats every other still-0 roster, unchanged from before this round of fixes), got {r[3]!r}"
+        else:
+            assert r[3] == "0", f"[custom] expected This Week (Rumbles) to still be 0 pregame for {r[1]} (unchanged from before this round of fixes), got {r[3]!r}"
         if float(r[4]) > 0:
             nonzero_points += 1
         base = baseline_by_manager[r[1]]
@@ -2096,7 +2260,7 @@ def scenario_pregame_week(browser):
         f"expected most/all managers to show a real nonzero pregame PROJECTED 'Points This Week' total in "
         f"Projected mode (the one thing that's allowed to differ from Actual pregame), only {nonzero_points}/12 were nonzero"
     )
-    print(f"Confirmed Projected mode pregame: This Week/Rumbles and every cumulative column still match Actual exactly (including Ankit's override), while Points This Week shows a real nonzero projected total for {nonzero_points}/12 managers.")
+    print(f"Confirmed Projected mode pregame: This Week/Rumbles keeps its OLD (pre-'Last Week'-relabel) Actual-bucket value (including Ankit's override), every cumulative column stays unfolded, and Points This Week shows a real nonzero projected total for {nonzero_points}/12 managers.")
 
     live_badges_custom = page.locator(".badge-live").count()
     assert live_badges_custom == 0, f"no LIVE badges expected anywhere pregame (Projected mode either), found {live_badges_custom}"
@@ -2106,7 +2270,7 @@ def scenario_pregame_week(browser):
     # accidentally break the existing tooltip feature.
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, ''))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     cell.hover()
@@ -2178,6 +2342,7 @@ def scenario_pointer_ahead_of_history(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -2252,6 +2417,7 @@ def scenario_cumulative_only(browser):
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),  # not posted yet
         "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": [],
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
         "**/scores/nfl/regular/2026/2": [],
@@ -2285,6 +2451,32 @@ def scenario_cumulative_only(browser):
 
     error_visible = page.eval_on_selector("#error-banner", "el => el.classList.contains('show')")
     assert not error_visible, "no error banner expected -- both fetches succeeded, there's just no live week"
+
+    # ---- "Pts Last Week" Diff column, unavailable case: this scenario's
+    # own "**/projections/nfl/2026/1*": [] route (see routes above) is a
+    # real, successful, genuinely-empty response -- unlike scenario 1e's
+    # real projections_week1.json fixture -- so loadLastWeekBreakdown's
+    # projectionsAvailable comes out false and the tooltip's second column
+    # must be omitted ENTIRELY (no "Proj" showing stale actual==proj
+    # numbers, no "Diff" computed from nothing) rather than showing
+    # anything misleading. Aidan's tooltip (a single plain player row, same
+    # underlying data as scenario 1e) is the one exercised there for
+    # comparison -- here it must render with just Name + Actual, no second
+    # numeric column or header cell at all.
+    aidan_idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+    ).index("Aidan")
+    aidan_cell = page.locator("#standings-body tr").nth(aidan_idx).locator("td.thisweek-pts")
+    aidan_cell.hover()
+    page.wait_for_timeout(150)
+    header_cell_count = page.eval_on_selector_all("#pts-tooltip thead th", "ths => ths.length")
+    assert header_cell_count == 2, f"expected exactly TWO header cells (the blank name header + 'Actual' -- Actual mode has no time column, and the Diff header must be omitted here) when projections are unavailable, got {header_cell_count}"
+    body_cell_counts = page.eval_on_selector_all("#pts-tooltip tbody tr", "trs => trs.map(tr => tr.querySelectorAll('td').length)")
+    assert body_cell_counts and all(c == 2 for c in body_cell_counts), f"expected every row to have exactly 2 cells (Name + Actual, no Diff) when projections are unavailable, got {body_cell_counts}"
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    print("Confirmed the 'Pts Last Week' tooltip omits its Diff column entirely (header and every row) when last week's real pregame projections aren't available.")
 
     page.close()
     assert not console_errors, f"console errors found: {console_errors}"

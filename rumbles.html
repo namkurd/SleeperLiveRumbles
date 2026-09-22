@@ -797,6 +797,30 @@
     text-decoration-color: var(--accent-2);
     text-underline-offset: 2px;
   }
+  /* The SAME "*" marker/tooltip mechanism as .qb-adj-asterisk above
+     (reused wholesale -- see render()'s ptsAsteriskHtml comment for why),
+     but attached to the "Pts Last Week" cell instead of the manager name,
+     for a still-"likely" QB-injury replacement whose estimated points are
+     folded into THAT number specifically (buildCombinedStandings'
+     last_week_qb_adjustment). Colored yellow (--replacement) instead of
+     this marker's usual blue -- matching the "likely" tier's established
+     color everywhere else on the page (the tooltip's own replacement rows,
+     the QB Injury Backup Adjustments table) rather than the "not yet
+     corroborated" blue, since this credit IS already corroborated and
+     folded into the total, just not yet commissioner-confirmed. */
+  .qb-adj-asterisk.pts-lastweek-yellow {
+    color: var(--replacement);
+    text-decoration-color: var(--replacement);
+  }
+  /* "W"/"L" appended after the manager name for last week's real H2H
+     result -- pregame Actual mode only, alongside the "Last Week"/"Pts
+     Last Week" relabeled columns it gives context for (see
+     buildCombinedStandings' last_week_h2h_win). Plain bold text, no
+     tooltip/interactivity (unlike the QB-adjustment asterisks) -- the
+     letter alone is the whole fact. */
+  .lastweek-h2h-badge { font-weight: 700; }
+  .lastweek-h2h-win { color: var(--good); }
+  .lastweek-h2h-loss { color: var(--bad); }
   /* Tooltip for .qb-adj-asterisk -- same fixed-position, JS-driven,
      hover(desktop)/tap(mobile) pattern as .pts-tooltip above (see that
      rule's comment for why position:fixed specifically). Kept as its own
@@ -2197,14 +2221,34 @@
       fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + lastWeek).catch(function () { return []; }),
       fetchJson(STATS_BASE + "/" + season + "/" + lastWeek + seasonTypeParam).catch(function () { return []; }),
       fetchJson(API_V1 + "/league/" + leagueId).catch(function () { return null; }),
-      ensurePlayersMeta()
+      ensurePlayersMeta(),
+      // Sleeper still serves a past week's REAL pregame projections at this
+      // same endpoint (confirmed live: /projections/nfl/2026/2 still
+      // returns week 2's real pregame numbers after week 2 finished) --
+      // used below to show "Pts Last Week"'s tooltip actual-vs-pregame-
+      // projection DIFFERENCE (see thisWeekTooltip's isLastWeek branch)
+      // instead of just restating the actual total a second time. Collapsed
+      // to [] on any failure, same as every other best-effort fetch here --
+      // projectionsAvailable below is what tells the tooltip to fall back
+      // to hiding the column entirely rather than showing a misleading
+      // all-zero diff if this ever comes back empty.
+      fetchJson(PROJECTIONS_BASE + "/" + season + "/" + lastWeek + seasonTypeParam).catch(function () { return []; })
     ]).then(function (results) {
       var matchups = results[0] || [];
       var statsMap = arrayToPlayerMap(results[1]);
       var league = results[2] || {};
       var playersMeta = results[3] || {};
+      var projectionsRaw = results[4] || [];
+      var projectionsAvailable = projectionsRaw.length > 0;
+      // pregameProjMap deliberately falls back to statsMap (proj==actual,
+      // the old behavior) when Sleeper's projections feed came back empty --
+      // the tooltip itself won't actually show that number in that case
+      // (see projectionsAvailable/showProjColumn), but this keeps every
+      // downstream computePlayerBreakdownEntry call safe either way rather
+      // than needing its own separate empty-map special case.
+      var pregameProjMap = projectionsAvailable ? arrayToPlayerMap(projectionsRaw) : statsMap;
       if (!matchups.length) {
-        state.lastWeek = { week: lastWeek, byRoster: {} };
+        state.lastWeek = { week: lastWeek, byRoster: {}, pointsDeltaByRoster: {}, qbAdjustmentByRoster: {}, projectionsAvailable: projectionsAvailable };
         return;
       }
       var scoringSettings = league.scoring_settings || {};
@@ -2224,16 +2268,16 @@
         (adjByRoster[e.roster_id] = adjByRoster[e.roster_id] || []).push(e);
       });
 
-      // No projections fetch for a week that's already over -- there's
-      // nothing left to project. statsMap is deliberately reused as BOTH
-      // the "actual" and "proj" source below, which lands "proj" on
-      // exactly the same number as "actual" for every row (rather than a
-      // misleading flat 0.00) -- this is the SAME convention the live
-      // tooltip already uses for any player whose game has positively
-      // finished (see computePlayerBreakdownEntry: a "complete" game_status
-      // makes effectiveRemainingFraction 0, which collapses blendedProjection
-      // down to actualPts exactly), just arrived at directly here since
-      // there's no teamGameSchedule at all to derive that same status from.
+      // statsMap is passed as the ACTUAL source below, same as always;
+      // pregameProjMap (real pregame projections, or statsMap itself as a
+      // last-resort fallback -- see above) is passed as the PROJ source.
+      // teamGameSchedule is still {} (there's no live-scoreboard feed for
+      // an already-finished week), which is exactly what makes
+      // computePlayerBreakdownEntry treat `game` as null and skip its
+      // blendedProjection collapse -- so "proj" here lands on the real,
+      // untouched pregame number rather than being pulled toward "actual"
+      // the way an in-progress player's blended estimate would be.
+      //
       // Only a still-"likely" (unconfirmed) replacement's estimated points
       // get folded into the displayed "Pts Last Week" total below -- a
       // "confirmed" entry's official custom_points_delta is already baked
@@ -2245,15 +2289,19 @@
       // it simply drops out of this sum on its own (no separate "was this
       // previously likely" transition check needed) and the tooltip text
       // color switch (pts-tooltip-replacement-confirmed, see CSS) is all
-      // that's left to show for it.
+      // that's left to show for it -- same for qbAdjustmentByRoster below,
+      // which backs the yellow "Pts Last Week" asterisk (only "likely"
+      // entries are ever recorded there, so the asterisk disappears the
+      // same automatic way once the commissioner confirms it).
       var byRoster = {};
       var pointsDeltaByRoster = {};
+      var qbAdjustmentByRoster = {};
       matchups.forEach(function (m) {
         var rid = m.roster_id;
-        var breakdown = buildPlayerBreakdown(m, statsMap, statsMap, scoringSettings, playersMeta, {}, rosterPositions);
+        var breakdown = buildPlayerBreakdown(m, statsMap, pregameProjMap, scoringSettings, playersMeta, {}, rosterPositions);
         (adjByRoster[rid] || []).forEach(function (entry) {
           var before = breakdown.length;
-          breakdown = appendQbReplacementRows(breakdown, entry.backup_qbs, statsMap, statsMap, scoringSettings, playersMeta, {}, entry.confidence);
+          breakdown = appendQbReplacementRows(breakdown, entry.backup_qbs, statsMap, pregameProjMap, scoringSettings, playersMeta, {}, entry.confidence);
           if (entry.confidence === "likely") {
             // The rows appendQbReplacementRows just appended for THIS
             // entry -- summing their own `.actual` (rather than
@@ -2261,14 +2309,33 @@
             // build_rumbles.py took when it first detected the injury)
             // keeps this delta pinned to the exact same numbers the
             // tooltip itself displays for these rows.
+            var entryDelta = 0;
             for (var i = before; i < breakdown.length; i++) {
-              pointsDeltaByRoster[rid] = round2((pointsDeltaByRoster[rid] || 0) + num(breakdown[i].actual));
+              entryDelta = round2(entryDelta + num(breakdown[i].actual));
             }
+            pointsDeltaByRoster[rid] = round2((pointsDeltaByRoster[rid] || 0) + entryDelta);
+            // Same "last one wins" simplification as applyQbAdjustmentsToScores
+            // (see its own comment) for the rare compound case (two
+            // simultaneous SUPER_FLEX QB injuries the same week) -- the
+            // points total above stays fully correct regardless; only a
+            // truly compound asterisk/tooltip would be incomplete.
+            qbAdjustmentByRoster[rid] = {
+              delta: entryDelta,
+              confidence: "likely",
+              injured_qb: entry.injured_qb,
+              backup_qbs: entry.backup_qbs
+            };
           }
         });
         byRoster[rid] = breakdown;
       });
-      state.lastWeek = { week: lastWeek, byRoster: byRoster, pointsDeltaByRoster: pointsDeltaByRoster };
+      state.lastWeek = {
+        week: lastWeek,
+        byRoster: byRoster,
+        pointsDeltaByRoster: pointsDeltaByRoster,
+        qbAdjustmentByRoster: qbAdjustmentByRoster,
+        projectionsAvailable: projectionsAvailable
+      };
     }).catch(function (err) {
       console.warn("[rumbles] couldn't load last week's player breakdown for the 'Pts Last Week' tooltip:", err);
       state.lastWeek = null;
@@ -2626,8 +2693,20 @@
   // couldn't be resolved), not text folded into the name. `live: true` (a
   // game currently in progress) is what render's row-coloring uses to
   // highlight that player in green.
-  function thisWeekTooltip(mode, breakdown, actualPoints) {
+  function thisWeekTooltip(mode, breakdown, actualPoints, opts) {
     if (!breakdown || !breakdown.length) return null;
+    // isLastWeek (only ever true for the "Pts Last Week" pregame tooltip --
+    // see render()'s call site) swaps the second column from "Proj" to
+    // "Diff": last week is fully over, so a live-blended "Proj" estimate
+    // would be meaningless there -- what IS useful is how each player's
+    // real score compared to their real PRE-GAME projection (green if they
+    // beat it, red if they fell short). projectionsAvailable gates this on
+    // whether loadLastWeekBreakdown actually got real pregame numbers back
+    // from Sleeper for that week at all -- when it didn't, showProjColumn
+    // below comes out false and renderPtsTooltipContent omits the column
+    // entirely rather than showing a misleading all-zero diff.
+    var isLastWeek = !!(opts && opts.isLastWeek);
+    var showDiffColumn = isLastWeek && !!(opts && opts.projectionsAvailable);
     var showStartTime = mode !== "actual";
     var players = mode === "actual"
       ? breakdown.filter(function (p) { return p.played; })
@@ -2645,6 +2724,18 @@
         timeColor: startLabel ? (state.timeSlotColorByLabel[startLabel] || null) : null,
         actual: p.actual,
         proj: p.proj,
+        // Actual-minus-pregame-projection, ONLY ever computed for the
+        // "Pts Last Week" tooltip (see showDiffColumn above) -- "proj"
+        // there is last week's real, untouched pregame number (see
+        // loadLastWeekBreakdown's own comment on why teamGameSchedule={}
+        // keeps computePlayerBreakdownEntry from blending it toward
+        // "actual" the way an in-progress player's estimate would be), so
+        // this is a genuine "beat/missed their projection by X" figure,
+        // not a live-vs-live comparison. null (rather than 0) whenever it
+        // isn't applicable, so renderPtsTooltipContent never has to guess
+        // whether a literal 0.00 diff means "exactly on projection" or
+        // "not computed here."
+        diff: showDiffColumn ? round2(num(p.actual) - num(p.proj)) : null,
         live: p.game_status === "in_progress",
         // See appendQbReplacementRows/.pts-tooltip-replacement(-confirmed)
         // -- a replacement row's own tier color always wins over the plain
@@ -2667,7 +2758,16 @@
     var actualPointsLabel = (mode !== "actual" && typeof actualPoints === "number")
       ? actualPoints.toFixed(2) + ": Actual Pts"
       : null;
-    return { showStartTime: showStartTime, rows: rows, actualPointsLabel: actualPointsLabel };
+    return {
+      showStartTime: showStartTime,
+      rows: rows,
+      actualPointsLabel: actualPointsLabel,
+      isLastWeek: isLastWeek,
+      // The live tooltip always shows its Proj column (unaffected by any
+      // of this); the last-week tooltip shows its Diff column only when
+      // real pregame projections were actually available to compute it.
+      showProjColumn: !isLastWeek || showDiffColumn
+    };
   }
 
   function buildCombinedStandings() {
@@ -2724,18 +2824,23 @@
       var weeksForPct = weeksCompleted.length + (foldInfo ? 1 : 0);
       var pct = weeksForPct ? (combinedRumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
 
-      var thisWeekRumbles = rumblesSourceInfo ? rumblesSourceInfo.rumbles : num(s.last_completed_week_rumbles);
       // In Actual mode specifically, once the target week hasn't actually
       // kicked off yet (pregame -- whether matchups are posted with
       // everyone still at a real 0.00, or not posted at all), "Points This
-      // Week" is genuinely uninformative: nobody's played, so it's just
-      // 0.00 across the board. Rather than show that, fall back to last
-      // week's real, final PF -- see showLastWeekPoints below, which also
-      // swaps the column header itself to "Pts Last Week" (render()) so
-      // the number is never shown under a misleading label. Projected mode
-      // is untouched -- it already shows a real forward-looking pregame
-      // projection before kickoff, which IS useful information on its own.
+      // Week"/"This Week" (Rumbles) are genuinely uninformative: nobody's
+      // played, so they're just 0.00/0 across the board (a live QB-
+      // adjustment commissioner override aside -- see rumblesSourceInfo/
+      // Ankit's case in test/run_test.py). Rather than show that, fall back
+      // to last week's real, final PF/Rumbles -- this also swaps both
+      // column headers themselves to "Pts Last Week"/"Last Week" (render())
+      // so the numbers are never shown under a misleading label. Projected
+      // mode is untouched -- it already shows a real forward-looking
+      // pregame projection before kickoff, which IS useful information on
+      // its own.
       var showLastWeekPoints = state.mode === "actual" && !kickoffStarted;
+      var thisWeekRumbles = showLastWeekPoints
+        ? num(s.last_completed_week_rumbles)
+        : (rumblesSourceInfo ? rumblesSourceInfo.rumbles : num(s.last_completed_week_rumbles));
       // A still-"likely" (unconfirmed) QB-injury replacement's estimated
       // points aren't part of s.last_completed_week_points itself (that's
       // a frozen, server-computed figure -- see build_rumbles.py's
@@ -2775,6 +2880,20 @@
       var hasIncompletePlayer = playersBreakdown
         ? playersBreakdown.some(function (p) { return p.game_status !== "complete"; })
         : true;
+
+      // Last week's real H2H result (true win / false loss / null for a
+      // bye or unresolvable pairing -- see score_week in build_rumbles.py)
+      // for the manager-name "W"/"L" badge, pregame only (showLastWeekPoints)
+      // -- state.lastWeek.week IS the last completed week number (see
+      // loadLastWeekBreakdown), so this reads the matching entry straight
+      // out of rumbles_history.json's own per-week log rather than
+      // recomputing anything client-side.
+      var lastWeekNum = state.lastWeek ? state.lastWeek.week : null;
+      var lastWeekLog = (lastWeekNum != null && state.history && state.history.weekly)
+        ? state.history.weekly[String(lastWeekNum)]
+        : null;
+      var lastWeekEntry = lastWeekLog ? lastWeekLog[String(rid)] : null;
+      var lastWeekH2hWin = lastWeekEntry && typeof lastWeekEntry.h2h_win === "boolean" ? lastWeekEntry.h2h_win : null;
 
       return {
         roster_id: rid,
@@ -2849,7 +2968,26 @@
         // tooltip while confidence is "likely" -- once the commissioner
         // confirms it, the credit stays (as the official override delta)
         // but the speculative-adjustment UI cue goes away.
-        qb_adjustment: liveActive && live.byRoster[rid] ? live.byRoster[rid].qbAdjustment : null
+        qb_adjustment: liveActive && live.byRoster[rid] ? live.byRoster[rid].qbAdjustment : null,
+        // Last week's real H2H outcome (see lastWeekH2hWin above) --
+        // null-scoped to showLastWeekPoints (pregame Actual only, same
+        // gate as the "Pts Last Week"/"Last Week" relabels) so the "W"/"L"
+        // badge never lingers once the current week's own live H2H result
+        // (a different, already-existing signal -- see this_week_winning)
+        // becomes the relevant one to show instead.
+        last_week_h2h_win: showLastWeekPoints ? lastWeekH2hWin : null,
+        // Still-"likely" (unconfirmed) QB-injury adjustment folded into
+        // THIS row's "Pts Last Week" total above (see lastWeekPointsDelta)
+        // -- {delta, confidence: "likely", injured_qb, backup_qbs} (same
+        // shape buildQbAdjTooltipHtml already expects) or null. Backs the
+        // yellow "*" appended to the "Pts Last Week" cell in render():
+        // disappears on its own once the commissioner confirms the
+        // adjustment, for the same reason lastWeekPointsDelta itself does
+        // (see loadLastWeekBreakdown) -- a "confirmed" entry is never
+        // recorded here in the first place.
+        last_week_qb_adjustment: showLastWeekPoints
+          ? ((state.lastWeek && state.lastWeek.qbAdjustmentByRoster && state.lastWeek.qbAdjustmentByRoster[rid]) || null)
+          : null
       };
     });
 
@@ -2948,9 +3086,13 @@
     // module-level string that updateHeaderSortIndicators() (just below)
     // renders into the <th> every call, so it must be set before that
     // call runs, every render -- not just once.
-    COLUMNS.this_week_points.label = (state.mode === "actual" && !(state.live && state.live.hasKickedOff))
-      ? "Pts Last Week"
-      : "Pts This Week";
+    var pregameActualLabels = state.mode === "actual" && !(state.live && state.live.hasKickedOff);
+    COLUMNS.this_week_points.label = pregameActualLabels ? "Pts Last Week" : "Pts This Week";
+    // Same swap, same condition, for the Rumbles-earned-this-week column --
+    // pregame in Actual mode it shows last week's real Rumbles total
+    // instead (see buildCombinedStandings' thisWeekRumbles), so its header
+    // needs to say so too, exactly like "Pts This Week" already does.
+    COLUMNS.this_week.label = pregameActualLabels ? "Last Week" : "This Week";
     updateHeaderSortIndicators();
 
     state.thisWeekTooltipData = {};
@@ -2984,19 +3126,55 @@
           state.qbAdjTooltipData[r.roster_id] = buildQbAdjTooltipHtml(r.qb_adjustment);
           nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">QB Inj*</span>';
         }
+        // "W"/"L" badge for last week's real H2H result -- pregame Actual
+        // mode only (r.last_week_h2h_win is already null outside that
+        // state, see buildCombinedStandings), right alongside the "Last
+        // Week"/"Pts Last Week" relabeled columns it's giving context for.
+        // null specifically means "no result to show" (a bye, or the data
+        // just isn't there) -- true/false are the only two values that get
+        // a badge at all.
+        if (r.last_week_h2h_win === true) {
+          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-win">W</span>';
+        } else if (r.last_week_h2h_win === false) {
+          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-loss">L</span>';
+        }
         // The tooltip itself is a custom element (see pts-tooltip show/
         // hide/toggle below), not a native title attribute -- a native
         // title tooltip never appears on tap on mobile at all, so this
         // cell just carries a data-roster-id for the delegated hover/tap
         // handlers to look up pre-built tooltip data from
         // state.thisWeekTooltipData with.
-        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown, r.this_week_actual_points);
+        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown, r.this_week_actual_points, {
+          isLastWeek: r.this_week_points_is_last_week,
+          projectionsAvailable: !!(state.lastWeek && state.lastWeek.projectionsAvailable)
+        });
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
         if (ptsTooltip) {
           state.thisWeekTooltipData[r.roster_id] = ptsTooltip;
           ptsCellAttrs += ' class="thisweek-pts has-tooltip"';
         } else {
           ptsCellAttrs += ' class="thisweek-pts"';
+        }
+        // Yellow "*" on "Pts Last Week" itself when a still-"likely"
+        // (unconfirmed) QB-injury replacement's estimated points are
+        // folded into THIS number (see buildCombinedStandings'
+        // last_week_qb_adjustment/lastWeekPointsDelta) -- reuses the exact
+        // same qb-adj-asterisk hover/tap/tooltip mechanism as the manager-
+        // name "QB Inj*" marker above (same #qb-adj-tooltip element, same
+        // show/hide/position functions, same delegated listeners -- see
+        // qbAdjElFromEvent's span.qb-adj-asterisk selector), just keyed
+        // under a "lw-"-prefixed id (state.qbAdjTooltipData["lw-" + rid"])
+        // rather than the plain roster id, so it can never collide with
+        // that OTHER marker's own entry for the same roster (a real, if
+        // rare, possibility: a roster could have a live "likely" adjustment
+        // for the CURRENT week's matchups being posted early AND a still-
+        // "likely" one from LAST week, at once). pts-lastweek-yellow is the
+        // only thing that overrides its color to yellow instead of that
+        // other marker's usual blue -- see CSS.
+        var ptsAsteriskHtml = "";
+        if (r.this_week_points_is_last_week && r.last_week_qb_adjustment) {
+          state.qbAdjTooltipData["lw-" + r.roster_id] = buildQbAdjTooltipHtml(r.last_week_qb_adjustment, { isLastWeek: true });
+          ptsAsteriskHtml = ' <span class="qb-adj-asterisk pts-lastweek-yellow" data-roster-id="lw-' + r.roster_id + '">*</span>';
         }
         // The team currently AHEAD in its live H2H matchup (under whichever
         // scoring mode -- Actual or Projected -- is currently selected;
@@ -3017,7 +3195,7 @@
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
-          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + "</td>" +
+          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           "<td>" + r.pf.toFixed(2) + "</td>" +
           "<td>" + r.pa.toFixed(2) + "</td>" +
@@ -3134,6 +3312,15 @@
   function renderPtsTooltipContent(tooltip) {
     var showStartTime = tooltip.showStartTime;
     var hasActualTotal = !!tooltip.actualPointsLabel;
+    var isLastWeek = !!tooltip.isLastWeek;
+    // Whether the second numeric column shows at all -- always true for the
+    // live tooltip; for the "Pts Last Week" tooltip, only when real pregame
+    // projections were available to compute the Diff column from (see
+    // thisWeekTooltip/loadLastWeekBreakdown's projectionsAvailable) --
+    // otherwise the whole column (header included) is omitted rather than
+    // showing a misleading flat 0.00 "Proj" that's really just "actual"
+    // restated, or a diff computed from nothing.
+    var showProjColumn = tooltip.showProjColumn !== false;
     // When the actual-points reference line is present it takes over the
     // WHOLE header-row left side (colspan="2") -- both the kickoff-time
     // header cell and the name header cell, which are otherwise blank --
@@ -3148,18 +3335,38 @@
       var rowClass = r.replacement === "confirmed" ? "pts-tooltip-replacement-confirmed"
         : r.replacement ? "pts-tooltip-replacement"
         : (r.live ? "pts-tooltip-live" : "");
+      var projCellHtml = "";
+      if (showProjColumn) {
+        if (isLastWeek) {
+          // Diff cell: green/red by sign ONLY for a plain row -- a
+          // tier-colored (replacement/confirmed) row keeps ITS OWN
+          // yellow/green instead (still applied via this exact same
+          // .pts-tooltip-proj class, by the tr.pts-tooltip-replacement(-
+          // confirmed) CSS rules above -- so no inline style is set here
+          // for those rows, letting that rule win untouched). That tier
+          // color is the higher-priority signal ("this is an estimated/
+          // confirmed adjustment"), not the diff's own sign.
+          var diffColor = typeof r.diff === "number" ? (r.diff >= 0 ? "var(--good)" : "var(--bad)") : null;
+          var diffStyle = (!rowClass && diffColor) ? ' style="color:' + diffColor + '"' : "";
+          var diffText = typeof r.diff === "number" ? (r.diff >= 0 ? "+" : "") + r.diff.toFixed(2) : "—";
+          projCellHtml = '<td class="pts-tooltip-proj"' + diffStyle + ">" + diffText + "</td>";
+        } else {
+          projCellHtml = '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>";
+        }
+      }
       return '<tr class="' + rowClass + '">' +
         timeCellHtml +
         '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
-        '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>" +
+        projCellHtml +
         "</tr>";
     }).join("");
     var actualTotalHtml = hasActualTotal
       ? '<th' + (showStartTime ? ' colspan="2"' : "") + ' class="pts-tooltip-name pts-tooltip-actual-total">' + escapeHtml(tooltip.actualPointsLabel) + "</th>"
       : '<th class="pts-tooltip-name"></th>';
+    var projHeaderHtml = showProjColumn ? ("<th>" + (isLastWeek ? "Diff" : "Proj") + "</th>") : "";
     els.ptsTooltip.innerHTML =
-      "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th><th>Proj</th>' +
+      "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th>' + projHeaderHtml +
       "</tr></thead><tbody>" +
       bodyHtml +
       "</tbody></table>";
@@ -3319,11 +3526,23 @@
     return entries.map(function (b) { return escapeHtml(b.name); }).join(", ");
   }
 
-  function buildQbAdjTooltipHtml(adj) {
+  function buildQbAdjTooltipHtml(adj, opts) {
+    // isLastWeek (only ever passed true from the "Pts Last Week" asterisk,
+    // see render()) swaps the tense/wording of a few lines so this reads
+    // naturally about a week that's already over -- "ruled out last week"/
+    // "were credited" instead of "ruled out this week"/"will be credited"
+    // -- and the points-added line names "Pts Last Week" specifically
+    // (there's no separate Actual/Projected split to speak of for an
+    // already-finished week the way there is for a live one). Every other
+    // line, and the DEFAULT (isLastWeek omitted/false) wording used by the
+    // manager-name "QB Inj*" marker, is completely unchanged.
+    var isLastWeek = !!(opts && opts.isLastWeek);
+    var whenPhrase = isLastWeek ? "last week" : "this week";
+    var creditVerb = isLastWeek ? "were" : "will be";
     var injuredName = (adj.injured_qb && adj.injured_qb.name) || "Unknown QB";
     var backups = adj.backup_qbs || [];
     var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
-    var lines = [escapeHtml(injuredName) + " was injured in-game and ruled out this week."];
+    var lines = [escapeHtml(injuredName) + " was injured in-game and ruled out " + whenPhrase + "."];
 
     // Normally at most one QB is actually in the game for a team at a
     // time -- so among the backups who recorded action, the ones who
@@ -3337,15 +3556,15 @@
     var activeBackups = backups.filter(function (b) { return !isOutStatus(b.injury_status); });
 
     if (!backups.length) {
-      lines.push("A backup QB came in; their points will be credited to this roster.");
+      lines.push("A backup QB came in; their points " + creditVerb + " credited to this roster.");
     } else if (!injuredBackups.length) {
-      lines.push(joinNamesForSentence(backups) + " came in; their points will be credited to this roster.");
+      lines.push(joinNamesForSentence(backups) + " came in; their points " + creditVerb + " credited to this roster.");
     } else {
       injuredBackups.forEach(function (b) {
-        lines.push(escapeHtml(b.name) + " was also injured in-game and ruled out this week.");
+        lines.push(escapeHtml(b.name) + " was also injured in-game and ruled out " + whenPhrase + ".");
       });
       if (activeBackups.length) {
-        lines.push(joinNamesForSentence(activeBackups) + " came in; their points will be credited to this roster.");
+        lines.push(joinNamesForSentence(activeBackups) + " came in; their points " + creditVerb + " credited to this roster.");
       } else {
         // Everyone who's played at QB for this team is now also hurt.
         // With only 2 QBs on the roster (the original starter plus this
@@ -3361,7 +3580,9 @@
       }
     }
 
-    lines.push('<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.");
+    lines.push(isLastWeek
+      ? '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Pts Last Week."
+      : '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.");
     lines.push("Pending the commissioner&rsquo;s official adjustment.");
 
     return "<strong>QB injury adjustment (likely)</strong><br>" + lines.join("<br>");

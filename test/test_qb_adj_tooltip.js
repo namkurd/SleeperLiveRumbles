@@ -229,5 +229,51 @@ check(
   "A &amp; B was injured in-game and ruled out this week."
 );
 
+// ---- isLastWeek: opts.isLastWeek swaps to past tense ("ruled out last
+// week", "were credited") and the points-added line names "Pts Last Week"
+// instead of "Actual & Projected" -- exercised end-to-end too (Rohaan's
+// tooltip in run_test.py's pregame scenario), covered here for the same
+// "shared helper, two test surfaces" reason as the single-backup case
+// above. The DEFAULT (opts omitted, single-backup case above) must stay
+// completely unaffected -- confirmed since that check still passes
+// unchanged with this same function.
+check(
+  "isLastWeek: past tense + 'Pts Last Week' wording",
+  bodyLines(buildQbAdjTooltipHtml({
+    injured_qb: { name: "Kyler Murray" },
+    backup_qbs: [{ name: "Carson Wentz", points: 21.9, injury_status: null }],
+    delta: 21.9,
+    team_qb_count: 3,
+  }, { isLastWeek: true })),
+  [
+    "Kyler Murray was injured in-game and ruled out last week.",
+    "Carson Wentz came in; their points were credited to this roster.",
+    '<span class="qb-adj-tooltip-yellow">+21.90 pts</span> added to Pts Last Week.',
+    "Pending the commissioner&rsquo;s official adjustment.",
+  ]
+);
+
+// ---- isLastWeek also applies past tense to a CHAIN's "also injured"
+// line and its own "came in" line, not just the top-level starter.
+check(
+  "isLastWeek: past tense also applies inside an injury chain",
+  bodyLines(buildQbAdjTooltipHtml({
+    injured_qb: { name: "Starter One" },
+    backup_qbs: [
+      { name: "Backup One", points: 0, injury_status: "Out" },
+      { name: "Backup Two", points: 14, injury_status: null },
+    ],
+    delta: 14,
+    team_qb_count: 4,
+  }, { isLastWeek: true })),
+  [
+    "Starter One was injured in-game and ruled out last week.",
+    "Backup One was also injured in-game and ruled out last week.",
+    "Backup Two came in; their points were credited to this roster.",
+    '<span class="qb-adj-tooltip-yellow">+14.00 pts</span> added to Pts Last Week.',
+    "Pending the commissioner&rsquo;s official adjustment.",
+  ]
+);
+
 console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL buildQbAdjTooltipHtml UNIT TESTS PASSED");
 process.exit(failures ? 1 : 0);

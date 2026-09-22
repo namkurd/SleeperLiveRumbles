@@ -86,8 +86,11 @@ history = {
 }
 # Week 1: roster i beat roster i+1 within each pair (1v2, 3v4, ...), and
 # scores increase with roster_id so higher roster_id = more teams outscored.
+def wk1_pf(roster_id):
+    return 90.0 + roster_id * 2.5
+
 for i, name in enumerate(MANAGERS, start=1):
-    pf = 90.0 + i * 2.5
+    pf = wk1_pf(i)
     pa = 95.0
     win = (i % 2 == 1)
     outscored = i - 1  # roster i outscores the i-1 rosters below it
@@ -102,6 +105,22 @@ for i, name in enumerate(MANAGERS, start=1):
         "vs_field_w": outscored, "vs_field_l": 11 - outscored,
         "rank": 0,
     })
+    # Same shape build_rumbles.py's score_week() writes into
+    # rumbles_history.json's own "weekly" log -- used by the "W"/"L"
+    # manager-name badge (pregame Actual mode only, see
+    # buildCombinedStandings' last_week_h2h_win in rumbles.html). Pairs
+    # match the win/loss pairing right above: roster i's opponent is i+1
+    # when i is odd (the winner of the pair), i-1 when i is even.
+    opponent_id = i + 1 if win else i - 1
+    history["weekly"]["1"][str(i)] = {
+        "points": pf,
+        "opponent_roster_id": opponent_id,
+        "opponent_points": wk1_pf(opponent_id),
+        "h2h_win": win,
+        "teams_outscored": outscored,
+        "teams_outscored_by": 11 - outscored,
+        "rumbles": rumbles,
+    }
 history["standings"].sort(key=lambda s: (-s["rumbles"], -s["pf"]))
 for idx, s in enumerate(history["standings"], start=1):
     s["rank"] = idx
@@ -476,6 +495,39 @@ stats_week1 = {
 }
 with open(os.path.join(OUT, "stats_week1.json"), "w") as f:
     json.dump(to_sleeper_array(stats_week1, "stat"), f, indent=2)
+
+# ---- /projections/nfl/2026/1 : week 1's real PREGAME projections --
+# deliberately DIFFERENT from stats_week1's actual numbers above (unlike
+# week 2's projections_week2.json, which is what a still-upcoming week
+# needs), so the "Pts Last Week" tooltip's Diff column (actual minus this)
+# has something genuine to show -- see thisWeekTooltip's isLastWeek branch
+# in rumbles.html. Deliberately covers all four cases that column can
+# render:
+#   - Aidan's plain starter: beat projection (16.00 actual vs 12.00 proj
+#     -> +4.00, green).
+#   - Ben's injured QB (plain row -- HE isn't the replacement row, his
+#     backup is): missed projection (10.00 vs 14.00 -> -4.00, red).
+#   - Ben's backup (a "confirmed" replacement row): proj set HIGHER than
+#     actual (20.00 vs 15.00 actual -> would-be -5.00, red, if this were a
+#     plain row) specifically to prove the row's own tier color (green,
+#     "confirmed") wins over the diff's own sign -- renderPtsTooltipContent
+#     must never color this cell red just because the raw sign says so.
+#   - Rohaan's injured QB (plain row): also missed projection (7.00 vs
+#     9.00 -> -2.00, red).
+#   - Rohaan's backup (a still-"likely" replacement row): proj set LOWER
+#     than actual (10.00 vs 20.00 actual -> would-be +10.00, green, if
+#     plain) to prove the SAME tier-wins-over-sign rule the other direction
+#     -- this cell must stay yellow ("likely"), not turn green just because
+#     the diff itself would be positive.
+projections_week1 = {
+    "WK1_R1_PLAYED": {"pass_yd": 300, "pass_td": 0, "pass_int": 0},  # 12.00
+    "P_HIST_INJURED": {"pass_yd": 350, "pass_td": 0, "pass_int": 0},  # 14.00
+    "P_HIST_BACKUP": {"pass_yd": 500, "pass_td": 0, "pass_int": 0},  # 20.00
+    "WK1_R4_INJURED": {"pass_yd": 225, "pass_td": 0, "pass_int": 0},  # 9.00
+    "WK1_R4_BACKUP": {"pass_yd": 250, "pass_td": 0, "pass_int": 0},  # 10.00
+}
+with open(os.path.join(OUT, "projections_week1.json"), "w") as f:
+    json.dump(to_sleeper_array(projections_week1, "proj"), f, indent=2)
 
 # ---- /v1/scores/nfl/{season_type}/{season}/{week} : per-game live status ----
 # Sleeper's own live-scoreboard feed -- what the "Pts This Week" tooltip
