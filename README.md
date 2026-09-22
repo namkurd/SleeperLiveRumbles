@@ -317,11 +317,17 @@ word like "COMMISSIONER ADJUSTMENT" on one line.
 
 Row text in this log table is colored to make the two "sides" of each
 adjustment easy to tell apart at a glance: the Injured QB's name and
-points are always red, the Commissioner Adjustment column is always
-green, and every other plain-text cell (Week, Commissioner Status) matches
-that row's own manager color (the same color used for the Manager cell
-and reused from the standings table above) -- regardless of scoring mode
-or which week the row is about.
+points are red (`--bad`) for a "likely"/"confirmed" row, but blue
+(`--accent-2` -- the same blue used everywhere else on the page for
+"flagged for awareness only, not corroborated") for a "possible" row
+specifically, since red is meant to signal an actual, corroborated
+injury and a "possible" row's whole point is that nothing corroborates
+one yet -- reusing red there read as more certain than the tier itself
+claims to be. The Commissioner Adjustment column is always green, and
+every other plain-text cell (Week, Commissioner Status) matches that
+row's own manager color (the same color used for the Manager cell and
+reused from the standings table above) -- regardless of scoring mode or
+which week the row is about.
 
 The **Backup QB(s)** name, the **Backup QB Points** total, and the
 **Commissioner Status** pill (the last column: "Possible", "Likely", or
@@ -511,9 +517,10 @@ is finalized) reflect this week's outcome yet or not. The trailing
 manager in that matchup just keeps the default color for both cells.
 
 A team's "Points This Week" cell shows a per-starter breakdown, rendered as
-a small table (blank header cells over the kickoff-time/name columns, then
-"Actual"/"Proj" labels over the two score columns, then one row per player)
-during a live week -- hover it on desktop, or tap it on mobile (a native
+a small table (blank header cells over the kickoff-time/name columns in
+Actual mode, "Actual"/"Proj" labels over the two score columns, then one
+row per player -- Projected mode's header row is described separately
+below) during a live week -- hover it on desktop, or tap it on mobile (a native
 `title`-attribute tooltip never appears on tap at all, so this is a custom
 element instead -- see `#pts-tooltip`/`.pts-tooltip` in `rumbles.html` --
 driven by real hover where a device has one, and tap-to-toggle (tap again,
@@ -560,6 +567,23 @@ means everywhere else on the page:
   slate. This coloring is independent of the win/name/live colors used
   elsewhere on the page -- the same 6-color set is just reused again here
   for a different purpose (see `buildTimeSlotColors` in `rumbles.html`).
+
+  Projected mode's header row also carries one more thing, specifically
+  because that mode's whole table is otherwise all-projected numbers with
+  no real anchor point: a real-points reference line reading e.g. "29.10:
+  Actual Pts" -- the manager's own real Actual-mode total for the week
+  right now, fixed and independent of whatever the Projected total shown
+  next to the cell says. It takes over the header row's kickoff-time and
+  name cells (both otherwise blank), flush against the tooltip's left
+  edge so it sits directly above the kickoff-time column's own values
+  rather than starting one column in, and is kept short (no manager name
+  -- the tooltip is already anchored to one manager's row) so it shares
+  that row neatly with the "Actual"/"Proj" labels instead of forcing the
+  tooltip wider. Actual mode's own tooltip never shows this line -- its
+  headline "Points This Week" figure right next to the cell already IS
+  the actual total, so restating it inside the tooltip would be
+  redundant (see `actualPointsLabel` in `thisWeekTooltip`/
+  `renderPtsTooltipContent`, `rumbles.html`).
 
 Every row, in either mode, is ordered by the player's roster SLOT (Sleeper
 Superflex, Superflex, RB, RB, WR/TE flex, WR/TE flex, FLEX, TE, K, DEF), not
@@ -654,47 +678,61 @@ shows a badge.
 **Portrait.** The standings table is intentionally wide (10 columns) and
 scrolls horizontally on narrow screens, with Rank + Manager pinned via
 `position: sticky` so you always know which row you're looking at while
-scrolling through the rest -- but only on a landscape phone or wider (see
-below). On a portrait phone, the five columns anyone actually needs at a
-glance -- #, Manager, Rumbles, This Week, and Points This Week -- are the
-ONLY columns shown at all: Rumble %, PF, PA, H2H, and Vs. Field are
-removed from layout entirely (`display: none` via `#standings-table
-thead th:nth-child(n+6)` / `tbody td:nth-child(n+6)` inside the
-`@media (max-width: 640px)` block), not just scrolled out of view. Rumble
-% specifically used to end up half-cut-off at the right edge of a portrait
-screen, readable as neither "clearly visible" nor "clearly hidden" -- full
-removal reads more cleanly than a partial sliver of a column nobody's
-meant to check on a phone. The same media query also sets
-`#standings-table { min-width: 0; }` so the table's base `min-width: 760px`
-(sized for all 10 columns) doesn't force the remaining 5 to stretch out and
-reintroduce horizontal scrolling now that there's nothing left to scroll
-to -- and the `.scroll-hint` ("swipe to see more" -- see the landscape
-paragraph below) stays hidden in portrait for the same reason. Those five
+scrolling through the rest. On a portrait phone, the five columns anyone
+actually needs at a glance -- #, Manager, Rumbles, This Week, and Points
+This Week -- are sized to all fit with NO scrolling needed by default;
+Rumble %, PF, PA, H2H, and Vs. Field stay reachable, exactly like on a
+landscape phone or desktop, by swiping/scrolling the table horizontally
+(the `.scroll-hint` -- "Swipe to see more stats →" -- stays visible in
+portrait for this reason, not just in landscape). An earlier version of
+this page removed those five columns from portrait layout entirely
+(`display: none`) rather than leaving them scrollable; that was reverted
+-- hiding them outright meant there was no way to check Rumble %/PF/PA/
+H2H/Vs. Field at all on a portrait phone, not even by choice, so the
+scroll-to-reveal pattern (identical in spirit to how the QB Injury table
+itself falls back to scrolling, described below) was restored instead,
+while keeping the same five-column default view. Those five default
 columns get explicit widths (plus a tighter header font that's allowed to
 wrap onto two lines, e.g. "This Week" -> "This" / "Week", instead of
 forcing its column wide enough to fit on one line unwrapped) so their
-combined width comfortably fits inside a ~390px-wide viewport; Manager
-gets an ellipsis fallback for the rare case a name plus the live
-" QB Inj*" suffix still doesn't fit. One easy-to-miss detail: the Manager
-column's sticky offset (`left: ...`) is hardcoded to match the Rank
-column's width, so shrinking Rank's width without also shrinking
+combined width comfortably fits inside a ~390px-wide viewport before any
+scrolling; Manager gets an ellipsis fallback for the rare case a name plus
+the live " QB Inj*" suffix still doesn't fit. One easy-to-miss detail: the
+Manager column's sticky offset (`left: ...`) is hardcoded to match the
+Rank column's width, so shrinking Rank's width without also shrinking
 Manager's sticky offset to match would silently make Manager overlap the
 column beside it -- both are updated together in that media query.
 
-**Landscape.** The QB Injury Backup Adjustments table's "Backup QB(s)"
-column normally stacks multiple backups one per line
-(`.backup-list { flex-direction: column }`). In landscape phone
-orientation (`@media (max-height: 500px) and (orientation: landscape)`,
-the same breakpoint used elsewhere on the page for landscape-specific
-compacting), that switches to a row layout instead, so backups read on one
-line (comma-separated) rather than stacking -- wrapping to a second line
-only if a row genuinely has more backups than fit, and never triggering
-horizontal scrolling, since `#qb-adj-table` stays `width: 100%` at this
-breakpoint regardless. That override is scoped to `#qb-adj-table
-.backup-list` rather than the bare `.backup-list` class specifically so it
-reliably wins the cascade over the table's own base (always-applies)
-`.backup-list` rule, whichever one happens to appear later in the
-stylesheet.
+**QB Injury Backup Adjustments table -- one-line names, both orientations.**
+The "Injured QB" and "Backup QB(s)" cells (each in "Name (points)" format)
+are kept on a single line -- never wrapping mid-name/mid-number -- in BOTH
+portrait and landscape phone orientations, and the "Backup QB(s)" column's
+normal one-backup-per-line stacking (`.backup-list { flex-direction:
+column }`) switches to a row layout (comma-separated) in both orientations
+too, rather than landscape only as in an earlier version. In landscape
+(`@media (max-height: 500px) and (orientation: landscape)`, the same
+breakpoint used elsewhere on the page for landscape-specific compacting)
+this comfortably fits with zero horizontal scrolling introduced, since
+`#qb-adj-table` stays `width: 100%` there regardless. Portrait
+(`@media (max-width: 640px)`) is tighter: even after shrinking the table's
+font/padding as far as stays legible (down to a 0.6rem base, 0.54rem
+headers, with header text additionally allowed to break mid-word --
+`word-break: break-word` -- so a long word like "COMMISSIONER" doesn't
+alone force extra column width) and letting long headers wrap onto two
+lines, the two nowrap "Name (points)" cells still don't consistently fit a
+~356px-wide portrait content area, so this table falls back to its own
+horizontal scroll specifically in portrait (`.table-scroll`'s inherent
+`overflow-x: auto`, same mechanism the standings table above uses) rather
+than accepting illegibly small text just to force a zero-scroll fit. A
+dedicated `.qb-scroll-hint` ("Swipe to see the full row →", shown only in
+portrait) flags this, mirroring the standings table's own `.scroll-hint`.
+Only the table's own container scrolls -- the page itself never gains
+horizontal scroll from this. Both the row-layout backups and the nowrap
+rule are scoped to `#qb-adj-table` (rather than the bare `.backup-list`/
+plain cell selectors, which stay wrap-able at desktop widths) specifically
+so the id-prefixed override reliably wins the cascade regardless of
+stylesheet order, without affecting the table's own already-established
+640-1280px zero-scroll desktop/tablet behavior.
 
 ### Status indicator: pregame vs. live
 

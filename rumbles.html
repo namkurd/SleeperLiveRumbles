@@ -369,6 +369,35 @@
     text-align: left;
     padding-left: 4px;
   }
+  /* The Projected-mode tooltip's real-actual-total reference line ("162.34:
+     Actual Pts" -- see renderPtsTooltipContent/thisWeekTooltip), rendered
+     into a colspan="2" cell that takes over the header row's kickoff-time
+     AND name columns, flush against the tooltip's left edge (directly
+     above the kickoff-time column's own values, not offset past it). Kept
+     short (no manager name) so it shares this row with Actual/Proj neatly
+     instead of forcing the tooltip wider. padding-left:0 here (overriding
+     the 4px left padding .pts-tooltip-name normally carries, since this
+     cell also has that class) so the text's left edge lines up EXACTLY
+     with the kickoff-time column's own left edge below it (that column
+     also has padding-left:0, see .pts-tooltip-time) -- without this the
+     two were visibly offset by that 4px. Overrides the plain .pts-tooltip
+     th rule's uppercase/dimmed/small caption styling -- that reads fine
+     for a one-word column label like "ACTUAL", but the same treatment
+     made this line hard to read at a glance, so this is normal case,
+     full-color text instead, with a bit more weight than a plain player
+     row to still read as the header/reference line it is. Left-aligned
+     (not centered like Actual/Proj), and never wraps -- same reasoning as
+     every other tooltip cell (see .pts-tooltip th/td above): the tooltip
+     box grows to fit rather than clipping or wrapping content. */
+  .pts-tooltip th.pts-tooltip-actual-total {
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text);
+    font-weight: 700;
+    padding-left: 0;
+    font-size: 0.72rem;
+    padding-bottom: 4px;
+  }
   /* A player currently in a live (in-progress) game -- their name, actual
      score, AND projected score (not the kickoff time, which keeps its own
      per-timeslot color) are colored with one of the existing manager
@@ -414,23 +443,40 @@
     color: var(--text-dim);
     padding: 6px 12px 0;
   }
+  /* QB Injury Backup Adjustments table's own scroll hint -- separate class
+     (not the standings table's .scroll-hint) because it only turns on in
+     portrait: at every OTHER breakpoint (landscape mobile, desktop) this
+     table fits its full width without scrolling (see the #qb-adj-table
+     comment further down), so there's nothing to hint at there. In
+     portrait specifically, keeping the Injured QB / Backup QB(s)
+     "Name (pts)" text on one line (see the nowrap rules elsewhere in this
+     file) means a long name can still push the table wider than a ~390px
+     viewport even after shrinking the font/padding as far as stays
+     legible -- rather than let that content spill off the right edge with
+     no indication, this hint (and the table's own horizontal scroll --
+     .table-scroll already handles that, same as the standings table)
+     makes it swipeable and says so. */
+  .qb-scroll-hint {
+    display: none;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    padding: 0 2px 4px;
+  }
   @media (max-width: 640px) {
-    /* Rumble %, PF, PA, H2H and Vs. Field are hidden outright in portrait
-       (rather than left reachable by scrolling, as they still are in
-       landscape) -- #, Manager, Rumbles, This Week and Points This Week
-       are the only columns meant to be visible at all here, so there's
-       nothing left to "swipe to see more" of and the hint stays hidden
-       (its default, un-overridden here) rather than being turned on like
-       it is for the landscape breakpoint below. */
-    #standings-table thead th:nth-child(n+6), #standings-table tbody td:nth-child(n+6) {
-      display: none;
-    }
-    /* The table's normal min-width: 760px (set on the base `table` rule)
-       assumes all 10 columns are present -- with 5 of them hidden above,
-       that min-width would otherwise force the 5 remaining columns to
-       stretch out to fill 760px of empty space, right back to needing
-       horizontal scroll for no reason. */
-    #standings-table { min-width: 0; }
+    .qb-scroll-hint { display: block; }
+    /* Rumble %, PF, PA, H2H and Vs. Field stay reachable by scrolling right
+       in portrait, same as landscape -- they're NOT removed from the table.
+       #, Manager, Rumbles, This Week and Points This Week are just the
+       columns explicitly sized to all fit in the default (unscrolled) view
+       (see the explicit widths below); the standings table keeps its
+       normal min-width: 760px (from the base `table` rule, untouched here)
+       so the remaining columns keep their natural width beyond that and the
+       table stays genuinely wider than the viewport -- which is what makes
+       it scrollable at all. An earlier version of this page hid those
+       columns outright in portrait instead of leaving them
+       scroll-to-reveal; that was reverted so portrait matches landscape's
+       "swipe to see more" behavior instead of removing the data. */
+    .scroll-hint { display: block; }
     /* Letting header labels wrap onto two lines (instead of the page's
        normal nowrap headers) is what actually buys back the width here --
        most of these columns hold a one- or two-digit number, so it's the
@@ -444,17 +490,17 @@
     thead th { padding: 6px 4px; font-size: 0.62rem; white-space: normal; word-break: normal; line-height: 1.2; }
     tbody td { padding: 8px 4px; font-size: 0.78rem; }
     h1 { font-size: 1.15rem; }
-    /* Explicit widths on the five columns that remain visible in portrait
-       (#, Manager, Rumbles, This Week, Points This Week) -- table
-       auto-layout otherwise sizes every column to its widest UNWRAPPED
-       content, which always overflows a portrait phone regardless of how
-       much the header/cell text COULD wrap. Pinning a width here is what
-       actually forces that wrap and keeps these five within the viewport;
-       Manager gets an ellipsis fallback for the rare case its name plus
-       the live " QB Inj*" suffix (see get_table_rows/render()) still
-       doesn't fit. The remaining columns (Rumble %, PF, PA, H2H, Vs.
-       Field) are hidden outright at this breakpoint (see nth-child(n+6)
-       above), not just scrolled past. */
+    /* Explicit widths on the five columns meant to all fit in the default
+       (unscrolled) view in portrait (#, Manager, Rumbles, This Week, Points
+       This Week) -- table auto-layout otherwise sizes every column to its
+       widest UNWRAPPED content, which always overflows a portrait phone
+       regardless of how much the header/cell text COULD wrap. Pinning a
+       width here is what actually forces that wrap and keeps these five
+       within the viewport; Manager gets an ellipsis fallback for the rare
+       case its name plus the live " QB Inj*" suffix (see
+       get_table_rows/render()) still doesn't fit. The remaining columns
+       (Rumble %, PF, PA, H2H, Vs. Field) keep their natural, wider width and
+       stay reachable by scrolling right, exactly like landscape. */
     table thead th:nth-child(1), table td.rank { width: 24px; min-width: 24px; padding-left: 6px; padding-right: 2px; }
     table thead th:nth-child(2), table td.manager { width: 108px; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     table thead th:nth-child(3), table td.rumbles { width: 44px; }
@@ -471,6 +517,22 @@
        here, Manager's sticky offset has to shrink to match or it visually
        overlaps/hides the start of the Rumbles column beside it. */
     table thead th:nth-child(2), table td.manager { left: 24px; }
+    /* QB Injury Backup Adjustments table: same one-line, row-layout
+       treatment the landscape breakpoint below already uses, now applied
+       in portrait too -- stacking each backup QB on its own line (the
+       default .backup-list layout, meant for a wide desktop column) wastes
+       vertical space here for no reason once names+points are already kept
+       on one line each (see the nowrap rule on .backup-list span above).
+       The #qb-adj-table prefix outweighs the plain .backup-list rule by
+       specificity, so this applies regardless of where it sits in the
+       stylesheet relative to that base rule. */
+    #qb-adj-table .backup-list { flex-direction: row; flex-wrap: wrap; column-gap: 4px; row-gap: 2px; }
+    #qb-adj-table .backup-list span:not(:last-child)::after { content: ","; }
+    /* Keeps each "Name (pts)" entry on one line at this squeezed-down
+       width -- the default/desktop rules above stay wrap-able on purpose;
+       these id-prefixed selectors out-specify them regardless of source
+       order. */
+    #qb-adj-table .backup-list span, #qb-adj-table td.qb-adj-injured { white-space: nowrap; }
   }
   /* Landscape phones are wide enough (often 700-950px) to miss the
      max-width breakpoint above but short enough that the table still
@@ -497,6 +559,9 @@
        cancel this override. */
     #qb-adj-table .backup-list { flex-direction: row; flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
     #qb-adj-table .backup-list span:not(:last-child)::after { content: ","; }
+    /* Same nowrap treatment as the portrait breakpoint above -- see its
+       comment for why the default/desktop rule stays wrap-able instead. */
+    #qb-adj-table .backup-list span, #qb-adj-table td.qb-adj-injured { white-space: nowrap; }
   }
   .badge-live {
     display: inline-block;
@@ -589,6 +654,14 @@
   #qb-adj-table tbody td { padding: 8px 6px; white-space: normal; }
   #qb-adj-table td.qb-name-cell, #qb-adj-table td.manager-cell { text-align: left; }
   .backup-list { display: flex; flex-direction: column; gap: 2px; }
+  /* Stays wrap-able (not nowrap) at this default/desktop width -- a long
+     "Name (12.34)" entry wrapping is a fine trade at a width that already
+     comfortably fits the rest of the table (verified without horizontal
+     scrolling down through 640px -- see the #qb-adj-table comment above).
+     The mobile breakpoints below (portrait AND landscape) override this to
+     nowrap instead, since THERE the table has already been squeezed down
+     enough that a name splitting mid-line reads badly and is worth fixing
+     directly -- see the #qb-adj-table-prefixed override in each. */
   .backup-list span { white-space: normal; }
   /* Row text color scheme: every OTHER cell in a row (Week, Commissioner
      Status) is colored to match that manager's own matchup color (an
@@ -596,16 +669,24 @@
      the Manager cell already is. The Injured QB's name/points is a
      deliberate exception -- always red, regardless of manager color, so
      it reads as "who got hurt" at a glance without having to parse column
-     headers. Commissioner Adjustment (the official, keyed-in delta) is
-     always green too, once it exists, on the theory that a confirmed
-     override is always the same "this is official" signal regardless of
-     which tier the row started at. The confidence pill keeps its own
-     existing fixed colors either way (never overridden by the row's
-     manager color, since it already sets its own `color` directly rather
-     than inheriting) -- this table deliberately carries no LIVE badge at
-     all (unlike the standings table's This Week/Pts This Week cells); the
-     pill's own label (Possible/Likely/Confirmed) is enough to convey
-     status without it.
+     headers -- EXCEPT for a still-"possible" row, where it's blue
+     (--accent-2, the same blue the Backup QB(s)/Backup QB Points cells
+     already use for this tier) instead: red is meant to signal a real,
+     corroborated injury, and a "possible" row's whole point is that
+     nothing corroborates it yet (see the confidence-tier writeup above) --
+     showing it in the same "uncertain, purely informational" blue as the
+     rest of that row reads more honestly than implying a confirmed injury
+     the page doesn't actually know about. Also kept nowrap (not normal),
+     same reasoning as the Backup QB(s) cell above. Commissioner Adjustment
+     (the official, keyed-in delta) is always green too, once it exists, on
+     the theory that a confirmed override is always the same "this is
+     official" signal regardless of which tier the row started at. The
+     confidence pill keeps its own existing fixed colors either way (never
+     overridden by the row's manager color, since it already sets its own
+     `color` directly rather than inheriting) -- this table deliberately
+     carries no LIVE badge at all (unlike the standings table's This
+     Week/Pts This Week cells); the pill's own label (Possible/Likely/
+     Confirmed) is enough to convey status without it.
 
      The Backup QB(s) NAME column and the "Backup QB Points" TOTAL column
      both instead track confidence state, using the exact same
@@ -621,11 +702,54 @@
      either total right now"); green (--good, matching Commissioner
      Adjustment) once "confirmed", reading as "this is now the official
      credit." See renderQbAdjustments for which class gets applied. */
+  /* Stays wrap-able at this default/desktop width, same reasoning as
+     .backup-list span above -- the mobile breakpoints override to nowrap. */
   #qb-adj-table td.qb-adj-injured { color: var(--bad); }
+  /* Higher specificity (two classes) than the plain rule just above, so
+     this correctly wins for a "possible" row regardless of source order --
+     see renderQbAdjustments, which adds this second class to the Injured
+     QB cell only when r.confidence === "possible". */
+  #qb-adj-table td.qb-adj-injured.qb-adj-tier-possible { color: var(--accent-2); }
   #qb-adj-table td.qb-adj-commissioner { color: var(--good); }
   #qb-adj-table td.qb-adj-tier-likely { color: var(--replacement); }
   #qb-adj-table td.qb-adj-tier-confirmed { color: var(--good); }
   #qb-adj-table td.qb-adj-tier-possible { color: var(--accent-2); }
+  /* Portrait phone: the QB Injury table needs real shrinking (not just
+     letting headers wrap, which is all the desktop/landscape rules above
+     do) to keep all 7 columns -- Week, Manager, Injured QB, Backup QB(s),
+     Backup QB Points, Commissioner Adjustment, Commissioner Status --
+     readable at a legible size now that Injured QB / Backup QB(s)
+     "Name (pts)" cells are nowrap (see above). This gets it CLOSE to
+     fitting a ~390px viewport without scrolling, but a genuinely long
+     player name can still push the table wider than that even at this
+     size -- pushing the font any smaller than this stops being legible,
+     so the table is left to scroll horizontally the rest of the way
+     (.table-scroll already supports this, same as the standings table
+     above) rather than chase an unrealistic zero-scroll target at the
+     cost of readability. See .qb-scroll-hint for the swipe indicator this
+     turns on. Placed after the base #qb-adj-table rules above (same-
+     selector overrides -- #qb-adj-table thead th / tbody td again -- so
+     source order is what makes this win, not just specificity). */
+  @media (max-width: 640px) {
+    #qb-adj-table { font-size: 0.6rem; }
+    /* word-break: break-word here (on top of the base rule's white-space:
+       normal) is what actually lets a long header WORD like "COMMISSIONER"
+       break mid-word at this width -- without it, table auto-layout sizes
+       a column to fit its longest unbreakable word even though the header
+       visually wraps onto two lines, silently forcing Commissioner
+       Adjustment/Status wider than their actual (short) cell content ever
+       needs. */
+    #qb-adj-table thead th { padding: 4px 2px; font-size: 0.54rem; line-height: 1.15; word-break: break-word; overflow-wrap: anywhere; }
+    #qb-adj-table tbody td { padding: 6px 3px; }
+    #qb-adj-table td.manager-cell {
+      max-width: 42px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* #qb-adj-table-prefixed (not bare .confidence-pill) so this reliably
+       wins over the base .confidence-pill rule below regardless of source
+       order -- same reasoning as the #qb-adj-table-prefixed selectors
+       elsewhere in this file. */
+    #qb-adj-table .confidence-pill { font-size: 0.54rem; padding: 2px 4px; }
+  }
   .confidence-pill {
     display: inline-block;
     font-size: 0.68rem;
@@ -762,6 +886,7 @@
   <p class="section-subtitle">If a started QB is ruled out mid-game and one or more backups from the same NFL team score, that manager is credited with all QBs' combined points. <span id="qb-adj-live-label"></span></p>
 
   <div class="table-panel">
+    <div class="qb-scroll-hint">Swipe to see the full row →</div>
     <div class="table-scroll">
     <table id="qb-adj-table">
       <thead>
@@ -2309,7 +2434,7 @@
   // couldn't be resolved), not text folded into the name. `live: true` (a
   // game currently in progress) is what render's row-coloring uses to
   // highlight that player in green.
-  function thisWeekTooltip(mode, breakdown) {
+  function thisWeekTooltip(mode, breakdown, actualPoints) {
     if (!breakdown || !breakdown.length) return null;
     var showStartTime = mode !== "actual";
     var players = mode === "actual"
@@ -2335,7 +2460,18 @@
         replacement: p.replacement === true
       };
     });
-    return { showStartTime: showStartTime, rows: rows };
+    // Projected mode ONLY -- the whole point is a fixed reference point for
+    // what's otherwise an all-projected view (Actual mode's own tooltip sits
+    // right next to a "Points This Week" figure that's already the real
+    // actual total, so restating it there would be redundant). "162.34:
+    // Actual Pts" -- kept short (no manager name -- the tooltip is already
+    // anchored to one manager's row) so it fits neatly into the header row
+    // alongside Actual/Proj rather than forcing the tooltip wider; see
+    // renderPtsTooltipContent for where it's placed.
+    var actualPointsLabel = (mode !== "actual" && typeof actualPoints === "number")
+      ? actualPoints.toFixed(2) + ": Actual Pts"
+      : null;
+    return { showStartTime: showStartTime, rows: rows, actualPointsLabel: actualPointsLabel };
   }
 
   function buildCombinedStandings() {
@@ -2457,6 +2593,15 @@
         // per-player numbers back both the Actual and Projected toggle);
         // render() decides how to format/filter them for display.
         this_week_player_breakdown: liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null,
+        // This roster's own real, banked ACTUAL total for the in-progress
+        // week -- independent of state.mode (always the Actual bucket's
+        // own points, see actualLiveInfo above), so it's available to show
+        // inside the Projected-mode "Points This Week" tooltip as a fixed
+        // point of reference (see thisWeekTooltip's actualPointsLabel):
+        // Projected's own headline number there is a projection, and
+        // that's easy to lose sight of, so the tooltip also states the
+        // real actual total it's being projected from/against.
+        this_week_actual_points: actualLiveInfo ? actualLiveInfo.points : null,
         // The live QB-injury backup-points adjustment for this roster this
         // week, if any -- {delta, confidence, injured_qb, backup_qbs} (see
         // applyQbAdjustmentsToScores). Not mode-scoped: the same delta was
@@ -2592,7 +2737,7 @@
         // cell just carries a data-roster-id for the delegated hover/tap
         // handlers to look up pre-built tooltip data from
         // state.thisWeekTooltipData with.
-        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown);
+        var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown, r.this_week_actual_points);
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
         if (ptsTooltip) {
           state.thisWeekTooltipData[r.roster_id] = ptsTooltip;
@@ -2712,6 +2857,17 @@
   // -- see the .pts-tooltip-time CSS for why it's a separate right-aligned
   // column rather than text folded into the name), then name, then a
   // header row labeling the Actual/Proj columns, then one row per player.
+  // In Projected mode, that header row's otherwise-blank left cell(s) --
+  // normally the kickoff-time column plus the name column, both blank --
+  // collapse into a single colspan="2" cell showing tooltip.actualPointsLabel
+  // -- "162.34: Actual Pts" -- a fixed real-points reference point sharing
+  // the header row with Actual/Proj rather than getting a row of its own
+  // (kept short specifically so it fits neatly there without forcing the
+  // tooltip wider). Flush against the tooltip's left edge, directly above
+  // the kickoff-time column's own values, rather than starting one column
+  // in. Given its own class (not the plain header style Actual/Proj use) so
+  // it reads as real content, not a column caption -- see
+  // .pts-tooltip-actual-total.
   // A row for a player whose game is currently live gets the
   // .pts-tooltip-live class (green text on name/actual/proj -- see that
   // CSS rule), which is why the proj cell below carries its own
@@ -2722,7 +2878,15 @@
   // to report its own live status.
   function renderPtsTooltipContent(tooltip) {
     var showStartTime = tooltip.showStartTime;
-    var timeHeaderHtml = showStartTime ? '<th class="pts-tooltip-time"></th>' : "";
+    var hasActualTotal = !!tooltip.actualPointsLabel;
+    // When the actual-points reference line is present it takes over the
+    // WHOLE header-row left side (colspan="2") -- both the kickoff-time
+    // header cell and the name header cell, which are otherwise blank --
+    // so the label sits flush left, directly above the kickoff-time
+    // column's own values, instead of starting one column in past the
+    // time column's width. So the separate time header cell is skipped
+    // here; the colspan cell below stands in for it.
+    var timeHeaderHtml = (showStartTime && !hasActualTotal) ? '<th class="pts-tooltip-time"></th>' : "";
     var bodyHtml = tooltip.rows.map(function (r) {
       var timeStyle = r.timeColor ? ' style="color:' + r.timeColor + '"' : "";
       var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time"' + timeStyle + ">" + escapeHtml(r.startLabel) + "</td>" : "";
@@ -2734,8 +2898,11 @@
         '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>" +
         "</tr>";
     }).join("");
+    var actualTotalHtml = hasActualTotal
+      ? '<th' + (showStartTime ? ' colspan="2"' : "") + ' class="pts-tooltip-name pts-tooltip-actual-total">' + escapeHtml(tooltip.actualPointsLabel) + "</th>"
+      : '<th class="pts-tooltip-name"></th>';
     els.ptsTooltip.innerHTML =
-      "<table><thead><tr>" + timeHeaderHtml + '<th class="pts-tooltip-name"></th><th>Actual</th><th>Proj</th>' +
+      "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th><th>Proj</th>' +
       "</tr></thead><tbody>" +
       bodyHtml +
       "</tbody></table>";
@@ -3184,10 +3351,18 @@
         // fewer column (was two separate cells) and fits without side
         // scrolling on a real desktop width or a landscape phone.
         var injuredHtml = escapeHtml(r.injured_qb.name) + " (" + r.injured_qb.points.toFixed(2) + ")";
+        // A still-"possible" row's Injured QB cell gets a second class
+        // (qb-adj-tier-possible, same tier class the Backup QB(s)/Backup
+        // QB Points cells use) so it reads blue instead of the usual red --
+        // see the CSS comment on #qb-adj-table td.qb-adj-injured above for
+        // why: red is reserved for a corroborated/confirmed injury, and
+        // "possible" is specifically the tier where nothing corroborates
+        // it yet.
+        var injuredCellClass = "qb-name-cell qb-adj-injured" + (r.confidence === "possible" ? " qb-adj-tier-possible" : "");
         return "<tr>" +
           "<td" + rowColorAttr + ">" + r.week + "</td>" +
           '<td class="manager-cell">' + managerHtml + "</td>" +
-          '<td class="qb-name-cell qb-adj-injured">' + injuredHtml + "</td>" +
+          '<td class="' + injuredCellClass + '">' + injuredHtml + "</td>" +
           '<td class="qb-name-cell ' + tierClass + '">' + backupsHtml + "</td>" +
           '<td class="' + tierClass + '">' + r.backup_points_total.toFixed(2) + "</td>" +
           '<td class="qb-adj-commissioner">' + commissionerAdjHtml + "</td>" +

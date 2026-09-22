@@ -356,6 +356,35 @@ def get_thisweek_pts_tooltip(page, manager):
     return rows
 
 
+def get_thisweek_pts_tooltip_header(page, manager):
+    """Hovers the given manager's 'Pts This Week' cell (same pattern as
+    get_thisweek_pts_tooltip) and returns the tooltip's own header-row
+    reference line (tooltip.actualPointsLabel in rumbles.html, e.g. '2.50:
+    Actual Pts') -- Projected mode only, see thisWeekTooltip -- or None if
+    that header cell is empty/absent (Actual mode, or no tooltip at all).
+    Moves the mouse away afterward so the next check starts clean."""
+    idx = page.eval_on_selector_all(
+        "#standings-body tr td.manager",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, ''))",
+    ).index(manager)
+    cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
+    classes = cell.get_attribute("class") or ""
+    if "has-tooltip" not in classes:
+        return None
+    cell.hover()
+    page.wait_for_timeout(150)
+    tip = page.locator("#pts-tooltip")
+    is_visible = tip.evaluate("el => el.classList.contains('visible')")
+    header = None
+    if is_visible:
+        header = page.evaluate(
+            "() => { var el = document.querySelector('#pts-tooltip thead th.pts-tooltip-actual-total'); return el ? el.textContent.trim() : null; }"
+        )
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(150)
+    return header
+
+
 def get_qb_adj_asterisk(page, manager):
     """Locator for the given manager's manager-name '*' (see qb-adj-
     asterisk in rumbles.html), or None if they don't have one -- only a
@@ -659,6 +688,25 @@ def scenario_live_blending(browser):
                 f"and show only the still-pregame one, got {aidan_rows}"
             )
         print(f"Verified Pts This Week tooltip content for {mode} mode (Aidan):", aidan_rows)
+
+        # ---- Projected-mode tooltip only: the header row's own real-
+        # actual-total reference line ("2.50: Actual Pts" -- tooltip.
+        # actualPointsLabel in rumbles.html) -- a fixed point of reference
+        # sharing the header row with Actual/Proj, above an otherwise
+        # all-projected table. Kept short (no manager name) so it fits that
+        # row neatly. Actual mode's tooltip must NOT show this (its own
+        # headline "Points This Week" figure right next to the cell already
+        # IS the actual total, so restating it in the tooltip would be
+        # redundant).
+        aidan_header = get_thisweek_pts_tooltip_header(page, "Aidan")
+        if mode == "actual":
+            assert aidan_header is None, f"[actual] expected no actual-points header line in Actual mode's tooltip, got: {aidan_header!r}"
+        else:
+            assert aidan_header == "2.50: Actual Pts", (
+                f"[{mode}] expected the tooltip header to read '2.50: Actual Pts' (Aidan's real actual "
+                f"total this week, independent of the Projected total shown elsewhere), got: {aidan_header!r}"
+            )
+        print(f"Verified Pts This Week tooltip header for {mode} mode (Aidan): {aidan_header!r}")
 
         # Alex (roster 6): Kyler Murray's team (MIN) is "in_progress", NOT
         # "complete" -- Projected mode must still include him (only a fully
@@ -1464,8 +1512,9 @@ def scenario_mobile_tap_tooltip(browser):
 
 def scenario_mobile_responsive_layout(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO 1c: mobile portrait column visibility + landscape")
-    print("QB Injury Backup Adjustments one-line layout")
+    print("SCENARIO 1c: mobile portrait default-visible columns + scroll-to-")
+    print("see-more, QB Injury Backup Adjustments one-line layout + full")
+    print("table fit (portrait AND landscape)")
     print("=" * 70)
     routes = {
         "**/rumbles_history.json": load("rumbles_history.json"),
@@ -1539,6 +1588,91 @@ def scenario_mobile_responsive_layout(browser):
     thisweek_badges = page.locator("#standings-body td.thisweek .badge-live").count()
     assert thisweek_badges == 0, f"'This Week' column must never show a LIVE badge, found {thisweek_badges}"
 
+    # ---- Rumble %, PF, PA, H2H and Vs. Field must stay reachable by
+    # scrolling right in portrait (not removed from the table entirely --
+    # an earlier version of this page hid them outright at this breakpoint,
+    # which was reverted). Confirmed two ways: the scroll-hint is visible
+    # (it was deliberately hidden when there was nothing left to scroll
+    # to), and the standings table's own scroll container is genuinely
+    # wider than its viewport (there's real content past the first five
+    # columns to scroll into view), with the Rumble % header still present
+    # and actually laid out (not display: none).
+    scroll_info = page.evaluate("""() => {
+        var container = document.querySelector('.table-scroll');
+        var hint = document.querySelector('.scroll-hint');
+        var pctHeader = document.querySelector('#standings-table thead th:nth-child(6)');
+        return {
+            hintVisible: hint ? getComputedStyle(hint).display !== 'none' : false,
+            scrollWidth: container.scrollWidth,
+            clientWidth: container.clientWidth,
+            pctHeaderText: pctHeader ? pctHeader.textContent.trim() : null,
+            pctHeaderDisplay: pctHeader ? getComputedStyle(pctHeader).display : null,
+        };
+    }""")
+    assert scroll_info["hintVisible"], "expected the 'Swipe to see more stats →' hint to be visible in portrait now that Rumble %/PF/PA/H2H/Vs. Field are reachable by scrolling again"
+    assert scroll_info["scrollWidth"] > scroll_info["clientWidth"], (
+        f"expected the standings table to genuinely overflow its container in portrait (scrollWidth "
+        f"{scroll_info['scrollWidth']} > clientWidth {scroll_info['clientWidth']}) -- Rumble % onward should "
+        f"still be there to scroll to, not removed"
+    )
+    assert scroll_info["pctHeaderDisplay"] != "none", f"expected the Rumble % header to still be laid out (not display: none) in portrait, got display: {scroll_info['pctHeaderDisplay']!r}"
+    assert "RUMBLE" in scroll_info["pctHeaderText"].upper(), f"expected the 6th header to still be Rumble %, got: {scroll_info['pctHeaderText']!r}"
+    print(
+        "Confirmed Rumble %/PF/PA/H2H/Vs. Field are NOT hidden in portrait -- still reachable by scrolling right, "
+        "with the 'Swipe to see more stats →' hint visible again."
+    )
+
+    # ---- QB Injury Backup Adjustments table, same portrait viewport: the
+    # Injured QB / Backup QB(s) "Name (pts)" text must stay on one line
+    # (nowrap), and backups must lay out in a row (not stacked) the same
+    # way landscape already does. Unlike landscape/desktop, this table is
+    # NOT required to fit without horizontal scrolling in portrait --
+    # rumbles.html shrinks it as far as stays legible, but a real player
+    # name can still be wider than a ~390px viewport allows even then, so
+    # it's left free to scroll the rest of the way (same as the standings
+    # table above) rather than chase an unrealistic zero-scroll target at
+    # the cost of readability. What IS checked: the table's own
+    # .qb-scroll-hint turns on here (it's off at every breakpoint that
+    # doesn't need it), and the table never overflows the PAGE itself (it
+    # scrolls within its own .table-scroll container, same pattern as the
+    # standings table -- it must never force the whole page wider).
+    qb_portrait_info = page.evaluate("""() => {
+        var table = document.getElementById('qb-adj-table');
+        var scroller = table.closest('.table-scroll');
+        var hint = document.querySelector('.qb-scroll-hint');
+        var bl = document.querySelector('#qb-adj-table .backup-list');
+        var span = document.querySelector('#qb-adj-table .backup-list span');
+        var injuredCell = document.querySelector('#qb-adj-table td.qb-adj-injured');
+        return {
+            scrollWidth: scroller.scrollWidth,
+            clientWidth: scroller.clientWidth,
+            hintVisible: hint ? getComputedStyle(hint).display !== 'none' : false,
+            bodyOverflowsViewport: document.body.scrollWidth > window.innerWidth,
+            flexDirection: bl ? getComputedStyle(bl).flexDirection : null,
+            spanWhiteSpace: span ? getComputedStyle(span).whiteSpace : null,
+            injuredWhiteSpace: injuredCell ? getComputedStyle(injuredCell).whiteSpace : null,
+        };
+    }""")
+    assert qb_portrait_info["hintVisible"], "expected the QB Injury Backup Adjustments table's own swipe hint (.qb-scroll-hint) to be visible in portrait"
+    assert not qb_portrait_info["bodyOverflowsViewport"], (
+        f"the QB Injury Backup Adjustments table must scroll within its own .table-scroll container in portrait, "
+        f"not force the whole page wider than the viewport (scrollWidth {qb_portrait_info['scrollWidth']} vs "
+        f"clientWidth {qb_portrait_info['clientWidth']} is fine for the table's own scroller; the PAGE itself "
+        f"overflowing is not)"
+    )
+    assert qb_portrait_info["flexDirection"] == "row", (
+        f"expected .backup-list to lay out in a row (one line) in portrait too (same as landscape), got "
+        f"flex-direction: {qb_portrait_info['flexDirection']!r}"
+    )
+    assert qb_portrait_info["spanWhiteSpace"] == "nowrap", f"expected a backup QB's 'Name (pts)' text to be nowrap (one line), got white-space: {qb_portrait_info['spanWhiteSpace']!r}"
+    assert qb_portrait_info["injuredWhiteSpace"] == "nowrap", f"expected the Injured QB's 'Name (pts)' text to be nowrap (one line), got white-space: {qb_portrait_info['injuredWhiteSpace']!r}"
+    print(
+        f"Confirmed the QB Injury Backup Adjustments table keeps backups in a row and Injured QB/Backup QB(s) "
+        f"text on one line in portrait, with its own swipe hint visible when the (shrunk-as-far-as-legible) "
+        f"table content ({qb_portrait_info['scrollWidth']}px) still exceeds the viewport "
+        f"({qb_portrait_info['clientWidth']}px), scrolling within its own container rather than the page."
+    )
+
     page.close()
     assert not console_errors, f"console errors found: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
@@ -1559,10 +1693,18 @@ def scenario_mobile_responsive_layout(browser):
     landscape_info = page.evaluate("""() => {
         var matches = window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
         var bl = document.querySelector('.backup-list');
+        var span = document.querySelector('#qb-adj-table .backup-list span');
+        var injuredCell = document.querySelector('#qb-adj-table td.qb-adj-injured');
+        var table = document.getElementById('qb-adj-table');
+        var scroller = table.closest('.table-scroll');
         return {
             mediaMatches: matches,
             flexDirection: bl ? getComputedStyle(bl).flexDirection : null,
+            spanWhiteSpace: span ? getComputedStyle(span).whiteSpace : null,
+            injuredWhiteSpace: injuredCell ? getComputedStyle(injuredCell).whiteSpace : null,
             bodyOverflowsViewport: document.body.scrollWidth > window.innerWidth,
+            qbScrollWidth: scroller.scrollWidth,
+            qbClientWidth: scroller.clientWidth,
         };
     }""")
     assert landscape_info["mediaMatches"], "this viewport should match the landscape-mobile media query -- the test setup itself is wrong if not"
@@ -1570,13 +1712,21 @@ def scenario_mobile_responsive_layout(browser):
         f"expected .backup-list to lay out in a row (one line) at the landscape-mobile breakpoint, got "
         f"flex-direction: {landscape_info['flexDirection']!r}"
     )
+    assert landscape_info["spanWhiteSpace"] == "nowrap", f"expected a backup QB's 'Name (pts)' text to be nowrap (one line) in landscape, got white-space: {landscape_info['spanWhiteSpace']!r}"
+    assert landscape_info["injuredWhiteSpace"] == "nowrap", f"expected the Injured QB's 'Name (pts)' text to be nowrap (one line) in landscape, got white-space: {landscape_info['injuredWhiteSpace']!r}"
     assert not landscape_info["bodyOverflowsViewport"], (
         "the QB Injury Backup Adjustments table's one-line backup layout must not introduce horizontal "
         "scrolling on a landscape phone"
     )
+    assert landscape_info["qbScrollWidth"] <= landscape_info["qbClientWidth"] + 1, (
+        f"expected the QB Injury Backup Adjustments table itself to fit without horizontal scrolling in "
+        f"landscape, but its content ({landscape_info['qbScrollWidth']}px) exceeds its container "
+        f"({landscape_info['qbClientWidth']}px)"
+    )
     print(
         "Confirmed the QB Injury Backup Adjustments table's backup-list lays out in a row (one line) in "
-        "landscape mobile orientation, with no horizontal scrolling introduced."
+        "landscape mobile orientation, with Injured QB/Backup QB(s) text kept on one line and no horizontal "
+        "scrolling introduced."
     )
 
     page.close()
@@ -1812,6 +1962,37 @@ def scenario_pregame_week(browser):
     assert tip.evaluate("el => el.classList.contains('visible')"), "Points This Week tooltip should still work pregame"
     assert tip.inner_text().strip(), "pregame tooltip should still have real content (projected players)"
     print("Confirmed the Points This Week tooltip still works pregame, showing projected player content.")
+
+    # ---- QB Injury Backup Adjustments table: Jake's stale, never-
+    # confirmed week-1 "possible" row must STILL be showing here (unlike
+    # scenario_live_blending, where it's correctly hidden once week 2 has
+    # genuinely kicked off) -- week 2's matchups are posted in this
+    # fixture but no game has actually started, so per the client-side
+    # backstop filter (see renderQbAdjustments), a newer week hasn't
+    # "begun" yet and Jake's row is still current. This is also the one
+    # real, currently-visible "possible" row across this test suite (the
+    # live scenario's own would-be-visible case is always a "likely" or
+    # "confirmed" tier), so it's the right place to confirm the Injured QB
+    # cell reads BLUE (--accent-2) rather than the usual red (--bad) for
+    # this tier -- see the CSS comment on #qb-adj-table td.qb-adj-injured
+    # in rumbles.html for why: red is reserved for a corroborated/
+    # confirmed injury, and "possible" is specifically the tier where
+    # nothing corroborates it yet.
+    qb_rows_pregame = get_qb_adjustment_rows(page)
+    jake_row = next((r for r in qb_rows_pregame if r["manager"] == "Jake"), None)
+    assert jake_row is not None, f"expected Jake's stale week-1 'possible' row to still be showing pregame (week 2 hasn't kicked off yet), got rows: {qb_rows_pregame}"
+    assert jake_row["confidence"] == "Possible", f"expected Jake's row to still read 'Possible', got: {jake_row['confidence']!r}"
+
+    accent2_ref = get_css_var_color(page, "accent-2")
+    bad_ref_pregame = get_css_var_color(page, "bad")
+    row_colors_pregame = get_qb_adjustment_row_colors(page)
+    jake_injured_color = row_colors_pregame["Jake"]["injured_color"]
+    assert jake_injured_color == accent2_ref, (
+        f"expected Jake's 'possible'-tier Injured QB name+points cell to be blue ({accent2_ref}, matching the "
+        f"Backup QB(s)/Backup QB Points cells for this tier) rather than the usual red ({bad_ref_pregame}), "
+        f"got {jake_injured_color}"
+    )
+    print(f"Confirmed Jake's stale 'Possible' row is still visible pregame, with its Injured QB cell colored blue ({accent2_ref}) instead of red.")
 
     page.close()
     assert not console_errors, f"console errors found: {console_errors}"
