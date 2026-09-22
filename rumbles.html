@@ -2234,16 +2234,41 @@
       // makes effectiveRemainingFraction 0, which collapses blendedProjection
       // down to actualPts exactly), just arrived at directly here since
       // there's no teamGameSchedule at all to derive that same status from.
+      // Only a still-"likely" (unconfirmed) replacement's estimated points
+      // get folded into the displayed "Pts Last Week" total below -- a
+      // "confirmed" entry's official custom_points_delta is already baked
+      // into s.last_completed_week_points server-side (build_rumbles.py's
+      // official_points() prefers the commissioner's own custom_points
+      // once set), so adding it again here would double-count it. This is
+      // the live week's applyQbAdjustmentsToScores pattern adapted for a
+      // week that's already over: once a "likely" entry gets confirmed,
+      // it simply drops out of this sum on its own (no separate "was this
+      // previously likely" transition check needed) and the tooltip text
+      // color switch (pts-tooltip-replacement-confirmed, see CSS) is all
+      // that's left to show for it.
       var byRoster = {};
+      var pointsDeltaByRoster = {};
       matchups.forEach(function (m) {
         var rid = m.roster_id;
         var breakdown = buildPlayerBreakdown(m, statsMap, statsMap, scoringSettings, playersMeta, {}, rosterPositions);
         (adjByRoster[rid] || []).forEach(function (entry) {
+          var before = breakdown.length;
           breakdown = appendQbReplacementRows(breakdown, entry.backup_qbs, statsMap, statsMap, scoringSettings, playersMeta, {}, entry.confidence);
+          if (entry.confidence === "likely") {
+            // The rows appendQbReplacementRows just appended for THIS
+            // entry -- summing their own `.actual` (rather than
+            // re-deriving from entry.backup_points_total, a snapshot
+            // build_rumbles.py took when it first detected the injury)
+            // keeps this delta pinned to the exact same numbers the
+            // tooltip itself displays for these rows.
+            for (var i = before; i < breakdown.length; i++) {
+              pointsDeltaByRoster[rid] = round2((pointsDeltaByRoster[rid] || 0) + num(breakdown[i].actual));
+            }
+          }
         });
         byRoster[rid] = breakdown;
       });
-      state.lastWeek = { week: lastWeek, byRoster: byRoster };
+      state.lastWeek = { week: lastWeek, byRoster: byRoster, pointsDeltaByRoster: pointsDeltaByRoster };
     }).catch(function (err) {
       console.warn("[rumbles] couldn't load last week's player breakdown for the 'Pts Last Week' tooltip:", err);
       state.lastWeek = null;
@@ -2711,7 +2736,22 @@
       // is untouched -- it already shows a real forward-looking pregame
       // projection before kickoff, which IS useful information on its own.
       var showLastWeekPoints = state.mode === "actual" && !kickoffStarted;
-      var thisWeekPoints = (showLastWeekPoints || !liveInfo) ? num(s.last_completed_week_points) : liveInfo.points;
+      // A still-"likely" (unconfirmed) QB-injury replacement's estimated
+      // points aren't part of s.last_completed_week_points itself (that's
+      // a frozen, server-computed figure -- see build_rumbles.py's
+      // official_points()/score_week()), so they're folded in here on
+      // top of it, same in spirit as applyQbAdjustmentsToScores already
+      // does for the LIVE week's own totals. Once the commissioner
+      // confirms the adjustment, official_points() switches to their real
+      // custom_points override and that becomes part of
+      // last_completed_week_points on its own -- at which point
+      // pointsDeltaByRoster no longer includes it either (see
+      // loadLastWeekBreakdown), so this addition drops out automatically
+      // rather than needing to be explicitly "removed".
+      var lastWeekPointsDelta = showLastWeekPoints
+        ? num((state.lastWeek && state.lastWeek.pointsDeltaByRoster && state.lastWeek.pointsDeltaByRoster[rid]))
+        : 0;
+      var thisWeekPoints = (showLastWeekPoints || !liveInfo) ? round2(num(s.last_completed_week_points) + lastWeekPointsDelta) : liveInfo.points;
 
       // Whether this roster still has a player (a real starter, or an
       // appended QB-injury replacement -- both are in the same `players`

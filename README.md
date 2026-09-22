@@ -1469,6 +1469,44 @@ injured starter plus a YELLOW "likely" replacement row -- both colors
 hand-verified against the real `--good`/`--replacement` CSS custom
 properties, not just a class-name check.
 
+**A still-"likely" QB-injury replacement's estimated points are folded
+into the displayed "Pts Last Week" NUMBER too, not just shown in its
+tooltip -- mirroring what a live week's "Points This Week" already does,
+and dropping back out on its own once the commissioner confirms it.**
+`last_completed_week_points` (in `rumbles_history.json`) is a frozen,
+server-computed figure from the week it was generated for: it reflects
+whatever `official_points()` considered official at that time (the
+commissioner's own `custom_points` override once one's been set, real
+`points` otherwise), so it never includes a "likely" entry's estimated
+backup points -- those are still just an unconfirmed best guess, not
+Sleeper's own scored total. That's the same gap `applyQbAdjustmentsToScores`
+already closes for the LIVE week's own "Points This Week"/"This Week"
+(folding a "likely" entry's estimate straight into the score before
+Rumbles are ever computed for it), so this closes it for "Pts Last Week"
+the same way: `loadLastWeekBreakdown` sums each roster's still-"likely"
+replacement row(s) (reading their own `actual` points straight off the
+same breakdown rows the tooltip renders, so the delta can never drift
+from what's shown on hover) into a `pointsDeltaByRoster` map, and
+`buildCombinedStandings` adds that on top of `last_completed_week_points`
+whenever "Pts Last Week" is being shown. A "confirmed" entry is
+deliberately excluded from this sum -- its official delta is already
+part of `last_completed_week_points` itself (via `official_points()`
+preferring `custom_points`), so adding it again would double-count it.
+In practice this means: the moment the commissioner keys in their
+official adjustment, the entry's tier flips from "likely" to "confirmed"
+in `rumbles_history.json`, it stops contributing to `pointsDeltaByRoster`
+on its own (no separate "was this previously likely" transition check
+needed), and `last_completed_week_points` itself has already picked up
+the real number in its place -- so the displayed total doesn't move
+(assuming the commissioner's official points matched the estimate) while
+the tooltip's replacement row simultaneously turns from yellow to green.
+Covered end-to-end by `test/run_test.py`'s pregame scenario (1e): Rohaan's
+still-"likely" backup (20.00 real points) is confirmed folded into his
+displayed "Pts Last Week" total on top of the history baseline, cross-
+checked directly against the same number shown in his own tooltip; Ben's
+already-"confirmed" backup is confirmed NOT added a second time, staying
+at the official `last_completed_week_points` value alone.
+
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
 
@@ -1648,14 +1686,18 @@ per-team data, just a standing explainer.
    "Points This Week" header relabels to "Pts Last Week" and every
    roster's value is their real last-completed-week PF -- untouched even
    by a commissioner's live QB-adjustment override on a still-pregame
-   roster (Ankit) -- while "This Week" (Rumbles) and every cumulative
-   column stay exactly as `rumbles_history.json` already has them, that
-   hovering "Pts Last Week" shows week 1's real per-player breakdown --
-   a plain player row (Aidan), an injured starter plus a GREEN "confirmed"
-   replacement row (Ben), and an injured starter plus a YELLOW "likely"
-   replacement row (Rohaan), the last two hand-verified against the real
-   `--good`/`--replacement` CSS colors -- that the header reverts to "Pts
-   This Week" the moment Projected mode is selected, that Projected
+   roster (Ankit) -- EXCEPT that Rohaan's still-"likely" backup's real
+   20.00 points ARE folded on top of his history baseline (cross-checked
+   directly against the same number shown in his own tooltip), while
+   Ben's already-"confirmed" backup is confirmed NOT double-added -- while
+   "This Week" (Rumbles) and every cumulative column stay exactly as
+   `rumbles_history.json` already has them, that hovering "Pts Last Week"
+   shows week 1's real per-player breakdown -- a plain player row (Aidan),
+   an injured starter plus a GREEN "confirmed" replacement row (Ben), and
+   an injured starter plus a YELLOW "likely" replacement row (Rohaan), the
+   last two hand-verified against the real `--good`/`--replacement` CSS
+   colors -- that the header reverts to "Pts This Week" the moment
+   Projected mode is selected, that Projected
    mode's "This Week"/Rumbles and every cumulative column still match
    Actual exactly (Ankit's override included) while "Points This Week"
    shows a real nonzero projected total instead, that the "Points This

@@ -1940,10 +1940,21 @@ def scenario_pregame_week(browser):
             assert r[3] == "20", f"[actual] expected Ankit's This Week to be 20 (commissioner override beats every other still-0 roster), got {r[3]!r}"
         else:
             assert r[3] == "0", f"[actual] expected This Week (Rumbles) to be 0 pregame for {r[1]}, got {r[3]!r}"
-        expected_last_week = f"{base['last_completed_week_points']:.2f}"
+        # Rohaan's Week-1 QB-adjustment is still "likely" (unconfirmed) --
+        # his backup's real 20.00 (Week1 Rohaan Backup QB, asserted in the
+        # tooltip below) is folded on TOP of the frozen history baseline,
+        # same as the live week's applyQbAdjustmentsToScores already does
+        # for an in-progress week's own totals (see loadLastWeekBreakdown's
+        # pointsDeltaByRoster). Ben's is already "confirmed", so his
+        # baseline already has it baked in server-side (via
+        # official_points()'s custom_points) -- no client-side addition on
+        # top for him, proving a confirmed adjustment is never double-added.
+        last_week_delta = 20.00 if r[1] == "Rohaan" else 0.0
+        expected_last_week = f"{base['last_completed_week_points'] + last_week_delta:.2f}"
         assert r[4] == expected_last_week, (
             f"[actual] expected 'Pts Last Week' to show {r[1]}'s real last-week PF ({expected_last_week}), untouched "
-            f"by anything in the not-yet-started week (Ankit's live override included), got {r[4]!r}"
+            f"by anything in the not-yet-started week (Ankit's live override included), but WITH a still-'likely' "
+            f"QB-adjustment's estimated backup points folded in (Rohaan only), got {r[4]!r}"
         )
         assert r[2] == str(base["rumbles"]), f"[actual] {r[1]}: expected cumulative Rumbles {base['rumbles']} unchanged, got {r[2]}"
         assert abs(float(r[6]) - base["pf"]) < 0.01, f"[actual] {r[1]}: expected PF {base['pf']} unchanged pregame, got {r[6]}"
@@ -2006,6 +2017,34 @@ def scenario_pregame_week(browser):
     assert rohaan_backup_colors["actual_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Actual to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['actual_color']}"
     assert rohaan_backup_colors["proj_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Proj to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['proj_color']}"
     print(f"Confirmed 'Pts Last Week' replacement-row coloring: Ben's confirmed backup is green ({good_ref_lastweek}), Rohaan's still-likely backup is yellow ({replacement_ref_lastweek}).")
+
+    # ---- "Pts Last Week" point-folding: a still-"likely" (unconfirmed)
+    # QB-injury replacement's estimated points get added into the
+    # displayed 'Pts Last Week' total on top of the frozen history
+    # baseline (same in spirit as applyQbAdjustmentsToScores already does
+    # for the LIVE week), but a "confirmed" one does NOT -- its official
+    # custom_points override is already baked into last_completed_week_points
+    # server-side (build_rumbles.py's official_points()), so adding it
+    # again here would double-count it. Cross-checked directly against
+    # the tooltip's own rows fetched above rather than a hardcoded literal,
+    # so this fails loudly if the fixture's numbers ever change.
+    rohaan_row = next(r for r in rows_actual if r[1] == "Rohaan")
+    rohaan_base = baseline_by_manager["Rohaan"]
+    rohaan_backup_pts = float(next(r for r in rohaan_last_week_rows if r["name"] == "Week1 Rohaan Backup QB")["actual"])
+    expected_rohaan_pts = round(rohaan_base["last_completed_week_points"] + rohaan_backup_pts, 2)
+    assert float(rohaan_row[4]) == expected_rohaan_pts, (
+        f"expected Rohaan's still-'likely' backup ({rohaan_backup_pts}) to be folded into his displayed 'Pts Last "
+        f"Week' ({rohaan_base['last_completed_week_points']} + {rohaan_backup_pts} = {expected_rohaan_pts}), got {rohaan_row[4]!r}"
+    )
+    print(f"Confirmed Rohaan's still-'likely' backup's {rohaan_backup_pts} real points ARE folded into his displayed 'Pts Last Week' total ({expected_rohaan_pts}).")
+
+    ben_row = next(r for r in rows_actual if r[1] == "Ben")
+    ben_base = baseline_by_manager["Ben"]
+    assert float(ben_row[4]) == ben_base["last_completed_week_points"], (
+        f"expected Ben's already-'confirmed' backup NOT to be added a second time on top of his displayed 'Pts Last "
+        f"Week' ({ben_base['last_completed_week_points']}, already official via custom_points server-side), got {ben_row[4]!r}"
+    )
+    print(f"Confirmed Ben's already-'confirmed' backup's points are NOT double-added to his displayed 'Pts Last Week' total (stays at the official {ben_base['last_completed_week_points']}).")
 
     # ---- Projected mode: must match Actual EXACTLY for This Week/Rumbles
     # (including Ankit's override-driven 20 -- proving the pregame "This
