@@ -189,7 +189,7 @@ def test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing():
     # "a backup QB played" observation on its own.
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries == [], f"no override + not fresh + no carry-forward must log NOTHING (no more 'detected' tier), got {entries}"
     print("PASS: with no override and no fresh/carried corroboration, nothing is logged")
@@ -198,7 +198,7 @@ def test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing():
 def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(entries) == 1, f"expected exactly 1 adjustment (roster 2 has no started QB), got {len(entries)}"
     e = entries[0]
@@ -223,7 +223,7 @@ def test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated():
     meta_not_corroborated = dict(QB_PLAYERS_META, QB_STARTER=dict(QB_PLAYERS_META["QB_STARTER"], injury_status=None))
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, meta_not_corroborated, build_team_qb_index(meta_not_corroborated), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(entries) == 1, f"a backup QB recording action should still log an entry even without corroboration, got {len(entries)}"
     e = entries[0]
@@ -243,7 +243,7 @@ def test_compute_qb_adjustments_possible_tier_also_fires_for_questionable():
     meta_questionable = dict(QB_PLAYERS_META, QB_STARTER=dict(QB_PLAYERS_META["QB_STARTER"], injury_status="Questionable"))
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, meta_questionable, build_team_qb_index(meta_questionable), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries[0]["confidence"] == "possible", f"'Questionable' shouldn't corroborate an out/IR/PUP case, got {entries[0]['confidence']}"
     assert entries[0]["injury_status_at_capture"] == "Questionable"
@@ -269,7 +269,7 @@ def test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale():
     }
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster=carried_possible,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster=carried_possible,
     )
     assert entries == [], f"a stale, never-confirmed 'possible' entry must not be carried forward, got {entries}"
     print("PASS: an unconfirmed 'possible' entry is not carried forward once its week is no longer fresh")
@@ -279,7 +279,7 @@ def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
     matchups_with_override = [dict(QB_MATCHUPS[0], custom_points=129.1), QB_MATCHUPS[1]]
     entries = compute_qb_adjustments_for_week(
         2, matchups_with_override, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries[0]["confidence"] == "confirmed", f"a set custom_points should always mean 'confirmed', got {entries[0]['confidence']}"
     assert approx(entries[0]["custom_points_delta"], 29.1)  # 129.1 - 100.0
@@ -300,7 +300,7 @@ def test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_
     stats_no_backup = {"QB_STARTER": QB_STATS_MAP["QB_STARTER"]}  # nobody else on MIN played
     entries = compute_qb_adjustments_for_week(
         1, matchups_override_no_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_no_backup,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(entries) == 1, f"a commissioner override must ALWAYS produce a log entry, got {len(entries)}"
     e = entries[0]
@@ -313,11 +313,14 @@ def test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_
 
 def test_compute_qb_adjustments_carries_forward_stale_likely_tier():
     # Simulates a week that's no longer the freshest one (is_fresh=False)
-    # but had already captured "likely" (injury_status "Out") back when it
-    # WAS fresh, in a previous script run -- that captured tier must be
-    # reused, not silently downgraded to "detected" just because today's
-    # current injury_status snapshot (which has since moved on) can't
-    # corroborate it anymore.
+    # but is STILL the single most-recently-completed week
+    # (is_most_recent_completed=True -- i.e. the following week hasn't
+    # itself completed yet, so we're still within the one-week grace
+    # window) and had already captured "likely" (injury_status "Out") back
+    # when it WAS fresh, in a previous script run -- that captured tier
+    # must be reused during this whole grace window, not silently
+    # downgraded/dropped just because today's current injury_status
+    # snapshot (which has since moved on) can't corroborate it anymore.
     carried = {
         1: [
             {
@@ -329,11 +332,39 @@ def test_compute_qb_adjustments_carries_forward_stale_likely_tier():
     }
     entries = compute_qb_adjustments_for_week(
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, carried_by_roster=carried,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster=carried,
     )
     assert entries[0]["confidence"] == "likely", f"expected the carried-forward 'likely' tier to be reused, got {entries[0]['confidence']}"
     assert entries[0]["injury_status_at_capture"] == "Out"
-    print("PASS: a previously-captured 'likely' tier is carried forward for an old (no-longer-fresh) week")
+    print("PASS: a previously-captured 'likely' tier is carried forward while its week is still the most-recently-completed one")
+
+
+def test_compute_qb_adjustments_likely_tier_stops_being_carried_once_superseded():
+    # The actual reported bug this session: "likely" used to be carried
+    # forward FOREVER, all season, with no cutoff -- a manager saw an old,
+    # never-confirmed "likely" case still showing up weeks later. Once an
+    # even NEWER week has also completed (is_most_recent_completed=False
+    # for this now-doubly-stale week), the carry-forward window has closed
+    # for good: an unconfirmed "likely" from two or more completed weeks
+    # back must stop being carried, exactly like "possible" already never
+    # got carried past its own single fresh day (see
+    # test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale).
+    # Only "confirmed" (a real commissioner override) persists indefinitely.
+    carried = {
+        1: [
+            {
+                "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+                "confidence": "likely",
+                "injury_status_at_capture": "Out",
+            }
+        ]
+    }
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=False, carried_by_roster=carried,
+    )
+    assert entries == [], f"a 'likely' entry from a week that's no longer even the most-recently-completed one must not be carried forward, got {entries}"
+    print("PASS: a 'likely' entry stops being carried forward once a newer week has also completed, superseding it")
 
 
 def test_compute_qb_adjustments_no_entry_without_a_backup():
@@ -341,7 +372,7 @@ def test_compute_qb_adjustments_no_entry_without_a_backup():
     stats_no_backup = {"QB_STARTER": QB_STATS_MAP["QB_STARTER"]}  # nobody else on MIN played
     entries = compute_qb_adjustments_for_week(
         2, matchups_no_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_no_backup,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries == [], f"no other team QB played -- there must be no adjustment entry at all, got {entries}"
     print("PASS: no adjustment entry when no same-team backup QB recorded any action")
@@ -377,7 +408,7 @@ def test_compute_qb_adjustments_no_entry_when_only_backup_scored_exactly_zero():
     stats_zero_backup = dict(QB_STATS_MAP, QB_BACKUP={"pass_att": 1, "pass_yd": 0, "pass_td": 0, "pass_int": 0})
     entries = compute_qb_adjustments_for_week(
         2, matchups_zero_backup, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_zero_backup,
-        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries == [], f"the only candidate backup scored exactly 0.00 -- there must be no adjustment entry at all, got {entries}"
     print("PASS: no adjustment entry when the only candidate backup QB scored exactly 0.00 points")
@@ -416,7 +447,7 @@ def test_superflex_only_the_qb_with_a_real_backup_is_logged():
     team_qb_index = build_team_qb_index(SUPERFLEX_PLAYERS_META)
     entries = compute_qb_adjustments_for_week(
         2, SUPERFLEX_MATCHUPS, SUPERFLEX_PLAYERS_META, team_qb_index, SUPERFLEX_STATS,
-        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(entries) == 1, f"Wentz (no backup) should log nothing, only Williams/Bagent should, got {len(entries)}"
     e = entries[0]
@@ -432,7 +463,7 @@ def test_superflex_both_started_qbs_can_log_separately():
     team_qb_index = build_team_qb_index(meta)
     entries = compute_qb_adjustments_for_week(
         2, SUPERFLEX_MATCHUPS, meta, team_qb_index, stats,
-        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, SUPERFLEX_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(entries) == 2, f"expected two separate entries (one per started QB), got {len(entries)}"
     by_name = {e["injured_qb"]["name"]: e for e in entries}
@@ -455,7 +486,7 @@ def test_superflex_two_deliberately_started_same_team_qbs_are_not_backups_of_eac
     team_qb_index = build_team_qb_index(meta)
     entries = compute_qb_adjustments_for_week(
         2, matchups, meta, team_qb_index, stats,
-        QB_SCORING_SETTINGS, {1: "Alex"}, is_fresh=True, carried_by_roster={},
+        QB_SCORING_SETTINGS, {1: "Alex"}, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
     )
     assert entries == [], f"neither deliberately-started same-team QB should be logged as the other's 'backup', got {entries}"
     print("PASS: two deliberately-started same-team QBs are never mistaken for one another's backup")
@@ -532,7 +563,7 @@ def test_possible_tier_dropped_once_a_new_week_has_started_end_to_end():
     is_fresh_run1 = determine_fresh_week([1], previously_completed_weeks=set()) == 1
     run1_entries = compute_qb_adjustments_for_week(
         1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
-        is_fresh=is_fresh_run1, carried_by_roster={},
+        is_fresh=is_fresh_run1, is_most_recent_completed=True, carried_by_roster={},
     )
     assert len(run1_entries) == 1 and run1_entries[0]["confidence"] == "possible", (
         f"expected run 1 to freshly log an unconfirmed 'possible' entry, got {run1_entries}"
@@ -546,7 +577,7 @@ def test_possible_tier_dropped_once_a_new_week_has_started_end_to_end():
     carried = {1: run1_entries}  # what load_previous_qb_adjustments would hand back from run 1's file
     run2_entries = compute_qb_adjustments_for_week(
         1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
-        is_fresh=is_fresh_run2, carried_by_roster=carried,
+        is_fresh=is_fresh_run2, is_most_recent_completed=True, carried_by_roster=carried,
     )
     assert run2_entries == [], (
         f"expected the unconfirmed 'possible' entry to be dropped once a new week has started, got {run2_entries}"
@@ -571,6 +602,7 @@ def main():
     test_compute_qb_adjustments_confirmed_tier_beats_everything_else()
     test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
+    test_compute_qb_adjustments_likely_tier_stops_being_carried_once_superseded()
     test_compute_qb_adjustments_no_entry_without_a_backup()
     test_find_backup_qbs_excludes_exactly_zero_point_backups()
     test_find_backup_qbs_keeps_negative_point_backups()

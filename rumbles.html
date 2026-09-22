@@ -2139,23 +2139,54 @@
     return fetchJson(API_V1 + "/state/nfl")
       .then(function (nflState) {
         var season = nflState.season;
-        var reportedWeek = nflState.week;
+        // nflState.week is deliberately NOT used to pick which week this
+        // page tracks live -- see targetWeek's own comment below for why.
         var seasonType = nflState.season_type; // "pre" | "regular" | "post" | "off"
         var historyWeeksDone = (state.history && state.history.weeks_completed) || [];
         var maxCompleted = historyWeeksDone.length ? Math.max.apply(null, historyWeeksDone) : 0;
 
-        // Sleeper's own "current week" pointer (state.week) doesn't always
-        // roll over the instant the last game of a week ends -- there can
-        // be a gap between Monday night's final whistle and whenever
-        // Sleeper flips it forward, sometimes not until close to Thursday
-        // kickoff of the next week. Rather than trust that pointer's exact
-        // timing, always target the next week AFTER whatever's already
-        // finalized in rumbles_history.json, so a fully-completed week
-        // never gets mistaken for "not live yet" while we wait for
-        // Sleeper's pointer to catch up.
-        var targetWeek = Math.max(reportedWeek || 0, maxCompleted + 1);
-        var weekAlreadyFinal = historyWeeksDone.indexOf(targetWeek) !== -1;
-        var eligible = seasonType !== "pre" && seasonType !== "off" && targetWeek && !weekAlreadyFinal;
+        // Sleeper's own "current week" pointer (state.week) is NOT a
+        // reliable signal for which week this page should be live-
+        // tracking, in EITHER direction. It can lag behind (there's a gap
+        // between Monday night's final whistle and whenever Sleeper flips
+        // it forward, sometimes not until close to Thursday kickoff of the
+        // next week) -- but it can also, just as easily, jump AHEAD of
+        // rumbles_history.json: Sleeper flips its pointer forward on its
+        // own schedule, independent of whether our own once-a-day
+        // build_rumbles.py run has actually finalized the week that just
+        // ended yet. Real case that prompted this fix: Week 2 ended, and
+        // within a day Sleeper's state.week had already advanced to 3 --
+        // but build_rumbles.py's daily run hadn't fired again yet, so
+        // rumbles_history.json still only had Week 1 finalized
+        // (weeks_completed: [1]). Blending in reportedWeek here (the
+        // previous approach: `Math.max(reportedWeek, maxCompleted + 1)`)
+        // meant targetWeek jumped straight to 3 -- a week with no matchups
+        // posted yet -- completely skipping over Week 2 the moment it was
+        // most important to still be checking it live: freshly-finished,
+        // not yet in history, actual/projected totals and the QB-injury
+        // log all needing that week's real data. The standings silently
+        // stopped reflecting Week 2 at all (still frozen on Week 1's
+        // history), and every "likely"/"possible" QB-injury entry detected
+        // live during Week 2 vanished the instant Sleeper's pointer ticked
+        // over, with nothing there yet to replace it.
+        //
+        // The fix: always target the single week right after whatever's
+        // already finalized in rumbles_history.json (maxCompleted + 1),
+        // full stop -- never blended with or overridden by Sleeper's own
+        // pointer. This makes the page walk forward exactly one week at a
+        // time as build_rumbles.py catches up (each daily run that
+        // finalizes a week naturally advances maxCompleted, which advances
+        // targetWeek right along with it), and it keeps live-tracking a
+        // week for its ENTIRE post-completion gap -- through games ending,
+        // through Sleeper's pointer eventually catching up, right up until
+        // build_rumbles.py itself finalizes it -- rather than abandoning it
+        // early just because Sleeper's own bookkeeping moved on first.
+        var targetWeek = maxCompleted + 1;
+        // targetWeek can never itself already be in historyWeeksDone (it's
+        // defined as one past the max of that very list), so the only
+        // remaining gate is season type -- no live tracking during the
+        // preseason or offseason, regardless of what targetWeek computes to.
+        var eligible = seasonType !== "pre" && seasonType !== "off";
 
         if (!eligible) {
           state.live = { week: targetWeek, season: season, seasonType: seasonType, isLive: false, byRoster: {}, hasKickedOff: false, firstGameStartMs: null };
@@ -2529,7 +2560,18 @@
       var pct = weeksForPct ? (combinedRumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
 
       var thisWeekRumbles = rumblesSourceInfo ? rumblesSourceInfo.rumbles : num(s.last_completed_week_rumbles);
-      var thisWeekPoints = liveInfo ? liveInfo.points : num(s.last_completed_week_points);
+      // In Actual mode specifically, once the target week hasn't actually
+      // kicked off yet (pregame -- whether matchups are posted with
+      // everyone still at a real 0.00, or not posted at all), "Points This
+      // Week" is genuinely uninformative: nobody's played, so it's just
+      // 0.00 across the board. Rather than show that, fall back to last
+      // week's real, final PF -- see showLastWeekPoints below, which also
+      // swaps the column header itself to "Pts Last Week" (render()) so
+      // the number is never shown under a misleading label. Projected mode
+      // is untouched -- it already shows a real forward-looking pregame
+      // projection before kickoff, which IS useful information on its own.
+      var showLastWeekPoints = state.mode === "actual" && !kickoffStarted;
+      var thisWeekPoints = (showLastWeekPoints || !liveInfo) ? num(s.last_completed_week_points) : liveInfo.points;
 
       // Whether this roster still has a player (a real starter, or an
       // appended QB-injury replacement -- both are in the same `players`
@@ -2561,6 +2603,13 @@
         rumble_pct: pct,
         this_week: thisWeekRumbles,
         this_week_points: thisWeekPoints,
+        // Same value for every row -- render() reads it off row 0 (or just
+        // recomputes the same state.mode/kickoffStarted check itself) to
+        // decide whether to swap the "Pts This Week" column header to
+        // "Pts Last Week". Carried per-row (rather than returned
+        // separately alongside `rows`) since buildCombinedStandings'
+        // return value is just the plain rows array.
+        this_week_points_is_last_week: showLastWeekPoints,
         this_week_live: !!liveInfo,
         // Separate flag just for the "Pts This Week" cell's own LIVE pill
         // (the "This Week" Rumbles-earned cell keeps using the plain
@@ -2698,6 +2747,20 @@
         return compareRows(a, b, state.sort.key, state.sort.dir);
       });
     }
+    // "Pts This Week" -> "Pts Last Week" in Actual mode once the target
+    // week hasn't kicked off yet (see buildCombinedStandings'
+    // showLastWeekPoints/this_week_points_is_last_week -- the CELL values
+    // themselves already swapped to last week's real PF there; this swaps
+    // the column header to match, so the number is never shown under a
+    // label that no longer describes it). Read directly off state rather
+    // than rows[0] so this still works correctly even with zero rows
+    // (empty history). COLUMNS.this_week_points.label is a shared,
+    // module-level string that updateHeaderSortIndicators() (just below)
+    // renders into the <th> every call, so it must be set before that
+    // call runs, every render -- not just once.
+    COLUMNS.this_week_points.label = (state.mode === "actual" && !(state.live && state.live.hasKickedOff))
+      ? "Pts Last Week"
+      : "Pts This Week";
     updateHeaderSortIndicators();
 
     state.thisWeekTooltipData = {};
@@ -3264,30 +3327,44 @@
 
     var histAdjustments = (state.history && state.history.qb_adjustments) || [];
     // Client-side backstop, on top of build_rumbles.py's own carry-forward
-    // rule (see determine_fresh_week there): an unconfirmed "possible"
-    // entry from an OLDER week is never shown once a NEWER week has
-    // already begun, even if rumbles_history.json itself still has a
+    // rule (see determine_fresh_week/compute_qb_adjustments_for_week
+    // there): an UNCONFIRMED entry -- "likely" or "possible" alike, never
+    // "confirmed" -- from an OLDER week is never shown once a NEWER week
+    // has already begun, even if rumbles_history.json itself still has a
     // stale one sitting in it (a real case: the scheduled job that
     // regenerates that file only runs once a day, so a week or two can
     // pass between "the fix shipped" and "the file actually got
     // rewritten" -- this makes the live page correct immediately,
-    // independent of when that next scheduled run happens). "A newer week
-    // has begun" here means either a genuinely later week has actually
-    // KICKED OFF (see computeWeekKickoffInfo -- matchups merely being
-    // POSTED isn't "begun"; this now uses the same real first-game-of-the-
-    // week signal the pregame status pill does, matching "once a week
-    // begins, with the first game generally Thursday night" exactly,
-    // rather than the coarser matchups-posted approximation this used to
-    // rely on), or a genuinely later week has already fully completed --
-    // never the entry's own week alone, so a still-current week's
-    // "possible" rows (the normal, intended case) are untouched.
+    // independent of when that next scheduled run happens). This is the
+    // whole intended lifecycle for an unconfirmed case: visible from the
+    // moment it's detected through the start of the following week, then
+    // gone for good if the commissioner never confirmed it by then --
+    // "confirmed" (a real custom_points override exists) is the only tier
+    // that persists indefinitely, all season; see the README's "QB injury
+    // backup-points adjustment" section for the full flow. "Likely" used
+    // to be carried forward by build_rumbles.py indefinitely (all season,
+    // never dropped) -- that was a real reported bug relative to this
+    // intended flow, fixed alongside this client-side filter (see
+    // compute_qb_adjustments_for_week's own carry-forward comment in
+    // build_rumbles.py for the matching server-side half of this fix).
+    //
+    // "A newer week has begun" here means either a genuinely later week
+    // has actually KICKED OFF (see computeWeekKickoffInfo -- matchups
+    // merely being POSTED isn't "begun"; this uses the same real
+    // first-game-of-the-week signal the pregame status pill does,
+    // matching "once a week begins, with the first game generally
+    // Thursday night" exactly, rather than the coarser matchups-posted
+    // approximation this used to rely on), or a genuinely later week has
+    // already fully completed -- never the entry's own week alone, so a
+    // still-current week's unconfirmed rows (the normal, intended case)
+    // are untouched.
     var weeksCompletedForFilter = (state.history && state.history.weeks_completed) || [];
     var latestKnownWeek = weeksCompletedForFilter.length ? Math.max.apply(null, weeksCompletedForFilter) : 0;
     if (state.live && state.live.isLive && state.live.hasKickedOff && state.live.week > latestKnownWeek) {
       latestKnownWeek = state.live.week;
     }
     histAdjustments = histAdjustments.filter(function (r) {
-      return !(r.confidence === "possible" && r.week < latestKnownWeek);
+      return !(r.confidence !== "confirmed" && r.week < latestKnownWeek);
     });
     var rows = histAdjustments.concat(state.liveQbAdjustments || []);
     // Sorted by confidence tier first -- Likely above Possible above

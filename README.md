@@ -159,37 +159,82 @@ itself, so it applies everywhere a backup is identified -- the override
 branch's candidate-picking heuristic included, not just the plain
 "Likely"/"Possible" detection path.
 
-Once a new week has started being played, an unconfirmed "Possible" entry
-from an OLDER week is dropped from the table entirely rather than
-lingering there indefinitely -- it was never corroborated or confirmed, so
-once everyone's attention has moved on to the current week there's nothing
-left to flag it for. This only affects "Possible"; a "Likely" (corroborated
-by a real `injury_status` read) or "Confirmed" (a commissioner override)
-entry still persists in `rumbles_history.json` forever, exactly as before.
-The subtlety this fixes: `build_rumbles.py`'s history builder only ever
-treats the most-recently-COMPLETED week as "fresh" (worth checking
-`injury_status` for at all) on the FIRST run after that week finishes --
-without that "first run only" guard, a week stays the max of
-`completed_weeks` (and so keeps getting freshly re-evaluated) for the
-ENTIRE span that the NEXT week is live but not yet itself completed, which
-can be most of a week -- so a stale "Possible" case would keep reappearing
-for days after a new week had clearly already started, instead of dropping
-right away. See `determine_fresh_week`/`load_previous_weeks_completed` in
-`build_rumbles.py`.
+**The unconfirmed-entry lifecycle** -- this is the intended behavior end to
+end, so it's worth stating plainly: a "Confirmed" entry (the commissioner
+has keyed in an official adjustment) stays in the log for the rest of the
+season, full stop. An UNCONFIRMED entry -- "Likely" or "Possible" alike --
+is visible from the moment it's first detected through the start of the
+FOLLOWING week, and is dropped for good if the commissioner never confirms
+it by then. So at any given moment you should never see an unconfirmed
+entry from more than one week back, but you SHOULD see every unconfirmed
+entry from the week that just started, carried over from whenever it was
+first detected.
 
-That backend fix only takes effect once `build_rumbles.py` actually runs
-again and rewrites `rumbles_history.json` -- and the scheduled workflow
-that does that only runs once a day (see Setup below), so there's a real
-window, potentially most of a day, where the file on disk can still hold
-a stale "possible" entry even after the fix has shipped. Rather than make
-visitors wait on that, `rumbles.html` also filters its OWN copy of
-`state.history.qb_adjustments` at render time: an unconfirmed "possible"
-row is hidden the moment a genuinely newer week is known to the page --
-either live right now, or itself already fully completed -- computed
-fresh on every render straight from the live/history data already loaded,
-with no dependency on `build_rumbles.py` having run again. "Likely" and
-"Confirmed" rows are never touched by this -- only "possible". See the
-comment right above `histAdjustments`' filter in `renderQbAdjustments`.
+Two real production bugs in this lifecycle were reported and fixed together
+(both were symptoms of the same underlying issue -- see "Sleeper's
+`state.week` pointer can also run AHEAD of `rumbles_history.json`" below):
+"Likely" entries from a week that had just ended were vanishing instead of
+carrying forward into the next week, and stale "Possible" entries from an
+already-superseded week were reappearing instead of staying dropped.
+
+On the server (`build_rumbles.py`), a NEW distinction drives the carry-
+forward: `determine_fresh_week`'s existing "fresh" flag is a strict
+one-shot -- true only on the single run immediately after a week first
+appears in `completed_weeks` -- which is the right gate for detecting a
+brand-new case (checking `injury_status` etc.) but the WRONG gate for how
+long an already-detected "Likely" case should keep being carried forward
+across subsequent daily runs. A second flag, `is_most_recent_completed`
+(`week == max(completed_weeks)`), stays true for the entire multi-day span
+a newer week is live-but-not-yet-completed, and only flips false once an
+even-newer week ALSO completes and supersedes it -- that's the real
+one-week grace window. A previously-captured "Likely" entry is now carried
+forward across daily runs for exactly as long as `is_most_recent_completed`
+holds, and stops being carried the moment it no longer does (see
+`compute_qb_adjustments_for_week`'s `is_most_recent_completed`/
+`carried_by_roster` handling). "Possible" entries were never carried
+forward server-side at all (client-side-only, below) -- that part is
+unchanged.
+
+That server-side half only takes effect once `build_rumbles.py` actually
+runs again and rewrites `rumbles_history.json` -- and the scheduled
+workflow that does that only runs once a day (see Setup below), so there's
+a real window, potentially most of a day, where the file on disk can still
+hold a stale unconfirmed entry from an old week even after the backend fix
+has shipped. Rather than make visitors wait on that, `rumbles.html` also
+filters its OWN copy of `state.history.qb_adjustments` at render time: an
+unconfirmed entry -- "likely" or "possible" alike -- from an older week is
+hidden the moment a genuinely newer week is known to the page (either live
+right now, or itself already fully completed), computed fresh on every
+render straight from the live/history data already loaded, with no
+dependency on `build_rumbles.py` having run again. This client-side filter
+now covers "likely" as well as "possible" -- it used to be "possible"-only,
+which is exactly how a stale week-1 "possible" entry could slip back into
+view once the page's own notion of "the current week" got confused (see
+below). "Confirmed" rows are never touched by this filter. See the comment
+right above `histAdjustments`' filter in `renderQbAdjustments`.
+
+**Sleeper's `state.week` pointer can also run AHEAD of
+`rumbles_history.json`, not just lag behind it.** `rumbles.html` picks
+which week to live-track as `maxCompleted + 1` -- one past whatever's
+already finalized in `rumbles_history.json` -- and used to blend that
+against Sleeper's own `state.week` pointer via
+`Math.max(reportedWeek, maxCompleted + 1)`, on the assumption that
+`reportedWeek` could only ever LAG behind (Sleeper hasn't rolled its own
+pointer over yet). In the reported case, Sleeper's pointer had instead
+already advanced past the just-ended week -- it flips on its own daily
+cadence, independent of whether this page's own once-a-day cron has
+actually finalized that week yet -- so `Math.max` picked the higher, WRONG
+value: the page jumped straight to a genuinely empty, not-yet-posted week,
+completely skipping the week that had just ended but wasn't in
+`rumbles_history.json` yet. That's also exactly how both QB-adjustment
+symptoms above showed up together: skipping straight past the just-ended
+week meant its freshly-detected "Likely" cases were never even looked for,
+while the stale week-old "Possible" entry the client-side filter should
+have been hiding (because a newer week was live) suddenly looked current
+again, since the page thought there was no newer live week at all. The
+fix: `targetWeek` is now always `maxCompleted + 1`, full stop -- Sleeper's
+own pointer is never blended in or allowed to override it. See
+`loadLive`'s `targetWeek` comment in `rumbles.html`.
 
 Confirmed against the real example that prompted this: league roster_id
 6 ("Alex"), Week 1 -- Kyler Murray left hurt, Carson Wentz (a free agent
@@ -212,13 +257,26 @@ fresh; a later run, with a newer week now current but not yet itself
 completed, is not; freshness moves on once that newer week itself
 finishes), plus an end-to-end check that an unconfirmed "possible" entry
 is genuinely dropped, not just theoretically excluded, once a new week has
-started. The client-side backstop filter has its own dedicated coverage in
+started. `test/test_build_rumbles.py` also directly covers the
+`is_most_recent_completed` carry-forward window: a previously-captured
+"likely" entry IS carried forward while its week is still the most-
+recently-completed one, and STOPS being carried forward the moment an even
+newer week has also completed and superseded it (the actual reported bug --
+"likely" used to be carried forward forever, with no cutoff at all). The
+client-side backstop filter has its own dedicated coverage in
 `test/run_test.py`'s live scenario too: a stale, never-confirmed "possible"
 week-1 entry is deliberately planted straight into the
 `rumbles_history.json` fixture (alongside the existing "confirmed"
 historical row, which must keep showing) precisely so the fixture can
 prove `rumbles.html` hides it once week 2 is live, independent of whatever
-`build_rumbles.py` itself would have done with the same data.
+`build_rumbles.py` itself would have done with the same data. And
+`test/run_test.py`'s dedicated `scenario_pointer_ahead_of_history` (1f)
+directly reproduces the real bug report end to end: Sleeper's `state.week`
+pointer advanced to week 3 while `rumbles_history.json` still only had week
+1 finalized, and the page must still target/show week 2's real live data --
+cumulative Rumbles intact, real nonzero live points, and both of week 2's
+freshly-detected QB-adjustment entries (Alex "likely", Ankit "confirmed")
+showing -- rather than a blank week 3.
 
 #### The credit now also lands in the live standings themselves
 
@@ -428,11 +486,13 @@ commissioner override still always wins as "confirmed" regardless of what
 the stats-only heuristic would have said. `test/test_build_rumbles.py`
 covers the equivalent server-side logic in `compute_qb_adjustments_for_
 week` (the historical/nightly-build detector), including that an
-unconfirmed "possible" entry is deliberately NOT carried forward once its
-week is no longer the freshest one being checked -- unlike "likely", which
-is -- so a "possible" flag that nobody ever confirmed quietly fades out of
-history rather than accumulating permanently, matching its purpose as a
-live-awareness signal rather than a permanent record.
+unconfirmed "possible" entry is deliberately NOT carried forward at all
+once its week is no longer the freshest one being checked -- "likely" IS
+carried forward, but only for the one-week grace window described above
+(`is_most_recent_completed`), never indefinitely -- so neither an
+unconfirmed "possible" nor an unconfirmed "likely" that nobody ever
+confirmed can accumulate permanently in history, matching their shared
+purpose as a live-awareness signal rather than a permanent record.
 
 The SUPER_FLEX/multi-started-QB fix (every started QB checked
 independently, not just the first one found) has its own dedicated
@@ -1337,6 +1397,33 @@ actually kicks off, Projected mode switches over to folding the
 live/blended numbers into the season totals as described above. See
 `foldCurrentWeekIntoTotals` / `rumblesSourceInfo` in `rumbles.html`.
 
+**"Points This Week" becomes "Pts Last Week" in Actual mode specifically,
+before kickoff.** Actual mode only ever uses real stats, so once the target
+week hasn't kicked off yet -- whether matchups aren't posted at all, or
+they're posted but every real player is still sitting at a genuine
+pregame 0.00 -- a flat 0.00 "Points This Week" figure is true but useless,
+telling you nothing you didn't already know. Rather than show that, the
+column header itself relabels to "Pts Last Week" and the value becomes
+each roster's real, final PF from the last COMPLETED week
+(`last_completed_week_points`, already present in `rumbles_history.json`) --
+a genuinely useful "what did this team actually score last time" figure
+instead of a placeholder zero. This is deliberately a plain historical
+number: it's untouched by anything happening in the not-yet-started week,
+including a commissioner's live QB-adjustment override on a still-pregame
+roster (that override still shows up right where it always has -- the
+"This Week" (Rumbles) column -- and once the week actually kicks off,
+"Points This Week" itself reverts to showing it too). The relabel is
+Actual-mode-only: Projected mode's whole purpose pregame is showing a real
+projected total for the week ahead (see above), never a frozen historical
+one, so its header and value are untouched by any of this. See
+`showLastWeekPoints`/`this_week_points_is_last_week` in
+`buildCombinedStandings`, and the header-label swap right before
+`updateHeaderSortIndicators()` in `render()`, both in `rumbles.html`.
+Covered end-to-end by `test/run_test.py`'s pregame scenario (1e): the
+header reads "Pts Last Week" with the real last-week PF for every roster
+(Ankit's live override included) in Actual mode, then reverts to "Pts This
+Week" the moment Projected mode is selected.
+
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
 
@@ -1410,7 +1497,7 @@ per-team data, just a standing explainer.
 
 `test/make_fixtures.py` builds mock Sleeper API responses, and
 `test/run_test.py` runs a headless-browser end-to-end test of the real
-`rumbles.html` against those mocks, across six scenarios:
+`rumbles.html` against those mocks, across eight scenarios:
 
 1. **A week genuinely live** -- hand-verified PF checks across both
    scoring modes (Actual / Projected), including a fully-pregame
@@ -1509,11 +1596,47 @@ per-team data, just a standing explainer.
    click would immediately re-close what hover had just opened -- click
    there needs to PIN the tooltip open instead (see `howtoPinned` in
    `rumbles.html`).
-5. **Cumulative-only** -- Week 1 is final in `rumbles_history.json`, but
-   Sleeper's own `state.week` pointer hasn't rolled over yet and Week 2's
-   matchups aren't posted. The page must show Week 1's cumulative
-   standings, never a blank table.
-6. **`rumbles_history.json` fails to load** -- the page must show a clear,
+5. **Week 2's matchups are posted but no game has kicked off yet
+   (pregame)** -- confirms the grey (non-live) status pill reads "Week 2
+   begins &lt;day&gt; &lt;time&gt;" using the EARLIEST kickoff across the
+   whole week (not just the first fixture game), that Actual mode's
+   "Points This Week" header relabels to "Pts Last Week" and every
+   roster's value is their real last-completed-week PF -- untouched even
+   by a commissioner's live QB-adjustment override on a still-pregame
+   roster (Ankit) -- while "This Week" (Rumbles) and every cumulative
+   column stay exactly as `rumbles_history.json` already has them, that
+   the header reverts to "Pts This Week" the moment Projected mode is
+   selected, that Projected mode's "This Week"/Rumbles and every
+   cumulative column still match Actual exactly (Ankit's override
+   included) while "Points This Week" shows a real nonzero projected
+   total instead, that the "Points This Week" tooltip still works
+   pregame, and that a stale week-1 "possible" QB-adjustment entry (Jake)
+   is still correctly showing (week 2 hasn't kicked off yet, so it isn't
+   stale YET) with its Injured QB cell colored blue rather than the usual
+   red.
+6. **Sleeper's `state.week` pointer has advanced AHEAD of
+   `rumbles_history.json`** -- the exact reported production bug: Week 2
+   has genuinely ended and Sleeper's own pointer already says week 3, but
+   `rumbles_history.json` (only rewritten once a day) still only has week
+   1 finalized. Reuses the same real, in-progress week-2 fixtures as
+   scenario 1 (deliberately with NO week-3 routes mocked at all, so a
+   regression back to targeting week 3 fails loudly rather than silently
+   showing stale/blank data), and confirms the page still targets and
+   live-tracks week 2: the status pill reads "Live: Week 2" (not blank),
+   week 1's cumulative Rumbles are intact, several rosters show real
+   nonzero live "Points This Week" figures, and the QB Injury Backup
+   Adjustments table shows week 2's freshly-detected live entries (Alex
+   "likely", Ankit "confirmed") -- none of which would exist at all if
+   the page had wrongly jumped to the empty week 3.
+7. **Cumulative-only** -- the mirror-image case: Week 1 is final in
+   `rumbles_history.json`, but Sleeper's own `state.week` pointer hasn't
+   rolled over yet (LAGGING, not ahead) and Week 2's matchups aren't
+   posted. The page must show Week 1's cumulative standings, never a
+   blank table.
+8. **`rumbles_history.json` fails to load** -- explicitly mocked as a 404
+   (rather than relying on the file's absence at the served project root,
+   which is no longer guaranteed now that a real `rumbles_history.json`
+   ships committed at the repo root) -- the page must show a clear,
    diagnosable message instead of a silent blank table.
 
 `test/test_build_rumbles.py` is a separate, plain-Python unit test (no

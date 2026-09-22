@@ -6,16 +6,26 @@ headless browser against the real page, intercept every request that would
 go to Sleeper (or to rumbles_history.json), and fulfill it with fixture
 JSON built by make_fixtures.py.
 
-Three scenarios:
+Scenarios (1a-1f share one live/pregame Week-2 fixture set and its variants,
+2 and 3 are standalone):
   1. live_blending      -- a week is genuinely in progress; verifies the
                             actual-vs-live-projection blending and that
                             live figures land on top of cumulative history.
-  2. cumulative_only     -- reproduces the reported bug: Week 1 is fully
-                            final in rumbles_history.json, but Sleeper's
-                            own state.week pointer hasn't rolled over yet
-                            and Week 2's matchups aren't posted. The page
-                            must still show Week 1's cumulative standings,
-                            not a blank table.
+                            (1b/1c/1d/1e are mobile/touch/how-to/pregame
+                            variants of this same fixture set.)
+  1f. pointer_ahead_of_history -- reproduces THE reported production bug:
+                            Week 2 has genuinely ended and Sleeper's own
+                            state.week pointer has already advanced to 3,
+                            but rumbles_history.json (only rewritten once a
+                            day) still only has Week 1 finalized. The page
+                            must still target/show Week 2's real live data,
+                            not a blank Week 3.
+  2. cumulative_only     -- the mirror-image case: Week 1 is fully final in
+                            rumbles_history.json, but Sleeper's own
+                            state.week pointer hasn't rolled over yet
+                            (LAGGING, not ahead) and Week 2's matchups
+                            aren't posted. The page must still show Week
+                            1's cumulative standings, not a blank table.
   3. history_load_failure -- rumbles_history.json 404s. The page must show
                             a clear error instead of a silent blank table.
 """
@@ -1876,36 +1886,52 @@ def scenario_pregame_week(browser):
     print(f"Confirmed the pregame status pill reads 'Week 2 begins {expected_label}' with a grey (non-live) dot.")
 
     # ---- Actual mode: nobody's played (stats route returns [] -- no real
-    # production at all yet), so This Week/Rumbles and Points This Week are
-    # 0 for everyone EXCEPT Ankit, whose "Confirmed" QB-adjustment
-    # commissioner override is baked directly into matchups_week2.json
-    # (custom_points, independent of any stats) and applies regardless of
-    # whether the week has kicked off -- a commissioner keying in a
-    # correction isn't gated on live detection, so Ankit legitimately shows
-    # a nonzero actual score (the override alone) here, which in turn makes
-    # Ankit "outscore" every other (still-0) roster and win their own H2H
-    # matchup, landing on the max 20 rumbles. PF/PA/H2H/etc. (the
-    # CUMULATIVE columns) are unaffected either way -- exactly the
-    # Week-1-only history baseline, same as any other not-yet-folded state.
+    # production at all yet), so This Week (Rumbles) is 0 for everyone
+    # EXCEPT Ankit, whose "Confirmed" QB-adjustment commissioner override is
+    # baked directly into matchups_week2.json (custom_points, independent
+    # of any stats) and applies regardless of whether the week has kicked
+    # off -- a commissioner keying in a correction isn't gated on live
+    # detection, so Ankit legitimately "outscores" every other (still-0)
+    # roster and wins their own H2H matchup, landing on the max 20 rumbles
+    # in the This Week (Rumbles) column specifically.
+    #
+    # "Points This Week" itself is a different story now: per the reported
+    # spec, once Actual mode's target week hasn't actually kicked off yet,
+    # that column is repurposed to "Pts Last Week" and shows each roster's
+    # real, final PF from the last COMPLETED week (last_completed_week_points
+    # in rumbles_history.json) -- a plain historical figure, deliberately
+    # UNAFFECTED by anything happening in the not-yet-started week, Ankit's
+    # live override included. (Ankit's override still shows up exactly
+    # where it always has: in the This Week (Rumbles) column above, and
+    # once the week actually kicks off, back in Points This Week too -- see
+    # scenario_live_blending's Ankit assertions.)
+    header_text_actual = page.text_content("#th-points")
+    assert header_text_actual == "Pts Last Week", (
+        f"expected the 'Pts This Week' header to read 'Pts Last Week' in Actual mode once the target week hasn't "
+        f"kicked off yet, got: {header_text_actual!r}"
+    )
+    print("Confirmed the header reads 'Pts Last Week' in Actual mode pregame.")
+
     rows_actual = get_table_rows(page)
     assert len(rows_actual) == 12, f"expected 12 rows, got {len(rows_actual)}"
-    for r in rows_actual:
-        if r[1] == "Ankit":
-            assert r[3] == "20", f"[actual] expected Ankit's This Week to be 20 (commissioner override beats every other still-0 roster), got {r[3]!r}"
-            assert r[4] == "15.00", f"[actual] expected Ankit's Points This Week to be exactly the 15.00 override (no real stats), got {r[4]!r}"
-        else:
-            assert r[3] == "0", f"[actual] expected This Week (Rumbles) to be 0 pregame for {r[1]}, got {r[3]!r}"
-            assert r[4] == "0.00", f"[actual] expected Points This Week to be 0.00 pregame for {r[1]} (nobody's played), got {r[4]!r}"
-
     history = load("rumbles_history.json")
     baseline_by_manager = {s["manager"]: s for s in history["standings"]}
     for r in rows_actual:
         base = baseline_by_manager[r[1]]
+        if r[1] == "Ankit":
+            assert r[3] == "20", f"[actual] expected Ankit's This Week to be 20 (commissioner override beats every other still-0 roster), got {r[3]!r}"
+        else:
+            assert r[3] == "0", f"[actual] expected This Week (Rumbles) to be 0 pregame for {r[1]}, got {r[3]!r}"
+        expected_last_week = f"{base['last_completed_week_points']:.2f}"
+        assert r[4] == expected_last_week, (
+            f"[actual] expected 'Pts Last Week' to show {r[1]}'s real last-week PF ({expected_last_week}), untouched "
+            f"by anything in the not-yet-started week (Ankit's live override included), got {r[4]!r}"
+        )
         assert r[2] == str(base["rumbles"]), f"[actual] {r[1]}: expected cumulative Rumbles {base['rumbles']} unchanged, got {r[2]}"
         assert abs(float(r[6]) - base["pf"]) < 0.01, f"[actual] {r[1]}: expected PF {base['pf']} unchanged pregame, got {r[6]}"
         assert abs(float(r[7]) - base["pa"]) < 0.01, f"[actual] {r[1]}: expected PA {base['pa']} unchanged pregame, got {r[7]}"
         assert r[8] == f"{base['h2h_w']}-{base['h2h_l']}", f"[actual] {r[1]}: expected H2H {base['h2h_w']}-{base['h2h_l']} unchanged pregame, got {r[8]}"
-    print("Confirmed Actual mode pregame: This Week/Points This Week are 0 for everyone except a legitimate, override-driven exception (Ankit), and every cumulative column matches the Week-1-only history baseline exactly.")
+    print("Confirmed Actual mode pregame: This Week (Rumbles) is 0 for everyone except a legitimate, override-driven exception (Ankit); 'Pts Last Week' shows each roster's real last-completed-week PF untouched by that override; and every cumulative column matches the Week-1-only history baseline exactly.")
 
     live_badges_actual = page.locator(".badge-live").count()
     assert live_badges_actual == 0, f"no LIVE badges expected anywhere pregame (Actual mode), found {live_badges_actual}"
@@ -1920,6 +1946,23 @@ def scenario_pregame_week(browser):
     # tooltip.
     page.click("#mode-custom")
     page.wait_for_timeout(200)
+
+    # The "Pts Last Week" relabel is Actual-mode-only (per the reported
+    # spec, Projected mode's whole point is showing a live/pregame
+    # PROJECTED total, never a frozen historical one) -- confirm the header
+    # reverts to its normal "Pts This Week" wording the moment the mode
+    # switches, pregame or not.
+    header_text_custom = page.text_content("#th-points")
+    # Projected mode's default sort is by this_week_points itself, so the
+    # header can carry a trailing sort arrow (" ▼") -- strip it before
+    # comparing, same as the label text alone.
+    header_label_custom = header_text_custom.replace(" ▲", "").replace(" ▼", "")
+    assert header_label_custom == "Pts This Week", (
+        f"expected the header to read 'Pts This Week' again in Projected mode (the relabel is Actual-mode-only), "
+        f"got: {header_text_custom!r}"
+    )
+    print("Confirmed the header reverts to 'Pts This Week' in Projected mode pregame.")
+
     rows_custom = get_table_rows(page)
     assert len(rows_custom) == 12, f"expected 12 rows, got {len(rows_custom)}"
     actual_by_manager = {r[1]: r for r in rows_actual}
@@ -2000,6 +2043,89 @@ def scenario_pregame_week(browser):
     print("\nSCENARIO 1e PASSED")
 
 
+def scenario_pointer_ahead_of_history(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO 1f: Sleeper's state.week pointer has advanced AHEAD of")
+    print("rumbles_history.json (Week 2 ended, but the daily rewrite hasn't")
+    print("run again yet) -- the reported production bug")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    # Identical to scenario_live_blending's own routes (real, in-progress
+    # Week 2 data) EXCEPT for state.json -- state_ahead.json reports
+    # Sleeper's own pointer at week 3, while rumbles_history.json (below)
+    # still only has weeks_completed: [1]. The OLD targetWeek formula
+    # (Math.max(reportedWeek, maxCompleted + 1) = Math.max(3, 2) = 3) would
+    # have pointed this page at Week 3 -- which has no matchups posted at
+    # all anywhere in these fixtures -- producing a blank/"not live" page
+    # instead of Week 2's real, live data. The fix (targetWeek = maxCompleted
+    # + 1, full stop, never blended with Sleeper's own pointer) must still
+    # land on Week 2 here.
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),  # weeks_completed: [1]
+        "**/v1/state/nfl": load("state_ahead.json"),  # Sleeper says week 3
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+        # Deliberately no route for matchups/3, stats/nfl/2026/3*, etc. --
+        # if targetWeek ever regressed back to picking week 3, the page
+        # would either hang on those unmocked requests or fall through to
+        # block_other and abort them, either way failing the assertions
+        # below rather than silently showing week 3 as if it were normal.
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load")
+    page.wait_for_timeout(1000)
+
+    status_text = page.text_content("#status-text")
+    print("Status text:", status_text)
+    assert "Live" in status_text and "Week 2" in status_text, (
+        f"expected the page to still target/live-track Week 2 (the real, just-ended week) even though Sleeper's "
+        f"own pointer already says Week 3 -- got status: {status_text!r}"
+    )
+    print("Confirmed the page targets Week 2, not a blank Week 3, despite Sleeper's pointer having advanced ahead of rumbles_history.json.")
+
+    rows = get_table_rows(page)
+    assert len(rows) == 12, f"expected the 12 real standings rows (Week 2's live data), not a blank table, got {len(rows)}"
+
+    hist_standings = load("rumbles_history.json")["standings"]
+    baseline_rumbles = {s["manager"]: s["rumbles"] for s in hist_standings}
+    by_manager = {r[1]: r for r in rows}
+    for manager, base_rumbles in baseline_rumbles.items():
+        assert by_manager[manager][2] == str(base_rumbles), (
+            f"expected {manager}'s cumulative Rumbles ({base_rumbles}, from Week 1 history) to still be intact, "
+            f"got {by_manager[manager][2]!r}"
+        )
+    # Points This Week must be genuinely live (nonzero for at least the
+    # rosters with real week-2 actual stats), never the frozen 0 a blank
+    # Week 3 would produce for everyone.
+    nonzero_points = sum(1 for r in rows if float(r[4].split("\n")[0]) > 0)
+    assert nonzero_points >= 4, f"expected several rosters to show real, nonzero live Week 2 points, only {nonzero_points}/12 did"
+    print("Confirmed Week 1's cumulative Rumbles are intact and Week 2's live Points This Week are real/nonzero -- this is genuinely Week 2's data, not a blank Week 3.")
+
+    # The QB Injury Backup Adjustments table must show Week 2's freshly-
+    # detected live entries (Alex/Kyler Murray, still 'likely'; Ankit,
+    # already 'confirmed' via commissioner override) -- if targetWeek had
+    # regressed to Week 3, neither of these would ever be detected at all.
+    qb_rows = get_qb_adjustment_rows(page)
+    qb_by_manager = {r["manager"]: r for r in qb_rows}
+    assert "Alex" in qb_by_manager and qb_by_manager["Alex"]["week"] == "2" and qb_by_manager["Alex"]["confidence"] == "Likely", (
+        f"expected a live, 'likely' Week 2 QB-adjustment entry for Alex, got: {qb_by_manager.get('Alex')}"
+    )
+    assert "Ankit" in qb_by_manager and qb_by_manager["Ankit"]["week"] == "2" and qb_by_manager["Ankit"]["confidence"] == "Confirmed", (
+        f"expected a live, 'confirmed' Week 2 QB-adjustment entry for Ankit, got: {qb_by_manager.get('Ankit')}"
+    )
+    print("Confirmed the QB Injury Backup Adjustments table shows Week 2's freshly-detected live entries (Alex 'likely', Ankit 'confirmed').")
+
+    page.close()
+    assert not console_errors, f"console errors found: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIO 1f PASSED")
+
+
 def scenario_cumulative_only(browser):
     print("\n" + "=" * 70)
     print("SCENARIO 2: Week 1 final, Sleeper's pointer lagging, Week 2 not posted")
@@ -2059,12 +2185,19 @@ def scenario_history_load_failure(browser):
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
     routes = {
-        # Deliberately no route for rumbles_history.json -- it falls
-        # through to the real local static server and 404s for real, since
-        # no such file exists at the served project root.
         "**/v1/state/nfl": load("state_lagging.json"),
     }
     install_routes(page, routes)
+    # Explicitly mock a 404 for rumbles_history.json rather than leaving it
+    # unmocked and relying on "no such file exists at the served project
+    # root" -- that used to be true incidentally, but this repo ships a
+    # real rumbles_history.json committed at the project root (see
+    # build_rumbles.py/the daily workflow), so the very directory this
+    # suite serves from (the repo root, per README's `python -m http.server
+    # 8123` instructions) now legitimately has one sitting right there. A
+    # real 404 route keeps this scenario deterministic regardless of
+    # whether that file happens to exist on disk.
+    page.route("**/rumbles_history.json", lambda route: route.fulfill(status=404, body="Not Found"))
     page.goto(PAGE_URL, wait_until="load")
     page.wait_for_timeout(1000)
 
@@ -2106,6 +2239,7 @@ def main():
         scenario_mobile_responsive_layout(browser)
         scenario_howto_tooltip(browser)
         scenario_pregame_week(browser)
+        scenario_pointer_ahead_of_history(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
         browser.close()

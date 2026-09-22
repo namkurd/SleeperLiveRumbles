@@ -442,6 +442,7 @@ def compute_qb_adjustments_for_week(
     scoring_settings: dict,
     manager_map: dict[int, str],
     is_fresh: bool,
+    is_most_recent_completed: bool,
     carried_by_roster: dict[int, list[dict]],
 ) -> list[dict]:
     entries: list[dict] = []
@@ -529,13 +530,28 @@ def compute_qb_adjustments_for_week(
         # the box score alone, so this is purely an awareness flag: it
         # never gets a custom_points_delta and the live page never folds
         # its points into anyone's total (see rumbles.html's
-        # applyQbAdjustmentsToScores). Once the week is no longer fresh
-        # (see the "carried" fallback below), an unconfirmed "possible"
-        # entry is intentionally NOT carried forward -- most of these
-        # resolve themselves as non-events, so only "likely" (a real,
-        # corroborated injury) and "confirmed" (a commissioner decided it
-        # WAS a real case, handled unconditionally above regardless of
-        # freshness) persist in history.
+        # applyQbAdjustmentsToScores).
+        #
+        # Full lifecycle for an unconfirmed entry, "likely" and "possible"
+        # alike (see the "carried" fallback below and its
+        # is_most_recent_completed gate): visible from the moment it's
+        # first detected here, through the entire span the FOLLOWING week
+        # is live-but-not-yet-completed, then dropped for good once that
+        # following week itself completes without ever being confirmed by
+        # the commissioner -- UNLESS confirmed, which is handled
+        # unconditionally above regardless of freshness and persists
+        # forever, all season. "Likely" used to be carried forward
+        # indefinitely here, every week, all season, with no cutoff at
+        # all -- that was a real bug relative to this intended flow (a
+        # manager reported an old, never-confirmed "likely" case still
+        # showing weeks later), fixed by adding the
+        # is_most_recent_completed gate below. rumbles.html's own
+        # renderQbAdjustments applies the same rule again, client-side, at
+        # the precise moment the following week actually KICKS OFF (not
+        # just "completes" -- a week can take most of a week to go from
+        # kickoff to completion) -- this server-side rule is deliberately
+        # the coarser, once-a-day backstop version of that same rule, not a
+        # replacement for it.
         #
         # This roster may have started more than one QB at once (see
         # find_started_qbs), so every started QB is checked independently,
@@ -570,12 +586,19 @@ def compute_qb_adjustments_for_week(
 
         # Not fresh -- carry forward every previously-captured "likely"
         # entry for this roster/week whose injured QB is still one this
-        # roster has started (or couldn't be freshly re-checked at all).
-        # carried_by_roster maps roster_id -> a LIST now, not a single
+        # roster has started (or couldn't be freshly re-checked at all) --
+        # but ONLY while this week is still the single most-recently-
+        # completed one (is_most_recent_completed). The moment an even
+        # newer week ALSO finishes and supersedes it, that carry-forward
+        # window has closed for good: an unconfirmed "likely" from two (or
+        # more) completed weeks back stops being carried, exactly like
+        # "possible" already never got carried past its own single fresh
+        # day. carried_by_roster maps roster_id -> a LIST now, not a single
         # entry, for the same multi-QB reason as everywhere else above.
-        for carried in carried_by_roster.get(roster_id, []):
-            if carried.get("confidence") == "likely" and (not started_pids or carried.get("injured_qb", {}).get("player_id") in started_pids):
-                entries.append(dict(carried, week=week, manager=manager))
+        if is_most_recent_completed:
+            for carried in carried_by_roster.get(roster_id, []):
+                if carried.get("confidence") == "likely" and (not started_pids or carried.get("injured_qb", {}).get("player_id") in started_pids):
+                    entries.append(dict(carried, week=week, manager=manager))
     return entries
 
 
@@ -626,6 +649,14 @@ def build_history(
     old_qb_by_week = old_qb_by_week or {}
     freshest_week = determine_fresh_week(completed_weeks, previously_completed_weeks)
     can_detect_qb_adjustments = bool(players_meta and team_qb_index and scoring_settings)
+    # The single most-recently-completed week, regardless of freshness --
+    # unlike freshest_week (true for only ONE run, the day a week first
+    # finishes), this stays true for every run across the entire span a
+    # newer week is live-but-not-yet-completed, and only moves once that
+    # newer week ALSO finishes. See compute_qb_adjustments_for_week's
+    # is_most_recent_completed param/comment for why this is the right
+    # gate for carrying an unconfirmed "likely" entry forward.
+    most_recently_completed_week = max(completed_weeks) if completed_weeks else None
 
     for week in completed_weeks:
         matchups = get_json(f"{API_BASE}/league/{league_id}/matchups/{week}")
@@ -648,6 +679,7 @@ def build_history(
                         scoring_settings,
                         manager_map,
                         is_fresh=(week == freshest_week),
+                        is_most_recent_completed=(week == most_recently_completed_week),
                         carried_by_roster=old_qb_by_week.get(week, {}),
                     )
                 )

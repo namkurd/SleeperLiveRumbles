@@ -106,6 +106,22 @@ with open(os.path.join(OUT, "state_lagging.json"), "w") as f:
 with open(os.path.join(OUT, "matchups_week2_empty.json"), "w") as f:
     json.dump([], f)
 
+# ---- /v1/state/nfl variant : Sleeper's pointer is AHEAD of rumbles_history.json ----
+# The actual real-world bug report this whole round of fixes started from:
+# Week 2 had genuinely ended, and Sleeper's own state.week pointer had
+# already advanced to 3 -- but rumbles_history.json (only rewritten once a
+# day by build_rumbles.py) still only had Week 1 finalized
+# (weeks_completed: [1]). The OLD targetWeek formula
+# (Math.max(reportedWeek, maxCompleted + 1)) picked 3 here, jumping
+# straight past Week 2 to an empty, not-yet-posted week -- completely
+# skipping the live/just-ended week the page should have been tracking.
+# Paired with the SAME week-2 matchups/stats/scores/players fixtures
+# scenario_live_blending already uses (week 2 has real, in-progress data in
+# those), this reproduces the exact bug: the page must still target and
+# show Week 2's real data, never a blank Week 3.
+with open(os.path.join(OUT, "state_ahead.json"), "w") as f:
+    json.dump({"season": "2026", "week": 3, "season_type": "regular"}, f)
+
 # ---- /v1/league/{id} : scoring_settings with non-PPR + first-down bonus ----
 # Also includes kr_yd and fgmiss:
 #   - fgmiss is a single flat weight, but Sleeper's real ACTUAL payloads
