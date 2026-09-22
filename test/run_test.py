@@ -484,6 +484,16 @@ def scenario_live_blending(browser):
         "**/v1/state/nfl": load("state.json"),  # week 2, regular
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        # Week 1's own matchups/stats -- fetched by loadLastWeekBreakdown
+        # (always kicked off in parallel, independent of whatever the
+        # CURRENT target week is doing -- see its own comment in
+        # rumbles.html) for the "Pts Last Week" tooltip's underlying data.
+        # Every scenario below whose history fixture has weeks_completed:
+        # [1] needs this mocked too, or that fetch falls through to a real
+        # (blocked) network request and fails the "no console errors"
+        # assertion at the end of each scenario.
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         # Real Sleeper requires ?season_type=... on these two or it 400s --
         # match with a trailing "*" rather than a literal "?" (Playwright
         # glob patterns treat "?" as "any one character", not literally).
@@ -1403,6 +1413,8 @@ def scenario_mobile_tap_tooltip(browser):
         "**/v1/state/nfl": load("state.json"),
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -1531,6 +1543,8 @@ def scenario_mobile_responsive_layout(browser):
         "**/v1/state/nfl": load("state.json"),
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -1763,6 +1777,8 @@ def scenario_howto_tooltip(browser):
         "**/v1/state/nfl": load("state_lagging.json"),
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
         "**/scores/nfl/regular/2026/2": [],
@@ -1857,6 +1873,8 @@ def scenario_pregame_week(browser):
         "**/v1/state/nfl": load("state.json"),  # week 2, regular
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),  # posted
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": [],  # nobody's played yet -- no stats rows at all
         "**/projections/nfl/2026/2*": load("projections_week2.json"),  # real pregame projections
         "**/v1/players/nfl": load("players.json"),
@@ -1935,6 +1953,59 @@ def scenario_pregame_week(browser):
 
     live_badges_actual = page.locator(".badge-live").count()
     assert live_badges_actual == 0, f"no LIVE badges expected anywhere pregame (Actual mode), found {live_badges_actual}"
+
+    # ---- "Pts Last Week" hover tooltip: shows week 1's real, final
+    # per-player breakdown (see loadLastWeekBreakdown in rumbles.html) --
+    # the same underlying tooltip mechanism as the live "Points This Week"
+    # one, just fed last week's data instead of this week's. Aidan gets a
+    # single ordinary player row (proving this isn't just about the
+    # QB-injury cases below); Ben and Rohaan each also get a QB-injury
+    # replacement row, colored by their OWN confidence tier -- Ben's is
+    # "confirmed" (green), Rohaan's is still "likely" (yellow) -- so both
+    # colors are exercised in the same scenario. "proj" always equals
+    # "actual" here (see loadLastWeekBreakdown's own comment: no
+    # projections fetch for a week that's already over).
+    aidan_last_week_rows = get_thisweek_pts_tooltip(page, "Aidan")
+    assert aidan_last_week_rows == [
+        {"time": "", "name": "Week1 Aidan Starter", "actual": "16.00", "proj": "16.00", "live": False},
+    ], f"expected Aidan's 'Pts Last Week' tooltip to show his one real week-1 player row, got {aidan_last_week_rows}"
+    print("Confirmed Aidan's 'Pts Last Week' tooltip shows a plain, real week-1 player row:", aidan_last_week_rows)
+
+    ben_last_week_rows = get_thisweek_pts_tooltip(page, "Ben")
+    assert ben_last_week_rows == [
+        {"time": "", "name": "Test Injured QB", "actual": "10.00", "proj": "10.00", "live": False},
+        {"time": "", "name": "Test Backup QB", "actual": "15.00", "proj": "15.00", "live": False},
+    ], f"expected Ben's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the confirmed backup, got {ben_last_week_rows}"
+    print("Confirmed Ben's 'Pts Last Week' tooltip shows his injured starter plus a 'confirmed' replacement row:", ben_last_week_rows)
+
+    rohaan_last_week_rows = get_thisweek_pts_tooltip(page, "Rohaan")
+    assert rohaan_last_week_rows == [
+        {"time": "", "name": "Week1 Rohaan Injured QB", "actual": "7.00", "proj": "7.00", "live": False},
+        {"time": "", "name": "Week1 Rohaan Backup QB", "actual": "20.00", "proj": "20.00", "live": False},
+    ], f"expected Rohaan's 'Pts Last Week' tooltip to show his own injured starter's real points plus a replacement row for the still-likely backup, got {rohaan_last_week_rows}"
+    print("Confirmed Rohaan's 'Pts Last Week' tooltip shows his injured starter plus a 'likely' replacement row:", rohaan_last_week_rows)
+
+    # Ben's replacement row (Test Backup QB, "confirmed") must be GREEN
+    # (--good) -- the whole point of this round's fix: a confirmed
+    # replacement no longer shows the same yellow as an unconfirmed one.
+    # Rohaan's (Week1 Rohaan Backup QB, still "likely") must stay the usual
+    # yellow (--replacement), unchanged from before. Neither row's own
+    # injured-starter row gets any special color (just an ordinary player
+    # row) -- only the appended replacement row itself is tier-colored.
+    good_ref_lastweek = get_css_var_color(page, "good")
+    replacement_ref_lastweek = get_css_var_color(page, "replacement")
+    ben_colors = get_tooltip_row_computed_colors(page, "Ben")
+    ben_backup_colors = next(r for r in ben_colors if r["name"] == "Test Backup QB")
+    assert ben_backup_colors["name_color"] == good_ref_lastweek, f"expected Ben's confirmed replacement row Name to be green ({good_ref_lastweek}), got {ben_backup_colors['name_color']}"
+    assert ben_backup_colors["actual_color"] == good_ref_lastweek, f"expected Ben's confirmed replacement row Actual to be green ({good_ref_lastweek}), got {ben_backup_colors['actual_color']}"
+    assert ben_backup_colors["proj_color"] == good_ref_lastweek, f"expected Ben's confirmed replacement row Proj to be green ({good_ref_lastweek}), got {ben_backup_colors['proj_color']}"
+
+    rohaan_colors = get_tooltip_row_computed_colors(page, "Rohaan")
+    rohaan_backup_colors = next(r for r in rohaan_colors if r["name"] == "Week1 Rohaan Backup QB")
+    assert rohaan_backup_colors["name_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Name to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['name_color']}"
+    assert rohaan_backup_colors["actual_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Actual to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['actual_color']}"
+    assert rohaan_backup_colors["proj_color"] == replacement_ref_lastweek, f"expected Rohaan's still-likely replacement row Proj to be yellow ({replacement_ref_lastweek}), got {rohaan_backup_colors['proj_color']}"
+    print(f"Confirmed 'Pts Last Week' replacement-row coloring: Ben's confirmed backup is green ({good_ref_lastweek}), Rohaan's still-likely backup is yellow ({replacement_ref_lastweek}).")
 
     # ---- Projected mode: must match Actual EXACTLY for This Week/Rumbles
     # (including Ankit's override-driven 20 -- proving the pregame "This
@@ -2066,6 +2137,8 @@ def scenario_pointer_ahead_of_history(browser):
         "**/v1/state/nfl": load("state_ahead.json"),  # Sleeper says week 3
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": load("stats_week2.json"),
         "**/projections/nfl/2026/2*": load("projections_week2.json"),
         "**/v1/players/nfl": load("players.json"),
@@ -2138,6 +2211,8 @@ def scenario_cumulative_only(browser):
         "**/v1/state/nfl": load("state_lagging.json"),  # Sleeper still says week 1
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2_empty.json"),  # not posted yet
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
         "**/scores/nfl/regular/2026/2": [],

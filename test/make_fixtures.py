@@ -63,6 +63,25 @@ history = {
             "injury_status_at_capture": None,
             "custom_points_delta": None,
         },
+        # A "likely" (not yet commissioner-confirmed) week-1 entry --
+        # exercises the "Pts Last Week" hover tooltip's replacement-row
+        # coloring: still yellow while unconfirmed, matching the manager-
+        # name "*" marker and the QB Injury Backup Adjustments table's own
+        # yellow for this tier (see matchups_week1.json/stats_week1.json
+        # below for this entry's real, hand-verifiable player stats).
+        # Roster 4 (Rohaan) chosen since it has no other QB-adjustment
+        # involvement to disturb.
+        {
+            "week": 1,
+            "roster_id": 4,
+            "manager": "Rohaan",
+            "injured_qb": {"player_id": "WK1_R4_INJURED", "name": "Week1 Rohaan Injured QB", "points": 7.0},
+            "backup_qbs": [{"player_id": "WK1_R4_BACKUP", "name": "Week1 Rohaan Backup QB", "points": 20.0}],
+            "backup_points_total": 20.0,
+            "confidence": "likely",
+            "injury_status_at_capture": "Out",
+            "custom_points_delta": None,
+        },
     ],
 }
 # Week 1: roster i beat roster i+1 within each pair (1v2, 3v4, ...), and
@@ -384,9 +403,79 @@ players = {
     # the only roster where hasIncompletePlayer should ever be false.
     "P13": {"position": "RB", "team": "SEA", "full_name": "Steven Starter One", "injury_status": None},
     "P14": {"position": "WR", "team": "SEA", "full_name": "Steven Starter Two", "injury_status": None},
+    # Week 1's real player-breakdown fixture (matchups_week1.json/
+    # stats_week1.json below) -- names for the "Pts Last Week" hover
+    # tooltip's rows. Team/injury_status don't matter here (that tooltip
+    # never shows a kickoff-time column or filters by game status -- see
+    # loadLastWeekBreakdown's comment), only full_name is read.
+    "WK1_R1_PLAYED": {"position": "WR", "team": None, "full_name": "Week1 Aidan Starter", "injury_status": None},
+    "P_HIST_INJURED": {"position": "QB", "team": None, "full_name": "Test Injured QB", "injury_status": "Out"},
+    "P_HIST_BACKUP": {"position": "QB", "team": None, "full_name": "Test Backup QB", "injury_status": None},
+    "WK1_R4_INJURED": {"position": "QB", "team": None, "full_name": "Week1 Rohaan Injured QB", "injury_status": "Out"},
+    "WK1_R4_BACKUP": {"position": "QB", "team": None, "full_name": "Week1 Rohaan Backup QB", "injury_status": None},
 }
 with open(os.path.join(OUT, "players.json"), "w") as f:
     json.dump(players, f, indent=2)
+
+# ---- /v1/league/{id}/matchups/1 + stats/nfl/2026/1 : Week 1's real,
+# final per-player breakdown -- used by the "Pts Last Week" hover tooltip
+# (Actual mode, once the target week hasn't kicked off yet -- see
+# loadLastWeekBreakdown/showLastWeekPoints in rumbles.html). Unlike week
+# 2's matchups above (still being played, mixed played/unplayed), week 1
+# is fully done -- every player given a stats entry here has genuinely
+# "played" per rumbles.html's own played=!!statsMap[pid] check. Only a
+# handful of rosters get real stats (not all 12) -- enough to hand-verify
+# a normal player's row, PLUS the two QB-injury replacement scenarios
+# below, without needing to hand-craft all 24 slots' worth of numbers.
+#   - Roster 1 (Aidan): one ordinary played starter, proving the tooltip
+#     shows a plain, non-QB-adjustment player row too, not just the
+#     replacement-row scenarios below.
+#   - Roster 2 (Ben): the injured QB from the EXISTING "confirmed" week-1
+#     qb_adjustments entry above (P_HIST_INJURED) is one of this roster's
+#     real starters here, and its identified backup (P_HIST_BACKUP) is a
+#     real (non-starter) player with his own stats line -- together these
+#     let the tooltip show BOTH the injured starter's own real points AND
+#     a replacement row for the backup, colored GREEN (--good) since this
+#     entry is "confirmed".
+#   - Roster 4 (Rohaan): a NEW "likely" (not yet commissioner-confirmed)
+#     week-1 qb_adjustments entry (added to `history["qb_adjustments"]`
+#     above) with its own injured starter (WK1_R4_INJURED) and identified
+#     backup (WK1_R4_BACKUP) -- same idea as roster 2, but colored YELLOW
+#     (--replacement) since this one's still "likely".
+WK1_PLAYED_STARTER = {
+    1: "WK1_R1_PLAYED",
+    2: "P_HIST_INJURED",   # Ben's real starter -- also this week's "confirmed" injured QB
+    4: "WK1_R4_INJURED",   # Rohaan's real starter -- also this week's "likely" injured QB
+}
+matchups_week1 = []
+wk1_matchup_id = 1
+for i in range(1, 13, 2):
+    a, b = i, i + 1
+    a_players = [WK1_PLAYED_STARTER.get(a, "WK1_R%d_A" % a), "WK1_R%d_B" % a]
+    b_players = [WK1_PLAYED_STARTER.get(b, "WK1_R%d_A" % b), "WK1_R%d_B" % b]
+    matchups_week1.append({"roster_id": a, "matchup_id": wk1_matchup_id, "starters": a_players, "points": 0})
+    matchups_week1.append({"roster_id": b, "matchup_id": wk1_matchup_id, "starters": b_players, "points": 0})
+    wk1_matchup_id += 1
+with open(os.path.join(OUT, "matchups_week1.json"), "w") as f:
+    json.dump(matchups_week1, f, indent=2)
+
+stats_week1 = {
+    # Aidan's ordinary played starter -- 300 pass_yd * 0.04 + 1 pass_td *
+    # 4 = 12.00 + 4.00 = 16.00.
+    "WK1_R1_PLAYED": {"pass_yd": 300, "pass_td": 1, "pass_int": 0},
+    # Ben's injured QB (P_HIST_INJURED) -- 250 pass_yd * 0.04 = 10.00.
+    "P_HIST_INJURED": {"pass_yd": 250, "pass_td": 0, "pass_int": 0},
+    # Ben's identified backup (P_HIST_BACKUP), NOT a roster starter --
+    # 375 pass_yd * 0.04 = 15.00.
+    "P_HIST_BACKUP": {"pass_yd": 375, "pass_td": 0, "pass_int": 0},
+    # Rohaan's injured QB (WK1_R4_INJURED) -- 175 pass_yd * 0.04 = 7.00.
+    "WK1_R4_INJURED": {"pass_yd": 175, "pass_td": 0, "pass_int": 0},
+    # Rohaan's identified backup (WK1_R4_BACKUP), NOT a roster starter --
+    # 300 pass_yd * 0.04 + 2 pass_td * 4 = 12.00 + 8.00 = 20.00.
+    "WK1_R4_BACKUP": {"pass_yd": 300, "pass_td": 2, "pass_int": 0},
+}
+with open(os.path.join(OUT, "stats_week1.json"), "w") as f:
+    json.dump(to_sleeper_array(stats_week1, "stat"), f, indent=2)
 
 # ---- /v1/scores/nfl/{season_type}/{season}/{week} : per-game live status ----
 # Sleeper's own live-scoreboard feed -- what the "Pts This Week" tooltip

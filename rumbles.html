@@ -413,16 +413,26 @@
     color: var(--matchup-4);
   }
   /* A QB-injury replacement row -- a same-team backup QB appended to this
-     roster's "Points This Week" breakdown (see appendQbReplacementRows) --
-     is shown with the exact same columns/filtering as any other player,
-     except its name/actual/proj are always this distinct yellow instead of
-     the usual live-green, whether or not that backup's own game happens to
-     still be in progress (see renderPtsTooltipContent -- a replacement row
-     gets THIS class instead of .pts-tooltip-live, never both). */
+     roster's "Points This Week"/"Pts Last Week" breakdown (see
+     appendQbReplacementRows) -- is shown with the exact same columns/
+     filtering as any other player, except its name/actual/proj are always
+     colored by its own confidence tier instead of the usual live-green,
+     whether or not that backup's own game happens to still be in progress
+     (see renderPtsTooltipContent -- a replacement row gets ONE of these two
+     classes instead of .pts-tooltip-live, never both). Still "likely" (no
+     commissioner adjustment yet) is this same yellow used everywhere else
+     on the page for that tier (the manager-name "*" marker, the QB Injury
+     Backup Adjustments table); once "confirmed", the next rule below turns
+     it green, matching that same table's green for a confirmed row. */
   .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-name,
   .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-actual,
   .pts-tooltip tr.pts-tooltip-replacement td.pts-tooltip-proj {
     color: var(--replacement);
+  }
+  .pts-tooltip tr.pts-tooltip-replacement-confirmed td.pts-tooltip-name,
+  .pts-tooltip tr.pts-tooltip-replacement-confirmed td.pts-tooltip-actual,
+  .pts-tooltip tr.pts-tooltip-replacement-confirmed td.pts-tooltip-proj {
+    color: var(--good);
   }
   /* Rank + Manager stay visible while the rest of the row scrolls under them. */
   thead th:first-child, td.rank {
@@ -955,6 +965,16 @@
     historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
     liveError: null,
+    // { week, byRoster: { roster_id: [breakdown row, ...] } } -- the last
+    // COMPLETED week's real, final per-player breakdown (see
+    // loadLastWeekBreakdown), used ONLY for the "Pts Last Week" hover
+    // tooltip (Actual mode, target week not yet kicked off -- see
+    // showLastWeekPoints in buildCombinedStandings). null until loaded, or
+    // if there's no completed week yet at all this season. Refetched only
+    // when the most-recently-completed week actually changes (see
+    // loadLastWeekBreakdown's own cache check), not on every 30s poll --
+    // a past week's real stats never change.
+    lastWeek: null,
     liveQbAdjustments: [], // this week's live-detected QB-injury-backup adjustments (see detectQbAdjustmentsForWeek)
     playersMeta: null, // player_id -> Sleeper player object, fetched once (see ensurePlayersMeta)
     teamQbIndex: null, // NFL team abbr -> [player_id, ...] of every QB on that team
@@ -1521,9 +1541,16 @@
   // computePlayerBreakdownEntry used for every other player -- same
   // actual/proj math, same played/game_status/game_start_ms, so it's
   // filtered and formatted identically in both Actual and Projected mode
-  // (see thisWeekTooltip). The only difference is the `replacement: true`
-  // flag, which renderPtsTooltipContent uses to color the row yellow
-  // instead of the usual live-green (see .pts-tooltip-replacement above).
+  // (see thisWeekTooltip). The only difference is the `replacement`
+  // field, set to the adjustment's OWN confidence tier ("likely" or
+  // "confirmed" -- "possible" never reaches here at all, since it's a
+  // strict no-op with no delta folded in, see applyQbAdjustmentsToScores),
+  // which renderPtsTooltipContent uses to color the row: yellow while
+  // still "likely" (matching the manager-name "*" marker and the QB
+  // Injury Backup Adjustments table's own yellow for the same tier),
+  // green once "confirmed" (ditto, matching that table's green) --
+  // instead of the usual live-green a plain in-progress starter gets. See
+  // .pts-tooltip-replacement/.pts-tooltip-replacement-confirmed above.
   // Always appended AFTER the roster's own (already slot-sorted) starters,
   // in whatever order findBackupQbs already ranked them (highest points
   // first) -- deliberately not folded back into the slot sort, since these
@@ -1532,11 +1559,11 @@
   // (returns `breakdown` unchanged) when there's no identified backup --
   // e.g. a "Confirmed" override with no backup the stats-based heuristic
   // could pin down (see findBackupQbs).
-  function appendQbReplacementRows(breakdown, backupQbs, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule) {
+  function appendQbReplacementRows(breakdown, backupQbs, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, confidence) {
     if (!backupQbs || !backupQbs.length) return breakdown;
     var extra = backupQbs.map(function (b) {
       var entry = computePlayerBreakdownEntry(b.player_id, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule);
-      entry.replacement = true;
+      entry.replacement = confidence || true; // fallback true (renders yellow) if a caller ever omits it
       return entry;
     });
     return breakdown.concat(extra);
@@ -2134,8 +2161,98 @@
       });
   }
 
+  // Loads the last COMPLETED week's real, final per-roster player
+  // breakdown -- used ONLY by the "Pts Last Week" hover tooltip (Actual
+  // mode, once the target week hasn't kicked off yet -- see
+  // showLastWeekPoints in buildCombinedStandings). Unlike loadLive's own
+  // targetWeek fetch, this is always a week that's already fully final in
+  // rumbles_history.json, so there's no live-scoreboard fetch, no
+  // projections fetch (only ever shown in Actual mode, where "proj" is
+  // never displayed), and no fresh re-detection of QB adjustments: any
+  // identified backup QB for this week is read straight out of
+  // rumbles_history.json's own qb_adjustments (already computed once,
+  // server-side, at generation time -- see build_rumbles.py's
+  // compute_qb_adjustments_for_week), then run through the SAME
+  // appendQbReplacementRows/computePlayerBreakdownEntry every other
+  // player uses, so its actual points and rounding match exactly. Only
+  // "likely" and "confirmed" entries ever produce a replacement row here
+  // -- "possible" is deliberately excluded, since it never carries a real
+  // points delta (see applyQbAdjustmentsToScores), so there'd be nothing
+  // genuine to credit in a row for it. Best-effort and NEVER rejects -- a
+  // failure here must never break the main live/standings flow; it just
+  // means "Pts Last Week" falls back to showing no tooltip at all (the
+  // same as before this feature existed). Cached by week: a past week's
+  // real stats never change, so this only actually fetches once per
+  // newly-completed week, not on every 30s poll.
+  function loadLastWeekBreakdown(season, seasonType, leagueId, lastWeek) {
+    if (!lastWeek || lastWeek < 1 || !leagueId) {
+      state.lastWeek = null;
+      return Promise.resolve();
+    }
+    if (state.lastWeek && state.lastWeek.week === lastWeek) {
+      return Promise.resolve(); // already cached -- a completed week's stats don't change
+    }
+    var seasonTypeParam = "?season_type=" + encodeURIComponent(seasonType);
+    return Promise.all([
+      fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + lastWeek).catch(function () { return []; }),
+      fetchJson(STATS_BASE + "/" + season + "/" + lastWeek + seasonTypeParam).catch(function () { return []; }),
+      fetchJson(API_V1 + "/league/" + leagueId).catch(function () { return null; }),
+      ensurePlayersMeta()
+    ]).then(function (results) {
+      var matchups = results[0] || [];
+      var statsMap = arrayToPlayerMap(results[1]);
+      var league = results[2] || {};
+      var playersMeta = results[3] || {};
+      if (!matchups.length) {
+        state.lastWeek = { week: lastWeek, byRoster: {} };
+        return;
+      }
+      var scoringSettings = league.scoring_settings || {};
+      var rosterPositions = league.roster_positions || [];
+
+      // Every "likely" or "confirmed" QB-adjustment entry for THIS week
+      // that has an identified backup, grouped by roster -- a roster_id ->
+      // LIST map since this league's SUPER_FLEX format can start two QBs
+      // at once (see findStartedQbs), so a roster can in principle have
+      // more than one entry the same week, each independently colored by
+      // its OWN confidence tier below.
+      var histAdjustments = ((state.history && state.history.qb_adjustments) || []).filter(function (e) {
+        return e.week === lastWeek && (e.confidence === "likely" || e.confidence === "confirmed") && e.backup_qbs && e.backup_qbs.length;
+      });
+      var adjByRoster = {};
+      histAdjustments.forEach(function (e) {
+        (adjByRoster[e.roster_id] = adjByRoster[e.roster_id] || []).push(e);
+      });
+
+      // No projections fetch for a week that's already over -- there's
+      // nothing left to project. statsMap is deliberately reused as BOTH
+      // the "actual" and "proj" source below, which lands "proj" on
+      // exactly the same number as "actual" for every row (rather than a
+      // misleading flat 0.00) -- this is the SAME convention the live
+      // tooltip already uses for any player whose game has positively
+      // finished (see computePlayerBreakdownEntry: a "complete" game_status
+      // makes effectiveRemainingFraction 0, which collapses blendedProjection
+      // down to actualPts exactly), just arrived at directly here since
+      // there's no teamGameSchedule at all to derive that same status from.
+      var byRoster = {};
+      matchups.forEach(function (m) {
+        var rid = m.roster_id;
+        var breakdown = buildPlayerBreakdown(m, statsMap, statsMap, scoringSettings, playersMeta, {}, rosterPositions);
+        (adjByRoster[rid] || []).forEach(function (entry) {
+          breakdown = appendQbReplacementRows(breakdown, entry.backup_qbs, statsMap, statsMap, scoringSettings, playersMeta, {}, entry.confidence);
+        });
+        byRoster[rid] = breakdown;
+      });
+      state.lastWeek = { week: lastWeek, byRoster: byRoster };
+    }).catch(function (err) {
+      console.warn("[rumbles] couldn't load last week's player breakdown for the 'Pts Last Week' tooltip:", err);
+      state.lastWeek = null;
+    });
+  }
+
   function loadLive() {
     state.liveError = null;
+    var lastWeekPromise = Promise.resolve();
     return fetchJson(API_V1 + "/state/nfl")
       .then(function (nflState) {
         var season = nflState.season;
@@ -2144,6 +2261,15 @@
         var seasonType = nflState.season_type; // "pre" | "regular" | "post" | "off"
         var historyWeeksDone = (state.history && state.history.weeks_completed) || [];
         var maxCompleted = historyWeeksDone.length ? Math.max.apply(null, historyWeeksDone) : 0;
+        var leagueIdForLastWeek = (state.history && state.history.league_id) || null;
+        // Kicked off here, in parallel with everything below -- maxCompleted
+        // (the last COMPLETED week) is already known at this point and
+        // never depends on targetWeek/eligible/whether THIS week's own
+        // matchups have posted, so there's no reason to wait for any of
+        // that first. Joined back in at the very end of this function (see
+        // the final .then() below) so callers awaiting loadLive() also see
+        // state.lastWeek populated by the time render() runs.
+        lastWeekPromise = loadLastWeekBreakdown(season, seasonType, leagueIdForLastWeek, maxCompleted);
 
         // Sleeper's own "current week" pointer (state.week) is NOT a
         // reliable signal for which week this page should be live-
@@ -2338,21 +2464,31 @@
               // adjustmentByRoster/appendQbReplacementRows) gets appended
               // to the same breakdown, so it shows up in this same
               // tooltip -- same columns and Actual/Projected filtering as
-              // any other player, just colored yellow (see
-              // .pts-tooltip-replacement above).
+              // any other player, colored by its own confidence tier (see
+              // appendQbReplacementRows' comment).
               matchups.forEach(function (m) {
                 var rid = m.roster_id;
                 if (state.live.byRoster[rid]) {
                   var breakdown = buildPlayerBreakdown(m, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule, rosterPositions);
                   var adj = adjustmentByRoster[rid];
                   state.live.byRoster[rid].players = appendQbReplacementRows(
-                    breakdown, adj ? adj.backup_qbs : null, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule
+                    breakdown, adj ? adj.backup_qbs : null, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule,
+                    adj ? adj.confidence : null
                   );
                 }
               });
             });
           });
         });
+      })
+      .then(function (result) {
+        // Join the "last week" fetch kicked off above -- it was already
+        // running in parallel with everything else in this function, this
+        // just makes sure loadLive()'s own promise (and so every
+        // .then(render) caller) doesn't resolve until state.lastWeek is
+        // populated too. loadLastWeekBreakdown never rejects, so this
+        // never turns a successful main fetch into a failure.
+        return lastWeekPromise.then(function () { return result; });
       })
       .catch(function (err) {
         console.warn("[rumbles] live fetch failed:", err);
@@ -2485,10 +2621,14 @@
         actual: p.actual,
         proj: p.proj,
         live: p.game_status === "in_progress",
-        // See appendQbReplacementRows/.pts-tooltip-replacement -- always
-        // wins over the plain "live" green when both are true (a
-        // replacement row's own game can certainly still be in progress).
-        replacement: p.replacement === true
+        // See appendQbReplacementRows/.pts-tooltip-replacement(-confirmed)
+        // -- a replacement row's own tier color always wins over the plain
+        // "live" green when both would apply (a replacement row's own
+        // game can certainly still be in progress). Carries the actual
+        // confidence-tier STRING ("likely"/"confirmed"), not just a
+        // boolean, so renderPtsTooltipContent can pick yellow vs. green;
+        // falsy (undefined/null) for any ordinary, non-replacement row.
+        replacement: p.replacement || null
       };
     });
     // Projected mode ONLY -- the whole point is a fixed reference point for
@@ -2637,11 +2777,21 @@
         // used only for the matchup color-coding below, never for the
         // freeze/fold math above.
         opponent_roster_id: liveInfo ? liveInfo.opponentRosterId : null,
-        // Per-starter actual/projected breakdown for the "Points This Week"
-        // hover tooltip -- independent of state.mode (the same underlying
-        // per-player numbers back both the Actual and Projected toggle);
-        // render() decides how to format/filter them for display.
-        this_week_player_breakdown: liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null,
+        // Per-starter actual/projected breakdown for the "Points This
+        // Week"/"Pts Last Week" hover tooltip. While showLastWeekPoints is
+        // true (Actual mode, target week not kicked off yet), this is
+        // deliberately the LAST completed week's real, final breakdown
+        // (state.lastWeek -- see loadLastWeekBreakdown) rather than the
+        // target week's own (mostly-empty/all-projected) one -- hovering
+        // "Pts Last Week" should show what actually happened last week,
+        // same as the live tooltip shows what's happening THIS week once
+        // it's kicked off. Otherwise unchanged: independent of state.mode
+        // beyond that one swap (the same underlying per-player numbers
+        // back both the Actual and Projected toggle); render() decides how
+        // to format/filter them for display.
+        this_week_player_breakdown: showLastWeekPoints
+          ? ((state.lastWeek && state.lastWeek.byRoster[rid]) || null)
+          : (liveActive && live.byRoster[rid] ? live.byRoster[rid].players : null),
         // This roster's own real, banked ACTUAL total for the in-progress
         // week -- independent of state.mode (always the Actual bucket's
         // own points, see actualLiveInfo above), so it's available to show
@@ -2936,9 +3086,11 @@
   // CSS rule), which is why the proj cell below carries its own
   // .pts-tooltip-proj class instead of being class-less like before. A
   // QB-injury replacement row (see appendQbReplacementRows) gets
-  // .pts-tooltip-replacement INSTEAD, even if it's also live -- yellow
-  // always wins there, since the point is to flag it as a replacement, not
-  // to report its own live status.
+  // .pts-tooltip-replacement (still "likely") or .pts-tooltip-replacement-
+  // confirmed (once the commissioner's confirmed it) INSTEAD, even if it's
+  // also live -- its own tier color always wins there, since the point is
+  // to flag it as a replacement (and whether that's official yet), not to
+  // report its own live status.
   function renderPtsTooltipContent(tooltip) {
     var showStartTime = tooltip.showStartTime;
     var hasActualTotal = !!tooltip.actualPointsLabel;
@@ -2953,7 +3105,9 @@
     var bodyHtml = tooltip.rows.map(function (r) {
       var timeStyle = r.timeColor ? ' style="color:' + r.timeColor + '"' : "";
       var timeCellHtml = showStartTime ? '<td class="pts-tooltip-time"' + timeStyle + ">" + escapeHtml(r.startLabel) + "</td>" : "";
-      var rowClass = r.replacement ? "pts-tooltip-replacement" : (r.live ? "pts-tooltip-live" : "");
+      var rowClass = r.replacement === "confirmed" ? "pts-tooltip-replacement-confirmed"
+        : r.replacement ? "pts-tooltip-replacement"
+        : (r.live ? "pts-tooltip-live" : "");
       return '<tr class="' + rowClass + '">' +
         timeCellHtml +
         '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +

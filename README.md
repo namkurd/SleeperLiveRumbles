@@ -662,24 +662,29 @@ player's Proj cell genuinely is live too, recomputing every 30-second poll
 right along with Actual, and leaving it the default color made it read as
 static/settled when it wasn't.)
 
-When a manager has a "likely" QB-injury-backup adjustment in effect (see
-above), the identified backup QB(s) also get appended as their own row(s)
-at the END of that manager's "Points This Week" tooltip -- after their own
-(already slot-sorted) starters, since a backup QB isn't really filling one
-of this roster's own slots, just extra context on who actually covered for
-the injured starter. Each row is computed exactly the same way as any
-other player's -- same actual/proj math (including the pace-dampened live
-blend while their game is still in progress), same Actual/Projected
-filtering rules (left out of Actual mode until they've actually played;
-left out of Projected mode once their game goes final) -- so it slots into
-the tooltip identically to a real starter in every respect except one: its
-Name, Actual, and Proj cells are colored a distinct yellow/gold
-(`--replacement`) instead of the usual colors, including instead of the
-green "live" color a genuinely-in-progress game would otherwise get (the
-yellow always wins, so this row reads as "the injury-backup credit," not
-as an ordinary live starter, even while its own game is still going). This
-shows up in both modes, since a backup QB's real stats are as "actual" as
-anyone else's.
+When a manager has a "likely" or "confirmed" QB-injury-backup adjustment in
+effect (see above) WITH an identified backup, that backup QB also gets
+appended as their own row at the END of that manager's "Points This Week"
+tooltip -- after their own (already slot-sorted) starters, since a backup
+QB isn't really filling one of this roster's own slots, just extra context
+on who actually covered for the injured starter. Each row is computed
+exactly the same way as any other player's -- same actual/proj math
+(including the pace-dampened live blend while their game is still in
+progress), same Actual/Projected filtering rules (left out of Actual mode
+until they've actually played; left out of Projected mode once their game
+goes final) -- so it slots into the tooltip identically to a real starter
+in every respect except one: its Name, Actual, and Proj cells are colored
+by the adjustment's OWN confidence tier instead of the usual colors,
+including instead of the green "live" color a genuinely-in-progress game
+would otherwise get (the tier color always wins, so this row reads as "the
+injury-backup credit," not as an ordinary live starter, even while its own
+game is still going) -- a distinct yellow/gold (`--replacement`) while
+still "likely" (not yet commissioner-confirmed), or GREEN (`--good`,
+matching the QB Injury Backup Adjustments table's own green for that tier)
+once "confirmed". This shows up in both modes, since a backup QB's real
+stats are as "actual" as anyone else's, and the exact same tier-based
+coloring is reused by the "Pts Last Week" tooltip's own replacement rows
+(see the Live scoring section above).
 
 If nobody on a team's roster qualifies for the current mode -- nobody's
 played yet in Actual mode, or every starter's game is already final in
@@ -1424,6 +1429,46 @@ header reads "Pts Last Week" with the real last-week PF for every roster
 (Ankit's live override included) in Actual mode, then reverts to "Pts This
 Week" the moment Projected mode is selected.
 
+**Hovering "Pts Last Week" shows last week's real, final per-player
+breakdown -- the same tooltip as a live week's "Points This Week", just
+fed last week's data.** Rather than leave "Pts Last Week" as a bare number
+with nothing to hover, it gets the exact same tooltip treatment as a
+genuinely live week: one row per starter with their real actual points
+(the tooltip's "Proj" column also just mirrors "Actual" here -- there's
+nothing left to project for a week that's already over, same convention a
+live tooltip already uses once a player's own game is confirmed complete).
+Any QB-injury-backup replacement for that week is appended too, exactly
+like the live tooltip does, and colored by its OWN confidence tier: still
+yellow (`--replacement`) while "likely" (not yet commissioner-confirmed),
+or GREEN (`--good`, matching the QB Injury Backup Adjustments table's own
+green for that tier) once "confirmed". This tier-based coloring is shared
+code (`renderPtsTooltipContent`'s `.pts-tooltip-replacement`/
+`.pts-tooltip-replacement-confirmed` CSS classes) with the live "Points
+This Week" tooltip's own replacement row, which used to always render
+yellow regardless of confidence -- a latent inconsistency (a confirmed
+override with an identified backup would have shown yellow, not green,
+during a live week) fixed alongside this feature, not just for last week's
+tooltip.
+
+The underlying data comes from `loadLastWeekBreakdown` in `rumbles.html`:
+a small, independent, best-effort fetch (last week's matchups + actual
+stats only -- no projections, no live-scoreboard feed, since none of that
+applies to an already-finished week) kicked off in parallel with the main
+live fetch and cached by week (a past week's real stats never change, so
+this only actually fetches once per newly-completed week, not on every 30s
+poll). Any identified backup QB for that week is read straight out of
+`rumbles_history.json`'s own `qb_adjustments` (already computed once,
+server-side, at generation time) rather than re-detected client-side --
+only "likely" and "confirmed" entries ever produce a row this way
+("possible" never carries a real points delta, so there'd be nothing
+genuine to credit). Covered end-to-end by `test/run_test.py`'s pregame
+scenario (1e): Aidan's tooltip shows one plain, real week-1 player row
+(not just the QB-injury cases); Ben's shows his injured starter's real
+points plus a GREEN "confirmed" replacement row; Rohaan's shows his
+injured starter plus a YELLOW "likely" replacement row -- both colors
+hand-verified against the real `--good`/`--replacement` CSS custom
+properties, not just a class-name check.
+
 Completed weeks (from `rumbles_history.json`) aren't affected by the
 toggle -- it only changes how the live, in-progress week is scored.
 
@@ -1605,15 +1650,19 @@ per-team data, just a standing explainer.
    by a commissioner's live QB-adjustment override on a still-pregame
    roster (Ankit) -- while "This Week" (Rumbles) and every cumulative
    column stay exactly as `rumbles_history.json` already has them, that
-   the header reverts to "Pts This Week" the moment Projected mode is
-   selected, that Projected mode's "This Week"/Rumbles and every
-   cumulative column still match Actual exactly (Ankit's override
-   included) while "Points This Week" shows a real nonzero projected
-   total instead, that the "Points This Week" tooltip still works
-   pregame, and that a stale week-1 "possible" QB-adjustment entry (Jake)
-   is still correctly showing (week 2 hasn't kicked off yet, so it isn't
-   stale YET) with its Injured QB cell colored blue rather than the usual
-   red.
+   hovering "Pts Last Week" shows week 1's real per-player breakdown --
+   a plain player row (Aidan), an injured starter plus a GREEN "confirmed"
+   replacement row (Ben), and an injured starter plus a YELLOW "likely"
+   replacement row (Rohaan), the last two hand-verified against the real
+   `--good`/`--replacement` CSS colors -- that the header reverts to "Pts
+   This Week" the moment Projected mode is selected, that Projected
+   mode's "This Week"/Rumbles and every cumulative column still match
+   Actual exactly (Ankit's override included) while "Points This Week"
+   shows a real nonzero projected total instead, that the "Points This
+   Week" tooltip still works pregame, and that a stale week-1 "possible"
+   QB-adjustment entry (Jake) is still correctly showing (week 2 hasn't
+   kicked off yet, so it isn't stale YET) with its Injured QB cell colored
+   blue rather than the usual red.
 6. **Sleeper's `state.week` pointer has advanced AHEAD of
    `rumbles_history.json`** -- the exact reported production bug: Week 2
    has genuinely ended and Sleeper's own pointer already says week 3, but
