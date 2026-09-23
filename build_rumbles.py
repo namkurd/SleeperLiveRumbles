@@ -545,7 +545,21 @@ def compute_qb_adjustments_for_week(
         # all -- that was a real bug relative to this intended flow (a
         # manager reported an old, never-confirmed "likely" case still
         # showing weeks later), fixed by adding the
-        # is_most_recent_completed gate below. rumbles.html's own
+        # is_most_recent_completed gate below. A second, related bug: the
+        # carry-forward gate below used to only ever match
+        # confidence=="likely", so a "possible" entry -- despite this same
+        # comment always having promised it the identical lifecycle -- was
+        # silently dropped the moment its own week's single fresh run ended
+        # (build_history's is_fresh window is exactly one run long), rather
+        # than surviving through the start of the following week like
+        # "likely" does. In practice this meant a real, still-worth-a-look
+        # "possible" case (like the Caleb Williams one that tier exists
+        # for) could vanish from the log within a day of being detected,
+        # well before anyone had a real chance to notice it and have the
+        # commissioner confirm or dismiss it. Fixed by also matching
+        # confidence=="possible" in the carry-forward check -- both tiers
+        # now share the exact one-week grace window this comment describes.
+        # rumbles.html's own
         # renderQbAdjustments applies the same rule again, client-side, at
         # the precise moment the following week actually KICKS OFF (not
         # just "completes" -- a week can take most of a week to go from
@@ -597,7 +611,7 @@ def compute_qb_adjustments_for_week(
         # entry, for the same multi-QB reason as everywhere else above.
         if is_most_recent_completed:
             for carried in carried_by_roster.get(roster_id, []):
-                if carried.get("confidence") == "likely" and (not started_pids or carried.get("injured_qb", {}).get("player_id") in started_pids):
+                if carried.get("confidence") in ("likely", "possible") and (not started_pids or carried.get("injured_qb", {}).get("player_id") in started_pids):
                     entries.append(dict(carried, week=week, manager=manager))
     return entries
 
@@ -616,12 +630,14 @@ def determine_fresh_week(completed_weeks: list[int], previously_completed_weeks:
 
     Without this "first run only" guard, an unconfirmed "possible" entry
     from the prior week would keep getting freshly re-logged (and so never
-    demoted to compute_qb_adjustments_for_week's carry-forward-likely-only
-    path) for the ENTIRE span that the new week is live but not yet itself
-    completed -- days, potentially -- instead of dropping as soon as that
-    new week starts, which is what a manager actually sees and expects (a
-    "possible" case that was never confirmed shouldn't keep lingering once
-    everyone's moved on to the next week)."""
+    demoted to compute_qb_adjustments_for_week's carry-forward path, which
+    only runs its one-week grace window once) for the ENTIRE span that the
+    new week is live but not yet itself completed -- days, potentially --
+    instead of starting that one-week grace window right when the new week
+    starts, which is what a manager actually sees and expects (a "possible"
+    case that was never confirmed keeps showing through that one week, same
+    as "likely", but doesn't linger indefinitely once everyone's moved on
+    past it)."""
     freshest_week = max(completed_weeks) if completed_weeks else None
     if freshest_week is not None and freshest_week in (previously_completed_weeks or set()):
         return None

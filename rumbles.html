@@ -812,12 +812,13 @@
     color: var(--replacement);
     text-decoration-color: var(--replacement);
   }
-  /* "W"/"L" appended after the manager name for last week's real H2H
-     result -- pregame Actual mode only, alongside the "Last Week"/"Pts
-     Last Week" relabeled columns it gives context for (see
-     buildCombinedStandings' last_week_h2h_win). Plain bold text, no
-     tooltip/interactivity (unlike the QB-adjustment asterisks) -- the
-     letter alone is the whole fact. */
+  /* "W"/"nW"/"L"/"nL" appended after the manager name for the manager's
+     current H2H winning/losing streak as of last week -- pregame Actual
+     mode only, alongside the "Last Week"/"Pts Last Week" relabeled columns
+     it gives context for (see buildCombinedStandings' last_week_h2h_streak
+     / computeH2hStreak). Plain bold text, no tooltip/interactivity (unlike
+     the QB-adjustment asterisks) -- the badge text alone is the whole
+     fact. */
   .lastweek-h2h-badge { font-weight: 700; }
   .lastweek-h2h-win { color: var(--good); }
   .lastweek-h2h-loss { color: var(--bad); }
@@ -2770,6 +2771,41 @@
     };
   }
 
+  // A roster's current H2H winning/losing streak, walking backward week by
+  // week from `uptoWeek` (the last completed week) through
+  // rumbles_history.json's own state.history.weekly log -- the same
+  // per-week h2h_win field the single-week "W"/"L" badge always used,
+  // just followed back as far as it keeps agreeing with itself. Returns
+  // {result, length}: result is true (winning streak) / false (losing
+  // streak) / null (no streak to show -- the most recent week itself was a
+  // bye or its result is missing), and length is how many CONSECUTIVE
+  // weeks, ending at uptoWeek, share that same result. A bye or otherwise
+  // unresolvable week (h2h_win isn't a real boolean -- see score_week in
+  // build_rumbles.py) breaks the streak rather than being skipped over: a
+  // week you didn't have a real result for can't extend a streak, whether
+  // it's the most recent week (nothing to show at all -- {null, 0}) or one
+  // further back (the streak just stops there, same as a result flipping).
+  function computeH2hStreak(history, uptoWeek, rosterId) {
+    if (uptoWeek == null || !history || !history.weekly) return { result: null, length: 0 };
+    var result = null;
+    var length = 0;
+    for (var w = uptoWeek; w >= 1; w--) {
+      var weekLog = history.weekly[String(w)];
+      var entry = weekLog ? weekLog[String(rosterId)] : null;
+      var win = entry && typeof entry.h2h_win === "boolean" ? entry.h2h_win : null;
+      if (win === null) break;
+      if (result === null) {
+        result = win;
+        length = 1;
+      } else if (win === result) {
+        length++;
+      } else {
+        break;
+      }
+    }
+    return { result: result, length: length };
+  }
+
   function buildCombinedStandings() {
     var histStandings = (state.history && state.history.standings) || [];
     var weeksCompleted = (state.history && state.history.weeks_completed) || [];
@@ -2881,19 +2917,14 @@
         ? playersBreakdown.some(function (p) { return p.game_status !== "complete"; })
         : true;
 
-      // Last week's real H2H result (true win / false loss / null for a
-      // bye or unresolvable pairing -- see score_week in build_rumbles.py)
-      // for the manager-name "W"/"L" badge, pregame only (showLastWeekPoints)
-      // -- state.lastWeek.week IS the last completed week number (see
-      // loadLastWeekBreakdown), so this reads the matching entry straight
-      // out of rumbles_history.json's own per-week log rather than
-      // recomputing anything client-side.
+      // This roster's current H2H winning/losing streak as of last week
+      // (see computeH2hStreak above) for the manager-name "W"/"nW"/"L"/
+      // "nL" badge, pregame only (showLastWeekPoints) -- state.lastWeek.week
+      // IS the last completed week number (see loadLastWeekBreakdown), so
+      // this walks state.history.weekly backward from there rather than
+      // recomputing anything against live data.
       var lastWeekNum = state.lastWeek ? state.lastWeek.week : null;
-      var lastWeekLog = (lastWeekNum != null && state.history && state.history.weekly)
-        ? state.history.weekly[String(lastWeekNum)]
-        : null;
-      var lastWeekEntry = lastWeekLog ? lastWeekLog[String(rid)] : null;
-      var lastWeekH2hWin = lastWeekEntry && typeof lastWeekEntry.h2h_win === "boolean" ? lastWeekEntry.h2h_win : null;
+      var lastWeekStreak = computeH2hStreak(state.history, lastWeekNum, rid);
 
       return {
         roster_id: rid,
@@ -2969,13 +3000,14 @@
         // confirms it, the credit stays (as the official override delta)
         // but the speculative-adjustment UI cue goes away.
         qb_adjustment: liveActive && live.byRoster[rid] ? live.byRoster[rid].qbAdjustment : null,
-        // Last week's real H2H outcome (see lastWeekH2hWin above) --
-        // null-scoped to showLastWeekPoints (pregame Actual only, same
-        // gate as the "Pts Last Week"/"Last Week" relabels) so the "W"/"L"
-        // badge never lingers once the current week's own live H2H result
-        // (a different, already-existing signal -- see this_week_winning)
+        // This roster's current H2H win/loss streak as of last week (see
+        // lastWeekStreak above) -- {result, length}, null-scoped to
+        // showLastWeekPoints (pregame Actual only, same gate as the "Pts
+        // Last Week"/"Last Week" relabels) so the "W"/"nW"/"L"/"nL" badge
+        // never lingers once the current week's own live H2H result (a
+        // different, already-existing signal -- see this_week_winning)
         // becomes the relevant one to show instead.
-        last_week_h2h_win: showLastWeekPoints ? lastWeekH2hWin : null,
+        last_week_h2h_streak: showLastWeekPoints ? lastWeekStreak : null,
         // Still-"likely" (unconfirmed) QB-injury adjustment folded into
         // THIS row's "Pts Last Week" total above (see lastWeekPointsDelta)
         // -- {delta, confidence: "likely", injured_qb, backup_qbs} (same
@@ -3126,17 +3158,21 @@
           state.qbAdjTooltipData[r.roster_id] = buildQbAdjTooltipHtml(r.qb_adjustment);
           nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">QB Inj*</span>';
         }
-        // "W"/"L" badge for last week's real H2H result -- pregame Actual
-        // mode only (r.last_week_h2h_win is already null outside that
-        // state, see buildCombinedStandings), right alongside the "Last
-        // Week"/"Pts Last Week" relabeled columns it's giving context for.
-        // null specifically means "no result to show" (a bye, or the data
-        // just isn't there) -- true/false are the only two values that get
-        // a badge at all.
-        if (r.last_week_h2h_win === true) {
-          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-win">W</span>';
-        } else if (r.last_week_h2h_win === false) {
-          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-loss">L</span>';
+        // "W"/"nW"/"L"/"nL" badge for the manager's current H2H
+        // winning/losing streak as of last week -- pregame Actual mode only
+        // (r.last_week_h2h_streak is already null outside that state, see
+        // buildCombinedStandings/computeH2hStreak), right alongside the
+        // "Last Week"/"Pts Last Week" relabeled columns it's giving context
+        // for. A 1-week streak shows as a plain "W"/"L" (unchanged from
+        // before this was a streak), and a 2+ week streak is prefixed with
+        // its length ("3W", "2L", ...). result===null (a bye, or the data
+        // just isn't there for last week) shows no badge at all.
+        if (r.last_week_h2h_streak && r.last_week_h2h_streak.result === true) {
+          var winStreakText = r.last_week_h2h_streak.length > 1 ? r.last_week_h2h_streak.length + "W" : "W";
+          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-win">' + winStreakText + "</span>";
+        } else if (r.last_week_h2h_streak && r.last_week_h2h_streak.result === false) {
+          var lossStreakText = r.last_week_h2h_streak.length > 1 ? r.last_week_h2h_streak.length + "L" : "L";
+          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-loss">' + lossStreakText + "</span>";
         }
         // The tooltip itself is a custom element (see pts-tooltip show/
         // hide/toggle below), not a native title attribute -- a native

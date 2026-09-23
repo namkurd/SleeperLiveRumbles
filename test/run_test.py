@@ -97,7 +97,7 @@ def get_table_rows(page):
         "#standings-body tr",
         """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
             var text = td.innerText.trim();
-            if (i === 1) return text.replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
+            if (i === 1) return text.replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, '');
             if (i === 4) return text.replace(/\\s*\\*$/, '');
             return text;
         }))""",
@@ -221,7 +221,7 @@ def get_matchup_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, '');
             var span = r.querySelector('td.manager .matchup-name');
             var color = span ? span.style.color : null;
             return [name, color || null];
@@ -239,7 +239,7 @@ def get_pts_this_week_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, '');
             var cell = r.querySelector('td.thisweek-pts');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -256,7 +256,7 @@ def get_thisweek_rumbles_colors(page):
     pairs = page.eval_on_selector_all(
         "#standings-body tr",
         """rows => rows.map(r => {
-            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, '');
+            var name = r.querySelector('td.manager').innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, '');
             var cell = r.querySelector('td.thisweek');
             var color = cell ? cell.style.color : null;
             return [name, color || null];
@@ -280,7 +280,7 @@ def get_tooltip_row_computed_colors(page, manager):
     clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+\\d*[WL]$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -343,7 +343,7 @@ def get_thisweek_pts_tooltip(page, manager):
     next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+\\d*[WL]$/, \'\'))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -384,7 +384,7 @@ def get_thisweek_pts_tooltip_header(page, manager):
     Moves the mouse away afterward so the next check starts clean."""
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
     ).index(manager)
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     classes = cell.get_attribute("class") or ""
@@ -1443,7 +1443,7 @@ def scenario_mobile_tap_tooltip(browser):
 
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+[WL]$/, \'\'))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, \'\').replace(/\\s+\\d*[WL]$/, \'\'))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     assert "has-tooltip" in (cell.get_attribute("class") or ""), "Aidan's Pts This Week cell should be tappable (has-tooltip)"
@@ -2054,7 +2054,7 @@ def scenario_pregame_week(browser):
     def get_last_week_diff_color(manager, player_name):
         idx = page.eval_on_selector_all(
             "#standings-body tr td.manager",
-            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
         ).index(manager)
         cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
         cell.hover()
@@ -2115,7 +2115,7 @@ def scenario_pregame_week(browser):
     def get_lastweek_pts_asterisk(page, manager):
         idx = page.eval_on_selector_all(
             "#standings-body tr td.manager",
-            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
         ).index(manager)
         row = page.locator("#standings-body tr").nth(idx)
         el = row.locator("td.thisweek-pts span.pts-lastweek-yellow")
@@ -2153,16 +2153,21 @@ def scenario_pregame_week(browser):
     page.wait_for_timeout(150)
     print("Confirmed the 'Pts Last Week' '*' tooltip uses last-week-tensed wording ('ruled out last week', 'were credited') and names 'Pts Last Week' in its points-added line, reusing #qb-adj-tooltip.")
 
-    # ---- "W"/"L" badge for last week's real H2H result, next to the
-    # manager name -- pregame Actual mode only (buildCombinedStandings'
-    # last_week_h2h_win). Kaitlyn (roster 11, the odd/winning half of the
-    # 11-vs-12 pair) beat Stephanie in week 1 (see make_fixtures.py's H2H
-    # pairing); Ben (roster 2, the even/losing half of the 1-vs-2 pair)
-    # lost to Aidan.
+    # ---- "W"/"L" badge for the manager's current H2H win/loss streak as of
+    # last week, next to the manager name -- pregame Actual mode only
+    # (buildCombinedStandings' last_week_h2h_streak / computeH2hStreak).
+    # With only ONE completed week in this fixture (weeks_completed: [1]),
+    # every streak here is trivially length 1, so the badge still reads a
+    # plain "W"/"L" -- a real multi-week streak ("2W", "3L", a streak
+    # broken by a bye) is unit-tested separately in test/test_h2h_streak.js
+    # against a hand-built multi-week history, no DOM/fixture involved.
+    # Kaitlyn (roster 11, the odd/winning half of the 11-vs-12 pair) beat
+    # Stephanie in week 1 (see make_fixtures.py's H2H pairing); Ben (roster
+    # 2, the even/losing half of the 1-vs-2 pair) lost to Aidan.
     def get_lastweek_h2h_badge(page, manager):
         idx = page.eval_on_selector_all(
             "#standings-body tr td.manager",
-            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+            "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
         ).index(manager)
         row = page.locator("#standings-body tr").nth(idx)
         el = row.locator("span.lastweek-h2h-badge")
@@ -2270,7 +2275,7 @@ def scenario_pregame_week(browser):
     # accidentally break the existing tooltip feature.
     idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
     ).index("Aidan")
     cell = page.locator("#standings-body tr").nth(idx).locator("td.thisweek-pts")
     cell.hover()
@@ -2465,7 +2470,7 @@ def scenario_cumulative_only(browser):
     # numeric column or header cell at all.
     aidan_idx = page.eval_on_selector_all(
         "#standings-body tr td.manager",
-        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+[WL]$/, ''))",
+        "cells => cells.map(c => c.innerText.trim().replace(/\\s*QB Inj\\*$/, '').replace(/\\s+\\d*[WL]$/, ''))",
     ).index("Aidan")
     aidan_cell = page.locator("#standings-body tr").nth(aidan_idx).locator("td.thisweek-pts")
     aidan_cell.hover()

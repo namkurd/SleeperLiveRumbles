@@ -191,9 +191,33 @@ one-week grace window. A previously-captured "Likely" entry is now carried
 forward across daily runs for exactly as long as `is_most_recent_completed`
 holds, and stops being carried the moment it no longer does (see
 `compute_qb_adjustments_for_week`'s `is_most_recent_completed`/
-`carried_by_roster` handling). "Possible" entries were never carried
-forward server-side at all (client-side-only, below) -- that part is
-unchanged.
+`carried_by_roster` handling).
+
+A THIRD, related bug (found and fixed in a later session, reported as
+"a real 'possible' case from last week just isn't showing up in the table
+anymore"): "Possible" entries were originally never carried forward
+server-side at all -- the carry-forward check only ever matched
+`confidence == "likely"`, so despite this very section's own promise that
+an unconfirmed entry gets the SAME one-week grace window regardless of
+tier, a "possible" entry would actually vanish from `rumbles_history.json`
+the very next time `build_rumbles.py` ran after its own single "fresh" day
+ended -- often within 24 hours of being detected, nowhere close to a full
+week, and well before a manager or the commissioner had any real chance to
+notice it and confirm or dismiss it. Confirmed against a real production
+case: three same-week "likely" entries the commissioner had already keyed
+in matching `custom_points` overrides for were correctly promoted to
+"confirmed" once `build_rumbles.py` ran again (the override branch is
+unconditional, so that half always worked), but a genuine "possible" case
+from the same week would have quietly disappeared on that same run instead
+of surviving to be checked. Fixed by carrying forward `confidence in
+("likely", "possible")` instead of just `"likely"` in the same
+`is_most_recent_completed`-gated block -- both tiers now share the
+identical grace window this section describes, dropped the same way once
+an even newer week supersedes them. See
+`test_compute_qb_adjustments_carries_forward_stale_possible_tier` /
+`test_compute_qb_adjustments_possible_tier_stops_being_carried_once_superseded`
+in `test/test_build_rumbles.py` for the regression coverage (mirroring the
+existing "likely" carry-forward tests exactly, tier for tier).
 
 That server-side half only takes effect once `build_rumbles.py` actually
 runs again and rewrites `rumbles_history.json` -- and the scheduled
@@ -486,13 +510,14 @@ commissioner override still always wins as "confirmed" regardless of what
 the stats-only heuristic would have said. `test/test_build_rumbles.py`
 covers the equivalent server-side logic in `compute_qb_adjustments_for_
 week` (the historical/nightly-build detector), including that an
-unconfirmed "possible" entry is deliberately NOT carried forward at all
-once its week is no longer the freshest one being checked -- "likely" IS
-carried forward, but only for the one-week grace window described above
-(`is_most_recent_completed`), never indefinitely -- so neither an
-unconfirmed "possible" nor an unconfirmed "likely" that nobody ever
-confirmed can accumulate permanently in history, matching their shared
-purpose as a live-awareness signal rather than a permanent record.
+unconfirmed "possible" entry IS carried forward, same as "likely", for the
+one-week grace window described above (`is_most_recent_completed`), and
+stops being carried the moment an even newer week supersedes it -- so
+neither an unconfirmed "possible" nor an unconfirmed "likely" that nobody
+ever confirmed can accumulate permanently in history, matching their
+shared purpose as a live-awareness signal rather than a permanent record,
+but both still get their full, promised one-week window to actually be
+noticed and confirmed or dismissed.
 
 The SUPER_FLEX/multi-started-QB fix (every started QB checked
 independently, not just the first one found) has its own dedicated
@@ -1557,25 +1582,54 @@ exactly in Actual mode, reverting to "This Week" with the old
 Actual-bucket values (Ankit's override included) the instant Projected
 mode is selected.
 
-**A green " W" or red " L" appears right after a manager's name, in the
-same Manager column, showing last week's real head-to-head result --
-Actual mode, pregame only.** Sourced from `rumbles_history.json`'s own
-`history.weekly[<last completed week>][<roster_id>].h2h_win` (a field
-that's been sitting in the history file, unused, since it was first
-written by `build_rumbles.py`'s `score_week()`) -- `true` renders a green
-`W`, `false` a red `L`, and a bye/malformed pairing (`h2h_win` is neither
-boolean, i.e. `None` server-side) renders nothing at all rather than a
-misleading badge either way. This sits right alongside the existing live
-`QB Inj*` marker in the same name cell -- both can show at once -- and,
-like every other pregame-only feature on this page, only appears in
-Actual mode before the target week has kicked off; Projected mode's
-manager names, and any manager name once the week is actually live, are
-untouched. See `last_week_h2h_win` in `buildCombinedStandings` and the
-`.lastweek-h2h-badge`/`.lastweek-h2h-win`/`.lastweek-h2h-loss` CSS classes
-in `rumbles.html`. Covered end-to-end by `test/run_test.py`'s pregame
-scenario (1e): Kaitlyn (who won her week-1 matchup) shows a green "W",
-Ben (who lost his) shows a red "L", both colors hand-verified against the
-real `--good`/`--bad` CSS custom properties.
+**A green "W"/"2W"/... or red "L"/"3L"/... badge appears right after a
+manager's name, in the same Manager column, showing the manager's CURRENT
+H2H winning/losing streak as of last week -- Actual mode, pregame only.**
+This started as a plain single-week "W"/"L" (last week's result alone) and
+was upgraded to a real streak: `computeH2hStreak` walks backward week by
+week from the last completed week through `rumbles_history.json`'s own
+`history.weekly[<week>][<roster_id>].h2h_win` (a field that's been sitting
+in the history file, unused before this whole feature, since it was first
+written by `build_rumbles.py`'s `score_week()`), counting how many
+CONSECUTIVE weeks -- ending at last week -- share the same true/false
+result, and stops the moment it hits a week with a different result or one
+it can't resolve at all. A 1-week streak (the common case) still renders
+as a plain `W`/`L`, unchanged from before this was a streak; a 2-or-more
+week streak gets its length prefixed -- `2W`, `3L`, and so on, with no cap
+on how long a real streak can run. `true` renders green, `false` red, same
+as the original single-week version. A bye or otherwise-unresolvable week
+(`h2h_win` isn't a real boolean, i.e. `None` server-side -- a malformed
+pairing) breaks the streak rather than being skipped over or averaged
+past: if it's the MOST RECENT week, there's nothing to show at all (no
+badge); if it's further back, the streak simply stops counting there, so
+only the consecutive result-matching weeks strictly after it are counted
+-- a manager can never be credited with a streak that quietly skips over a
+week they didn't have a real result for. This sits right alongside the
+existing live `QB Inj*` marker in the same name cell -- both can show at
+once -- and, like every other pregame-only feature on this page, only
+appears in Actual mode before the target week has kicked off; Projected
+mode's manager names, and any manager name once the week is actually live,
+are untouched. See `computeH2hStreak` and `last_week_h2h_streak` in
+`rumbles.html`, and the `.lastweek-h2h-badge`/`.lastweek-h2h-win`/
+`.lastweek-h2h-loss` CSS classes. Covered two ways: `test/run_test.py`'s
+pregame scenario (1e) end-to-end, against a fixture with only one
+completed week of history (so every streak there is trivially length 1) --
+Kaitlyn (who won her week-1 matchup) shows a green "W", Ben (who lost his)
+shows a red "L", both colors hand-verified against the real
+`--good`/`--bad` CSS custom properties; and a real multi-week streak
+(2-in-a-row, 3-in-a-row, a streak broken by a result flipping, a streak
+broken/stopped by a bye either at the most recent week or partway back,
+missing `history.weekly` data entirely, and a long double-digit streak
+reporting its real length rather than being capped) is unit-tested
+directly against hand-built multi-week history objects in
+`test/test_h2h_streak.js` (`node test/test_h2h_streak.js`, no browser or
+fixtures needed) -- building a second fully-completed week into the shared
+Playwright fixture just to reach a 2-week streak would have meant
+reworking every other scenario that fixture backs (the live week, both
+mobile layouts, the pointer-ahead-of-history scenario, ...) for what's
+really pure backward-scan arithmetic with no DOM involvement at all, the
+same reasoning `test_qb_adj_tooltip.js` and `test_blended_projection.js`
+already followed for their own function-level cases.
 
 **The "Pts Last Week" tooltip's "Proj" column becomes a "Diff" column --
 actual minus last week's real pregame projection, colored green when the
@@ -1807,7 +1861,11 @@ per-team data, just a standing explainer.
    confirmed NOT double-added and shows no asterisk -- while every
    cumulative column stays exactly as `rumbles_history.json` already has
    them, that a green "W" (Kaitlyn) or red "L" (Ben) badge appears right
-   after the manager name showing last week's real H2H result, that
+   after the manager name showing the manager's current H2H streak as of
+   last week (this fixture only has one completed week, so every streak
+   here is trivially length 1 and reads as a plain letter -- a real
+   multi-week "2W"/"3L" is covered separately in `test/test_h2h_streak.js`,
+   see the "Live scoring" section above), that
    hovering "Pts Last Week" shows week 1's real per-player breakdown with
    a "Diff" column (not "Proj") -- a plain player row with its own
    actual-vs-pregame-projection diff colored by sign (Aidan), an injured
@@ -1866,27 +1924,40 @@ injury-backup detector: the dot-product QB scoring, team-scoping (same
 scenario as above -- excludes a non-playing same-team QB and a playing
 different-team QB), all three confidence tiers -- including that
 "possible" fires whenever fresh but uncorroborated (a `None` status and a
-real non-out one like "Questionable" are both checked) and, unlike
-"likely", is deliberately NOT carried forward once its week goes stale --
-and, the exact bug this log design fixes, that a commissioner override
-always produces a log entry even when no backup QB can be independently
-identified from the stats.
+real non-out one like "Questionable" are both checked), that BOTH
+"likely" and "possible" alike are carried forward for the exact same
+one-week grace window (while their week is still the single
+most-recently-completed one) and dropped the moment an even newer week
+supersedes it -- a real bug, fixed this session: the carry-forward check
+used to only ever match `confidence == "likely"`, so a "possible" entry
+would silently vanish from the log the day after its own single "fresh"
+run ended, well short of the one-week window this same file's own
+comments always said it should get, and well before a manager or the
+commissioner had any real chance to notice it and confirm or dismiss
+it -- and, the exact bug this log design fixes, that a commissioner
+override always produces a log entry even when no backup QB can be
+independently identified from the stats.
 
 `test/test_blended_projection.js` (`node test/test_blended_projection.js`,
 no server/browser needed), `test/test_qb_adj_tooltip.js` (`node
-test/test_qb_adj_tooltip.js`, likewise), and `test/test_qb_adj_detection.js`
-(`node test/test_qb_adj_detection.js`, likewise) are all standalone unit
-tests that regex-extract specific pure functions straight out of
-`rumbles.html` and exercise them in isolation -- the live-blending
-pace-dampening math for the first, the QB-injury manager-marker tooltip's
-wording (including the "a replacement QB is also injured" chain scenarios)
-for the second, and `detectQbAdjustmentsForWeek`/`applyQbAdjustmentsToScores`
-(the client-side confidence-tier detector and how it feeds the live
-totals -- including the "possible" tier never moving either total or
-populating the marker/tooltip map) for the third. All three exist
-specifically to cover logic that would otherwise need a lot of fixture
-plumbing to reach through the full Playwright scenario for what's really
-pure string/number-crunching with no DOM or live-fetch involved.
+test/test_qb_adj_tooltip.js`, likewise), `test/test_qb_adj_detection.js`
+(`node test/test_qb_adj_detection.js`, likewise), and
+`test/test_h2h_streak.js` (`node test/test_h2h_streak.js`, likewise) are
+all standalone unit tests that regex-extract specific pure functions
+straight out of `rumbles.html` and exercise them in isolation -- the
+live-blending pace-dampening math for the first, the QB-injury
+manager-marker tooltip's wording (including the "a replacement QB is also
+injured" chain scenarios) for the second,
+`detectQbAdjustmentsForWeek`/`applyQbAdjustmentsToScores` (the client-side
+confidence-tier detector and how it feeds the live totals -- including the
+"possible" tier never moving either total or populating the marker/tooltip
+map) for the third, and `computeH2hStreak` (the manager-name "W"/"2W"/
+"L"/"3L" streak badge's backward-scan logic, against hand-built multi-week
+history objects the shared Playwright fixture doesn't have room for) for
+the fourth. All four exist specifically to cover logic that would
+otherwise need a lot of fixture plumbing to reach through the full
+Playwright scenario for what's really pure string/number-crunching with no
+DOM or live-fetch involved.
 
 Useful if you ever touch the scoring or live-detection logic and want to
 check it without waiting for a live NFL window:
@@ -1901,6 +1972,7 @@ python test/test_build_rumbles.py   # no server/browser needed for this one
 node test/test_blended_projection.js   # ditto
 node test/test_qb_adj_tooltip.js       # ditto
 node test/test_qb_adj_detection.js     # ditto
+node test/test_h2h_streak.js           # ditto
 ```
 
 ## Source of truth

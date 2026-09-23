@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-09-22T13:33:00.384037+00:00",
+  "generated_at": "2026-09-23T11:59:18.708118+00:00",
   "weeks_completed": [
     1,
     2
@@ -17,7 +17,7 @@
       "last_completed_week_rumbles": 20,
       "last_completed_week_points": 219.0,
       "pf": 409.05,
-      "pa": 285.75,
+      "pa": 295.89,
       "h2h_w": 2,
       "h2h_l": 0,
       "vs_field_w": 21,
@@ -42,16 +42,16 @@
     {
       "roster_id": 8,
       "manager": "Ankit",
-      "rumbles": 32,
-      "rumble_pct": 80.0,
-      "last_completed_week_rumbles": 17,
+      "rumbles": 31,
+      "rumble_pct": 77.5,
+      "last_completed_week_rumbles": 16,
       "last_completed_week_points": 169.4,
       "pf": 335.33,
       "pa": 307.26,
       "h2h_w": 2,
       "h2h_l": 0,
-      "vs_field_w": 14,
-      "vs_field_l": 8,
+      "vs_field_w": 13,
+      "vs_field_l": 9,
       "rank": 3
     },
     {
@@ -60,8 +60,8 @@
       "rumbles": 31,
       "rumble_pct": 77.5,
       "last_completed_week_rumbles": 11,
-      "last_completed_week_points": 105.61,
-      "pf": 297.82,
+      "last_completed_week_points": 109.05,
+      "pf": 301.26,
       "pa": 257.66,
       "h2h_w": 2,
       "h2h_l": 0,
@@ -72,16 +72,16 @@
     {
       "roster_id": 6,
       "manager": "Alex",
-      "rumbles": 21,
-      "rumble_pct": 52.5,
-      "last_completed_week_rumbles": 16,
-      "last_completed_week_points": 167.98,
-      "pf": 328.06,
+      "rumbles": 22,
+      "rumble_pct": 55.0,
+      "last_completed_week_rumbles": 17,
+      "last_completed_week_points": 170.29,
+      "pf": 330.37,
       "pa": 309.56,
       "h2h_w": 1,
       "h2h_l": 1,
-      "vs_field_w": 12,
-      "vs_field_l": 10,
+      "vs_field_w": 13,
+      "vs_field_l": 9,
       "rank": 5
     },
     {
@@ -102,31 +102,31 @@
     {
       "roster_id": 5,
       "manager": "Joe",
-      "rumbles": 18,
-      "rumble_pct": 45.0,
-      "last_completed_week_rumbles": 5,
+      "rumbles": 17,
+      "rumble_pct": 42.5,
+      "last_completed_week_rumbles": 4,
       "last_completed_week_points": 131.51,
       "pf": 278.53,
       "pa": 273.0,
       "h2h_w": 1,
       "h2h_l": 1,
-      "vs_field_w": 9,
-      "vs_field_l": 13,
+      "vs_field_w": 8,
+      "vs_field_l": 14,
       "rank": 7
     },
     {
       "roster_id": 10,
       "manager": "Ryan",
-      "rumbles": 16,
-      "rumble_pct": 40.0,
-      "last_completed_week_rumbles": 4,
-      "last_completed_week_points": 125.67,
-      "pf": 266.6,
+      "rumbles": 17,
+      "rumble_pct": 42.5,
+      "last_completed_week_rumbles": 5,
+      "last_completed_week_points": 135.81,
+      "pf": 276.74,
       "pa": 337.61,
       "h2h_w": 1,
       "h2h_l": 1,
-      "vs_field_w": 7,
-      "vs_field_l": 15,
+      "vs_field_w": 8,
+      "vs_field_l": 14,
       "rank": 8
     },
     {
@@ -167,7 +167,7 @@
       "last_completed_week_rumbles": 3,
       "last_completed_week_points": 119.51,
       "pf": 238.12,
-      "pa": 308.91,
+      "pa": 311.22,
       "h2h_w": 0,
       "h2h_l": 2,
       "vs_field_w": 4,
@@ -182,7 +182,7 @@
       "last_completed_week_rumbles": 1,
       "last_completed_week_points": 81.69,
       "pf": 222.41,
-      "pa": 271.54,
+      "pa": 274.98,
       "h2h_w": 0,
       "h2h_l": 2,
       "vs_field_w": 3,
@@ -305,14 +305,14 @@
       "1": {
         "points": 81.69,
         "opponent_roster_id": 7,
-        "opponent_points": 105.61,
+        "opponent_points": 109.05000305175781,
         "h2h_win": false,
         "teams_outscored": 1,
         "teams_outscored_by": 10,
         "rumbles": 1
       },
       "7": {
-        "points": 105.61,
+        "points": 109.05000305175781,
         "opponent_roster_id": 1,
         "opponent_points": 81.69,
         "h2h_win": true,
@@ -323,20 +323,20 @@
       "2": {
         "points": 219.0,
         "opponent_roster_id": 10,
-        "opponent_points": 125.67,
+        "opponent_points": 135.80999755859375,
         "h2h_win": true,
         "teams_outscored": 11,
         "teams_outscored_by": 0,
         "rumbles": 20
       },
       "10": {
-        "points": 125.67,
+        "points": 135.80999755859375,
         "opponent_roster_id": 2,
         "opponent_points": 219.0,
         "h2h_win": false,
-        "teams_outscored": 4,
-        "teams_outscored_by": 7,
-        "rumbles": 4
+        "teams_outscored": 5,
+        "teams_outscored_by": 6,
+        "rumbles": 5
       },
       "3": {
         "points": 71.59,
@@ -370,18 +370,18 @@
         "opponent_roster_id": 4,
         "opponent_points": 166.54,
         "h2h_win": true,
-        "teams_outscored": 8,
-        "teams_outscored_by": 3,
-        "rumbles": 17
+        "teams_outscored": 7,
+        "teams_outscored_by": 4,
+        "rumbles": 16
       },
       "5": {
         "points": 131.51,
         "opponent_roster_id": 11,
         "opponent_points": 178.91,
         "h2h_win": false,
-        "teams_outscored": 5,
-        "teams_outscored_by": 6,
-        "rumbles": 5
+        "teams_outscored": 4,
+        "teams_outscored_by": 7,
+        "rumbles": 4
       },
       "11": {
         "points": 178.91,
@@ -393,18 +393,18 @@
         "rumbles": 18
       },
       "6": {
-        "points": 167.98,
+        "points": 170.2899932861328,
         "opponent_roster_id": 9,
         "opponent_points": 119.51,
         "h2h_win": true,
-        "teams_outscored": 7,
-        "teams_outscored_by": 4,
-        "rumbles": 16
+        "teams_outscored": 8,
+        "teams_outscored_by": 3,
+        "rumbles": 17
       },
       "9": {
         "points": 119.51,
         "opponent_roster_id": 6,
-        "opponent_points": 167.98,
+        "opponent_points": 170.2899932861328,
         "h2h_win": false,
         "teams_outscored": 3,
         "teams_outscored_by": 8,
@@ -451,9 +451,9 @@
         }
       ],
       "backup_points_total": 2.31,
-      "confidence": "likely",
-      "injury_status_at_capture": "Out",
-      "custom_points_delta": null
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": 2.31
     },
     {
       "week": 2,
@@ -472,9 +472,9 @@
         }
       ],
       "backup_points_total": 3.44,
-      "confidence": "likely",
-      "injury_status_at_capture": "Out",
-      "custom_points_delta": null
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": 3.44
     },
     {
       "week": 2,
@@ -493,9 +493,9 @@
         }
       ],
       "backup_points_total": 10.14,
-      "confidence": "likely",
-      "injury_status_at_capture": "Out",
-      "custom_points_delta": null
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": 10.14
     }
   ]
 }

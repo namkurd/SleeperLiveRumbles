@@ -250,14 +250,20 @@ def test_compute_qb_adjustments_possible_tier_also_fires_for_questionable():
     print("PASS: 'possible' tier also fires for a non-out status like 'Questionable', not just a missing one")
 
 
-def test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale():
-    # Once a week is no longer the freshest one, an unconfirmed "possible"
-    # entry must NOT be carried forward the way "likely" is -- most of
-    # these are just normal in-game substitutions that resolve themselves,
-    # so they're meant to fade away rather than accumulate permanently in
-    # history. Only "likely" (a real, corroborated injury) and "confirmed"
-    # (the commissioner explicitly decided it was a real case, which is
-    # handled unconditionally regardless of freshness) persist.
+def test_compute_qb_adjustments_carries_forward_stale_possible_tier():
+    # A "possible" entry (uncorroborated -- e.g. a backup scored but the
+    # starter's own injury_status never confirmed "Out"/"IR"/"PUP") gets the
+    # SAME one-week grace window as "likely", not a shorter one: it must
+    # still be carried forward for as long as its week remains the single
+    # most-recently-completed one (is_most_recent_completed=True), exactly
+    # like test_compute_qb_adjustments_carries_forward_stale_likely_tier's
+    # "likely" case just below. This used to be a real bug -- the
+    # carry-forward check only ever matched confidence=="likely", so a
+    # "possible" entry silently vanished from the log the day after its own
+    # single "fresh" run ended, well before the one-week grace window this
+    # function's own comment always promised it (and long before a manager
+    # or the commissioner would have any real chance to notice and confirm
+    # or dismiss it) -- fixed by also matching confidence=="possible" here.
     carried_possible = {
         1: [
             {
@@ -271,8 +277,35 @@ def test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale():
         2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
         QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster=carried_possible,
     )
-    assert entries == [], f"a stale, never-confirmed 'possible' entry must not be carried forward, got {entries}"
-    print("PASS: an unconfirmed 'possible' entry is not carried forward once its week is no longer fresh")
+    assert len(entries) == 1, f"a still-within-its-grace-window 'possible' entry must be carried forward, got {entries}"
+    assert entries[0]["confidence"] == "possible", f"expected the carried-forward 'possible' tier to be reused, got {entries[0]['confidence']}"
+    assert entries[0]["injury_status_at_capture"] is None
+    print("PASS: a previously-captured 'possible' tier is carried forward while its week is still the most-recently-completed one, same as 'likely'")
+
+
+def test_compute_qb_adjustments_possible_tier_stops_being_carried_once_superseded():
+    # Mirrors test_compute_qb_adjustments_likely_tier_stops_being_carried_
+    # once_superseded exactly, for "possible": once an even NEWER week has
+    # also completed (is_most_recent_completed=False for this now-doubly-
+    # stale week), the one-week grace window has closed for good -- an
+    # unconfirmed "possible" from two or more completed weeks back must
+    # stop being carried, same cutoff "likely" gets, never carried
+    # indefinitely. Only "confirmed" persists all season.
+    carried_possible = {
+        1: [
+            {
+                "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+                "confidence": "possible",
+                "injury_status_at_capture": None,
+            }
+        ]
+    }
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=False, carried_by_roster=carried_possible,
+    )
+    assert entries == [], f"a 'possible' entry from a week that's no longer even the most-recently-completed one must not be carried forward, got {entries}"
+    print("PASS: a 'possible' entry stops being carried forward once a newer week has also completed, superseding it, same cutoff as 'likely'")
 
 
 def test_compute_qb_adjustments_confirmed_tier_beats_everything_else():
@@ -346,9 +379,9 @@ def test_compute_qb_adjustments_likely_tier_stops_being_carried_once_superseded(
     # even NEWER week has also completed (is_most_recent_completed=False
     # for this now-doubly-stale week), the carry-forward window has closed
     # for good: an unconfirmed "likely" from two or more completed weeks
-    # back must stop being carried, exactly like "possible" already never
-    # got carried past its own single fresh day (see
-    # test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale).
+    # back must stop being carried, exactly the same cutoff "possible" gets
+    # too (see
+    # test_compute_qb_adjustments_possible_tier_stops_being_carried_once_superseded).
     # Only "confirmed" (a real commissioner override) persists indefinitely.
     carried = {
         1: [
@@ -540,14 +573,25 @@ def test_determine_fresh_week_missing_previous_data_defaults_to_fresh():
     print("PASS: missing previous weeks_completed data defaults to treating the week as fresh, not crashing")
 
 
-def test_possible_tier_dropped_once_a_new_week_has_started_end_to_end():
-    """The full reported scenario, exercised through compute_qb_adjustments_for_week
-    directly the way build_history actually drives it across two simulated
+def test_possible_tier_carried_through_next_weeks_span_then_dropped_end_to_end():
+    """The full lifecycle, exercised through compute_qb_adjustments_for_week
+    directly the way build_history actually drives it across three simulated
     runs: run 1 (week 1 just completed) logs an unconfirmed 'possible' case
     fresh; run 2 (week 2 now live/current but not yet itself completed --
-    completed_weeks is still just [1]) must NOT re-log it, and since it was
-    never 'likely'/confirmed, carrying forward finds nothing -- the entry
-    is gone."""
+    completed_weeks is still just [1], the real-world span this server-side
+    rule is meant to cover -- see compute_qb_adjustments_for_week's own
+    "coarser, once-a-day backstop" comment) must still carry it forward,
+    exactly like 'likely' would (this was the real bug: an earlier version
+    of the carry-forward check only ever matched confidence=='likely', so a
+    'possible' entry here would already have been dropped by this point,
+    days before a manager or the commissioner had any real chance to see it
+    and confirm or dismiss it -- rumbles.html's OWN client-side filter is
+    what actually hides a stale unconfirmed entry from the live page the
+    moment the next week visually kicks off, independent of whatever this
+    once-a-day file still has sitting in it); run 3 (week 2 has now ALSO
+    completed -- completed_weeks is [1, 2], so week 1 is no longer even the
+    most-recently-completed week) must finally drop it, same cutoff
+    'likely' gets."""
     meta = {
         "QB1": {"position": "QB", "team": "SF", "full_name": "Started QB", "injury_status": None},
         "QB1B": {"position": "QB", "team": "SF", "full_name": "Backup QB", "injury_status": None},
@@ -571,18 +615,32 @@ def test_possible_tier_dropped_once_a_new_week_has_started_end_to_end():
 
     # Run 2: week 2 has started (it's now the current week per Sleeper's
     # state) but hasn't itself finished, so completed_weeks is STILL just
-    # [1] -- the real-world bug case. previously_completed_weeks now
-    # contains {1} (from run 1's own output).
+    # [1]. previously_completed_weeks now contains {1} (from run 1's own
+    # output). Week 1 is still the most-recently-completed week throughout
+    # this whole span, so the entry must still be carried.
     is_fresh_run2 = determine_fresh_week([1], previously_completed_weeks={1}) == 1
-    carried = {1: run1_entries}  # what load_previous_qb_adjustments would hand back from run 1's file
+    carried_run2 = {1: run1_entries}  # what load_previous_qb_adjustments would hand back from run 1's file
     run2_entries = compute_qb_adjustments_for_week(
         1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
-        is_fresh=is_fresh_run2, is_most_recent_completed=True, carried_by_roster=carried,
+        is_fresh=is_fresh_run2, is_most_recent_completed=True, carried_by_roster=carried_run2,
     )
-    assert run2_entries == [], (
-        f"expected the unconfirmed 'possible' entry to be dropped once a new week has started, got {run2_entries}"
+    assert len(run2_entries) == 1 and run2_entries[0]["confidence"] == "possible", (
+        f"expected the unconfirmed 'possible' entry to still be carried forward while week 2 is live but not yet completed, got {run2_entries}"
     )
-    print("PASS: an unconfirmed 'possible' entry from a prior week is dropped as soon as a new week starts, not carried for the newer week's entire live span")
+
+    # Run 3: week 2 has now ALSO completed (completed_weeks == [1, 2]) --
+    # week 1 is no longer the most-recently-completed week, so its grace
+    # window has closed for good.
+    is_fresh_run3 = determine_fresh_week([1, 2], previously_completed_weeks={1}) == 1
+    carried_run3 = {1: run2_entries}
+    run3_entries = compute_qb_adjustments_for_week(
+        1, matchups, meta, team_qb_index, stats, QB_SCORING_SETTINGS, {1: "Alex"},
+        is_fresh=is_fresh_run3, is_most_recent_completed=False, carried_by_roster=carried_run3,
+    )
+    assert run3_entries == [], (
+        f"expected the unconfirmed 'possible' entry to finally be dropped once week 2 has also completed, got {run3_entries}"
+    )
+    print("PASS: an unconfirmed 'possible' entry is carried forward for the entire span the following week is live-but-not-completed, then dropped once that following week itself completes -- same lifecycle as 'likely'")
 
 
 def main():
@@ -598,11 +656,12 @@ def main():
     test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
     test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated()
     test_compute_qb_adjustments_possible_tier_also_fires_for_questionable()
-    test_compute_qb_adjustments_possible_tier_not_carried_forward_once_stale()
     test_compute_qb_adjustments_confirmed_tier_beats_everything_else()
     test_compute_qb_adjustments_confirmed_always_logs_even_without_identifiable_backup()
     test_compute_qb_adjustments_carries_forward_stale_likely_tier()
     test_compute_qb_adjustments_likely_tier_stops_being_carried_once_superseded()
+    test_compute_qb_adjustments_carries_forward_stale_possible_tier()
+    test_compute_qb_adjustments_possible_tier_stops_being_carried_once_superseded()
     test_compute_qb_adjustments_no_entry_without_a_backup()
     test_find_backup_qbs_excludes_exactly_zero_point_backups()
     test_find_backup_qbs_keeps_negative_point_backups()
@@ -615,7 +674,7 @@ def main():
     test_determine_fresh_week_advances_once_a_newer_week_completes()
     test_determine_fresh_week_no_completed_weeks_yet()
     test_determine_fresh_week_missing_previous_data_defaults_to_fresh()
-    test_possible_tier_dropped_once_a_new_week_has_started_end_to_end()
+    test_possible_tier_carried_through_next_weeks_span_then_dropped_end_to_end()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 
