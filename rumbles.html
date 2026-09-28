@@ -174,6 +174,24 @@
     cursor: pointer;
   }
   .refresh-btn:active { transform: scale(0.97); }
+  /* Actual tab week picker -- same pill look as .refresh-btn. Hidden in
+     the Projected tab (see renderWeekSelect). */
+  .week-select-wrap[hidden] { display: none; }
+  .week-select {
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   .refresh-btn[disabled] { opacity: 0.5; cursor: default; }
   /* "How to Use" button reuses .refresh-btn's exact pill styling; the
      dotted underline is the same "this is interactive/has more info"
@@ -642,6 +660,8 @@
     margin: 10px 2px 0;
     line-height: 1.5;
   }
+  .qb-adj-legend { padding-left: 18px; }
+  .qb-adj-legend li { margin-bottom: 3px; }
   /* This table gets its own, denser layout rather than inheriting the
      standings table's (min-width: 760px, nowrap headers/cells, 0.85rem)
      rules -- it only has 7 columns' worth of real content once the
@@ -812,16 +832,21 @@
     color: var(--replacement);
     text-decoration-color: var(--replacement);
   }
-  /* "W"/"nW"/"L"/"nL" appended after the manager name for the manager's
-     current H2H winning/losing streak as of last week -- pregame Actual
-     mode only, alongside the "Last Week"/"Pts Last Week" relabeled columns
-     it gives context for (see buildCombinedStandings' last_week_h2h_streak
-     / computeH2hStreak). Plain bold text, no tooltip/interactivity (unlike
-     the QB-adjustment asterisks) -- the badge text alone is the whole
-     fact. */
-  .lastweek-h2h-badge { font-weight: 700; }
-  .lastweek-h2h-win { color: var(--good); }
-  .lastweek-h2h-loss { color: var(--bad); }
+  /* H2H streak badge after the manager name (Actual tab only, see
+     renderStreakBadge): only the arrow is colored, the "2W"/"3L" text
+     stays the normal table text color and weight. */
+  .h2h-streak { font-weight: 400; color: var(--text); font-size: 0.85em; white-space: nowrap; margin-left: 2px; }
+  .h2h-streak .streak-arrow { font-size: 0.8em; margin-right: 2px; }
+  .h2h-streak-win .streak-arrow { color: var(--good); }
+  .h2h-streak-loss .streak-arrow { color: var(--bad); }
+  /* Movement in "#" vs. the week before (see renderRankChange). */
+  /* Stacked under the rank number (not beside it) so it fits the narrow,
+     fixed-width sticky "#" column and never shifts the sticky Manager
+     column's left offset. */
+  .rank-move { display: block; font-size: 0.68em; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+  .rank-move span { font-size: 0.85em; margin-right: 1px; }
+  .rank-move-up { color: var(--good); }
+  .rank-move-down { color: var(--bad); }
   /* Dotted-underline "this is interactive" cue on the Injured QB name
      itself in the QB Injury Backup Adjustments log (renderQbAdjustments),
      applied only once a durable live-capture timestamp exists for that
@@ -892,6 +917,12 @@
         <button type="button" id="mode-actual" class="active">Actual</button>
         <button type="button" id="mode-custom">Projected</button>
       </div>
+      <label class="week-select-wrap" id="week-select-wrap">
+        <span class="visually-hidden">Standings after week</span>
+        <select id="week-select" class="week-select" aria-label="Show standings after a past week">
+          <option value="">Current</option>
+        </select>
+      </label>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
     </div>
@@ -935,7 +966,7 @@
   </footer>
 
   <h2 class="section-title">QB Injury Backup Adjustments</h2>
-  <p class="section-subtitle">If a started QB is ruled out mid-game and one or more backups from the same NFL team score, that manager is credited with all QBs' combined points. <span id="qb-adj-live-label"></span></p>
+  <p class="section-subtitle">If a QB you started gets hurt during his game and a backup QB from the same NFL team comes in, you also get the backup's points. This only covers injuries that happen during the game. A QB who is ruled out before kickoff does not count. <span id="qb-adj-live-label"></span></p>
 
   <div class="table-panel">
     <div class="qb-scroll-hint">Swipe to see the full row →</div>
@@ -958,7 +989,12 @@
     </table>
     </div>
   </div>
-  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" while that QB's own game was still pre-game or in progress (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current -- and a status that only appears after the game's gone final doesn't count, since that's the team's own post-game injury report catching up, not something confirmed during the game itself). Still just a same-team backup with no injury-status corroboration yet? That stays <strong>Possible</strong> instead. <strong>Commissioner Adjustment</strong> is the exact point delta the commissioner's own override represents (blank until one exists) -- compare it directly against Backup QB Points to see how closely this page's own live estimate matched what the commissioner actually keyed in.</p>
+  <ul class="footnote qb-adj-legend">
+    <li><strong>Confirmed:</strong> the commissioner has added the backup's points to your official score.</li>
+    <li><strong>Likely:</strong> your QB played, a backup from his team came in and scored, and Sleeper has listed your QB as Out. The backup's points are added to your score on this page until the commissioner makes it official.</li>
+    <li><strong>Possible:</strong> your QB played and a backup from his team also played, but Sleeper has not listed your QB as Out. This could just be a normal substitution, so no points are added unless the commissioner confirms it.</li>
+    <li><strong>Commissioner Adjustment</strong> is the number of points the commissioner actually added. Hover or tap an underlined QB name to see when his injury was caught live.</li>
+  </ul>
 </div>
 
 <div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
@@ -972,9 +1008,10 @@
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
-  <p>Shows the most recently completed week's real standings: Rumbles, Rumble %, PF, PA, H2H, and Vs. Field are all locked in from that finished week. Once a new week kicks off, it tracks the actual points scored so far and shows what this week's Rumbles would be if the week ended right now, without adding them to the season Rumbles total yet. Hover or tap a team's Pts This Week to see exactly which players have contributed to that score.</p>
+  <p>The real standings through the last completed week. During a live week, This Week and Pts This Week follow the live scores, but season totals don't change until the week is final. Hover or tap a team's points to see who scored them.</p>
+  <p>Next to each manager is their head-to-head streak (2W is two wins in a row). The arrow under each rank shows how many spots a team moved since the prior week. Use the week menu to see the standings after any past week.</p>
   <p class="howto-heading">Projected</p>
-  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
+  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time. The arrow under each rank shows how many spots a team would move from the current standings.</p>
   <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
   <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
 </div>
@@ -1023,6 +1060,10 @@
 
   var state = {
     mode: "actual", // "actual" | "custom"
+    // Actual tab week picker: null = the normal current view, otherwise a
+    // completed week number to show the standings as they stood after it
+    // (see selectedHistoricalWeek/buildHistoricalRows).
+    viewWeek: null,
     history: null, // parsed rumbles_history.json
     historyError: null, // set when rumbles_history.json couldn't be loaded at all
     live: null, // { week, season, isLive, byRoster: { roster_id: {score, oppScore, oppRosterId, h2hWin, rumbles} } }
@@ -1089,6 +1130,8 @@
     modeActual: document.getElementById("mode-actual"),
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
+    weekSelect: document.getElementById("week-select"),
+    weekSelectWrap: document.getElementById("week-select-wrap"),
     liveWeekLabel: document.getElementById("live-week-label"),
     ptsTooltip: document.getElementById("pts-tooltip"),
     qbAdjTooltip: document.getElementById("qb-adj-tooltip"),
@@ -1863,9 +1906,10 @@
   // Fixed by additionally requiring the started QB's own NFL team's game
   // to NOT already be "complete" (teamGameSchedule -- same live
   // scoreboard signal already used for the "Pts This Week" tooltip's
-  // game_status) at the moment injury_status is read: pre_game and
-  // in_progress are both still trustworthy (a genuine pregame inactive,
-  // or a real in-game injury caught while it's still live), but once a
+  // game_status) at the moment injury_status is read: only in_progress
+  // is trustworthy (the rule covers in-game injuries only; a pregame
+  // inactive never qualifies -- see the isPlayed gate on the started QB
+  // in detectQbAdjustmentsForWeek), and once a
   // game has gone final, a same-team backup having played stays at
   // "possible" -- awaiting either a commissioner override (promotes to
   // "confirmed" regardless) or the once-a-week server-side freshness
@@ -2087,6 +2131,13 @@
       if (!startedList.length) return;
       var startedPids = startedList.map(function (s) { return s.pid; });
       startedList.forEach(function (startedNoOverride) {
+        // League rule: this only covers a QB who gets hurt DURING his game.
+        // A started QB with no recorded action of his own never took the
+        // field at all (ruled out/inactive before kickoff, or benched), so
+        // a same-team backup playing in his place is not an in-game injury
+        // and must not be logged or credited at any tier. Only a
+        // commissioner override (handled above) can still log such a case.
+        if (!isPlayed(statsMap[startedNoOverride.pid])) return;
         var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings, startedPids);
         if (!backups.length) return;
         // liveCaptures (see LIVE_CAPTURES_URL/buildLiveCapturesLookup
@@ -2095,7 +2146,7 @@
         // durable, timestamped record -- shared across every visitor,
         // not just this browser session -- that a same-team backup was
         // corroborated by a live Out/IR/PUP reading WHILE that started
-        // QB's own game was still pre_game or in_progress, captured by a
+        // QB's own game was in progress, captured by a
         // workflow that polls every ~15 minutes during real NFL game
         // windows. That's a strictly better signal than re-deriving
         // "corroborated" from THIS poll's own current injury_status/
@@ -2127,14 +2178,13 @@
           // report (often hours later), which says nothing about
           // whether anyone was ever actually ruled out before or during
           // the game itself (see the long comment above this function
-          // for the real case that caught this). pre_game and
-          // in_progress both still count -- a genuine pregame inactive,
-          // or a real in-game injury caught while its game is still
-          // live, are both legitimate live corroboration; "complete" (or
-          // no schedule info at all) is not.
+          // for the real case that caught this). Only in_progress counts:
+          // the rule covers in-game injuries only, so a pre-kickoff "Out"
+          // is not corroboration, and "complete" (or no schedule info at
+          // all) can't be trusted as caught live.
           var startedTeam = startedNoOverride.meta.team;
           var startedGame = (startedTeam && teamGameSchedule && teamGameSchedule[startedTeam]) || null;
-          var gameStillLive = !!startedGame && startedGame.status !== "complete";
+          var gameStillLive = !!startedGame && startedGame.status === "in_progress";
           corroborated = isFresh && gameStillLive && isOutStatus(startedNoOverride.meta.injury_status);
           confidence = corroborated ? "likely" : "possible";
         }
@@ -2965,6 +3015,111 @@
     return { result: result, length: length };
   }
 
+  // Season standings as they stood at the end of `uptoWeek`, rebuilt from
+  // rumbles_history.json's per-week log (history.weekly) rather than the
+  // frozen "current" history.standings snapshot. Summing every completed
+  // week reproduces history.standings exactly (Rumbles, PF, PA, H2H and
+  // Vs. Field all come straight from the same weekly entries score_week
+  // wrote in build_rumbles.py), so this is what powers the Actual tab's
+  // week picker, the "#" column's movement vs. the prior week, and any
+  // other "as of week N" view. Ranking uses the same Rumbles-then-PF order
+  // as build_rumbles.py and buildCombinedStandings below.
+  //
+  // Returns null when there's nothing to rank yet (uptoWeek before the
+  // first completed week), otherwise {week, byRoster, rankByRoster}, where
+  // byRoster[rid] has the cumulative totals plus `weekEntry` (that exact
+  // week's own weekly-log row, or null for a roster with no entry).
+  function computeStandingsAsOf(history, uptoWeek) {
+    if (!history || !history.weekly || uptoWeek == null) return null;
+    var weeks = (history.weeks_completed || []).filter(function (w) { return w <= uptoWeek; });
+    if (!weeks.length) return null;
+    var rosterIds = (history.standings || []).map(function (st) { return st.roster_id; });
+    var byRoster = {};
+    rosterIds.forEach(function (rid) {
+      var t = { roster_id: rid, rumbles: 0, pf: 0, pa: 0, h2h_w: 0, h2h_l: 0, vs_field_w: 0, vs_field_l: 0, weekEntry: null };
+      weeks.forEach(function (w) {
+        var log = history.weekly[String(w)];
+        var e = log ? log[String(rid)] : null;
+        if (!e) return;
+        t.rumbles += num(e.rumbles);
+        t.pf += num(e.points);
+        t.pa += num(e.opponent_points);
+        if (e.h2h_win === true) t.h2h_w++;
+        if (e.h2h_win === false) t.h2h_l++;
+        t.vs_field_w += num(e.teams_outscored);
+        t.vs_field_l += num(e.teams_outscored_by);
+        if (w === uptoWeek) t.weekEntry = e;
+      });
+      t.pf = round2(t.pf);
+      t.pa = round2(t.pa);
+      byRoster[rid] = t;
+    });
+    var ordered = rosterIds.slice().sort(function (a, b) {
+      var A = byRoster[a], B = byRoster[b];
+      if (B.rumbles !== A.rumbles) return B.rumbles - A.rumbles;
+      return B.pf - A.pf;
+    });
+    var rankByRoster = {};
+    ordered.forEach(function (rid, i) { rankByRoster[rid] = i + 1; });
+    return { week: uptoWeek, weeksCount: weeks.length, byRoster: byRoster, rankByRoster: rankByRoster };
+  }
+
+  // Which completed week the Actual tab's week picker is showing, or null
+  // for the normal current view. Only honored in Actual mode and only for
+  // a week that's actually in weeks_completed (a stale selection from a
+  // previous history load just falls back to the current view).
+  function selectedHistoricalWeek() {
+    if (state.mode !== "actual" || state.viewWeek == null) return null;
+    var done = (state.history && state.history.weeks_completed) || [];
+    return done.indexOf(state.viewWeek) !== -1 ? state.viewWeek : null;
+  }
+
+  function lastCompletedWeek() {
+    var done = (state.history && state.history.weeks_completed) || [];
+    return done.length ? Math.max.apply(null, done) : null;
+  }
+
+  // Standings rows for a past completed week (Actual tab week picker).
+  // Same row shape buildCombinedStandings produces, but every number comes
+  // from computeStandingsAsOf: "This Week"/"Pts This Week" become that
+  // week's own Rumbles/points, matchup colors follow that week's pairings,
+  // and there's no live data, tooltip breakdown or QB-adjustment marker.
+  function buildHistoricalRows(viewWeek) {
+    var asOf = computeStandingsAsOf(state.history, viewWeek);
+    if (!asOf) return [];
+    var managers = {};
+    ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
+    var maxPerWeek = MAX_RUMBLES_PER_WEEK;
+    return Object.keys(asOf.byRoster).map(function (key) {
+      var t = asOf.byRoster[key];
+      var e = t.weekEntry;
+      return {
+        roster_id: t.roster_id,
+        manager: managers[t.roster_id],
+        rumbles: t.rumbles,
+        rumble_pct: asOf.weeksCount ? (t.rumbles / (asOf.weeksCount * maxPerWeek)) * 100 : 0,
+        this_week: e ? num(e.rumbles) : 0,
+        this_week_points: e ? round2(num(e.points)) : 0,
+        this_week_points_is_last_week: false,
+        this_week_live: false,
+        this_week_points_live: false,
+        this_week_winning: e && typeof e.h2h_win === "boolean" ? e.h2h_win : null,
+        pf: t.pf,
+        pa: t.pa,
+        h2h_w: t.h2h_w,
+        h2h_l: t.h2h_l,
+        vs_field_w: t.vs_field_w,
+        vs_field_l: t.vs_field_l,
+        opponent_roster_id: e && e.opponent_roster_id != null ? e.opponent_roster_id : null,
+        this_week_player_breakdown: null,
+        this_week_actual_points: null,
+        qb_adjustment: null,
+        h2h_streak: computeH2hStreak(state.history, viewWeek, t.roster_id),
+        last_week_qb_adjustment: null
+      };
+    });
+  }
+
   function buildCombinedStandings() {
     var histStandings = (state.history && state.history.standings) || [];
     var weeksCompleted = (state.history && state.history.weeks_completed) || [];
@@ -2992,7 +3147,11 @@
     var kickoffStarted = !!(live && live.hasKickedOff);
     var foldCurrentWeekIntoTotals = state.mode !== "actual" && kickoffStarted;
 
-    var rows = histStandings.map(function (s) {
+    // Actual tab's week picker: a past completed week is rebuilt entirely
+    // from the weekly log (see buildHistoricalRows) instead of the live/
+    // current path below.
+    var viewWeek = selectedHistoricalWeek();
+    var rows = viewWeek != null ? buildHistoricalRows(viewWeek) : histStandings.map(function (s) {
       var rid = s.roster_id;
       var liveInfo = liveActive && live.byRoster[rid] ? live.byRoster[rid][state.mode] : null;
       var foldInfo = foldCurrentWeekIntoTotals ? liveInfo : null;
@@ -3076,14 +3235,11 @@
         ? playersBreakdown.some(function (p) { return p.game_status !== "complete"; })
         : true;
 
-      // This roster's current H2H winning/losing streak as of last week
-      // (see computeH2hStreak above) for the manager-name "W"/"nW"/"L"/
-      // "nL" badge, pregame only (showLastWeekPoints) -- state.lastWeek.week
-      // IS the last completed week number (see loadLastWeekBreakdown), so
-      // this walks state.history.weekly backward from there rather than
-      // recomputing anything against live data.
-      var lastWeekNum = state.lastWeek ? state.lastWeek.week : null;
-      var lastWeekStreak = computeH2hStreak(state.history, lastWeekNum, rid);
+      // This roster's current H2H winning/losing streak through the last
+      // completed week (see computeH2hStreak above) for the manager-name
+      // streak badge. Shown in the Actual tab at all times (pregame and
+      // during a live week); the Projected tab doesn't show it.
+      var h2hStreak = state.mode === "actual" ? computeH2hStreak(state.history, lastCompletedWeek(), rid) : null;
 
       return {
         roster_id: rid,
@@ -3159,14 +3315,9 @@
         // confirms it, the credit stays (as the official override delta)
         // but the speculative-adjustment UI cue goes away.
         qb_adjustment: liveActive && live.byRoster[rid] ? live.byRoster[rid].qbAdjustment : null,
-        // This roster's current H2H win/loss streak as of last week (see
-        // lastWeekStreak above) -- {result, length}, null-scoped to
-        // showLastWeekPoints (pregame Actual only, same gate as the "Pts
-        // Last Week"/"Last Week" relabels) so the "W"/"nW"/"L"/"nL" badge
-        // never lingers once the current week's own live H2H result (a
-        // different, already-existing signal -- see this_week_winning)
-        // becomes the relevant one to show instead.
-        last_week_h2h_streak: showLastWeekPoints ? lastWeekStreak : null,
+        // {result, length} H2H streak through the last completed week, or
+        // null outside the Actual tab -- see h2hStreak above.
+        h2h_streak: h2hStreak,
         // Still-"likely" (unconfirmed) QB-injury adjustment folded into
         // THIS row's "Pts Last Week" total above (see lastWeekPointsDelta)
         // -- {delta, confidence: "likely", injured_qb, backup_qbs} (same
@@ -3192,6 +3343,23 @@
       return b.pf - a.pf;
     });
     rows.forEach(function (r, i) { r.rank = i + 1; });
+
+    // Movement in "#" vs. the previous week's standings, for the green-up/
+    // red-down arrow next to each rank. The baseline is always "one week
+    // earlier than what this table is showing":
+    //   - a past week from the Actual tab's week picker: that week - 1
+    //   - Projected tab with the live week folded into the totals: the
+    //     standings as of the last completed week (i.e. today's Actual)
+    //   - otherwise (Actual tab, or Projected before kickoff, both showing
+    //     standings through the last completed week): that week - 1
+    // null (no arrow at all) when there's no earlier week to compare to.
+    var shownThrough = viewWeek != null ? viewWeek : lastCompletedWeek();
+    var baselineWeek = (viewWeek == null && foldCurrentWeekIntoTotals) ? shownThrough : (shownThrough != null ? shownThrough - 1 : null);
+    var baseline = computeStandingsAsOf(state.history, baselineWeek);
+    rows.forEach(function (r) {
+      var prevRank = baseline ? baseline.rankByRoster[r.roster_id] : null;
+      r.rank_change = prevRank ? prevRank - r.rank : null;
+    });
 
     // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
     // opponent get the same name color) so it's visible at a glance who's
@@ -3232,7 +3400,12 @@
     var colorForPair = {};
     pairKeys.forEach(function (pairKey, idx) { colorForPair[pairKey] = matchupPalette[idx % matchupPalette.length]; });
 
+    // A past week (week picker) colors its own rows by THAT week's
+    // pairings, but must not overwrite the current week's color map that
+    // the QB Injury Backup Adjustments log reuses.
+    var currentWeekColors = state.matchupColorByRosterId;
     state.matchupColorByRosterId = {};
+    state.shownHistoricalWeek = viewWeek;
     rows.forEach(function (r) {
       if (r.opponent_roster_id == null || !byRosterId[r.opponent_roster_id]) return;
       var pairKey = [r.roster_id, r.opponent_roster_id].sort(function (a, b) { return a - b; }).join("-");
@@ -3240,6 +3413,7 @@
       r.matchup_opponent = byRosterId[r.opponent_roster_id].manager;
       state.matchupColorByRosterId[r.roster_id] = r.matchup_color;
     });
+    if (viewWeek != null) state.matchupColorByRosterId = currentWeekColors || {};
 
     return rows;
   }
@@ -3257,7 +3431,47 @@
     return dir === "asc" ? cmp : -cmp;
   }
 
+  // Keeps the Actual tab's week picker in sync with rumbles_history.json
+  // (a new option appears on its own once another week completes) and
+  // hides it in the Projected tab. Rebuilt every render, but only touches
+  // the DOM when the option list actually changed, so an open dropdown
+  // isn't disturbed by the 30-second live poll.
+  function renderWeekSelect() {
+    var sel = els.weekSelect;
+    if (!sel) return;
+    els.weekSelectWrap.hidden = state.mode !== "actual";
+    var weeks = ((state.history && state.history.weeks_completed) || []).slice().sort(function (a, b) { return b - a; });
+    var sig = weeks.join(",");
+    if (sel.getAttribute("data-weeks") !== sig) {
+      sel.innerHTML = '<option value="">Current</option>' + weeks.map(function (w) {
+        return '<option value="' + w + '">After Week ' + w + "</option>";
+      }).join("");
+      sel.setAttribute("data-weeks", sig);
+    }
+    var shown = selectedHistoricalWeek();
+    sel.value = shown == null ? "" : String(shown);
+  }
+
+  function renderStreakBadge(streak) {
+    if (!streak || typeof streak.result !== "boolean" || !streak.length) return "";
+    var win = streak.result;
+    return ' <span class="h2h-streak ' + (win ? "h2h-streak-win" : "h2h-streak-loss") + '" title="' +
+      streak.length + "-game " + (win ? "winning" : "losing") + ' streak">' +
+      '<span class="streak-arrow" aria-hidden="true">' + (win ? "\u25B2" : "\u25BC") + "</span>" +
+      streak.length + (win ? "W" : "L") + "</span>";
+  }
+
+  function renderRankChange(change) {
+    if (!change) return "";
+    var up = change > 0;
+    var n = Math.abs(change);
+    return '<span class="rank-move ' + (up ? "rank-move-up" : "rank-move-down") + '" title="' +
+      (up ? "Up " : "Down ") + n + (n === 1 ? " spot" : " spots") + ' from the week before">' +
+      '<span aria-hidden="true">' + (up ? "\u25B2" : "\u25BC") + "</span>" + n + "</span>";
+  }
+
   function render() {
+    renderWeekSelect();
     var rows = buildCombinedStandings();
 
     var displayRows = rows;
@@ -3278,12 +3492,13 @@
     // renders into the <th> every call, so it must be set before that
     // call runs, every render -- not just once.
     var pregameActualLabels = state.mode === "actual" && !(state.live && state.live.hasKickedOff);
-    COLUMNS.this_week_points.label = pregameActualLabels ? "Pts Last Week" : "Pts This Week";
+    var histWeek = state.shownHistoricalWeek;
+    COLUMNS.this_week_points.label = histWeek != null ? "Wk " + histWeek + " Pts" : (pregameActualLabels ? "Pts Last Week" : "Pts This Week");
     // Same swap, same condition, for the Rumbles-earned-this-week column --
     // pregame in Actual mode it shows last week's real Rumbles total
     // instead (see buildCombinedStandings' thisWeekRumbles), so its header
     // needs to say so too, exactly like "Pts This Week" already does.
-    COLUMNS.this_week.label = pregameActualLabels ? "Last Week" : "This Week";
+    COLUMNS.this_week.label = histWeek != null ? "Wk " + histWeek : (pregameActualLabels ? "Last Week" : "This Week");
     updateHeaderSortIndicators();
 
     state.thisWeekTooltipData = {};
@@ -3300,7 +3515,7 @@
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
-          var title = 'This week\'s matchup: ' + escapeHtml(r.manager) + ' vs ' + escapeHtml(r.matchup_opponent);
+          var title = (histWeek != null ? "Week " + histWeek + " matchup: " : "This week's matchup: ") + escapeHtml(r.manager) + ' vs ' + escapeHtml(r.matchup_opponent);
           nameHtml = '<span class="matchup-name" style="color:' + r.matchup_color + '" title="' + title + '">' + escapeHtml(r.manager) + "</span>";
         } else {
           nameHtml = escapeHtml(r.manager);
@@ -3317,22 +3532,12 @@
           state.qbAdjTooltipData[r.roster_id] = buildQbAdjTooltipHtml(r.qb_adjustment);
           nameHtml += ' <span class="qb-adj-asterisk" data-roster-id="' + r.roster_id + '">QB Inj*</span>';
         }
-        // "W"/"nW"/"L"/"nL" badge for the manager's current H2H
-        // winning/losing streak as of last week -- pregame Actual mode only
-        // (r.last_week_h2h_streak is already null outside that state, see
-        // buildCombinedStandings/computeH2hStreak), right alongside the
-        // "Last Week"/"Pts Last Week" relabeled columns it's giving context
-        // for. A 1-week streak shows as a plain "W"/"L" (unchanged from
-        // before this was a streak), and a 2+ week streak is prefixed with
-        // its length ("3W", "2L", ...). result===null (a bye, or the data
-        // just isn't there for last week) shows no badge at all.
-        if (r.last_week_h2h_streak && r.last_week_h2h_streak.result === true) {
-          var winStreakText = r.last_week_h2h_streak.length > 1 ? r.last_week_h2h_streak.length + "W" : "W";
-          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-win">' + winStreakText + "</span>";
-        } else if (r.last_week_h2h_streak && r.last_week_h2h_streak.result === false) {
-          var lossStreakText = r.last_week_h2h_streak.length > 1 ? r.last_week_h2h_streak.length + "L" : "L";
-          nameHtml += ' <span class="lastweek-h2h-badge lastweek-h2h-loss">' + lossStreakText + "</span>";
-        }
+        // H2H streak badge (Actual tab only -- r.h2h_streak is null in
+        // Projected): a green up arrow + "2W" for a 2-game winning streak,
+        // a red down arrow + "3L" for a 3-game losing streak. Every streak
+        // shows its length, including "1W"/"1L". No badge when the most
+        // recent week has no result (bye, or missing data).
+        nameHtml += renderStreakBadge(r.h2h_streak);
         // The tooltip itself is a custom element (see pts-tooltip show/
         // hide/toggle below), not a native title attribute -- a native
         // title tooltip never appears on tap on mobile at all, so this
@@ -3386,7 +3591,7 @@
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
         return "<tr>" +
-          '<td class="rank">' + r.rank + "</td>" +
+          '<td class="rank">' + r.rank + renderRankChange(r.rank_change) + "</td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
@@ -3432,6 +3637,10 @@
     } else {
       els.statusText.textContent = "Not live right now";
       els.liveWeekLabel.textContent = "";
+    }
+
+    if (state.shownHistoricalWeek != null) {
+      els.liveWeekLabel.textContent = "Showing standings after Week " + state.shownHistoricalWeek + ". Pick Current to go back to this week.";
     }
 
     els.updatedPill.textContent = "Last updated " + new Date().toLocaleTimeString();
@@ -4314,6 +4523,11 @@
   els.modeActual.addEventListener("click", function () { setMode("actual"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
+  els.weekSelect.addEventListener("change", function () {
+    var v = els.weekSelect.value;
+    state.viewWeek = v === "" ? null : parseInt(v, 10);
+    render();
+  });
 
   // ---- boot ------------------------------------------------------------
 
