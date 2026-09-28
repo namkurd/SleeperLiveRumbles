@@ -126,18 +126,33 @@ def test_find_new_captures_logs_live_out_with_backup_action():
     print("PASS: a backup who played while the starter reads 'Out' and the game is still in_progress is captured with the full expected shape")
 
 
-def test_find_new_captures_pre_game_still_counts_as_live():
-    # A pregame inactive (Out before kickoff) is just as legitimate a live
-    # corroboration as one seen mid-game -- only "complete" excludes it.
+def test_find_new_captures_skips_pre_game():
+    # The rule covers in-game injuries only. An "Out" seen before kickoff
+    # is a pregame ruling and must never be captured.
     games = make_games({"is_over": False, "quarter_num": None})
     schedule = build_team_game_schedule(games)
+    assert schedule["MIN"]["status"] == "pre_game"
     captures = find_new_captures(
         3, "2026", MATCHUPS, PLAYERS_META, TEAM_QB_INDEX, STATS_MAP, SCORING_SETTINGS, MANAGER_MAP,
         schedule, set(), "2026-09-28T18:00:00+00:00",
     )
-    assert len(captures) == 1
-    assert captures[0]["game_status_at_capture"] == "pre_game"
-    print("PASS: a pre_game team status still yields a capture, not just in_progress")
+    assert captures == [], f"expected no capture for a pre_game status, got {captures}"
+    print("PASS: a pre_game team status is never captured (in-game injuries only)")
+
+
+def test_find_new_captures_skips_when_starter_never_played():
+    # Started QB is Out and a same-team backup is playing, but the starter
+    # himself recorded no action: he was ruled out before kickoff, not
+    # injured during the game, so this must not be captured.
+    games = make_games({"is_in_progress": True})
+    schedule = build_team_game_schedule(games)
+    stats = {k: v for k, v in STATS_MAP.items() if k != "QB_STARTER"}
+    captures = find_new_captures(
+        3, "2026", MATCHUPS, PLAYERS_META, TEAM_QB_INDEX, stats, SCORING_SETTINGS, MANAGER_MAP,
+        schedule, set(), "2026-09-28T20:14:03+00:00",
+    )
+    assert captures == [], f"expected no capture when the starter never played, got {captures}"
+    print("PASS: a starter with no recorded action of his own (pregame inactive) is never captured")
 
 
 def test_find_new_captures_skips_once_game_is_complete():
@@ -214,7 +229,8 @@ def main():
     test_normalize_game_status_defaults_to_pre_game()
     test_build_team_game_schedule_maps_both_teams()
     test_find_new_captures_logs_live_out_with_backup_action()
-    test_find_new_captures_pre_game_still_counts_as_live()
+    test_find_new_captures_skips_pre_game()
+    test_find_new_captures_skips_when_starter_never_played()
     test_find_new_captures_skips_once_game_is_complete()
     test_find_new_captures_skips_missing_schedule_info()
     test_find_new_captures_skips_when_not_ruled_out()
