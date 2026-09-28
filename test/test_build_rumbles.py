@@ -217,6 +217,21 @@ def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
     print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out', with correct team-scoped backup detection")
 
 
+def test_compute_qb_adjustments_starter_who_never_played_logs_nothing():
+    # League rule: in-game injuries only. If the started QB recorded no
+    # action of his own (ruled out before kickoff), a same-team backup
+    # playing instead doesn't qualify at any tier, even with a fresh "Out"
+    # status or a durable live capture.
+    stats = {k: v for k, v in QB_STATS_MAP.items() if k != "QB_STARTER"}
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
+        live_captures_by_key={"2:1:QB_STARTER": "2026-09-28T20:00:00+00:00"},
+    )
+    assert entries == [], f"a starter who never played must log nothing, got {entries}"
+    print("PASS: a started QB with no recorded action of his own (pregame inactive) logs nothing at any tier")
+
+
 def test_compute_qb_adjustments_confirmed_tier_captured_at_is_always_null():
     # A commissioner override is already the strongest possible signal on
     # its own -- captured_at is a live-capture-log concept, and doesn't
@@ -776,6 +791,7 @@ def main():
     test_build_team_qb_index_scopes_by_team()
     test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing()
     test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
+    test_compute_qb_adjustments_starter_who_never_played_logs_nothing()
     test_compute_qb_adjustments_confirmed_tier_captured_at_is_always_null()
     test_compute_qb_adjustments_durable_capture_wins_even_when_not_fresh()
     test_compute_qb_adjustments_durable_capture_takes_precedence_over_fresh_injury_status()
