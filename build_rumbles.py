@@ -584,7 +584,7 @@ def compute_qb_adjustments_for_week(
         # -- see that script's header) is checked FIRST, independent of
         # is_fresh: it's a durable, timestamped record that a same-team
         # backup was corroborated by a live "Out"/"IR"/"PUP" reading WHILE
-        # that started QB's own game was still pre-game or in progress --
+        # that started QB's own game was in progress --
         # captured by a workflow that polls frequently during real game
         # windows, not just once here the morning after. That's a strictly
         # better signal than this run's own current injury_status snapshot
@@ -606,6 +606,13 @@ def compute_qb_adjustments_for_week(
         if started_list:
             new_entries: list[dict] = []
             for pid, meta in started_list:
+                # League rule: in-game injuries only. A started QB with no
+                # recorded action of his own never took the field (ruled
+                # out before kickoff, or benched), so a backup playing in
+                # his place doesn't qualify at any tier. Only a
+                # commissioner override (handled above) can still log it.
+                if not is_played(stats_map.get(pid)):
+                    continue
                 backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings, started_pids)
                 if not backup_entries:
                     continue
@@ -846,7 +853,7 @@ LIVE_CAPTURES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "l
 def load_live_qb_captures(season: str) -> dict[str, str]:
     """roster/week/player -> ISO timestamp lookup of every QB-injury-backup
     case that capture_live_qb_injuries.py durably confirmed WHILE the
-    started QB's own game was still pre-game or in progress (see that
+    started QB's own game was in progress (see that
     script's header, and detectQbAdjustmentsForWeek's matching comment in
     rumbles.html) -- keyed "{week}:{roster_id}:{player_id}" to match
     compute_qb_adjustments_for_week's lookup key exactly. Cross-season
