@@ -165,12 +165,26 @@ function detect(starterStatus, isFresh, schedule, liveCaptures) {
   check("'Out' observed only after the game went final downgrades to 'possible', not 'likely'", entries[0].confidence, "possible");
 })();
 
-// ---- Same case, but pre-game -- a genuine pregame inactive (started QB
-// ruled Out before kickoff, same-team backup starts instead) is still
-// legitimate live corroboration, same as in-progress. ----------------------
+// ---- Same case, but pre-game. The rule covers in-game injuries only, so
+// an "Out" seen before kickoff is not live corroboration. (In practice a
+// starter who has already recorded stats can't be pre_game, but the gate
+// itself must still only accept in_progress.) -----------------------------
 (function () {
   var entries = detect("Out", true, { MIN: { status: "pre_game" }, KC: { status: "pre_game" } });
-  check("'Out' observed pre-game still yields 'likely' (a real pregame inactive)", entries[0].confidence, "likely");
+  check("'Out' observed pre-game does not yield 'likely' (in-game injuries only)", entries[0].confidence, "possible");
+})();
+
+// ---- A pregame inactive: the started QB never took the field (no stats
+// of his own) and a same-team backup played instead. That is not an
+// in-game injury, so nothing is logged at any tier, live game or not. ------
+(function () {
+  var meta = playersMeta("Out");
+  var stats = Object.assign({}, STATS);
+  delete stats.QB_STARTER;
+  var inProg = detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), stats, SCORING, MANAGERS, true, IN_PROGRESS_SCHEDULE, null);
+  check("starter who never played (pregame inactive) logs nothing, even with 'Out' and a live game", inProg.length, 0);
+  var captured = detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), stats, SCORING, MANAGERS, true, IN_PROGRESS_SCHEDULE, { "2:1:QB_STARTER": "2026-09-28T20:00:00Z" });
+  check("starter who never played logs nothing even if a capture-log entry exists", captured.length, 0);
 })();
 
 // ---- No schedule info at all for this team (unknown/missing game status)
