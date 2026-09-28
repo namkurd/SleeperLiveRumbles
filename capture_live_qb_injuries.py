@@ -73,7 +73,7 @@ from build_rumbles import (
     array_to_player_map,
     player_name,
     dot_product,
-    is_played,  # noqa: F401 -- re-exported for anyone importing this module for tests
+    is_played,
 )
 
 # Sleeper's live-scoreboard feed -- same endpoint rumbles.html's own
@@ -196,11 +196,19 @@ def find_new_captures(
             team = meta.get("team")
             game = team_game_schedule.get(team) if team else None
             game_status = game["status"] if game else None
-            if game_status is None or game_status == "complete":
-                # Exactly the case this whole script exists to exclude: no
-                # live-window observation is possible once a game is over
-                # (or its schedule info simply isn't available) -- mirrors
-                # detectQbAdjustmentsForWeek's client-side gameStillLive gate.
+            if game_status != "in_progress":
+                # The rule only covers in-game injuries, so only a game that
+                # is actually being played counts. A finished game (or one
+                # with no schedule info) can't be observed live, and a
+                # pre-kickoff "Out" is a pregame ruling that never
+                # qualifies -- mirrors detectQbAdjustmentsForWeek's
+                # client-side gameStillLive gate.
+                continue
+
+            if not is_played(stats_map.get(pid)):
+                # The started QB never took the field himself (inactive or
+                # benched before kickoff), so a backup playing in his place
+                # is not an in-game injury.
                 continue
 
             injury_status = meta.get("injury_status")
