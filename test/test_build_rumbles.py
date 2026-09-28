@@ -16,11 +16,13 @@ page was previously ignoring entirely (reading only `points`), silently
 understating that roster's PF, their opponent's PA, AND -- less obviously
 -- how many other teams they'd actually outscored that week.
 """
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import build_rumbles  # noqa: E402 -- imported as a module too, so tests can monkeypatch build_rumbles.LIVE_CAPTURES_PATH
 from build_rumbles import (  # noqa: E402
     build_team_qb_index,
     compute_qb_adjustments_for_week,
@@ -28,6 +30,7 @@ from build_rumbles import (  # noqa: E402
     dot_product,
     find_backup_qbs,
     is_played,
+    load_live_qb_captures,
     official_points,
     score_week,
 )
@@ -210,7 +213,126 @@ def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
     assert approx(e["backup_points_total"], 21.9)
     assert e["confidence"] == "likely", f"fresh + injury_status 'Out' should be 'likely', got {e['confidence']}"
     assert e["injury_status_at_capture"] == "Out"
+    assert e["captured_at"] is None, "no durable live-capture log was provided, so captured_at must be null here"
     print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out', with correct team-scoped backup detection")
+
+
+def test_compute_qb_adjustments_confirmed_tier_captured_at_is_always_null():
+    # A commissioner override is already the strongest possible signal on
+    # its own -- captured_at is a live-capture-log concept, and doesn't
+    # apply to a human-confirmed entry.
+    matchups = [{"roster_id": 1, "matchup_id": 1, "starters": ["QB_STARTER"], "points": 100.0, "custom_points": 119.47}]
+    stats_no_backup = {"QB_STARTER": QB_STATS_MAP["QB_STARTER"]}
+    entries = compute_qb_adjustments_for_week(
+        2, matchups, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), stats_no_backup,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster={},
+    )
+    assert entries[0]["confidence"] == "confirmed"
+    assert entries[0]["captured_at"] is None
+    print("PASS: a 'confirmed' (commissioner-override) entry always has captured_at=None")
+
+
+# ---- REGRESSION: a durably-captured live case (see
+# capture_live_qb_injuries.py and load_live_qb_captures) must be trusted as
+# "likely" -- WITH a real captured_at timestamp for the UI to reference --
+# even on a run that's no longer "fresh" (days later, long after Sleeper's
+# same-day injury_status snapshot would otherwise have gone stale). This is
+# the actual fix for the real gap Ben found: without a durable log, a
+# genuinely-live-caught injury (Out status seen while the game was still
+# in progress) had no way to stay "Likely" once the once-a-day freshness
+# window closed, and no timestamp to point to either. ---------------------
+def test_compute_qb_adjustments_durable_capture_wins_even_when_not_fresh():
+    captures_by_key = {"2:1:QB_STARTER": "2026-09-27T20:14:03+00:00"}
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster={},
+        live_captures_by_key=captures_by_key,
+    )
+    assert len(entries) == 1, f"a durable capture must still produce an entry even when not fresh, got {len(entries)}"
+    e = entries[0]
+    assert e["confidence"] == "likely", f"a durable capture must always yield 'likely', got {e['confidence']}"
+    assert e["captured_at"] == "2026-09-27T20:14:03+00:00", "the durable log's own timestamp must be carried through onto the entry"
+    print("PASS: a durable live-capture log entry wins as 'likely' (with its timestamp) even on a not-fresh run")
+
+
+def test_compute_qb_adjustments_durable_capture_takes_precedence_over_fresh_injury_status():
+    # Even when the run IS fresh, a durable capture's timestamp should
+    # still be attached (rather than silently falling back to the
+    # same-day injury_status path and losing the timestamp).
+    captures_by_key = {"2:1:QB_STARTER": "2026-09-27T20:14:03+00:00"}
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
+        live_captures_by_key=captures_by_key,
+    )
+    assert entries[0]["captured_at"] == "2026-09-27T20:14:03+00:00"
+    print("PASS: a durable capture's timestamp is attached even on a fresh run, not just as a not-fresh fallback")
+
+
+def test_compute_qb_adjustments_no_matching_capture_falls_back_to_injury_status_check():
+    # A capture log that exists but doesn't mention this roster/week/player
+    # combo must behave exactly as if no log were provided at all --
+    # wrong-roster and wrong-player keys must never accidentally match.
+    captures_by_key = {"2:99:QB_STARTER": "2026-09-27T20:14:03+00:00", "2:1:SOME_OTHER_PLAYER": "2026-09-27T20:14:03+00:00"}
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
+        live_captures_by_key=captures_by_key,
+    )
+    assert entries[0]["confidence"] == "likely", "should still fall back correctly to the fresh injury_status check"
+    assert entries[0]["captured_at"] is None, "a non-matching capture-log entry must never be attached to an unrelated roster/player"
+    print("PASS: a capture log with no matching key for this roster/week/player falls back cleanly to the injury_status check")
+
+
+def test_compute_qb_adjustments_durable_capture_without_fresh_skips_carry_forward_not_duplicated():
+    # A durable capture producing an entry on a NOT-fresh run must not also
+    # pick up a stale carried-forward duplicate for the same roster.
+    stale_carried = {1: [{"week": 2, "roster_id": 1, "manager": "Alex", "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2}, "backup_qbs": [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}], "backup_points_total": 21.9, "confidence": "likely", "injury_status_at_capture": "Out", "custom_points_delta": None, "captured_at": None}]}
+    captures_by_key = {"2:1:QB_STARTER": "2026-09-27T20:14:03+00:00"}
+    entries = compute_qb_adjustments_for_week(
+        2, QB_MATCHUPS, QB_PLAYERS_META, build_team_qb_index(QB_PLAYERS_META), QB_STATS_MAP,
+        QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=False, is_most_recent_completed=True, carried_by_roster=stale_carried,
+        live_captures_by_key=captures_by_key,
+    )
+    assert len(entries) == 1, f"the durable capture should produce exactly one entry, not also a carried-forward duplicate, got {len(entries)}"
+    print("PASS: a durable-capture-sourced entry doesn't also get a duplicate carried-forward entry for the same roster")
+
+
+def test_load_live_qb_captures_missing_file_returns_empty():
+    original_path = build_rumbles.LIVE_CAPTURES_PATH
+    build_rumbles.LIVE_CAPTURES_PATH = "/tmp/definitely_does_not_exist_live_qb_captures.json"
+    try:
+        assert load_live_qb_captures("2026") == {}
+    finally:
+        build_rumbles.LIVE_CAPTURES_PATH = original_path
+    print("PASS: load_live_qb_captures returns {} when the captures file doesn't exist yet")
+
+
+def test_load_live_qb_captures_builds_season_scoped_keys():
+    original_path = build_rumbles.LIVE_CAPTURES_PATH
+    tmp_path = "/tmp/test_live_qb_captures.json"
+    with open(tmp_path, "w") as f:
+        json.dump({
+            "captures": [
+                {"season": "2026", "week": 3, "roster_id": 1, "injured_qb": {"player_id": "QB_STARTER"}, "captured_at": "2026-09-27T20:14:03+00:00"},
+                # A different season's Week 3 must NEVER collide with 2026's.
+                {"season": "2025", "week": 3, "roster_id": 1, "injured_qb": {"player_id": "QB_STARTER"}, "captured_at": "2025-09-28T20:00:00+00:00"},
+            ]
+        }, f)
+    build_rumbles.LIVE_CAPTURES_PATH = tmp_path
+    try:
+        result = load_live_qb_captures("2026")
+        # Keys are "{week}:{roster_id}:{player_id}" -- no season prefix --
+        # to match compute_qb_adjustments_for_week's lookup key exactly.
+        # Season-scoping happens at filtering time (the dict returned here
+        # is already scoped to one season), so 2025's Week 3 capture for
+        # the same roster/player must be filtered out entirely rather than
+        # merely keyed differently.
+        assert result == {"3:1:QB_STARTER": "2026-09-27T20:14:03+00:00"}, f"got {result}"
+    finally:
+        build_rumbles.LIVE_CAPTURES_PATH = original_path
+        os.remove(tmp_path)
+    print("PASS: load_live_qb_captures builds keys matching the consumption side and never leaks a different season's capture")
 
 
 def test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated():
@@ -654,6 +776,13 @@ def main():
     test_build_team_qb_index_scopes_by_team()
     test_compute_qb_adjustments_no_override_and_not_fresh_logs_nothing()
     test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out()
+    test_compute_qb_adjustments_confirmed_tier_captured_at_is_always_null()
+    test_compute_qb_adjustments_durable_capture_wins_even_when_not_fresh()
+    test_compute_qb_adjustments_durable_capture_takes_precedence_over_fresh_injury_status()
+    test_compute_qb_adjustments_no_matching_capture_falls_back_to_injury_status_check()
+    test_compute_qb_adjustments_durable_capture_without_fresh_skips_carry_forward_not_duplicated()
+    test_load_live_qb_captures_missing_file_returns_empty()
+    test_load_live_qb_captures_builds_season_scoped_keys()
     test_compute_qb_adjustments_possible_tier_when_fresh_but_not_corroborated()
     test_compute_qb_adjustments_possible_tier_also_fires_for_questionable()
     test_compute_qb_adjustments_confirmed_tier_beats_everything_else()

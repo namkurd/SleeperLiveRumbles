@@ -822,6 +822,23 @@
   .lastweek-h2h-badge { font-weight: 700; }
   .lastweek-h2h-win { color: var(--good); }
   .lastweek-h2h-loss { color: var(--bad); }
+  /* Dotted-underline "this is interactive" cue on the Injured QB name
+     itself in the QB Injury Backup Adjustments log (renderQbAdjustments),
+     applied only once a durable live-capture timestamp exists for that
+     row (see capture_live_qb_injuries.py / LIVE_CAPTURES_URL) -- same
+     cursor:help + dotted-underline pattern as .qb-adj-asterisk just
+     above, but on the name text directly rather than a separate marker
+     character, since "when was this seen live" is naturally a fact
+     about the injured QB, not a distinct flag next to them. Deliberately
+     inherits the surrounding cell's own color (--bad/--accent-2, see
+     td.qb-adj-injured rules below) rather than accent-2 like
+     .qb-adj-asterisk, so it doesn't fight with this table's existing
+     confidence-tier coloring. */
+  .qb-adj-captured-flag {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+  }
   /* Tooltip for .qb-adj-asterisk -- same fixed-position, JS-driven,
      hover(desktop)/tap(mobile) pattern as .pts-tooltip above (see that
      rule's comment for why position:fixed specifically). Kept as its own
@@ -941,11 +958,17 @@
     </table>
     </div>
   </div>
-  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" at the moment this was caught (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current). <strong>Commissioner Adjustment</strong> is the exact point delta the commissioner's own override represents (blank until one exists) -- compare it directly against Backup QB Points to see how closely this page's own live estimate matched what the commissioner actually keyed in.</p>
+  <p class="footnote">A running log of every time this rule has gone into effect. <strong>Confirmed</strong> means the commissioner has already keyed in a matching score override. <strong>Likely</strong> means a same-team backup QB clearly played and scored, and the started QB's Sleeper injury status read "Out" while that QB's own game was still pre-game or in progress (Sleeper doesn't keep a historical record of in-game injury designations, so this can only be checked while it's still current -- and a status that only appears after the game's gone final doesn't count, since that's the team's own post-game injury report catching up, not something confirmed during the game itself). Still just a same-team backup with no injury-status corroboration yet? That stays <strong>Possible</strong> instead. <strong>Commissioner Adjustment</strong> is the exact point delta the commissioner's own override represents (blank until one exists) -- compare it directly against Backup QB Points to see how closely this page's own live estimate matched what the commissioner actually keyed in.</p>
 </div>
 
 <div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
 <div id="qb-adj-tooltip" class="qb-adj-tooltip" role="tooltip" aria-hidden="true"></div>
+<!-- Separate element from #qb-adj-tooltip above (reuses its .qb-adj-tooltip
+     styling, but is a different tooltip keyed by week:roster_id:player_id
+     rather than roster_id) -- see buildQbAdjCapturedTooltipHtml/
+     showQbAdjCapturedTooltip: shows WHEN a "likely" QB-injury row's live
+     corroboration was durably captured. -->
+<div id="qb-adj-captured-tooltip" class="qb-adj-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
@@ -961,6 +984,20 @@
   "use strict";
 
   var HISTORY_URL = "./rumbles_history.json";
+  // Durable, timestamped log of QB-injury-backup cases that
+  // capture_live_qb_injuries.py (a separate, more-frequently-scheduled
+  // GitHub Actions workflow -- see that script's own header) confirmed
+  // WHILE the started QB's own game was still live -- see
+  // detectQbAdjustmentsForWeek's use of it below, and
+  // build_rumbles.py's load_live_qb_captures for the server-side
+  // counterpart this mirrors. Committed straight to the repo, so every
+  // visitor sees the same shared record, not just whoever happened to
+  // catch it live in their own browser session. Best-effort: a missing
+  // or unreadable file (repo predates this feature, fetch hiccup, etc)
+  // just means no durable captures are available yet -- every case
+  // falls back to the pre-existing in-session game-status-gated check,
+  // exactly as it worked before this file existed.
+  var LIVE_CAPTURES_URL = "./live_qb_captures.json";
   var API_V1 = "https://api.sleeper.app/v1";
   var STATS_BASE = "https://api.sleeper.app/stats/nfl";
   var PROJECTIONS_BASE = "https://api.sleeper.app/projections/nfl";
@@ -1010,6 +1047,8 @@
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
     qbAdjTooltipData: {}, // roster_id -> {html} for the manager-name "*" tooltip (set by render(), read by the qb-adj-tooltip show/toggle handlers) -- only populated for "likely"-tier live QB adjustments, see buildCombinedStandings' qb_adjustment field
     activeQbAdjTooltipRosterId: null, // which roster's "*" tooltip is currently showing (native touch/click toggle state), or null
+    qbAdjCapturedTooltipData: {}, // "{week}:{roster_id}:{player_id}" -> {html} for the QB Injury log's Injured QB name hover tooltip (set by renderQbAdjustments, read by the qb-adj-captured-tooltip show/toggle handlers) -- only populated for a row whose captured_at is set (see LIVE_CAPTURES_URL/buildLiveCapturesLookup)
+    activeQbAdjCapturedTooltipKey: null, // which row's Injured QB name tooltip is currently showing (native touch/click toggle state), or null
     refreshing: false,
     pollTimer: null,
     sort: { key: null, dir: "desc" }, // key: one of COLUMNS' keys, or null = natural standings order
@@ -1053,6 +1092,8 @@
     liveWeekLabel: document.getElementById("live-week-label"),
     ptsTooltip: document.getElementById("pts-tooltip"),
     qbAdjTooltip: document.getElementById("qb-adj-tooltip"),
+    qbAdjCapturedTooltip: document.getElementById("qb-adj-captured-tooltip"),
+    qbAdjBody: document.getElementById("qb-adj-body"),
     howtoBtn: document.getElementById("howto-btn"),
     howtoTooltip: document.getElementById("howto-tooltip"),
     headerCells: {} // filled in by attachSortHandlers(): column key -> <th>
@@ -1728,6 +1769,27 @@
     return map;
   }
 
+  // "{week}:{roster_id}:{player_id}" -> ISO timestamp lookup built from
+  // live_qb_captures.json's raw {captures: [...]} array -- same key
+  // shape and same season-scoping-via-filter-not-via-key approach as
+  // build_rumbles.py's load_live_qb_captures (see that function's
+  // comment for why season doesn't need to be embedded in the key
+  // itself once the season filter below has already run). Mirrors
+  // Python's dict.get-based lookup with a plain JS object.
+  function buildLiveCapturesLookup(captureDoc, season) {
+    var out = {};
+    var captures = (captureDoc && captureDoc.captures) || [];
+    captures.forEach(function (entry) {
+      if (!entry || String(entry.season) !== String(season)) return;
+      var capturedAt = entry.captured_at;
+      if (!capturedAt) return;
+      var injuredQb = entry.injured_qb || {};
+      var key = entry.week + ":" + entry.roster_id + ":" + injuredQb.player_id;
+      out[key] = capturedAt;
+    });
+    return out;
+  }
+
   // Distinguishes "matchups are posted for this week" (the existing
   // isLive/liveActive meaning -- Sleeper typically posts a week's matchups
   // several days before its first kickoff) from "this week has actually
@@ -1781,6 +1843,39 @@
   // playersMeta recently enough to trust its injury_status snapshot" --
   // there's no carry-forward concept needed client-side since nothing
   // here persists between page loads.
+  //
+  // BUG FOUND AND FIXED (Sep 28 2026): "corroborated" used to mean
+  // nothing more than "injury_status currently reads Out/IR/PUP" -- with
+  // NO check on whether that status was ever actually observed WHILE the
+  // started QB's own game was still live. Sleeper doesn't flip a
+  // player's injury_status in real time as something happens on the
+  // field; that field gets set from the team's own injury report, which
+  // normally updates only AFTER the game (sometimes hours later, once
+  // the team/press confirms a player's hurt and will miss time -- see
+  // the real case that caught this: Baker Mayfield left a Week 3 game
+  // with a hand injury under 2 minutes left, Jalon Daniels finished the
+  // game for him, and there was no "Out" designation anywhere before or
+  // during the game -- CBS Sports was still calling it "a developing
+  // story" as the game ended. Sleeper's injury_status field didn't read
+  // "Out" until sometime after the final whistle, but the live poll
+  // trusted it the moment it saw it and immediately stamped the case
+  // "Likely", which reads as "this was confirmed live" when it wasn't.
+  // Fixed by additionally requiring the started QB's own NFL team's game
+  // to NOT already be "complete" (teamGameSchedule -- same live
+  // scoreboard signal already used for the "Pts This Week" tooltip's
+  // game_status) at the moment injury_status is read: pre_game and
+  // in_progress are both still trustworthy (a genuine pregame inactive,
+  // or a real in-game injury caught while it's still live), but once a
+  // game has gone final, a same-team backup having played stays at
+  // "possible" -- awaiting either a commissioner override (promotes to
+  // "confirmed" regardless) or the once-a-week server-side freshness
+  // check in build_rumbles.py, which is a deliberate, SEPARATE
+  // mechanism: for an already-fully-completed week there's no earlier
+  // "still live" signal available at all, so build_rumbles.py
+  // intentionally trusts the first snapshot taken the morning after
+  // (see determine_fresh_week's comment there) -- that's correct for a
+  // past week and this change doesn't touch it. This fix only tightens
+  // what the LIVE, mid-game page is willing to call "Likely" on its own.
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -1882,7 +1977,7 @@
       .sort(function (a, b) { return b.points - a.points; });
   }
 
-  function detectQbAdjustmentsForWeek(week, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, isFresh) {
+  function detectQbAdjustmentsForWeek(week, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, isFresh, teamGameSchedule, liveCaptures) {
     var entries = [];
     matchups.forEach(function (m) {
       var rosterId = m.roster_id;
@@ -1955,6 +2050,11 @@
           confidence: "confirmed",
           injury_status_at_capture: null,
           custom_points_delta: overrideDelta,
+          // A commissioner override is already the strongest possible
+          // signal on its own -- captured_at is a live-capture-log
+          // concept and doesn't apply to a human-confirmed entry (see
+          // build_rumbles.py's identical rule for this same tier).
+          captured_at: null,
           live: true
         });
         return;
@@ -1989,7 +2089,55 @@
       startedList.forEach(function (startedNoOverride) {
         var backups = findBackupQbs(startedNoOverride.pid, startedNoOverride.meta, playersMeta, teamQbIndex, statsMap, scoringSettings, startedPids);
         if (!backups.length) return;
-        var corroborated = isFresh && isOutStatus(startedNoOverride.meta.injury_status);
+        // liveCaptures (see LIVE_CAPTURES_URL/buildLiveCapturesLookup
+        // above, and capture_live_qb_injuries.py's own header) is
+        // checked FIRST, independent of isFresh/gameStillLive: it's a
+        // durable, timestamped record -- shared across every visitor,
+        // not just this browser session -- that a same-team backup was
+        // corroborated by a live Out/IR/PUP reading WHILE that started
+        // QB's own game was still pre_game or in_progress, captured by a
+        // workflow that polls every ~15 minutes during real NFL game
+        // windows. That's a strictly better signal than re-deriving
+        // "corroborated" from THIS poll's own current injury_status/
+        // game-status snapshot below, for the exact reason a durable log
+        // exists at all: without it, a genuinely-live-caught "likely"
+        // case had no way to stay "likely" once its game went final on
+        // the very next 30-second poll (isFresh/gameStillLive would
+        // recompute to false and silently downgrade it back to
+        // "possible", discarding real information on every single
+        // refresh from then on) -- and there was nowhere to point to
+        // showing WHEN the live corroboration actually happened. A
+        // durable capture, once it exists, is trusted regardless of
+        // isFresh/gameStillLive. When no capture exists yet for this
+        // started QB (the workflow hasn't covered that moment, or
+        // hasn't run yet), this falls back to the original same-day,
+        // game-status-gated injury_status check exactly as before --
+        // see that check's own comment just below.
+        var captureKey = week + ":" + rosterId + ":" + startedNoOverride.pid;
+        var capturedAt = (liveCaptures && liveCaptures[captureKey]) || null;
+        var confidence, corroborated;
+        if (capturedAt) {
+          confidence = "likely";
+        } else {
+          // A fresh Out/IR/PUP reading only actually corroborates a LIVE
+          // injury if it's possible this status was already true while
+          // the game was still being played -- once the started QB's
+          // own NFL team's game has gone final, Sleeper's injury_status
+          // has had a chance to update from that team's POST-game injury
+          // report (often hours later), which says nothing about
+          // whether anyone was ever actually ruled out before or during
+          // the game itself (see the long comment above this function
+          // for the real case that caught this). pre_game and
+          // in_progress both still count -- a genuine pregame inactive,
+          // or a real in-game injury caught while its game is still
+          // live, are both legitimate live corroboration; "complete" (or
+          // no schedule info at all) is not.
+          var startedTeam = startedNoOverride.meta.team;
+          var startedGame = (startedTeam && teamGameSchedule && teamGameSchedule[startedTeam]) || null;
+          var gameStillLive = !!startedGame && startedGame.status !== "complete";
+          corroborated = isFresh && gameStillLive && isOutStatus(startedNoOverride.meta.injury_status);
+          confidence = corroborated ? "likely" : "possible";
+        }
 
         entries.push({
           week: week,
@@ -1999,9 +2147,10 @@
           backup_qbs: backups,
           backup_points_total: round2(backups.reduce(function (s, b) { return s + b.points; }, 0)),
           team_qb_count: (teamQbIndex[startedNoOverride.meta.team] || []).length,
-          confidence: corroborated ? "likely" : "possible",
+          confidence: confidence,
           injury_status_at_capture: startedNoOverride.meta.injury_status || null,
           custom_points_delta: null,
+          captured_at: capturedAt,
           live: true
         });
       });
@@ -2439,6 +2588,15 @@
           fetchJson(SCORES_BASE + "/" + seasonType + "/" + season + "/" + targetWeek).catch(function (err) {
             console.warn("[rumbles] couldn't load live game status (Pts This Week tooltip will treat every game as \"unknown\", so it won't hide any finished players in Projected mode):", err);
             return [];
+          }),
+          // Best-effort, same as above -- see LIVE_CAPTURES_URL's own
+          // comment. A missing/unreadable file just means no durable
+          // captures exist yet; detectQbAdjustmentsForWeek falls back to
+          // its original same-day check exactly as before this feature
+          // existed, so this must never block or break live scoring.
+          fetchJson(LIVE_CAPTURES_URL).catch(function (err) {
+            console.warn("[rumbles] couldn't load live_qb_captures.json (QB-injury 'likely' entries will fall back to the same-day check, with no hover timestamp):", err);
+            return { captures: [] };
           })
         ]).then(function (results) {
           var league = results[0];
@@ -2447,6 +2605,7 @@
           var projMap = arrayToPlayerMap(results[3]);
           var games = results[4] || [];
           var teamGameSchedule = buildTeamGameSchedule(games);
+          var liveCaptures = buildLiveCapturesLookup(results[5], season);
           state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
@@ -2516,7 +2675,7 @@
             var teamQbIndex = state.teamQbIndex || {};
 
             var prelim = detectQbAdjustmentsForWeek(
-              targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+              targetWeek, matchups, playersMeta, teamQbIndex, statsMap, scoringSettings, managerByRosterId, true, teamGameSchedule, liveCaptures
             );
             var stale = !state.playersMetaFetchedAt || (Date.now() - state.playersMetaFetchedAt) > PLAYERS_REFRESH_COOLDOWN_MS;
             var needsFreshCheck = prelim.some(function (e) { return e.confidence !== "confirmed"; });
@@ -2524,7 +2683,7 @@
               ? fetchPlayersMeta()
                 .then(function (freshMeta) {
                   return detectQbAdjustmentsForWeek(
-                    targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true
+                    targetWeek, matchups, freshMeta, state.teamQbIndex, statsMap, scoringSettings, managerByRosterId, true, teamGameSchedule, liveCaptures
                   );
                 })
                 .catch(function () { return prelim; })
@@ -3682,6 +3841,138 @@
     return e.target && e.target.closest ? e.target.closest("span.qb-adj-asterisk") : null;
   }
 
+  // ---- Injured QB name hover/tap tooltip (QB Injury Backup Adjustments
+  // log, "when was this captured live") ------------------------------------
+  // Same reusable-element, hover(desktop)/tap(mobile) pattern as the two
+  // tooltips above (see the Pts tooltip's own comment for the
+  // position:fixed rationale), wired independently of both since this one
+  // keys off yet another element (span.qb-adj-captured-flag, inside the
+  // #qb-adj-body table rather than the standings table els.body lives in)
+  // and must never toggle either of the others. Reuses the .qb-adj-tooltip
+  // CSS class for identical panel styling, but is its OWN element
+  // (#qb-adj-captured-tooltip) and its own show/hide/position functions --
+  // same reasoning as keeping #qb-adj-tooltip separate from #pts-tooltip:
+  // two tooltips triggered in quick succession must never show mismatched
+  // content by sharing one DOM node.
+  //
+  // Only ever shown for a row with a real captured_at -- i.e. one actually
+  // backed by capture_live_qb_injuries.py's durable, shared log, not the
+  // same-day injury_status fallback (which has no timestamp to show at
+  // all) -- see renderQbAdjustments, which is the only place
+  // state.qbAdjCapturedTooltipData gets populated.
+  function formatCapturedAt(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "at an unknown time";
+    try {
+      return d.toLocaleString(undefined, {
+        weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+      });
+    } catch (e) {
+      // Ancient/unusual environment without Intl options support -- still
+      // show SOMETHING rather than nothing.
+      return d.toLocaleString();
+    }
+  }
+
+  function buildQbAdjCapturedTooltipHtml(r) {
+    var name = (r.injured_qb && r.injured_qb.name) || "This QB";
+    var when = formatCapturedAt(r.captured_at);
+    return "<strong>Confirmed live</strong><br>" +
+      escapeHtml(name) + " was seen ruled out (Out/IR/PUP) while their game was still live.<br>" +
+      "Captured " + escapeHtml(when) + ".";
+  }
+
+  function positionQbAdjCapturedTooltip(el) {
+    var tip = els.qbAdjCapturedTooltip;
+    var elRect = el.getBoundingClientRect();
+    var margin = 6;
+    var tipRect = tip.getBoundingClientRect();
+    var left = elRect.left;
+    var maxLeft = window.innerWidth - tipRect.width - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    var top = elRect.bottom + margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = elRect.top - tipRect.height - margin;
+      if (top < margin) top = margin;
+    }
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function showQbAdjCapturedTooltip(el) {
+    var key = el.getAttribute("data-qb-adj-key");
+    var html = state.qbAdjCapturedTooltipData[key];
+    if (!html) return;
+    state.activeQbAdjCapturedTooltipKey = key;
+    els.qbAdjCapturedTooltip.innerHTML = html;
+    els.qbAdjCapturedTooltip.setAttribute("aria-hidden", "false");
+    els.qbAdjCapturedTooltip.classList.add("visible");
+    positionQbAdjCapturedTooltip(el);
+  }
+
+  function hideQbAdjCapturedTooltip() {
+    if (state.activeQbAdjCapturedTooltipKey == null) return;
+    state.activeQbAdjCapturedTooltipKey = null;
+    els.qbAdjCapturedTooltip.classList.remove("visible");
+    els.qbAdjCapturedTooltip.setAttribute("aria-hidden", "true");
+  }
+
+  // Called at the end of every renderQbAdjustments() (see
+  // refreshOrHideQbAdjTooltip's own comment for why -- same reasoning: a
+  // tap-triggered tooltip has no "pointer left" moment of its own, so keep
+  // it open with fresh content on a poll, or close it if this row no
+  // longer carries a captured_at at all (e.g. history got rebuilt without
+  // it, or the row simply aged out of the table).
+  function refreshOrHideQbAdjCapturedTooltip() {
+    var key = state.activeQbAdjCapturedTooltipKey;
+    if (key == null) return;
+    var html = state.qbAdjCapturedTooltipData[key];
+    var el = els.qbAdjBody && els.qbAdjBody.querySelector('span.qb-adj-captured-flag[data-qb-adj-key="' + key + '"]');
+    if (!html || !el) {
+      hideQbAdjCapturedTooltip();
+      return;
+    }
+    els.qbAdjCapturedTooltip.innerHTML = html;
+    positionQbAdjCapturedTooltip(el);
+  }
+
+  function qbAdjCapturedElFromEvent(e) {
+    return e.target && e.target.closest ? e.target.closest("span.qb-adj-captured-flag") : null;
+  }
+
+  if (els.qbAdjBody) {
+    if (supportsHover) {
+      els.qbAdjBody.addEventListener("mouseover", function (e) {
+        var el = qbAdjCapturedElFromEvent(e);
+        if (el) showQbAdjCapturedTooltip(el);
+      });
+      els.qbAdjBody.addEventListener("mouseout", function (e) {
+        var el = qbAdjCapturedElFromEvent(e);
+        if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hideQbAdjCapturedTooltip();
+      });
+    } else {
+      els.qbAdjBody.addEventListener("click", function (e) {
+        var el = qbAdjCapturedElFromEvent(e);
+        if (!el) return;
+        e.stopPropagation();
+        var key = el.getAttribute("data-qb-adj-key");
+        if (state.activeQbAdjCapturedTooltipKey === key) {
+          hideQbAdjCapturedTooltip();
+        } else {
+          showQbAdjCapturedTooltip(el);
+        }
+      });
+      document.addEventListener("click", function (e) {
+        if (state.activeQbAdjCapturedTooltipKey != null && (!e.target.closest || !e.target.closest("span.qb-adj-captured-flag"))) {
+          hideQbAdjCapturedTooltip();
+        }
+      });
+    }
+  }
+  window.addEventListener("scroll", hideQbAdjCapturedTooltip, true);
+  window.addEventListener("resize", hideQbAdjCapturedTooltip);
+
   // ---- "How to Use" hover/click tooltip ----------------------------------
   // Static explainer content (not per-row data, unlike the Pts tooltip
   // above), anchored to a single fixed button in the header instead of a
@@ -3831,6 +4122,15 @@
       return String(a.manager).localeCompare(String(b.manager));
     });
 
+    // Rebuilt fresh every render, same as state.qbAdjTooltipData in
+    // render() -- only rows with a real captured_at (see
+    // LIVE_CAPTURES_URL/buildLiveCapturesLookup and
+    // detectQbAdjustmentsForWeek's liveCaptures param) get an entry, so a
+    // row that no longer has one (rare, but possible if history gets
+    // rebuilt without it) simply loses its hover affordance on the next
+    // render rather than showing stale data.
+    state.qbAdjCapturedTooltipData = {};
+
     if (!rows.length) {
       body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No QB-injury backup adjustments detected yet this season.</div></td></tr>';
     } else {
@@ -3878,7 +4178,23 @@
         // same format Backup QB(s) already used, so this table needs one
         // fewer column (was two separate cells) and fits without side
         // scrolling on a real desktop width or a landscape phone.
-        var injuredHtml = escapeHtml(r.injured_qb.name) + " (" + r.injured_qb.points.toFixed(2) + ")";
+        //
+        // When this row carries a real captured_at (a durable, shared
+        // live-capture log entry actually backs this "likely" -- see
+        // LIVE_CAPTURES_URL/detectQbAdjustmentsForWeek's liveCaptures
+        // param and build_rumbles.py's identical live_captures_by_key),
+        // the injured QB's name itself becomes a hover/tap target (same
+        // key format -- "{week}:{roster_id}:{player_id}" -- as the
+        // capture log's own lookup, so it always matches exactly one
+        // row) showing WHEN that live corroboration was captured -- see
+        // buildQbAdjCapturedTooltipHtml/showQbAdjCapturedTooltip below.
+        var injuredNameHtml = escapeHtml(r.injured_qb.name);
+        if (r.captured_at && r.injured_qb && r.injured_qb.player_id) {
+          var capturedKey = r.week + ":" + r.roster_id + ":" + r.injured_qb.player_id;
+          state.qbAdjCapturedTooltipData[capturedKey] = buildQbAdjCapturedTooltipHtml(r);
+          injuredNameHtml = '<span class="qb-adj-captured-flag" data-qb-adj-key="' + capturedKey + '">' + injuredNameHtml + "</span>";
+        }
+        var injuredHtml = injuredNameHtml + " (" + r.injured_qb.points.toFixed(2) + ")";
         // A still-"possible" row's Injured QB cell gets a second class
         // (qb-adj-tier-possible, same tier class the Backup QB(s)/Backup
         // QB Points cells use) so it reads blue instead of the usual red --
@@ -3904,6 +4220,8 @@
       var isLive = state.live && state.live.isLive;
       liveLabelEl.textContent = isLive ? "Checking Week " + state.live.week + " live." : "";
     }
+
+    refreshOrHideQbAdjCapturedTooltip();
   }
 
   function escapeHtml(s) {

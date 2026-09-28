@@ -43,6 +43,7 @@ const source = [
   extract(/function findBackupQbs\([^)]*\) \{[\s\S]*?\n  \}/, "findBackupQbs"),
   extract(/function detectQbAdjustmentsForWeek\([^)]*\) \{[\s\S]*?\n  \}/, "detectQbAdjustmentsForWeek"),
   extract(/function applyQbAdjustmentsToScores\([^)]*\) \{[\s\S]*?\n  \}/, "applyQbAdjustmentsToScores"),
+  extract(/function buildLiveCapturesLookup\([^)]*\) \{[\s\S]*?\n  \}/, "buildLiveCapturesLookup"),
 ].join("\n");
 
 const sandbox = {};
@@ -51,10 +52,11 @@ vm.runInContext(
   source + "\nthis.detectQbAdjustmentsForWeek = detectQbAdjustmentsForWeek;" +
     "\nthis.applyQbAdjustmentsToScores = applyQbAdjustmentsToScores;" +
     "\nthis.buildTeamQbIndex = buildTeamQbIndex;" +
-    "\nthis.findBackupQbs = findBackupQbs;",
+    "\nthis.findBackupQbs = findBackupQbs;" +
+    "\nthis.buildLiveCapturesLookup = buildLiveCapturesLookup;",
   sandbox
 );
-const { detectQbAdjustmentsForWeek, applyQbAdjustmentsToScores, buildTeamQbIndex, findBackupQbs } = sandbox;
+const { detectQbAdjustmentsForWeek, applyQbAdjustmentsToScores, buildTeamQbIndex, findBackupQbs, buildLiveCapturesLookup } = sandbox;
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -108,9 +110,17 @@ const MATCHUPS = [
 
 const MANAGERS = { 1: "Alex", 2: "Ben" };
 
-function detect(starterStatus, isFresh) {
+// Default schedule for these fixtures: MIN's (and KC's) game still live --
+// most existing tests below are about isFresh/backup-detection, not the
+// game-completion gate, so they should keep behaving exactly as before
+// unless a test explicitly passes a "complete" schedule to exercise that
+// gate on its own.
+const IN_PROGRESS_SCHEDULE = { MIN: { status: "in_progress" }, KC: { status: "in_progress" }, CHI: { status: "in_progress" } };
+const COMPLETE_SCHEDULE = { MIN: { status: "complete" }, KC: { status: "complete" }, CHI: { status: "complete" } };
+
+function detect(starterStatus, isFresh, schedule, liveCaptures) {
   var meta = playersMeta(starterStatus);
-  return detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), STATS, SCORING, MANAGERS, isFresh);
+  return detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), STATS, SCORING, MANAGERS, isFresh, schedule || IN_PROGRESS_SCHEDULE, liveCaptures);
 }
 
 // ---- "possible" fires when fresh, a backup recorded action, but nothing
@@ -124,6 +134,7 @@ function detect(starterStatus, isFresh) {
   check("possible tier: backup_qbs", e.backup_qbs.map(function (b) { return b.name; }), ["Carson Wentz"]);
   ok("possible tier: backup_points_total still recorded (21.9) for awareness", Math.abs(e.backup_points_total - 21.9) < 1e-9);
   check("possible tier: custom_points_delta is null (only a commissioner sets this)", e.custom_points_delta, null);
+  check("possible tier: captured_at is null (no durable capture log passed in)", e.captured_at, null);
 })();
 
 // ---- Also fires for a real-but-non-out status ("Questionable") -- not
@@ -134,10 +145,41 @@ function detect(starterStatus, isFresh) {
 })();
 
 // ---- "likely" still fires (unaffected regression check) when the status
-// DOES corroborate out/IR/PUP. --------------------------------------------
+// DOES corroborate out/IR/PUP -- game still in progress. -------------------
 (function () {
   var entries = detect("Out", true);
   check("'Out' still yields 'likely', not 'possible'", entries[0].confidence, "likely");
+})();
+
+// ---- REGRESSION: the real Baker Mayfield case (Week 3 2026) -- a same-
+// team backup played, and injury_status now reads "Out" fresh, but the
+// started QB's own game has already gone FINAL. Sleeper doesn't flip
+// injury_status in real time off what happens on the field; that only
+// updates from the team's post-game injury report, often well after the
+// final whistle -- there was no "Out" designation anywhere before or
+// during this actual game. An "Out" status that only appears once the
+// game is already complete must NOT be trusted as live corroboration, so
+// this must stay "possible", not jump to "likely". ------------------------
+(function () {
+  var entries = detect("Out", true, COMPLETE_SCHEDULE);
+  check("'Out' observed only after the game went final downgrades to 'possible', not 'likely'", entries[0].confidence, "possible");
+})();
+
+// ---- Same case, but pre-game -- a genuine pregame inactive (started QB
+// ruled Out before kickoff, same-team backup starts instead) is still
+// legitimate live corroboration, same as in-progress. ----------------------
+(function () {
+  var entries = detect("Out", true, { MIN: { status: "pre_game" }, KC: { status: "pre_game" } });
+  check("'Out' observed pre-game still yields 'likely' (a real pregame inactive)", entries[0].confidence, "likely");
+})();
+
+// ---- No schedule info at all for this team (unknown/missing game status)
+// must fail safe to NOT corroborating -- same reasoning as "complete":
+// without positive confirmation the game is still live, an Out status
+// can't be trusted as caught live. ------------------------------------------
+(function () {
+  var entries = detect("Out", true, {});
+  check("missing schedule info for the team downgrades to 'possible', not 'likely'", entries[0].confidence, "possible");
 })();
 
 // ---- Not fresh -- and not corroborated -- falls back to "possible" too
@@ -201,6 +243,46 @@ function detect(starterStatus, isFresh) {
   var byRoster = applyQbAdjustmentsToScores(entries, scoresActual, scoresCustom);
   ok("confirmed tier: Actual total increased by the official delta (29.1)", Math.abs(scoresActual[1] - 129.1) < 1e-9);
   ok("confirmed tier: byRoster entry exists", byRoster[1] !== undefined);
+  check("confirmed tier: captured_at is always null (a commissioner override doesn't need a live-capture timestamp)", entries[0].captured_at, null);
+})();
+
+// ---- REGRESSION: a durably-captured live case (see LIVE_CAPTURES_URL/
+// buildLiveCapturesLookup and capture_live_qb_injuries.py) must be trusted
+// as "likely" -- WITH its real captured_at timestamp threaded onto the
+// entry -- even when THIS poll's own isFresh/game-status snapshot would
+// otherwise downgrade it to "possible" (game already complete, or not the
+// one fresh day). This is the actual fix for the real gap Ben found: a
+// genuinely-live-caught injury (Out status seen while the game was still
+// in progress) had no way to stay "likely" once the game ended on the very
+// next 30-second poll, and no timestamp to point to either -- see
+// detectQbAdjustmentsForWeek's own comment on liveCaptures. -----------------
+(function () {
+  var liveCaptures = { "2:1:QB_STARTER": "2026-09-27T20:14:03+00:00" };
+  var entries = detect("Out", false, COMPLETE_SCHEDULE, liveCaptures);
+  ok("a durable capture must still produce an entry even when not fresh and the game is complete", entries.length === 1);
+  check("a durable live-capture log entry wins as 'likely' even on a not-fresh, game-complete poll", entries[0].confidence, "likely");
+  check("the durable log's own timestamp is carried through onto the entry", entries[0].captured_at, "2026-09-27T20:14:03+00:00");
+})();
+
+// ---- Even when the run IS fresh and the game IS still live (the normal
+// "likely" path would fire on its own too), a durable capture's timestamp
+// must still be attached -- rather than silently taking the same-day
+// injury_status path instead and losing the timestamp. ---------------------
+(function () {
+  var liveCaptures = { "2:1:QB_STARTER": "2026-09-27T20:14:03+00:00" };
+  var entries = detect("Out", true, IN_PROGRESS_SCHEDULE, liveCaptures);
+  check("a durable capture's timestamp is attached even on a fresh, still-live run", entries[0].captured_at, "2026-09-27T20:14:03+00:00");
+})();
+
+// ---- A capture log that exists but doesn't mention this exact
+// week:roster:player combo must behave exactly as if no log were provided
+// at all -- falls back cleanly to the same-day injury_status check, with
+// no captured_at attached. --------------------------------------------------
+(function () {
+  var liveCaptures = { "2:99:QB_STARTER": "2026-09-27T20:14:03+00:00", "2:1:SOME_OTHER_PLAYER": "2026-09-27T20:14:03+00:00" };
+  var entries = detect("Out", true, IN_PROGRESS_SCHEDULE, liveCaptures);
+  check("a capture log with no matching key falls back cleanly to the injury_status check", entries[0].confidence, "likely");
+  check("a non-matching capture-log entry is never attached to an unrelated roster/player", entries[0].captured_at, null);
 })();
 
 // ---- SUPER_FLEX / multi-started-QB regression: this league's real
@@ -320,6 +402,31 @@ const SUPERFLEX_MANAGERS = { 1: "Alex", 2: "Ben" };
   });
   var entries = detectQbAdjustmentsForWeek(2, MATCHUPS, meta, buildTeamQbIndex(meta), zeroStats, SCORING, MANAGERS, true);
   ok("no adjustment entry when the only candidate backup QB scored exactly 0.00 points", entries.length === 0);
+})();
+
+// ---- buildLiveCapturesLookup: builds a "{week}:{roster_id}:{player_id}"
+// lookup from live_qb_captures.json's raw shape, scoped to one season, with
+// the same no-season-in-the-key format as build_rumbles.py's
+// load_live_qb_captures (season-scoping happens via the filter, not the
+// key itself -- see that Python function's own comment). -------------------
+(function () {
+  var captureDoc = {
+    captures: [
+      { season: "2026", week: 3, roster_id: 1, injured_qb: { player_id: "QB_STARTER" }, captured_at: "2026-09-27T20:14:03+00:00" },
+      // A different season's Week 3 must NEVER collide with 2026's.
+      { season: "2025", week: 3, roster_id: 1, injured_qb: { player_id: "QB_STARTER" }, captured_at: "2025-09-28T20:00:00+00:00" },
+      // No captured_at at all -- shouldn't happen in practice, but must
+      // never produce a bogus lookup entry if it does.
+      { season: "2026", week: 4, roster_id: 2, injured_qb: { player_id: "QB_OTHER" }, captured_at: null },
+    ],
+  };
+  var result = buildLiveCapturesLookup(captureDoc, "2026");
+  check("buildLiveCapturesLookup builds a season-scoped, no-season-prefix key", result, { "3:1:QB_STARTER": "2026-09-27T20:14:03+00:00" });
+})();
+
+(function () {
+  var result = buildLiveCapturesLookup(null, "2026");
+  check("buildLiveCapturesLookup returns {} for a missing/empty capture doc", result, {});
 })();
 
 console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL QB-adjustment detection/scoring UNIT TESTS PASSED");

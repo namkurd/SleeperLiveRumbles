@@ -444,6 +444,7 @@ def compute_qb_adjustments_for_week(
     is_fresh: bool,
     is_most_recent_completed: bool,
     carried_by_roster: dict[int, list[dict]],
+    live_captures_by_key: dict[str, str] | None = None,
 ) -> list[dict]:
     entries: list[dict] = []
     for m in matchups:
@@ -516,6 +517,10 @@ def compute_qb_adjustments_for_week(
                     "confidence": "confirmed",
                     "injury_status_at_capture": None,
                     "custom_points_delta": override_delta,
+                    # A commissioner override is already the strongest possible
+                    # signal on its own -- it doesn't need a live-capture
+                    # timestamp to be trustworthy, so this is always null here.
+                    "captured_at": None,
                 }
             )
             continue
@@ -574,16 +579,54 @@ def compute_qb_adjustments_for_week(
         # backup who recorded action -- each one excludes this roster's
         # OTHER started QB(s) from counting as "a backup" (see
         # find_backup_qbs).
+        #
+        # live_captures_by_key (added alongside capture_live_qb_injuries.py
+        # -- see that script's header) is checked FIRST, independent of
+        # is_fresh: it's a durable, timestamped record that a same-team
+        # backup was corroborated by a live "Out"/"IR"/"PUP" reading WHILE
+        # that started QB's own game was still pre-game or in progress --
+        # captured by a workflow that polls frequently during real game
+        # windows, not just once here the morning after. That's a strictly
+        # better signal than this run's own current injury_status snapshot
+        # (which, being read here only after the whole week has already
+        # completed, can never itself distinguish "ruled out during the
+        # game" from "the team's post-game injury report flipped this
+        # field afterward" -- see rumbles.html's detectQbAdjustmentsForWeek
+        # for the client-side half of this same distinction, and the real
+        # case that prompted it). A durable capture, once it exists, is
+        # trusted regardless of is_fresh/is_most_recent_completed -- it
+        # doesn't need same-day freshness the way the injury_status
+        # fallback below does, since it's not re-deriving trust from a
+        # snapshot that can go stale. When no capture exists for this
+        # started QB (the workflow didn't cover that moment, or hasn't run
+        # yet), this falls back to the original same-day injury_status
+        # check exactly as before.
         started_list = find_started_qbs(m, players_meta)
         started_pids = {pid for pid, _ in started_list}
-        if is_fresh and started_list:
+        if started_list:
+            new_entries: list[dict] = []
             for pid, meta in started_list:
                 backup_entries = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings, started_pids)
                 if not backup_entries:
                     continue
-                status = (meta.get("injury_status") or "").strip().lower()
-                confidence = "likely" if status in ("out", "ir", "pup") else "possible"
-                entries.append(
+                capture_key = f"{week}:{roster_id}:{pid}"
+                captured_at = (live_captures_by_key or {}).get(capture_key)
+                if captured_at:
+                    confidence = "likely"
+                    status_at_capture = meta.get("injury_status")
+                elif is_fresh:
+                    status = (meta.get("injury_status") or "").strip().lower()
+                    confidence = "likely" if status in ("out", "ir", "pup") else "possible"
+                    status_at_capture = meta.get("injury_status")
+                else:
+                    # No durable capture, and this isn't the one fresh
+                    # day for this week either -- nothing new to say about
+                    # this started QB this run. If a "likely" was already
+                    # recorded for them on a prior run, the carry-forward
+                    # block below (is_most_recent_completed) is what keeps
+                    # showing it, not this loop re-deriving it.
+                    continue
+                new_entries.append(
                     {
                         "week": week,
                         "roster_id": roster_id,
@@ -592,11 +635,20 @@ def compute_qb_adjustments_for_week(
                         "backup_qbs": backup_entries,
                         "backup_points_total": round(sum(b["points"] for b in backup_entries), 2),
                         "confidence": confidence,
-                        "injury_status_at_capture": meta.get("injury_status"),
+                        "injury_status_at_capture": status_at_capture,
                         "custom_points_delta": None,
+                        "captured_at": captured_at,
                     }
                 )
-            continue
+            entries.extend(new_entries)
+            # Same "always skip carry-forward" behavior as the original
+            # `if is_fresh and started_list: ... continue` had for the
+            # is_fresh case (whether or not any entry actually got
+            # appended above) -- now also skipped when a durable capture
+            # produced an entry even on a NOT-fresh run, so that roster
+            # doesn't also get a stale carried-forward duplicate below.
+            if is_fresh or new_entries:
+                continue
 
         # Not fresh -- carry forward every previously-captured "likely"
         # entry for this roster/week whose injured QB is still one this
@@ -655,6 +707,7 @@ def build_history(
     scoring_settings: dict | None = None,
     old_qb_by_week: dict[int, dict[int, list[dict]]] | None = None,
     previously_completed_weeks: set[int] | None = None,
+    live_captures_by_key: dict[str, str] | None = None,
 ) -> dict:
     weekly: dict[str, dict] = {}
     qb_adjustments: list[dict] = []
@@ -697,6 +750,7 @@ def build_history(
                         is_fresh=(week == freshest_week),
                         is_most_recent_completed=(week == most_recently_completed_week),
                         carried_by_roster=old_qb_by_week.get(week, {}),
+                        live_captures_by_key=live_captures_by_key,
                     )
                 )
             except Exception as e:  # noqa: BLE001 - this is a nice-to-have overlay, never fatal to the main standings
@@ -786,6 +840,47 @@ def load_previous_qb_adjustments() -> dict[int, dict[int, list[dict]]]:
         return {}
 
 
+LIVE_CAPTURES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_qb_captures.json")
+
+
+def load_live_qb_captures(season: str) -> dict[str, str]:
+    """roster/week/player -> ISO timestamp lookup of every QB-injury-backup
+    case that capture_live_qb_injuries.py durably confirmed WHILE the
+    started QB's own game was still pre-game or in progress (see that
+    script's header, and detectQbAdjustmentsForWeek's matching comment in
+    rumbles.html) -- keyed "{week}:{roster_id}:{player_id}" to match
+    compute_qb_adjustments_for_week's lookup key exactly. Cross-season
+    collisions are already ruled out by the season filter below (this dict
+    is only ever built for one season at a time), so the season does not
+    need to be embedded in the key itself. This is a strictly better
+    signal than this script's own same-day injury_status fallback (see
+    compute_qb_adjustments_for_week),
+    since it's a real, timestamped record of what Sleeper's injury_status
+    said DURING the game, not a same-morning guess taken after every game
+    that week has already gone final. Never fatal: a missing/corrupt/
+    not-yet-existing captures file just means no durable captures are
+    available yet, so every case falls back to the pre-existing same-day
+    check, exactly as it always did before capture_live_qb_injuries.py
+    existed."""
+    if not os.path.exists(LIVE_CAPTURES_PATH):
+        return {}
+    try:
+        with open(LIVE_CAPTURES_PATH) as f:
+            data = json.load(f)
+        out: dict[str, str] = {}
+        for entry in data.get("captures") or []:
+            if entry.get("season") != season:
+                continue
+            key = f"{entry.get('week')}:{entry.get('roster_id')}:{entry.get('injured_qb', {}).get('player_id')}"
+            captured_at = entry.get("captured_at")
+            if captured_at:
+                out[key] = captured_at
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't read {LIVE_CAPTURES_PATH} for durable QB-capture lookup ({e})", file=sys.stderr)
+        return {}
+
+
 def load_previous_weeks_completed() -> set[int]:
     """Which weeks were already `weeks_completed` as of the LAST run (if
     any) -- used by build_history to tell "this week just finished, this is
@@ -863,6 +958,8 @@ def main() -> None:
 
         old_qb_by_week = load_previous_qb_adjustments()
         previously_completed_weeks = load_previous_weeks_completed()
+        live_captures_by_key = load_live_qb_captures(season)
+        print(f"[info] {len(live_captures_by_key)} durable live QB-injury capture(s) available for this season")
         history = build_history(
             league_id,
             season,
@@ -874,6 +971,7 @@ def main() -> None:
             scoring_settings,
             old_qb_by_week,
             previously_completed_weeks,
+            live_captures_by_key,
         )
 
     with open(OUTPUT_PATH, "w") as f:

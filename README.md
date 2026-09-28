@@ -533,6 +533,104 @@ a roster that deliberately starts two QBs from the SAME NFL team (not an
 injury situation at all) correctly logs nothing, proving the other started
 QB is excluded from counting as "a backup" for its counterpart.
 
+#### Durable live-capture log: telling "ruled out live" apart from "flipped to Out after the fact"
+
+A real case (Baker Mayfield/Jalon Daniels, Week 3 2026) exposed a gap in
+the "Likely" tier above: Sleeper's `injury_status` field is a live,
+*current-only* snapshot with no timestamp and no memory of WHEN a player
+was actually marked "Out" -- so there was no way to tell a status seen
+live, mid-game, apart from a routine post-game roster-status update that
+happened to land on the same field hours after the final whistle. Mayfield
+left the game in the 4th quarter with a hand injury and Daniels finished
+it, but no official "Out" designation existed before or during the game
+per contemporaneous coverage -- so the "Out" status the page saw was very
+likely a post-game flip, not a live-confirmed one, and treating it as
+"Likely" corroboration would have been wrong.
+
+**The fix has two parts, both required together:**
+
+1. **A game-status gate**, client-side (`detectQbAdjustmentsForWeek` in
+   `rumbles.html`): an "Out"/"IR"/"PUP" reading only counts as live
+   corroboration if the started QB's own NFL game hadn't gone fully
+   `"complete"` yet at the moment it was checked (`pre_game` and
+   `in_progress` both still count -- a genuine pregame inactive is just as
+   legitimate as a real in-game injury caught while the game's still
+   live; `"complete"`, or no schedule info at all, is not). Game status
+   comes from the same live-scoreboard feed (`SCORES_BASE`) the "Points
+   This Week" tooltip already uses -- see `normalizeGameStatus`/
+   `buildTeamGameSchedule`.
+2. **A durable, shared capture log** (`live_qb_captures.json`,
+   `capture_live_qb_injuries.py`, `.github/workflows/live_qb_capture.yml`)
+   -- because the gate above, on its own, creates a NEW problem: this
+   page recomputes everything from scratch on every 30-second poll, with
+   no memory of its own. Without a durable record, a genuinely-live-caught
+   "Likely" case would flip right back to "Possible" the instant the game
+   went final on the very next poll -- correctly filtering out the false
+   positive, but also discarding real information on every single refresh
+   from then on, with nothing anywhere to show WHEN (or whether) it was
+   ever actually seen live. `build_rumbles.py`'s own once-a-day historical
+   builder has the identical blind spot for a different reason: it only
+   ever runs after a week is already fully complete, so its same-day
+   "fresh" check can *never* draw the live-vs-post-game distinction on its
+   own, no matter how fresh the run is.
+
+   `capture_live_qb_injuries.py` is a separate script, run by its own
+   GitHub Actions workflow on a much tighter schedule (every ~15 minutes,
+   but *only* during actual NFL game windows -- Thu/Sat*/Sun/Mon, padded
+   generously in UTC to cover both EDT and EST since GitHub's cron is
+   UTC-only and doesn't observe DST -- see the workflow file's own
+   comments for the exact windows and the reasoning). It watches for the
+   one thing that's unambiguous: a backup QB recording real statistical
+   action while the started QB in front of him reads Out/IR/PUP AND his
+   game hasn't gone final yet. The instant that combination is observed,
+   it's durably logged with a UTC timestamp to `live_qb_captures.json`,
+   committed straight to the repo -- so every visitor sees the same shared
+   record, not just whoever happened to have the page open at that exact
+   moment. Entries are de-duplicated by `(season, week, roster_id,
+   player_id)`, so once a case is captured it's captured for good; the
+   script is never fatal (a fetch hiccup just means no new captures this
+   poll, existing ones untouched) and a missing/unreadable file just means
+   no durable captures exist yet.
+
+   Both consumers -- `detectQbAdjustmentsForWeek` (client) and
+   `compute_qb_adjustments_for_week`/`load_live_qb_captures` (server) --
+   check this log FIRST, before falling back to their own same-day,
+   game-status-gated check: a matching entry always wins as "Likely",
+   carries its real `captured_at` timestamp onto the row, and is trusted
+   regardless of whether THIS particular poll's own freshness/game-status
+   snapshot would otherwise have said something different. That's the
+   whole point of a durable log -- it doesn't need to keep re-deriving
+   trust from a snapshot that can go stale or flip after the fact. When no
+   capture exists yet for a given case (the workflow hasn't covered that
+   moment, or hasn't run yet), everything behaves exactly as it did before
+   this feature existed.
+
+   A "Confirmed" (commissioner-override) entry never has a `captured_at`
+   -- a human confirming it is already the strongest possible signal on
+   its own, and doesn't need a live-capture timestamp to back it up.
+
+   **On the page**, a "Likely" row backed by a real durable capture gets a
+   dotted-underline hover/tap affordance on the Injured QB's own name
+   (same hover-on-desktop/tap-on-mobile pattern as the `QB Inj*` marker
+   elsewhere on the page) -- pointing at it shows a small tooltip stating
+   plainly that this QB "was seen ruled out while their game was still
+   live," with the captured timestamp formatted in the viewer's own local
+   time. A row with no durable capture (still possible -- the same-day
+   fallback check can still produce a "Likely" tier on its own, just
+   without a timestamp to show) gets no such affordance, since there's
+   nothing to point to.
+
+   Covered by dedicated tests on both sides:
+   `test/test_capture_live_qb_injuries.py` (the capture script's own
+   detection logic -- live/pre-game vs. complete, Out vs. not, backup
+   played vs. not, already-captured dedup, all exercised directly with no
+   network calls), and regression tests in both
+   `test/test_qb_adj_detection.js` and `test/test_build_rumbles.py`
+   proving a durable capture wins as "Likely" with its timestamp attached
+   even when the run is not fresh and the game has already gone complete
+   -- the exact scenario the game-status gate alone would otherwise get
+   wrong.
+
 ### Columns
 
 Rank (`#`), Manager, Rumbles, This Week (Rumbles earned so far this week),
@@ -1701,8 +1799,11 @@ per-team data, just a standing explainer.
 | `rumbles.html` | The live standings page. Self-contained (no build step, no server) -- just needs to be served as a static file next to `rumbles_history.json`. |
 | `rumbles_history.json` | Generated by `build_rumbles.py` -- don't hand-edit it. Doesn't exist until the workflow has run at least once. |
 | `.github/workflows/update.yml` | Runs `build_rumbles.py` on a daily schedule and commits `rumbles_history.json` when it changes. |
-| `requirements.txt` | Python dependency for `build_rumbles.py` (just `requests`). |
-| `test/` | Mocked tests for `rumbles.html` and `build_rumbles.py` (see below) -- optional, not needed to run the site itself. |
+| `capture_live_qb_injuries.py` | Polls for genuinely-LIVE QB-injury-backup corroborations (see "Durable live-capture log" above) and appends any new ones to `live_qb_captures.json`. Reuses `build_rumbles.py`'s own helpers. |
+| `live_qb_captures.json` | Generated/appended-to by `capture_live_qb_injuries.py` -- don't hand-edit it. Starts as `{"captures": []}`; both `rumbles.html` and `build_rumbles.py` treat a missing/empty file as "no durable captures yet" and fall back to their own same-day check. |
+| `.github/workflows/live_qb_capture.yml` | Runs `capture_live_qb_injuries.py` every ~15 minutes, but only during actual NFL game windows (Thu/Sat/Sun/Mon, DST-padded), and commits `live_qb_captures.json` when it changes. |
+| `requirements.txt` | Python dependency for `build_rumbles.py`/`capture_live_qb_injuries.py` (just `requests`). |
+| `test/` | Mocked tests for `rumbles.html`, `build_rumbles.py`, and `capture_live_qb_injuries.py` (see below) -- optional, not needed to run the site itself. |
 
 ## Setup
 
@@ -1741,6 +1842,15 @@ per-team data, just a standing explainer.
    `https://<you>.github.io/<repo>/rumbles.html`.
 6. **Embed it** in the Google Site: Insert -> Embed -> By URL, pointing at
    that URL, on its own page.
+7. **(Optional, but recommended) Trigger the "Capture live QB injuries"
+   workflow once manually** too (Actions tab -> "Capture live QB
+   injuries" -> Run workflow) so `live_qb_captures.json` gets created. It
+   otherwise only runs automatically during NFL game windows (see the
+   `cron` schedules in `.github/workflows/live_qb_capture.yml`) -- both
+   `rumbles.html` and `build_rumbles.py` work fine without this file ever
+   existing (they just fall back to the same-day check with no
+   captured-live timestamp to show), so this step can be skipped and
+   added later with no other changes needed.
 
 ## Testing without live Sleeper access
 
