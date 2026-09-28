@@ -1,0 +1,82 @@
+name: Capture live QB injuries
+
+# Polls every 15 minutes, but ONLY during actual NFL game windows (Thu/
+# Sat*/Sun/Mon), for a genuinely-LIVE corroboration of a QB-injury-backup
+# situation: a backup QB recording real action while Sleeper's
+# injury_status for the guy in front of him reads Out/IR/PUP AND that
+# game hasn't gone final yet. See capture_live_qb_injuries.py's own
+# header for the full story (this is the fix for the real Baker Mayfield/
+# Jalon Daniels case, Week 3 2026 -- Sleeper's injury_status has no
+# timestamp, so without this, there was no way to tell "ruled out live,
+# mid-game" apart from "flipped to Out sometime after the game ended").
+#
+# *Saturday games only happen in the back half of the season (usually
+# Week 15+), but polling on an empty/no-matchups Saturday is a harmless,
+# cheap no-op (capture_live_qb_injuries.py just logs "nothing to do" and
+# exits) -- simpler and safer than trying to conditionally add/remove a
+# Saturday schedule mid-season.
+#
+# GitHub Actions cron is UTC-only and does NOT observe daylight saving,
+# but NFL kickoff times are fixed in US Eastern local time (ET), which
+# shifts between UTC-4 (EDT, roughly mid-March-early November) and UTC-5
+# (EST, the rest of the season -- so effectively all of it after the
+# first ~9 weeks). Rather than maintaining two separate cron schedules
+# that would need manually swapping at the DST changeover, every window
+# below is padded generously enough in UTC to cover BOTH offsets at
+# once -- a little wasted polling right at the edges of the window in
+# exchange for never silently missing real game time. Each game night's
+# window is split into two cron lines because it crosses UTC midnight
+# (a single cron entry can't span two different day-of-week values).
+on:
+  schedule:
+    # Thursday Night Football: ~7:00pm-11:59pm ET kickoff-to-typical-end,
+    # padded for both EDT (23:00-03:59 UTC) and EST (00:00-04:59 UTC).
+    - cron: "*/15 23 * * 4"   # Thu 23:00-23:59 UTC
+    - cron: "*/15 0-4 * * 5"  # Fri 00:00-04:59 UTC (Thursday night's tail)
+
+    # Saturday games (December/January doubleheaders+), same ~1:00pm-
+    # 11:59pm ET span as Sunday below.
+    - cron: "*/15 16-23 * * 6" # Sat 16:00-23:59 UTC
+    - cron: "*/15 0-4 * * 0"   # Sun 00:00-04:59 UTC (Saturday night's tail)
+
+    # Sunday: early/afternoon/SNF games, ~1:00pm-11:59pm ET.
+    - cron: "*/15 16-23 * * 0" # Sun 16:00-23:59 UTC
+    - cron: "*/15 0-4 * * 1"   # Mon 00:00-04:59 UTC (Sunday night's tail)
+
+    # Monday Night Football: ~7:00pm-11:59pm ET.
+    - cron: "*/15 23 * * 1"   # Mon 23:00-23:59 UTC
+    - cron: "*/15 0-4 * * 2"  # Tue 00:00-04:59 UTC (Monday night's tail)
+  workflow_dispatch: {}  # lets you trigger a poll manually from the Actions tab, e.g. to backfill/test
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run capture_live_qb_injuries.py
+        run: python capture_live_qb_injuries.py
+
+      - name: Commit live_qb_captures.json if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add live_qb_captures.json
+          if git diff --cached --quiet; then
+            echo "No new live QB-injury captures -- nothing to commit."
+          else
+            git commit -m "Capture live QB-injury corroboration ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push
+          fi
