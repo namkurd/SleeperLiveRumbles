@@ -622,8 +622,14 @@ def compute_qb_adjustments_for_week(
                     confidence = "likely"
                     status_at_capture = meta.get("injury_status")
                 elif is_fresh:
-                    status = (meta.get("injury_status") or "").strip().lower()
-                    confidence = "likely" if status in ("out", "ir", "pup") else "possible"
+                    # "Likely" now strictly means the starter's status was
+                    # caught changing to Out DURING the game, which only the
+                    # durable capture log above can prove. This run happens
+                    # after the week is over, so an "Out" seen here may just
+                    # be the post-game injury report -- never enough for
+                    # "likely" on its own. It stays "possible" for the
+                    # commissioner to review.
+                    confidence = "possible"
                     status_at_capture = meta.get("injury_status")
                 else:
                     # No durable capture, and this isn't the one fresh
