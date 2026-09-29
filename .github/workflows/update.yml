@@ -1,8 +1,19 @@
 name: Update Rumbles standings
 
 on:
+  # GitHub can delay or silently skip scheduled runs when it's busy (the
+  # top of the hour is the worst time), and a single missed daily run used
+  # to leave a finished week showing as "live" for a whole extra day (Week
+  # 3, 2026: the 9:00 UTC Tuesday run never fired). So this now tries
+  # several times on Tuesday morning after Monday Night Football, at
+  # off-peak minutes, plus a daily backup. Extra runs are harmless: the
+  # build is idempotent and only commits when the standings changed, and
+  # each run is well under a minute of Actions time.
   schedule:
-    - cron: "0 9 * * *"  # daily, 9am UTC -- change if you want completed weeks to finalize sooner after MNF
+    # Tuesday 1:23am-10:23am ET (EDT; an hour earlier in EST), roughly hourly.
+    - cron: "23 5,6,7,8,9,10,12,14 * * 2"
+    # Daily backup, every day of the week.
+    - cron: "41 10 * * *"
   workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
 
 permissions:
