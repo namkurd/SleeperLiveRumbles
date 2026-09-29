@@ -21,11 +21,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import capture_live_qb_injuries  # noqa: E402
 from capture_live_qb_injuries import (  # noqa: E402
     build_team_game_schedule,
     find_new_captures,
+    find_starter_watch_targets,
     is_out_status,
     normalize_game_status,
+    update_chain_watch,
 )
 
 MANAGER_MAP = {1: "Alex", 2: "Ben"}
@@ -219,6 +222,132 @@ def test_find_new_captures_skips_already_captured_key():
     print("PASS: a key already present in already_captured_keys is never re-captured on a later poll")
 
 
+
+# ---- Watch mode -------------------------------------------------------------
+
+def _meta(starter_status=None, backup_status=None, third_status=None):
+    return {
+        "QB_STARTER": {"position": "QB", "team": "MIN", "full_name": "Kyler Murray", "injury_status": starter_status},
+        "QB_BACKUP": {"position": "QB", "team": "MIN", "full_name": "Carson Wentz", "injury_status": backup_status},
+        "QB_THIRD": {"position": "QB", "team": "MIN", "full_name": "JJ McCarthy", "injury_status": third_status},
+        "QB_OTHER_TEAM": {"position": "QB", "team": "KC", "full_name": "Other Team's QB", "injury_status": None},
+    }
+
+
+WATCH_INDEX = {"MIN": ["QB_STARTER", "QB_BACKUP", "QB_THIRD"], "KC": ["QB_OTHER_TEAM"]}
+LIVE = build_team_game_schedule(make_games({"is_in_progress": True}))
+FINAL = build_team_game_schedule(make_games({"is_over": True}))
+
+
+def _starter_targets(meta, stats, schedule, captured=None):
+    return find_starter_watch_targets(3, "2026", MATCHUPS, meta, WATCH_INDEX, stats, SCORING_SETTINGS, schedule, captured or set())
+
+
+def test_starter_watch_starts_when_backup_enters_before_out():
+    targets = _starter_targets(_meta(starter_status=None), STATS_MAP, LIVE)
+    assert len(targets) == 1 and "Kyler Murray" in targets[0], targets
+    print("PASS: starter watch starts when a backup has come in but the starter isn't listed Out yet")
+
+
+def test_starter_watch_ends_once_status_is_out():
+    assert _starter_targets(_meta(starter_status="Out"), STATS_MAP, LIVE) == []
+    captures = find_new_captures(3, "2026", MATCHUPS, _meta(starter_status="Out"), WATCH_INDEX, STATS_MAP, SCORING_SETTINGS,
+                                 MANAGER_MAP, LIVE, set(), "2026-10-04T18:40:00+00:00")
+    assert len(captures) == 1 and captures[0]["backups_seen"] == ["QB_BACKUP"]
+    print("PASS: once the starter reads Out he is captured (with backups_seen) and starter watch ends")
+
+
+def test_starter_watch_not_started_without_live_game_or_backup_or_starter_play():
+    assert _starter_targets(_meta(), STATS_MAP, FINAL) == [], "game over: nothing to watch"
+    no_backup = {"QB_STARTER": STATS_MAP["QB_STARTER"]}
+    assert _starter_targets(_meta(), no_backup, LIVE) == [], "no backup has played: nothing to watch"
+    no_starter = {"QB_BACKUP": STATS_MAP["QB_BACKUP"]}
+    assert _starter_targets(_meta(), no_starter, LIVE) == [], "starter never played: not an in-game injury"
+    assert _starter_targets(_meta(), STATS_MAP, LIVE, {"2026:3:1:QB_STARTER"}) == [], "already captured"
+    print("PASS: starter watch only starts for a live game, a backup who played, and a starter who played")
+
+
+def _captured_log():
+    return {"captures": [{
+        "season": "2026", "week": 3, "roster_id": 1, "manager": "Alex", "team": "MIN",
+        "injured_qb": {"player_id": "QB_STARTER", "name": "Kyler Murray", "points": 7.2},
+        "backup_qbs": [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}],
+        "backups_seen": ["QB_BACKUP"], "captured_at": "2026-10-04T18:40:00+00:00",
+    }]}
+
+
+THIRD_PLAYED = dict(STATS_MAP, QB_THIRD={"pass_att": 3, "pass_yd": 30})
+
+
+def test_chain_watch_starts_when_a_different_backup_enters():
+    log = _captured_log()
+    changed, targets = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, THIRD_PLAYED,
+                                          SCORING_SETTINGS, LIVE, "2026-10-04T19:00:00+00:00")
+    entry = log["captures"][0]
+    assert changed and entry["chain_watch_for"] == ["QB_BACKUP"] and entry["backups_seen"] == ["QB_BACKUP", "QB_THIRD"]
+    assert len(targets) == 1 and "Carson Wentz" in targets[0], targets
+    print("PASS: a new backup entering after a capture re-enters watch mode on the earlier backup")
+
+
+def test_chain_watch_logs_and_exits_when_earlier_backup_flips_out():
+    log = _captured_log()
+    update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, THIRD_PLAYED, SCORING_SETTINGS, LIVE, "2026-10-04T19:00:00+00:00")
+    changed, targets = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out", backup_status="Out"), WATCH_INDEX, THIRD_PLAYED,
+                                          SCORING_SETTINGS, LIVE, "2026-10-04T19:05:00+00:00")
+    entry = log["captures"][0]
+    assert changed and targets == [] and entry["chain_watch_for"] == []
+    assert entry["backup_injuries"] == [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "injury_status_at_capture": "Out",
+                                         "captured_at": "2026-10-04T19:05:00+00:00"}]
+    # Nothing new afterwards: no duplicate log, no re-watch.
+    changed2, targets2 = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out", backup_status="Out"), WATCH_INDEX, THIRD_PLAYED,
+                                            SCORING_SETTINGS, LIVE, "2026-10-04T19:10:00+00:00")
+    assert not changed2 and targets2 == [] and len(entry["backup_injuries"]) == 1
+    print("PASS: the earlier backup's change to Out is logged with a timestamp and chain watch exits")
+
+
+def test_chain_watch_stops_when_game_ends():
+    log = _captured_log()
+    update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, THIRD_PLAYED, SCORING_SETTINGS, LIVE, "2026-10-04T19:00:00+00:00")
+    changed, targets = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, THIRD_PLAYED, SCORING_SETTINGS, FINAL,
+                                          "2026-10-04T19:30:00+00:00")
+    assert changed and targets == [] and log["captures"][0]["chain_watch_for"] == [] and "backup_injuries" not in log["captures"][0]
+    print("PASS: chain watch stops when the game ends, without logging anything")
+
+
+def test_chain_watch_quiet_when_no_new_backup():
+    log = _captured_log()
+    changed, targets = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, STATS_MAP, SCORING_SETTINGS, LIVE,
+                                          "2026-10-04T19:00:00+00:00")
+    assert not changed and targets == []
+    print("PASS: no chain watch while the same backup is still the only one in")
+
+
+def test_main_loop_rechecks_every_5_minutes_until_resolved():
+    calls, sleeps = [], []
+    results = [["watching"], ["watching"], []]
+    orig_poll, orig_sleep = capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep
+    capture_live_qb_injuries.run_poll = lambda: (calls.append(1), results[len(calls) - 1])[1]
+    capture_live_qb_injuries.time.sleep = lambda sec: sleeps.append(sec)
+    try:
+        capture_live_qb_injuries.main()
+    finally:
+        capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep = orig_poll, orig_sleep
+    assert len(calls) == 3 and sleeps == [300, 300], (calls, sleeps)
+    print("PASS: while watching, the run re-checks every 5 minutes and exits as soon as nothing is left to watch")
+
+
+def test_main_loop_single_check_when_nothing_to_watch():
+    calls, sleeps = [], []
+    orig_poll, orig_sleep = capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep
+    capture_live_qb_injuries.run_poll = lambda: (calls.append(1), [])[1]
+    capture_live_qb_injuries.time.sleep = lambda sec: sleeps.append(sec)
+    try:
+        capture_live_qb_injuries.main()
+    finally:
+        capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep = orig_poll, orig_sleep
+    assert calls == [1] and sleeps == []
+    print("PASS: with nothing to watch, a run is a single check (no extra Actions minutes)")
+
 def main():
     test_is_out_status()
     test_normalize_game_status_is_over_flag()
@@ -236,6 +365,15 @@ def main():
     test_find_new_captures_skips_when_not_ruled_out()
     test_find_new_captures_skips_when_no_backup_played()
     test_find_new_captures_skips_already_captured_key()
+    test_starter_watch_starts_when_backup_enters_before_out()
+    test_starter_watch_ends_once_status_is_out()
+    test_starter_watch_not_started_without_live_game_or_backup_or_starter_play()
+    test_chain_watch_starts_when_a_different_backup_enters()
+    test_chain_watch_logs_and_exits_when_earlier_backup_flips_out()
+    test_chain_watch_stops_when_game_ends()
+    test_chain_watch_quiet_when_no_new_backup()
+    test_main_loop_rechecks_every_5_minutes_until_resolved()
+    test_main_loop_single_check_when_nothing_to_watch()
     print("\nALL capture_live_qb_injuries.py UNIT TESTS PASSED")
 
 
