@@ -211,10 +211,12 @@ def test_compute_qb_adjustments_likely_tier_when_fresh_and_ruled_out():
     # QB (despite playing) is on the wrong team entirely.
     assert e["backup_qbs"] == [{"player_id": "QB_BACKUP", "name": "Carson Wentz", "points": 21.9}]
     assert approx(e["backup_points_total"], 21.9)
-    assert e["confidence"] == "likely", f"fresh + injury_status 'Out' should be 'likely', got {e['confidence']}"
+    # "Likely" requires the Out status to be caught DURING the game (the
+    # durable capture log). A fresh post-game "Out" alone stays "possible".
+    assert e["confidence"] == "possible", f"fresh + post-game injury_status 'Out' with no live capture should be 'possible', got {e['confidence']}"
     assert e["injury_status_at_capture"] == "Out"
     assert e["captured_at"] is None, "no durable live-capture log was provided, so captured_at must be null here"
-    print("PASS: 'likely' tier fires when fresh and the started QB's live injury_status is 'Out', with correct team-scoped backup detection")
+    print("PASS: a fresh post-game 'Out' with no live capture stays 'possible' (Likely needs an in-game capture), with correct team-scoped backup detection")
 
 
 def test_compute_qb_adjustments_starter_who_never_played_logs_nothing():
@@ -294,7 +296,7 @@ def test_compute_qb_adjustments_no_matching_capture_falls_back_to_injury_status_
         QB_SCORING_SETTINGS, QB_MANAGER_MAP, is_fresh=True, is_most_recent_completed=True, carried_by_roster={},
         live_captures_by_key=captures_by_key,
     )
-    assert entries[0]["confidence"] == "likely", "should still fall back correctly to the fresh injury_status check"
+    assert entries[0]["confidence"] == "possible", "with no matching capture, a post-game 'Out' falls back to 'possible' (Likely needs an in-game capture)"
     assert entries[0]["captured_at"] is None, "a non-matching capture-log entry must never be attached to an unrelated roster/player"
     print("PASS: a capture log with no matching key for this roster/week/player falls back cleanly to the injury_status check")
 
