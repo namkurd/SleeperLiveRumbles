@@ -270,6 +270,13 @@
   /* Every column is center-aligned except Manager (column 2), which stays
      left-aligned since it's a name, not a number/stat. */
   thead th:nth-child(2) { text-align: left; }
+  /* "#" lines up over the rank numbers, which are right-aligned in their
+     cell with the movement arrow to their left. */
+  #standings-table thead th:first-child { text-align: right; padding-right: 10px; }
+  /* Standings "#" column is wider than the generic 40px sticky first
+     column to fit the rank-movement arrow, so its Manager column's sticky
+     offset moves with it. Scoped to this table only. */
+  #standings-table thead th:nth-child(2), #standings-table td.manager { left: 64px; }
   thead th.sortable { cursor: pointer; user-select: none; }
   thead th.sortable:hover { color: var(--text); }
   thead th.sort-active { color: var(--text); }
@@ -283,7 +290,7 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:nth-child(even) { background: var(--row-alt); }
   td.manager { text-align: left; }
-  td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 40px; min-width: 40px; }
+  td.rank { font-variant-numeric: tabular-nums; color: var(--text-dim); width: 64px; min-width: 64px; padding-left: 6px; padding-right: 10px; text-align: right; }
   td.manager { font-weight: 600; }
   td.rumbles { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   /* "This Week" (the Rumbles-earned column) never carries a LIVE badge --
@@ -387,6 +394,28 @@
     text-align: left;
     padding-left: 4px;
   }
+  /* Color-coded position tag before each player's name in the points
+     tooltips (see posBadgeHtml). Solid fills so they read the same in
+     light and dark mode; fixed width so names line up. */
+  .pos-badge {
+    display: inline-block;
+    min-width: 2.6em;
+    margin-right: 6px;
+    padding: 1px 0;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    color: #fff;
+    background: #6b7280;
+  }
+  .pos-QB { background: #dc2626; }
+  .pos-RB { background: #16a34a; }
+  .pos-WR { background: #2563eb; }
+  .pos-TE { background: #eab308; color: #1a1d24; }
+  .pos-K { background: #9333ea; }
+  .pos-DEF { background: #8b4513; }
   /* The Projected-mode tooltip's real-actual-total reference line ("162.34:
      Actual Pts" -- see renderPtsTooltipContent/thisWeekTooltip), rendered
      into a colspan="2" cell that takes over the header row's kickoff-time
@@ -530,6 +559,9 @@
        (Rumble %, PF, PA, H2H, Vs. Field) keep their natural, wider width and
        stay reachable by scrolling right, exactly like landscape. */
     table thead th:nth-child(1), table td.rank { width: 24px; min-width: 24px; padding-left: 6px; padding-right: 2px; }
+    #standings-table thead th:nth-child(1), #standings-table td.rank { width: 38px; min-width: 38px; padding-left: 0; padding-right: 3px; }
+    #standings-table thead th:nth-child(2), #standings-table td.manager { left: 38px; }
+    #standings-table .rank-move { width: 1.6em; margin-right: 2px; }
     table thead th:nth-child(2), table td.manager { width: 108px; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     table thead th:nth-child(3), table td.rumbles { width: 44px; }
     table thead th:nth-child(4), table td.thisweek { width: 48px; }
@@ -539,10 +571,10 @@
        the reserved padding-right (inherited from td.thisweek-pts above)
        sets a floor on how far this column can be tightened. */
     table thead th:nth-child(5), table td.thisweek-pts { width: 76px; }
-    /* The Manager column's sticky offset is normally a fixed 40px (see
+    /* The Manager column's sticky offset is normally a fixed 64px (see
        "thead th:nth-child(2), td.manager" above), matching the Rank
-       column's fixed 40px width on desktop -- since Rank shrinks to 24px
-       here, Manager's sticky offset has to shrink to match or it visually
+       column's fixed width on desktop -- since Rank shrinks to 44px here,
+       Manager's sticky offset has to shrink to match or it visually
        overlaps/hides the start of the Rumbles column beside it. */
     table thead th:nth-child(2), table td.manager { left: 24px; }
     /* QB Injury Backup Adjustments table: same one-line, row-layout
@@ -840,10 +872,11 @@
   .h2h-streak-win .streak-arrow { color: var(--good); }
   .h2h-streak-loss .streak-arrow { color: var(--bad); }
   /* Movement in "#" vs. the week before (see renderRankChange). */
-  /* Stacked under the rank number (not beside it) so it fits the narrow,
-     fixed-width sticky "#" column and never shifts the sticky Manager
-     column's left offset. */
-  .rank-move { display: block; font-size: 0.68em; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+  /* Sits to the left of the rank number in a fixed-width slot, so rank
+     numbers stay aligned whether or not a team moved. The "#" column (and
+     the sticky Manager column's left offset) is sized for this. */
+  .rank-move { display: inline-block; width: 1.9em; margin-right: 3px; text-align: right; font-size: 0.72em; font-weight: 600; white-space: nowrap; }
+  .rank-num { display: inline-block; min-width: 1.2em; text-align: right; }
   .rank-move span { font-size: 0.85em; margin-right: 1px; }
   .rank-move-up { color: var(--good); }
   .rank-move-down { color: var(--bad); }
@@ -966,7 +999,7 @@
   </footer>
 
   <h2 class="section-title">QB Injury Backup Adjustments</h2>
-  <p class="section-subtitle">If a QB you started gets hurt during his game and a backup QB from the same NFL team comes in, you also get the backup's points. This only covers injuries that happen during the game. A QB who is ruled out before kickoff does not count. <span id="qb-adj-live-label"></span></p>
+  <p class="section-subtitle">If a QB you started gets hurt during his game and a backup QB from the same NFL team comes in, you also get the backup's points. <span id="qb-adj-live-label"></span></p>
 
   <div class="table-panel">
     <div class="qb-scroll-hint">Swipe to see the full row →</div>
@@ -991,9 +1024,9 @@
   </div>
   <ul class="footnote qb-adj-legend">
     <li><strong>Confirmed:</strong> the commissioner has added the backup's points to your official score.</li>
-    <li><strong>Likely:</strong> your QB played, a backup from his team came in and scored, and Sleeper has listed your QB as Out. The backup's points are added to your score on this page until the commissioner makes it official.</li>
-    <li><strong>Possible:</strong> your QB played and a backup from his team also played, but Sleeper has not listed your QB as Out. This could just be a normal substitution, so no points are added unless the commissioner confirms it.</li>
-    <li><strong>Commissioner Adjustment</strong> is the number of points the commissioner actually added. Hover or tap an underlined QB name to see when his injury was caught live.</li>
+    <li><strong>Likely:</strong> your starter's status changed to Out during the game and a backup from his team came in and scored. The backup's points are added to your score on this page until the commissioner makes it official. Hover or tap the QB's name to see when the change was logged.</li>
+    <li><strong>Possible:</strong> your QB played and a backup from his team also played, but his status was not caught changing to Out during the game. This could just be a normal substitution, so no points are added unless the commissioner confirms it.</li>
+    <li><strong>Commissioner Adjustment</strong> is the number of points the commissioner actually added.</li>
   </ul>
 </div>
 
@@ -1009,9 +1042,9 @@
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
   <p>The real standings through the last completed week. During a live week, This Week and Pts This Week follow the live scores, but season totals don't change until the week is final. Hover or tap a team's points to see who scored them.</p>
-  <p>Next to each manager is their head-to-head streak (2W is two wins in a row). The arrow under each rank shows how many spots a team moved since the prior week. Use the week menu to see the standings after any past week.</p>
+  <p>Next to each manager is their head-to-head streak (2W is two wins in a row). The arrow next to each rank shows how many spots a team moved since the prior week. Use the week menu to see the standings after any past week.</p>
   <p class="howto-heading">Projected</p>
-  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time. The arrow under each rank shows how many spots a team would move from the current standings.</p>
+  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time. The arrow next to each rank shows how many spots a team would move from the current standings.</p>
   <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
   <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
 </div>
@@ -1619,6 +1652,7 @@
     return {
       player_id: pid,
       name: meta ? playerName(meta) : pid,
+      position: meta ? (meta.position || null) : null,
       actual: round2(actualPts),
       proj: round2(projPts),
       played: played,
@@ -2287,7 +2321,8 @@
         delta: delta,
         confidence: entry.confidence,
         injured_qb: entry.injured_qb,
-        backup_qbs: entry.backup_qbs
+        backup_qbs: entry.backup_qbs,
+        captured_at: entry.captured_at || null
       };
     });
     return byRoster;
@@ -2523,7 +2558,8 @@
               delta: entryDelta,
               confidence: "likely",
               injured_qb: entry.injured_qb,
-              backup_qbs: entry.backup_qbs
+              backup_qbs: entry.backup_qbs,
+              captured_at: entry.captured_at || null
             };
           }
         });
@@ -2926,6 +2962,7 @@
       var startLabel = showStartTime ? formatGameStartLabel(p.game_start_ms) : "";
       return {
         name: p.name,
+        position: p.position || null,
         startLabel: startLabel,
         // Per-timeslot color (see buildTimeSlotColors) -- null when there's
         // no label to color (Actual mode, or a game that couldn't be
@@ -3461,8 +3498,11 @@
       streak.length + (win ? "W" : "L") + "</span>";
   }
 
+  // Movement since the prior week, shown to the LEFT of the rank number.
+  // Always renders the fixed-width slot (empty when there's no change) so
+  // every rank number lines up in the same place.
   function renderRankChange(change) {
-    if (!change) return "";
+    if (!change) return '<span class="rank-move"></span>';
     var up = change > 0;
     var n = Math.abs(change);
     return '<span class="rank-move ' + (up ? "rank-move-up" : "rank-move-down") + '" title="' +
@@ -3591,7 +3631,7 @@
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
         return "<tr>" +
-          '<td class="rank">' + r.rank + renderRankChange(r.rank_change) + "</td>" +
+          '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
@@ -3760,7 +3800,7 @@
       }
       return '<tr class="' + rowClass + '">' +
         timeCellHtml +
-        '<td class="pts-tooltip-name">' + escapeHtml(r.name) + "</td>" +
+        '<td class="pts-tooltip-name">' + posBadgeHtml(r.position) + escapeHtml(r.name) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         projCellHtml +
         "</tr>";
@@ -3774,6 +3814,15 @@
       "</tr></thead><tbody>" +
       bodyHtml +
       "</tbody></table>";
+  }
+
+  // Colored position tag for the points tooltips: red QB, green RB, blue
+  // WR, yellow TE, purple K, brown DEF (anything else gets a neutral gray).
+  function posBadgeHtml(position) {
+    if (!position) return "";
+    var pos = String(position).toUpperCase();
+    var known = { QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DEF: 1 };
+    return '<span class="pos-badge' + (known[pos] ? " pos-" + pos : "") + '">' + escapeHtml(pos) + "</span>";
   }
 
   function showPtsTooltip(cell) {
@@ -3947,6 +3996,9 @@
     var backups = adj.backup_qbs || [];
     var deltaStr = (adj.delta >= 0 ? "+" : "") + adj.delta.toFixed(2);
     var lines = [escapeHtml(injuredName) + " was injured in-game and ruled out " + whenPhrase + "."];
+    // When the durable capture log has it, say when his status change to
+    // Out was logged during the game.
+    if (adj.captured_at) lines.push("Status change logged " + escapeHtml(formatCapturedAt(adj.captured_at)) + ".");
 
     // Normally at most one QB is actually in the game for a team at a
     // time -- so among the backups who recorded action, the ones who
@@ -4083,12 +4135,21 @@
     }
   }
 
+  // Tooltip on a "likely" row's Injured QB name: when his status change
+  // to Out was logged during the game. A "likely" row with no captured_at
+  // yet was spotted Out by this page itself while the game is in progress
+  // (see detectQbAdjustmentsForWeek); the capture workflow logs it on its
+  // next run, and the timestamp shows up here after that.
   function buildQbAdjCapturedTooltipHtml(r) {
     var name = (r.injured_qb && r.injured_qb.name) || "This QB";
-    var when = formatCapturedAt(r.captured_at);
-    return "<strong>Confirmed live</strong><br>" +
-      escapeHtml(name) + " was seen ruled out (Out/IR/PUP) while their game was still live.<br>" +
-      "Captured " + escapeHtml(when) + ".";
+    if (!r.captured_at) {
+      return "<strong>Status changed to Out</strong><br>" +
+        escapeHtml(name) + " is listed as Out while his game is in progress.<br>" +
+        "The time will be logged shortly.";
+    }
+    return "<strong>Status changed to Out</strong><br>" +
+      escapeHtml(name) + "'s status changed to Out during the game.<br>" +
+      "Logged " + escapeHtml(formatCapturedAt(r.captured_at)) + ".";
   }
 
   function positionQbAdjCapturedTooltip(el) {
@@ -4398,7 +4459,7 @@
         // row) showing WHEN that live corroboration was captured -- see
         // buildQbAdjCapturedTooltipHtml/showQbAdjCapturedTooltip below.
         var injuredNameHtml = escapeHtml(r.injured_qb.name);
-        if (r.captured_at && r.injured_qb && r.injured_qb.player_id) {
+        if (r.confidence === "likely" && r.injured_qb && r.injured_qb.player_id) {
           var capturedKey = r.week + ":" + r.roster_id + ":" + r.injured_qb.player_id;
           state.qbAdjCapturedTooltipData[capturedKey] = buildQbAdjCapturedTooltipHtml(r);
           injuredNameHtml = '<span class="qb-adj-captured-flag" data-qb-adj-key="' + capturedKey + '">' + injuredNameHtml + "</span>";
