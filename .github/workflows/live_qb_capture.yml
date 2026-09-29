@@ -51,9 +51,21 @@ on:
 permissions:
   contents: write
 
+# Watch mode (see capture_live_qb_injuries.py): when a check sees a backup
+# QB playing while the starter isn't listed Out yet (or a second backup
+# enters after a capture), that same run keeps checking every 5 minutes
+# until the status flips to Out or the game ends. Only one run at a time,
+# so a long watch just holds the next scheduled check in the queue instead
+# of two runs racing to write live_qb_captures.json.
+concurrency:
+  group: live-qb-capture
+  cancel-in-progress: false
+
 jobs:
   capture:
     runs-on: ubuntu-latest
+    # Script caps a single watch at 150 minutes; this is the hard backstop.
+    timeout-minutes: 170
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -66,17 +78,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Run capture_live_qb_injuries.py
+        env:
+          # Commit each capture as soon as it's made during a watch, so it
+          # shows up on the page without waiting for the run to finish.
+          CAPTURE_COMMIT_EACH_POLL: "1"
         run: python capture_live_qb_injuries.py
 
       - name: Commit live_qb_captures.json if it changed
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add live_qb_captures.json
           if git diff --cached --quiet; then
             echo "No new live QB-injury captures -- nothing to commit."
           else
             git commit -m "Capture live QB-injury corroboration ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git pull --rebase --quiet || true
             git push
           fi
