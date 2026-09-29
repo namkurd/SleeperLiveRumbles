@@ -97,7 +97,7 @@ def get_table_rows(page):
         "#standings-body tr",
         """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
             var text = td.innerText.trim();
-            if (i === 0) return text.replace(/\\s*[\u25B2\u25BC]\\d+$/, '');
+            if (i === 0) { var rn = td.querySelector('.rank-num'); return rn ? rn.innerText.trim() : text; }
             if (i === 1) return text.replace(/\\s*[\u25B2\u25BC]\\d+[WL]$/, '').replace(/\\s*QB Inj\\*$/, '');
             if (i === 4) return text.replace(/\\s*\\*$/, '');
             return text;
@@ -301,7 +301,7 @@ def get_tooltip_row_computed_colors(page, manager):
                 var i = hasTime ? 1 : 0;
                 var timeCell = hasTime ? tds[0] : null;
                 return {
-                    name: tds[i].innerText.trim(),
+                    name: (function (td) { var c = td.cloneNode(true); c.querySelectorAll('.pos-badge').forEach(function (b) { b.remove(); }); return c.textContent.trim(); })(tds[i]),
                     time_color: timeCell ? getComputedStyle(timeCell).color : null,
                     name_color: getComputedStyle(tds[i]).color,
                     actual_color: getComputedStyle(tds[i + 1]).color,
@@ -364,7 +364,7 @@ def get_thisweek_pts_tooltip(page, manager):
                 var i = hasTime ? 1 : 0;
                 return {
                     time: hasTime ? tds[0].innerText.trim() : "",
-                    name: tds[i].innerText.trim(),
+                    name: (function (td) { var c = td.cloneNode(true); c.querySelectorAll('.pos-badge').forEach(function (b) { b.remove(); }); return c.textContent.trim(); })(tds[i]),
                     actual: tds[i + 1].innerText.trim(),
                     proj: tds[i + 2].innerText.trim(),
                     live: tr.classList.contains('pts-tooltip-live'),
@@ -2065,7 +2065,7 @@ def scenario_pregame_week(browser):
                 var trs = document.querySelectorAll('#pts-tooltip tbody tr');
                 for (var tr of trs) {
                     var tds = tr.querySelectorAll('td');
-                    if (tds[0].innerText.trim() === name) {
+                    if ((function (td) { var c = td.cloneNode(true); c.querySelectorAll('.pos-badge').forEach(function (b) { b.remove(); }); return c.textContent.trim(); })(tds[0]) === name) {
                         return getComputedStyle(tds[tds.length - 1]).color;
                     }
                 }
