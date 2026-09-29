@@ -107,6 +107,10 @@
     gap: 14px;
     flex-wrap: wrap;
   }
+  /* Each status pill carries a full label (desktop) and a short one
+     (portrait phones, see the max-width: 640px block) so both pills fit
+     side by side on one line instead of stacking. */
+  .status-pill .pill-short { display: none; }
   .status-pill {
     display: inline-flex;
     align-items: center;
@@ -520,6 +524,10 @@
     padding: 0 2px 4px;
   }
   @media (max-width: 640px) {
+    .status-pill .pill-full { display: none; }
+    .status-pill .pill-short { display: inline; }
+    .status-row { gap: 8px; flex-wrap: nowrap; }
+    .status-pill { font-size: 0.74rem; padding: 4px 9px 4px 7px; white-space: nowrap; }
     .qb-scroll-hint { display: block; }
     /* Rumble %, PF, PA, H2H and Vs. Field stay reachable by scrolling right
        in portrait, same as landscape -- they're NOT removed from the table.
@@ -962,8 +970,8 @@
   </header>
 
   <div class="status-row" style="margin-bottom:12px;">
-    <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text">Checking status…</span></span>
-    <span class="status-pill" id="updated-pill">Last updated —</span>
+    <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text" class="pill-full">Checking status…</span><span id="status-text-short" class="pill-short">Checking…</span></span>
+    <span class="status-pill"><span id="updated-pill" class="pill-full">Last updated —</span><span id="updated-pill-short" class="pill-short">Updated —</span></span>
   </div>
 
   <div class="error-banner" id="error-banner"></div>
@@ -1157,6 +1165,8 @@
     subtitle: document.getElementById("subtitle"),
     statusDot: document.getElementById("status-dot"),
     statusText: document.getElementById("status-text"),
+    statusTextShort: document.getElementById("status-text-short"),
+    updatedPillShort: document.getElementById("updated-pill-short"),
     updatedPill: document.getElementById("updated-pill"),
     errorBanner: document.getElementById("error-banner"),
     body: document.getElementById("standings-body"),
@@ -2860,13 +2870,16 @@
   // (and reads better with) the unabbreviated day name, unlike the tight
   // tooltip column formatGameStartLabel is built for.
   var STATUS_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  function formatWeekStartLabel(ms) {
+  // abbreviated=true gives "Thu 8pm" (the portrait-phone status pill);
+  // otherwise "Thursday 8pm".
+  function formatWeekStartLabel(ms, abbreviated) {
     if (typeof ms !== "number" || isNaN(ms)) return "";
     var d = new Date(ms);
     var hours = d.getHours();
     var hour12 = hours % 12;
     if (hour12 === 0) hour12 = 12;
-    return STATUS_DAY_NAMES[d.getDay()] + " " + hour12 + (hours >= 12 ? "pm" : "am");
+    var day = STATUS_DAY_NAMES[d.getDay()];
+    return (abbreviated ? day.slice(0, 3) : day) + " " + hour12 + (hours >= 12 ? "pm" : "am");
   }
 
   // Assigns one color per distinct kickoff-time LABEL this week (e.g. every
@@ -3662,28 +3675,39 @@
     var kickoffStarted = !!(state.live && state.live.hasKickedOff);
     var trulyLive = isLive && kickoffStarted;
     els.statusDot.className = "dot" + (trulyLive ? " live" : "");
+    // Short versions (portrait phones) go in statusTextShort; see
+    // .pill-short in the CSS.
+    var shortStatus;
     if (trulyLive) {
       els.statusText.textContent = "Live: Week " + state.live.week;
+      shortStatus = "Live · Wk " + state.live.week;
       els.liveWeekLabel.textContent = "Showing live Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ")";
     } else if (state.live && state.live.firstGameStartMs) {
       els.statusText.textContent = "Week " + state.live.week + " begins " + formatWeekStartLabel(state.live.firstGameStartMs);
+      shortStatus = "Wk " + state.live.week + " · " + formatWeekStartLabel(state.live.firstGameStartMs, true);
       els.liveWeekLabel.textContent = isLive ? "Showing Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ") — not live yet" : "";
     } else if (state.live && state.live.seasonType === "off") {
       els.statusText.textContent = "Offseason";
+      shortStatus = "Offseason";
       els.liveWeekLabel.textContent = "";
     } else if (state.live && state.live.seasonType === "pre") {
       els.statusText.textContent = "Preseason — Rumbles start Week 1";
+      shortStatus = "Preseason";
       els.liveWeekLabel.textContent = "";
     } else {
       els.statusText.textContent = "Not live right now";
+      shortStatus = "Not live";
       els.liveWeekLabel.textContent = "";
     }
+    els.statusTextShort.textContent = shortStatus;
 
     if (state.shownHistoricalWeek != null) {
       els.liveWeekLabel.textContent = "Showing standings after Week " + state.shownHistoricalWeek + ". Pick Current to go back to this week.";
     }
 
-    els.updatedPill.textContent = "Last updated " + new Date().toLocaleTimeString();
+    var nowForPill = new Date();
+    els.updatedPill.textContent = "Last updated " + nowForPill.toLocaleTimeString();
+    els.updatedPillShort.textContent = "Updated " + nowForPill.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
     if (state.historyError && rows.length) {
       // We have rows (from a prior successful load) but the most recent
