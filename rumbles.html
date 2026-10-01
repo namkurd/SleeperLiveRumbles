@@ -1153,7 +1153,7 @@
     sort: { key: null, dir: "desc" }, // key: one of COLUMNS' keys, or null = natural standings order
     // Once the user has clicked any column header to sort manually, mode
     // switches (Actual <-> Projected) leave their chosen sort alone -- see
-    // setMode's DEFAULT_SORT_BY_MODE comment for what happens before that.
+    // defaultSortFor's comment for what happens before that.
     userSorted: false
   };
 
@@ -3571,6 +3571,7 @@
   }
 
   function render(opts) {
+    if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();
     var rows = buildCombinedStandings();
 
@@ -4575,25 +4576,21 @@
 
   // ---- controls ------------------------------------------------------
 
-  // Each mode's default sort -- applied on switching TO that mode, but
-  // only until the user clicks a column header themselves (see
-  // state.userSorted). Both tabs default to standings order (key: null).
-  // In Projected that's the projected standings once the week is live (the
-  // projected results are folded in), so the table reads top to bottom as
-  // "where everyone would finish".
-  var DEFAULT_SORT_BY_MODE = {
-    actual: { key: null, dir: "desc" },
-    custom: { key: null, dir: "desc" }
-  };
+  // Each tab's default sort, used until the user clicks a column header
+  // themselves (see state.userSorted). Actual: standings order. Projected:
+  // standings order before kickoff, then projected score (Pts This Week,
+  // highest first) once the week has started. Re-checked on every render,
+  // so an open Projected tab switches over by itself at kickoff.
+  function defaultSortFor(mode) {
+    var kickedOff = !!(state.live && state.live.hasKickedOff);
+    if (mode === "custom" && kickedOff) return { key: "this_week_points", dir: "desc" };
+    return { key: null, dir: "desc" };
+  }
 
   function setMode(mode) {
     state.mode = mode;
     els.modeActual.classList.toggle("active", mode === "actual");
     els.modeCustom.classList.toggle("active", mode === "custom");
-    if (!state.userSorted) {
-      var def = DEFAULT_SORT_BY_MODE[mode];
-      state.sort = { key: def.key, dir: def.dir };
-    }
     render();
   }
 
