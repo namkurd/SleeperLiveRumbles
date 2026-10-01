@@ -349,6 +349,8 @@
   .pfpa-proj { font-size: 0.85em; font-style: italic; color: var(--text-dim); }
   .pfpa-table tr.pfpa-win td { color: var(--good); }
   .pfpa-table tr.pfpa-loss td { color: var(--bad); }
+  .pfpa-table td.pfpa-val.pfpa-win { color: var(--good); }
+  .pfpa-table td.pfpa-val.pfpa-loss { color: var(--bad); }
   /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
      a native title-attribute tooltip works fine on desktop hover, but
      never appears at all on tap on mobile, so this single reusable,
@@ -3606,8 +3608,9 @@
 
   // Week-by-week tooltip for PF / PA / H2H / Vs. Field: column headings
   // plus one row per week, newest first. No totals -- the cell itself
-  // already shows the season figure. H2H rows are green for a win and red
-  // for a loss; a projected (live, Projected tab) week is marked "proj".
+  // already shows the season figure. Each week is green for an H2H win and
+  // red for a loss (the whole row for H2H, the value for PF / PA / Vs.
+  // Field); a projected (live, Projected tab) week is marked "proj".
   function buildPfPaTooltipHtml(r, kind) {
     var managers = {};
     ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
@@ -3617,25 +3620,26 @@
     var weekCell = function (w) {
       return '<td class="pfpa-week">' + w.week + (w.projected ? ' <span class="pfpa-proj">proj</span>' : "") + "</td>";
     };
+    // H2H result of the week: "pfpa-win" / "pfpa-loss" / "" (no result).
+    var resultCls = function (w) { return w.win === true ? "pfpa-win" : w.win === false ? "pfpa-loss" : ""; };
     var headers, rowFor;
     if (kind === "h2h") {
       headers = ["Wk", "Opponent", "Score"];
       rowFor = function (w) {
-        var cls = w.win === true ? "pfpa-win" : w.win === false ? "pfpa-loss" : "";
-        return '<tr class="' + cls + '">' + weekCell(w) + '<td class="pfpa-opp">' + oppName(w) + "</td>" +
+        return '<tr class="' + resultCls(w) + '">' + weekCell(w) + '<td class="pfpa-opp">' + oppName(w) + "</td>" +
           '<td class="pfpa-val">' + w.pf.toFixed(2) + "&ndash;" + w.pa.toFixed(2) + "</td></tr>";
       };
     } else if (kind === "vf") {
       headers = ["Wk", "Teams outscored"];
       rowFor = function (w) {
-        return "<tr>" + weekCell(w) + '<td class="pfpa-val">' + w.outscored + "</td></tr>";
+        return "<tr>" + weekCell(w) + '<td class="pfpa-val ' + resultCls(w) + '">' + w.outscored + "</td></tr>";
       };
     } else {
       var isPf = kind === "pf";
       headers = ["Wk", "Opponent", isPf ? "PF" : "PA"];
       rowFor = function (w) {
         return "<tr>" + weekCell(w) + '<td class="pfpa-opp">' + oppName(w) + "</td>" +
-          '<td class="pfpa-val">' + (isPf ? w.pf : w.pa).toFixed(2) + "</td></tr>";
+          '<td class="pfpa-val ' + resultCls(w) + '">' + (isPf ? w.pf : w.pa).toFixed(2) + "</td></tr>";
       };
     }
     return '<table class="pfpa-table"><thead><tr>' +
