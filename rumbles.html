@@ -875,10 +875,28 @@
   /* H2H streak badge after the manager name (Actual tab only, see
      renderStreakBadge): only the arrow is colored, the "2W"/"3L" text
      stays the normal table text color and weight. */
-  .h2h-streak { font-weight: 400; color: var(--text); font-size: 0.85em; white-space: nowrap; margin-left: 2px; }
-  .h2h-streak .streak-arrow { font-size: 0.8em; margin-right: 2px; }
-  .h2h-streak-win .streak-arrow { color: var(--good); }
-  .h2h-streak-loss .streak-arrow { color: var(--bad); }
+  /* Refresh flash (see flashChangedCells): a brief tint that fades out.
+     Drawn as an inset shadow so it sits on top of any row/sticky-cell
+     background without changing it. */
+  @keyframes cellFlash {
+    0% { box-shadow: inset 0 0 0 999px rgba(250, 204, 21, 0.22); }
+    100% { box-shadow: inset 0 0 0 999px rgba(250, 204, 21, 0); }
+  }
+  td.cell-flash { animation: cellFlash 1.6s ease-out; }
+  @media (prefers-reduced-motion: reduce) { td.cell-flash { animation: none; } }
+  .h2h-streak {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1.35;
+    white-space: nowrap;
+    vertical-align: 1px;
+  }
+  .h2h-streak-win { color: var(--good); background: rgba(53, 194, 107, 0.16); background: color-mix(in srgb, var(--good) 16%, transparent); }
+  .h2h-streak-loss { color: var(--bad); background: rgba(229, 72, 77, 0.16); background: color-mix(in srgb, var(--bad) 16%, transparent); }
   /* Movement in "#" vs. the week before (see renderRankChange). */
   /* Sits to the left of the rank number in a fixed-width slot, so rank
      numbers stay aligned whether or not a team moved. The "#" column (and
@@ -1003,7 +1021,7 @@
 
   <footer>
     <span>9 Rumbles for the H2H win, +1 per team outscored that week (up to 20/week).</span>
-    <span id="live-week-label"></span>
+    <span id="live-week-label" hidden></span>
   </footer>
 
   <h2 class="section-title">QB Injury Backup Adjustments</h2>
@@ -1049,12 +1067,11 @@
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
-  <p>The real standings through the last completed week. During a live week, This Week and Pts This Week follow the live scores, but season totals don't change until the week is final. Hover or tap a team's points to see who scored them.</p>
-  <p>Next to each manager is their head-to-head streak (2W is two wins in a row). The arrow next to each rank shows how many spots a team moved since the prior week. Use the week menu to see the standings after any past week.</p>
+  <p>Official standings through the last completed week. During games, This Week and Pts This Week update live, and season totals update once the week is final. Use the week menu to look back at past weeks.</p>
   <p class="howto-heading">Projected</p>
-  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
-  <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
-  <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
+  <p>Where the standings would land if every player finishes at their projection.</p>
+  <p>Tap a team's points to see each player's score. Names share a color with this week's opponent.</p>
+  <p class="howto-note">Updates every 30 seconds during games.</p>
 </div>
 
 <script>
@@ -3409,7 +3426,11 @@
     rows.forEach(function (r) {
       var prevRank = baseline ? baseline.rankByRoster[r.roster_id] : null;
       // Actual tab only: the Projected tab doesn't show rank movement.
-      r.rank_change = (state.mode === "actual" && prevRank) ? prevRank - r.rank : null;
+      // Actual tab: always. Projected tab: only once the week is live (the
+      // projected results are folded into the totals), compared against
+      // the current Actual standings; never before kickoff.
+      var showMove = state.mode === "actual" || foldCurrentWeekIntoTotals;
+      r.rank_change = (showMove && prevRank) ? prevRank - r.rank : null;
     });
 
     // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
@@ -3508,7 +3529,6 @@
     var win = streak.result;
     return ' <span class="h2h-streak ' + (win ? "h2h-streak-win" : "h2h-streak-loss") + '" title="' +
       streak.length + "-game " + (win ? "winning" : "losing") + ' streak">' +
-      '<span class="streak-arrow" aria-hidden="true">' + (win ? "\u25B2" : "\u25BC") + "</span>" +
       streak.length + (win ? "W" : "L") + "</span>";
   }
 
@@ -3524,7 +3544,33 @@
       '<span aria-hidden="true">' + (up ? "\u25B2" : "\u25BC") + "</span>" + n + "</span>";
   }
 
-  function render() {
+  // Subtle flash on cells whose value changed since the previous refresh
+  // (render({flash: true}) from the 30-second poll / Refresh now). Values
+  // are remembered per view (tab + selected week), and a view change never
+  // flashes. Skipped entirely under prefers-reduced-motion via CSS.
+  function flashChangedCells(flash) {
+    var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek);
+    var prev = state.flashPrev;
+    var canFlash = !!flash && prev && prev.viewKey === viewKey;
+    var values = {};
+    var trs = els.body.querySelectorAll("tr[data-rid]");
+    for (var i = 0; i < trs.length; i++) {
+      var rid = trs[i].getAttribute("data-rid");
+      var tds = trs[i].querySelectorAll("td");
+      for (var c = 0; c < tds.length; c++) {
+        if (c === 1) continue; // manager name
+        var key = rid + ":" + c;
+        var text = tds[c].textContent.replace(/\s+/g, " ").trim();
+        values[key] = text;
+        if (canFlash && prev.values[key] !== undefined && prev.values[key] !== text) {
+          tds[c].classList.add("cell-flash");
+        }
+      }
+    }
+    state.flashPrev = { viewKey: viewKey, values: values };
+  }
+
+  function render(opts) {
     renderWeekSelect();
     var rows = buildCombinedStandings();
 
@@ -3644,7 +3690,7 @@
           thisWeekCellAttrs = ' style="color:' + r.matchup_color + '"';
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
-        return "<tr>" +
+        return '<tr data-rid="' + r.roster_id + '">' +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
@@ -3658,6 +3704,7 @@
           "</tr>";
       }).join("");
     }
+    flashChangedCells(opts && opts.flash);
     refreshOrHidePtsTooltip();
     refreshOrHideQbAdjTooltip();
 
@@ -4513,7 +4560,8 @@
     var liveLabelEl = document.getElementById("qb-adj-live-label");
     if (liveLabelEl) {
       var isLive = state.live && state.live.isLive;
-      liveLabelEl.textContent = isLive ? "Checking Week " + state.live.week + " live." : "";
+      // The status pill above already says whether the week is live.
+      liveLabelEl.textContent = "";
     }
 
     refreshOrHideQbAdjCapturedTooltip();
@@ -4529,14 +4577,13 @@
 
   // Each mode's default sort -- applied on switching TO that mode, but
   // only until the user clicks a column header themselves (see
-  // state.userSorted). Actual defaults to the natural season-standings
-  // order (key: null); Projected defaults to "Pts This Week" descending
-  // (highest live/projected score first), since that's the figure people
-  // actually watch move during a live week -- natural rank order there is
-  // still last week's standings until the fold happens.
+  // state.userSorted). Both tabs default to standings order (key: null).
+  // In Projected that's the projected standings once the week is live (the
+  // projected results are folded in), so the table reads top to bottom as
+  // "where everyone would finish".
   var DEFAULT_SORT_BY_MODE = {
     actual: { key: null, dir: "desc" },
-    custom: { key: "this_week_points", dir: "desc" }
+    custom: { key: null, dir: "desc" }
   };
 
   function setMode(mode) {
@@ -4556,7 +4603,7 @@
     els.refreshBtn.disabled = true;
     els.refreshBtn.textContent = "Refreshing…";
     loadLive()
-      .then(render)
+      .then(function () { render({ flash: true }); })
       .finally(function () {
         state.refreshing = false;
         els.refreshBtn.disabled = false;
@@ -4626,7 +4673,7 @@
     })
     .finally(function () {
       state.pollTimer = setInterval(function () {
-        loadLive().then(render);
+        loadLive().then(function () { render({ flash: true }); });
       }, POLL_MS);
     });
 })();
