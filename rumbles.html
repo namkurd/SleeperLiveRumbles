@@ -347,7 +347,6 @@
   .pfpa-table td.pfpa-val { font-weight: 600; }
   .pfpa-table td.pfpa-week { color: var(--text-dim); }
   .pfpa-proj { font-size: 0.85em; font-style: italic; color: var(--text-dim); }
-  .pfpa-of { font-weight: 400; color: var(--text-dim); }
   .pfpa-table tr.pfpa-win td { color: var(--good); }
   .pfpa-table tr.pfpa-loss td { color: var(--bad); }
   /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
@@ -3629,8 +3628,7 @@
     } else if (kind === "vf") {
       headers = ["Wk", "Teams outscored"];
       rowFor = function (w) {
-        return "<tr>" + weekCell(w) + '<td class="pfpa-val">' + w.outscored +
-          ' <span class="pfpa-of">of ' + (w.outscored + w.outscored_by) + "</span></td></tr>";
+        return "<tr>" + weekCell(w) + '<td class="pfpa-val">' + w.outscored + "</td></tr>";
       };
     } else {
       var isPf = kind === "pf";
