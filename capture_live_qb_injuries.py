@@ -269,9 +269,21 @@ def find_new_captures(
 #      Out (logged under the capture's backup_injuries with its own
 #      timestamp) or the game ends.
 #
+# Pausing: a watch also stops as soon as the player being watched (the
+# starter, or the earlier backup in a chain watch) starts accumulating
+# again -- his points or pass/rush attempts change between checks -- since
+# that means he's back in the game, not ruled out. If his replacement then
+# starts accumulating again, the watch resumes. See apply_watch_state.
+# Status-change detection itself still runs on every check either way; a
+# paused watch just doesn't keep the run alive for extra 5-minute checks.
+#
 # Minutes are only spent while one of these is actually happening, so the
 # cost is a few extra minutes on the rare weeks it triggers.
 WATCH_INTERVAL_SECONDS = 5 * 60
+# Last-seen stat lines for watch pausing (see apply_watch_state). Carried
+# between scheduled runs by the workflow's Actions cache steps, NOT
+# committed, so it never adds commits or site deploys.
+WATCH_STATE_PATH = os.environ.get("WATCH_STATE_PATH", "watch_state.json")
 # Hard stop for a single run, well under the workflow's own timeout, so a
 # stuck/very long game can never burn unbounded Actions minutes.
 MAX_WATCH_MINUTES = 150
@@ -279,6 +291,66 @@ MAX_WATCH_MINUTES = 150
 
 def capture_key(season, week, roster_id, player_id) -> str:
     return f"{season}:{week}:{roster_id}:{player_id}"
+
+
+def stat_activity(stats: dict | None, scoring_settings: dict) -> list:
+    """A player's running stat line for "is he accumulating?" checks: his
+    fantasy points plus pass and rush attempts. Attempts are included
+    because a QB can play a whole series (incompletions, handoffs) without
+    his points moving."""
+    s = stats or {}
+    return [
+        round(dot_product(s, scoring_settings), 2),
+        s.get("pass_att") or 0,
+        s.get("rush_att") or 0,
+    ]
+
+
+def load_watch_state(season, week) -> dict:
+    """{key: {"mode", "subject", "replacements"}} for this week only (any
+    other week's entries are dropped). Never raises."""
+    try:
+        with open(WATCH_STATE_PATH) as f:
+            data = json.load(f)
+        if str(data.get("season")) == str(season) and data.get("week") == week and isinstance(data.get("entries"), dict):
+            return data["entries"]
+    except Exception:  # noqa: BLE001 - missing/corrupt state just means "start fresh"
+        pass
+    return {}
+
+
+def save_watch_state(season, week, entries: dict) -> None:
+    try:
+        with open(WATCH_STATE_PATH, "w") as f:
+            json.dump({"season": season, "week": week, "entries": entries}, f)
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't save {WATCH_STATE_PATH} ({e})", file=sys.stderr)
+
+
+def apply_watch_state(state: dict, key: str, subject_activity: list, replacement_activity: dict) -> bool:
+    """Decides whether one watch should keep the run alive, and records
+    this check's stat lines for next time. Returns True while watching.
+
+      - First time seen: watching (a replacement has just come in).
+      - The watched player's stat line changed since last check: he's back
+        in the game -> paused.
+      - Otherwise, a replacement's stat line changed (or a new one appeared):
+        the replacement is playing again -> watching.
+      - Nothing changed: keep whatever it was.
+    If both moved in the same interval, the watched player wins (paused):
+    the next check resumes the watch if the replacement keeps playing."""
+    prev = state.get(key)
+    if prev is None:
+        mode = "watching"
+    else:
+        mode = prev.get("mode", "watching")
+        prev_repl = prev.get("replacements") or {}
+        if subject_activity != prev.get("subject"):
+            mode = "paused"
+        elif any(replacement_activity.get(pid) != prev_repl.get(pid) for pid in replacement_activity):
+            mode = "watching"
+    state[key] = {"mode": mode, "subject": subject_activity, "replacements": replacement_activity}
+    return mode == "watching"
 
 
 def find_starter_watch_targets(
@@ -291,10 +363,15 @@ def find_starter_watch_targets(
     scoring_settings: dict,
     team_game_schedule: dict[str, dict],
     already_captured_keys: set[str],
+    watch_state: dict | None = None,
 ) -> list[str]:
     """Starter watch (see above): one description per started QB who has
     played, has a same-team backup who's now recorded action, is in a game
-    that's in progress, and isn't listed Out yet (not captured)."""
+    that's in progress, and isn't listed Out yet (not captured) -- unless
+    the watch is paused because the starter is accumulating again (see
+    apply_watch_state)."""
+    if watch_state is None:
+        watch_state = {}
     targets: list[str] = []
     for m in matchups:
         roster_id = m.get("roster_id")
@@ -315,6 +392,15 @@ def find_starter_watch_targets(
                 continue  # find_new_captures handles this one on this same poll
             backups = find_backup_qbs(pid, meta, players_meta, team_qb_index, stats_map, scoring_settings, started_pids)
             if backups:
+                watching = apply_watch_state(
+                    watch_state,
+                    f"starter:{capture_key(season, week, roster_id, pid)}",
+                    stat_activity(stats_map.get(pid), scoring_settings),
+                    {b["player_id"]: stat_activity(stats_map.get(b["player_id"]), scoring_settings) for b in backups},
+                )
+                if not watching:
+                    print(f"[watch] roster {roster_id}: {player_name(meta)} is accumulating again (back in the game) -- watch paused")
+                    continue
                 targets.append(
                     f"roster {roster_id}: {player_name(meta)} not Out yet, but {[b['name'] for b in backups]} "
                     f"has come in -- watching for his status to change"
@@ -333,9 +419,13 @@ def update_chain_watch(
     scoring_settings: dict,
     team_game_schedule: dict[str, dict],
     now_iso: str,
+    watch_state: dict | None = None,
 ) -> tuple[bool, list[str]]:
     """Chain watch (see above), applied in place to this week's existing
-    captures. Returns (changed, watch descriptions)."""
+    captures. Returns (changed, watch descriptions). A chain watch pauses
+    while the earlier backup is accumulating again (see apply_watch_state)."""
+    if watch_state is None:
+        watch_state = {}
     changed = False
     targets: list[str] = []
     started_by_roster = {}
@@ -394,6 +484,15 @@ def update_chain_watch(
             entry["chain_watch_for"] = still_watching
             changed = True
         for pid in still_watching:
+            watching = apply_watch_state(
+                watch_state,
+                f"chain:{capture_key(season, week, entry.get('roster_id'), starter)}:{pid}",
+                stat_activity(stats_map.get(pid), scoring_settings),
+                {b["player_id"]: stat_activity(stats_map.get(b["player_id"]), scoring_settings) for b in current if b["player_id"] != pid},
+            )
+            if not watching:
+                print(f"[watch] roster {entry.get('roster_id')}: {player_name(players_meta.get(pid))} is accumulating again -- watch paused")
+                continue
             targets.append(
                 f"roster {entry.get('roster_id')}: a new backup entered, watching {player_name(players_meta.get(pid))} for a status change to Out"
             )
@@ -486,14 +585,16 @@ def run_poll() -> list[str]:
     )
     log["captures"].extend(new_captures)
 
+    watch_state = load_watch_state(season, week)
     chain_changed, chain_targets = update_chain_watch(
         log, week, season, data["matchups"], data["players_meta"], data["team_qb_index"], data["stats_map"],
-        data["scoring_settings"], data["team_game_schedule"], now_iso,
+        data["scoring_settings"], data["team_game_schedule"], now_iso, watch_state,
     )
     starter_targets = find_starter_watch_targets(
         week, season, data["matchups"], data["players_meta"], data["team_qb_index"], data["stats_map"],
-        data["scoring_settings"], data["team_game_schedule"], already_captured_keys,
+        data["scoring_settings"], data["team_game_schedule"], already_captured_keys, watch_state,
     )
+    save_watch_state(season, week, watch_state)
 
     if new_captures or chain_changed:
         with open(LIVE_CAPTURES_PATH, "w") as f:
