@@ -83,12 +83,31 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Watch pausing needs each QB's last-seen stat line from the previous
+      # run (see capture_live_qb_injuries.py's apply_watch_state). Carried
+      # in the Actions cache instead of being committed, so it never adds
+      # commits or Pages deploys. The newest saved copy is restored by
+      # prefix; a cache miss just means "start fresh".
+      - name: Restore watch state
+        uses: actions/cache/restore@v4
+        with:
+          path: watch_state.json
+          key: qb-watch-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: qb-watch-state-
+
       - name: Run capture_live_qb_injuries.py
         env:
           # Commit each capture as soon as it's made during a watch, so it
           # shows up on the page without waiting for the run to finish.
           CAPTURE_COMMIT_EACH_POLL: "1"
         run: python capture_live_qb_injuries.py
+
+      - name: Save watch state
+        if: always() && hashFiles('watch_state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: watch_state.json
+          key: qb-watch-state-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Commit live_qb_captures.json if it changed
         run: |
