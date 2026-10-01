@@ -178,9 +178,12 @@
     cursor: pointer;
   }
   .refresh-btn:active { transform: scale(0.97); }
-  /* Actual tab week picker -- same pill look as .refresh-btn. Hidden in
+  /* Actual tab week picker -- same pill look as .refresh-btn. Disabled in
      the Projected tab (see renderWeekSelect). */
-  .week-select-wrap[hidden] { display: none; }
+  /* Kept in place (dimmed and disabled) in the Projected tab rather than
+     hidden, so the Actual/Projected buttons never shift when switching. */
+  .week-select-wrap.is-disabled { opacity: 0.4; }
+  .week-select:disabled { cursor: default; }
   .week-select {
     border: 1px solid var(--panel-border);
     background: var(--panel);
@@ -972,16 +975,16 @@
       <p class="subtitle" id="subtitle">DTF Club · loading…</p>
     </div>
     <div class="controls">
-      <div class="toggle-group" role="group" aria-label="Scoring source">
-        <button type="button" id="mode-actual" class="active">Actual</button>
-        <button type="button" id="mode-custom">Projected</button>
-      </div>
       <label class="week-select-wrap" id="week-select-wrap">
         <span class="visually-hidden">Standings after week</span>
         <select id="week-select" class="week-select" aria-label="Show standings after a past week">
           <option value="">Current</option>
         </select>
       </label>
+      <div class="toggle-group" role="group" aria-label="Scoring source">
+        <button type="button" id="mode-actual" class="active">Actual</button>
+        <button type="button" id="mode-custom">Projected</button>
+      </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
     </div>
@@ -3511,7 +3514,10 @@
   function renderWeekSelect() {
     var sel = els.weekSelect;
     if (!sel) return;
-    els.weekSelectWrap.hidden = state.mode !== "actual";
+    var inActual = state.mode === "actual";
+    sel.disabled = !inActual;
+    els.weekSelectWrap.classList.toggle("is-disabled", !inActual);
+    els.weekSelectWrap.title = inActual ? "" : "Past weeks are in the Actual tab";
     var weeks = ((state.history && state.history.weeks_completed) || []).slice().sort(function (a, b) { return b - a; });
     var sig = weeks.join(",");
     if (sel.getAttribute("data-weeks") !== sig) {
