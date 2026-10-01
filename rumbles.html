@@ -341,6 +341,8 @@
   .pfpa-table td.pfpa-pts { text-align: right; font-weight: 600; }
   .pfpa-table td.pfpa-opp { color: var(--text-dim); padding-right: 0; }
   .pfpa-table tr.pfpa-projected td { font-style: italic; }
+  .pfpa-table tr.pfpa-win td { color: var(--good); }
+  .pfpa-table tr.pfpa-loss td { color: var(--bad); }
   .pfpa-table tfoot td { border-top: 1px solid var(--panel-border); padding-top: 4px; font-weight: 700; color: var(--text); }
   /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
      a native title-attribute tooltip works fine on desktop hover, but
@@ -3156,8 +3158,9 @@
   }
 
   // One roster's completed weeks up to and including `uptoWeek`, newest
-  // first: [{week, pf, pa, opponent_roster_id}] from the weekly log (the
-  // same numbers that sum to PF/PA). Bye/missing weeks are skipped.
+  // first: [{week, pf, pa, opponent_roster_id, win, outscored,
+  // outscored_by}] from the weekly log (the same numbers that sum to PF,
+  // PA, H2H and Vs. Field). Bye/missing weeks are skipped.
   function weeklyPfPa(rosterId, uptoWeek) {
     var h = state.history;
     if (!h || !h.weekly || uptoWeek == null) return [];
@@ -3165,7 +3168,11 @@
       .sort(function (a, b) { return b - a; })
       .map(function (w) {
         var e = (h.weekly[String(w)] || {})[String(rosterId)];
-        return e ? { week: w, pf: num(e.points), pa: num(e.opponent_points), opponent_roster_id: e.opponent_roster_id } : null;
+        return e ? {
+          week: w, pf: num(e.points), pa: num(e.opponent_points), opponent_roster_id: e.opponent_roster_id,
+          win: typeof e.h2h_win === "boolean" ? e.h2h_win : null,
+          outscored: num(e.teams_outscored), outscored_by: num(e.teams_outscored_by)
+        } : null;
       })
       .filter(Boolean);
   }
@@ -3445,6 +3452,9 @@
           pf: num(foldInfo.points),
           pa: num(foldInfo.opponentPoints),
           opponent_roster_id: foldInfo.opponentRosterId,
+          win: typeof foldInfo.h2hWin === "boolean" ? foldInfo.h2hWin : null,
+          outscored: num(foldInfo.teamsOutscored),
+          outscored_by: num(foldInfo.teamsOutscoredBy),
           projected: true
         }] : []).concat(weeklyPfPa(rid, lastCompletedWeek()))
       };
@@ -3577,10 +3587,13 @@
     sel.value = shown == null ? "" : String(shown);
   }
 
-  // PF / PA cell with a week-by-week breakdown tooltip (see
-  // buildPfPaTooltipHtml / the pfpa tooltip handlers below).
+  // PF / PA / H2H / Vs. Field cell with a week-by-week breakdown tooltip
+  // (see buildPfPaTooltipHtml / the pfpa tooltip handlers below).
   function pfpaCell(r, kind) {
-    var val = (kind === "pf" ? r.pf : r.pa).toFixed(2);
+    var val = kind === "pf" ? r.pf.toFixed(2)
+      : kind === "pa" ? r.pa.toFixed(2)
+      : kind === "h2h" ? formatRecord(r.h2h_w, r.h2h_l)
+      : formatRecord(r.vs_field_w, r.vs_field_l);
     if (!r.pfpa_weeks || !r.pfpa_weeks.length) return "<td>" + val + "</td>";
     state.pfpaTooltipData[r.roster_id + ":" + kind] = buildPfPaTooltipHtml(r, kind);
     return '<td class="pfpa-cell" data-pfpa-key="' + r.roster_id + ":" + kind + '">' + val + "</td>";
@@ -3589,6 +3602,35 @@
   function buildPfPaTooltipHtml(r, kind) {
     var managers = {};
     ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
+    var weekLabel = function (w) { return '<td class="pfpa-week">Wk ' + w.week + (w.projected ? " (proj)" : "") + "</td>"; };
+    var oppName = function (w) { return w.opponent_roster_id != null && managers[w.opponent_roster_id] ? managers[w.opponent_roster_id] : ""; };
+    if (kind === "h2h") {
+      // Week, opponent and score; wins green, losses red.
+      var h2hRows = r.pfpa_weeks.map(function (w) {
+        var cls = w.win === true ? "pfpa-win" : w.win === false ? "pfpa-loss" : "";
+        var opp = oppName(w);
+        return '<tr class="' + cls + (w.projected ? " pfpa-projected" : "") + '">' + weekLabel(w) +
+          '<td class="pfpa-opp">' + (opp ? "vs " + escapeHtml(opp) : "") + "</td>" +
+          '<td class="pfpa-pts">' + w.pf.toFixed(2) + "&ndash;" + w.pa.toFixed(2) + "</td>" +
+          "</tr>";
+      }).join("");
+      return "<strong>Head-to-head by week</strong>" +
+        '<table class="pfpa-table"><tbody>' + h2hRows + "</tbody>" +
+        '<tfoot><tr><td class="pfpa-week">Record</td><td></td><td class="pfpa-pts">' + formatRecord(r.h2h_w, r.h2h_l) + "</td></tr></tfoot></table>";
+    }
+    if (kind === "vf") {
+      // How many teams were outscored each week.
+      var vfRows = r.pfpa_weeks.map(function (w) {
+        var field = w.outscored + w.outscored_by;
+        return "<tr" + (w.projected ? ' class="pfpa-projected"' : "") + ">" + weekLabel(w) +
+          '<td class="pfpa-pts">' + w.outscored + "</td>" +
+          '<td class="pfpa-opp">of ' + field + "</td>" +
+          "</tr>";
+      }).join("");
+      return "<strong>Teams outscored by week</strong>" +
+        '<table class="pfpa-table"><tbody>' + vfRows + "</tbody>" +
+        '<tfoot><tr><td class="pfpa-week">Record</td><td class="pfpa-pts">' + formatRecord(r.vs_field_w, r.vs_field_l) + "</td><td></td></tr></tfoot></table>";
+    }
     var isPf = kind === "pf";
     var rows = r.pfpa_weeks.map(function (w) {
       var opp = w.opponent_roster_id != null && managers[w.opponent_roster_id] ? managers[w.opponent_roster_id] : "";
@@ -3782,8 +3824,8 @@
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
-          "<td>" + formatRecord(r.h2h_w, r.h2h_l) + "</td>" +
-          "<td>" + formatRecord(r.vs_field_w, r.vs_field_l) + "</td>" +
+          pfpaCell(r, "h2h") +
+          pfpaCell(r, "vf") +
           "</tr>";
       }).join("");
     }
