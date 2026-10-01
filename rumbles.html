@@ -1052,7 +1052,7 @@
   <p>The real standings through the last completed week. During a live week, This Week and Pts This Week follow the live scores, but season totals don't change until the week is final. Hover or tap a team's points to see who scored them.</p>
   <p>Next to each manager is their head-to-head streak (2W is two wins in a row). The arrow next to each rank shows how many spots a team moved since the prior week. Use the week menu to see the standings after any past week.</p>
   <p class="howto-heading">Projected</p>
-  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time. The arrow next to each rank shows how many spots a team would move from the current standings.</p>
+  <p>The tab to watch during a live week. It scores the week using projected points and folds the result straight into the season totals, giving an early look at where the standings could land if the week ended right now. Hover or tap a team's Pts This Week to see which players are still to play or currently in a game, along with their kickoff time.</p>
   <p>In both tabs, manager names are colored by this week's matchup, and whichever manager is currently ahead has their This Week and Pts This Week values colored to match.</p>
   <p class="howto-note">Standings refresh automatically every 30 seconds during a live week, or hit Refresh now for an update right away.</p>
 </div>
@@ -3408,7 +3408,8 @@
     var baseline = computeStandingsAsOf(state.history, baselineWeek);
     rows.forEach(function (r) {
       var prevRank = baseline ? baseline.rankByRoster[r.roster_id] : null;
-      r.rank_change = prevRank ? prevRank - r.rank : null;
+      // Actual tab only: the Projected tab doesn't show rank movement.
+      r.rank_change = (state.mode === "actual" && prevRank) ? prevRank - r.rank : null;
     });
 
     // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
