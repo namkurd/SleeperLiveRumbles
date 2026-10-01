@@ -25,6 +25,7 @@ import capture_live_qb_injuries  # noqa: E402
 from capture_live_qb_injuries import (  # noqa: E402
     build_team_game_schedule,
     find_new_captures,
+    apply_watch_state,
     find_starter_watch_targets,
     is_out_status,
     normalize_game_status,
@@ -348,6 +349,98 @@ def test_main_loop_single_check_when_nothing_to_watch():
     assert calls == [1] and sleeps == []
     print("PASS: with nothing to watch, a run is a single check (no extra Actions minutes)")
 
+
+# ---- Watch pausing (starter back in the game) ------------------------------
+
+def _starter_targets_with(state, stats, meta=None):
+    return find_starter_watch_targets(3, "2026", MATCHUPS, meta or _meta(), WATCH_INDEX, stats, SCORING_SETTINGS, LIVE, set(), state)
+
+
+def _bump(stats, pid, **delta):
+    out = {k: dict(v) for k, v in stats.items()}
+    for k, v in delta.items():
+        out[pid][k] = out[pid].get(k, 0) + v
+    return out
+
+
+def test_starter_back_in_game_pauses_watch():
+    state = {}
+    assert len(_starter_targets_with(state, STATS_MAP)) == 1, "first sighting of the backup: watching"
+    back = _bump(STATS_MAP, "QB_STARTER", pass_att=3, pass_yd=25)
+    assert _starter_targets_with(state, back) == [], "starter accumulating again: watch paused"
+    assert _starter_targets_with(state, back) == [], "nothing changed since: stays paused"
+    print("PASS: once the starter accumulates again (back in the game) the watch pauses and stays paused")
+
+
+def test_backup_accumulating_again_resumes_watch():
+    state = {}
+    _starter_targets_with(state, STATS_MAP)
+    back = _bump(STATS_MAP, "QB_STARTER", pass_att=3)
+    _starter_targets_with(state, back)
+    backup_again = _bump(back, "QB_BACKUP", rush_att=1, rush_yd=4)
+    assert len(_starter_targets_with(state, backup_again)) == 1, "backup accumulating again: watch resumes"
+    print("PASS: if the backup accumulates again after the starter came back, the watch resumes")
+
+
+def test_attempts_count_even_without_points():
+    state = {}
+    _starter_targets_with(state, STATS_MAP)
+    incompletions = _bump(STATS_MAP, "QB_STARTER", pass_att=2)  # no yards, no points
+    assert _starter_targets_with(state, incompletions) == [], "attempts alone show he's back in"
+    print("PASS: pass/rush attempts count as accumulating even when his points don't move")
+
+
+def test_still_watching_while_only_backup_accumulates():
+    state = {}
+    _starter_targets_with(state, STATS_MAP)
+    more_backup = _bump(STATS_MAP, "QB_BACKUP", pass_att=5, pass_yd=40)
+    assert len(_starter_targets_with(state, more_backup)) == 1
+    print("PASS: while only the backup keeps playing, the watch stays on")
+
+
+def test_out_is_still_captured_while_paused():
+    state = {}
+    _starter_targets_with(state, STATS_MAP)
+    back = _bump(STATS_MAP, "QB_STARTER", pass_att=3)
+    _starter_targets_with(state, back)
+    captures = find_new_captures(3, "2026", MATCHUPS, _meta(starter_status="Out"), WATCH_INDEX, back, SCORING_SETTINGS,
+                                 MANAGER_MAP, LIVE, set(), "2026-10-04T19:20:00+00:00")
+    assert len(captures) == 1, "a paused watch never blocks logging a change to Out on a regular check"
+    print("PASS: a change to Out is still logged on a regular check even while the watch is paused")
+
+
+def test_chain_watch_pauses_when_earlier_backup_plays_again():
+    log = _captured_log()
+    state = {}
+    _, t1 = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, THIRD_PLAYED, SCORING_SETTINGS, LIVE,
+                               "2026-10-04T19:00:00+00:00", state)
+    assert len(t1) == 1
+    backup_back = _bump(THIRD_PLAYED, "QB_BACKUP", pass_att=2)
+    _, t2 = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, backup_back, SCORING_SETTINGS, LIVE,
+                               "2026-10-04T19:05:00+00:00", state)
+    assert t2 == [], "earlier backup accumulating again: chain watch paused"
+    third_again = _bump(backup_back, "QB_THIRD", pass_att=2)
+    _, t3 = update_chain_watch(log, 3, "2026", MATCHUPS, _meta("Out"), WATCH_INDEX, third_again, SCORING_SETTINGS, LIVE,
+                               "2026-10-04T19:10:00+00:00", state)
+    assert len(t3) == 1, "newer backup accumulating again: chain watch resumes"
+    print("PASS: chain watch pauses when the earlier backup plays again and resumes when the newer one does")
+
+
+def test_watch_state_round_trips_and_resets_each_week():
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "ws.json")
+    orig = capture_live_qb_injuries.WATCH_STATE_PATH
+    capture_live_qb_injuries.WATCH_STATE_PATH = path
+    try:
+        state = {}
+        apply_watch_state(state, "k", [1, 2, 3], {"b": [4, 5, 6]})
+        capture_live_qb_injuries.save_watch_state("2026", 3, state)
+        assert capture_live_qb_injuries.load_watch_state("2026", 3) == state
+        assert capture_live_qb_injuries.load_watch_state("2026", 4) == {}, "a new week starts fresh"
+    finally:
+        capture_live_qb_injuries.WATCH_STATE_PATH = orig
+    print("PASS: watch state survives between runs (same week) and starts fresh each new week")
+
 def main():
     test_is_out_status()
     test_normalize_game_status_is_over_flag()
@@ -374,6 +467,13 @@ def main():
     test_chain_watch_quiet_when_no_new_backup()
     test_main_loop_rechecks_every_5_minutes_until_resolved()
     test_main_loop_single_check_when_nothing_to_watch()
+    test_starter_back_in_game_pauses_watch()
+    test_backup_accumulating_again_resumes_watch()
+    test_attempts_count_even_without_points()
+    test_still_watching_while_only_backup_accumulates()
+    test_out_is_still_captured_while_paused()
+    test_chain_watch_pauses_when_earlier_backup_plays_again()
+    test_watch_state_round_trips_and_resets_each_week()
     print("\nALL capture_live_qb_injuries.py UNIT TESTS PASSED")
 
 
