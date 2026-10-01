@@ -326,6 +326,22 @@
     text-underline-offset: 3px;
   }
   td { font-variant-numeric: tabular-nums; }
+  /* PF / PA cells with a week-by-week tooltip: same dotted-underline hint. */
+  td.pfpa-cell {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--panel-border);
+    text-underline-offset: 3px;
+  }
+  .pfpa-tooltip { max-width: min(92vw, 300px); }
+  .pfpa-tooltip strong { color: var(--text); }
+  .pfpa-table { width: 100%; min-width: 0; border-collapse: collapse; margin-top: 4px; font-size: 0.78rem; }
+  .pfpa-table td { padding: 2px 6px; border: none; text-align: left; white-space: nowrap; }
+  .pfpa-table td.pfpa-week { color: var(--text-dim); padding-left: 0; }
+  .pfpa-table td.pfpa-pts { text-align: right; font-weight: 600; }
+  .pfpa-table td.pfpa-opp { color: var(--text-dim); padding-right: 0; }
+  .pfpa-table tr.pfpa-projected td { font-style: italic; }
+  .pfpa-table tfoot td { border-top: 1px solid var(--panel-border); padding-top: 4px; font-weight: 700; color: var(--text); }
   /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
      a native title-attribute tooltip works fine on desktop hover, but
      never appears at all on tap on mobile, so this single reusable,
@@ -1067,6 +1083,8 @@
      showQbAdjCapturedTooltip: shows WHEN a "likely" QB-injury row's live
      corroboration was durably captured. -->
 <div id="qb-adj-captured-tooltip" class="qb-adj-tooltip" role="tooltip" aria-hidden="true"></div>
+<!-- PF / PA week-by-week breakdown (see pfpaCell / buildPfPaTooltipHtml). -->
+<div id="pfpa-tooltip" class="qb-adj-tooltip pfpa-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
   <p class="howto-heading">Actual</p>
@@ -1147,6 +1165,8 @@
     thisWeekTooltipData: {}, // roster_id -> {showStartTime, rows} "Pts This Week" tooltip data (set by render(), read by the pts-tooltip show/toggle handlers)
     timeSlotColorByLabel: {}, // "Mon 1pm" etc -> "var(--matchup-N)" (set by loadLive() via buildTimeSlotColors, read by thisWeekTooltip)
     activePtsTooltipRosterId: null, // which roster's tooltip is currently showing (native touch/click toggle state), or null
+    pfpaTooltipData: {}, // "roster_id:pf|pa" -> html for the PF/PA week-by-week tooltip (set by render())
+    activePfPaKey: null,
     qbAdjTooltipData: {}, // roster_id -> {html} for the manager-name "*" tooltip (set by render(), read by the qb-adj-tooltip show/toggle handlers) -- only populated for "likely"-tier live QB adjustments, see buildCombinedStandings' qb_adjustment field
     activeQbAdjTooltipRosterId: null, // which roster's "*" tooltip is currently showing (native touch/click toggle state), or null
     qbAdjCapturedTooltipData: {}, // "{week}:{roster_id}:{player_id}" -> {html} for the QB Injury log's Injured QB name hover tooltip (set by renderQbAdjustments, read by the qb-adj-captured-tooltip show/toggle handlers) -- only populated for a row whose captured_at is set (see LIVE_CAPTURES_URL/buildLiveCapturesLookup)
@@ -1199,6 +1219,7 @@
     ptsTooltip: document.getElementById("pts-tooltip"),
     qbAdjTooltip: document.getElementById("qb-adj-tooltip"),
     qbAdjCapturedTooltip: document.getElementById("qb-adj-captured-tooltip"),
+    pfpaTooltip: document.getElementById("pfpa-tooltip"),
     qbAdjBody: document.getElementById("qb-adj-body"),
     howtoBtn: document.getElementById("howto-btn"),
     howtoTooltip: document.getElementById("howto-tooltip"),
@@ -3134,6 +3155,21 @@
     return { week: uptoWeek, weeksCount: weeks.length, byRoster: byRoster, rankByRoster: rankByRoster };
   }
 
+  // One roster's completed weeks up to and including `uptoWeek`, newest
+  // first: [{week, pf, pa, opponent_roster_id}] from the weekly log (the
+  // same numbers that sum to PF/PA). Bye/missing weeks are skipped.
+  function weeklyPfPa(rosterId, uptoWeek) {
+    var h = state.history;
+    if (!h || !h.weekly || uptoWeek == null) return [];
+    return (h.weeks_completed || []).filter(function (w) { return w <= uptoWeek; })
+      .sort(function (a, b) { return b - a; })
+      .map(function (w) {
+        var e = (h.weekly[String(w)] || {})[String(rosterId)];
+        return e ? { week: w, pf: num(e.points), pa: num(e.opponent_points), opponent_roster_id: e.opponent_roster_id } : null;
+      })
+      .filter(Boolean);
+  }
+
   // Which completed week the Actual tab's week picker is showing, or null
   // for the normal current view. Only honored in Actual mode and only for
   // a week that's actually in weeks_completed (a stale selection from a
@@ -3185,7 +3221,8 @@
         this_week_actual_points: null,
         qb_adjustment: null,
         h2h_streak: computeH2hStreak(state.history, viewWeek, t.roster_id),
-        last_week_qb_adjustment: null
+        last_week_qb_adjustment: null,
+        pfpa_weeks: weeklyPfPa(t.roster_id, viewWeek)
       };
     });
   }
@@ -3399,7 +3436,17 @@
         // recorded here in the first place.
         last_week_qb_adjustment: showLastWeekPoints
           ? ((state.lastWeek && state.lastWeek.qbAdjustmentByRoster && state.lastWeek.qbAdjustmentByRoster[rid]) || null)
-          : null
+          : null,
+        // Week-by-week PF/PA for the PF/PA hover tooltip. When the live
+        // week is folded into the totals (Projected tab after kickoff), it
+        // leads the list marked as projected, matching the PF/PA shown.
+        pfpa_weeks: (foldInfo ? [{
+          week: live.week,
+          pf: num(foldInfo.points),
+          pa: num(foldInfo.opponentPoints),
+          opponent_roster_id: foldInfo.opponentRosterId,
+          projected: true
+        }] : []).concat(weeklyPfPa(rid, lastCompletedWeek()))
       };
     });
 
@@ -3530,6 +3577,34 @@
     sel.value = shown == null ? "" : String(shown);
   }
 
+  // PF / PA cell with a week-by-week breakdown tooltip (see
+  // buildPfPaTooltipHtml / the pfpa tooltip handlers below).
+  function pfpaCell(r, kind) {
+    var val = (kind === "pf" ? r.pf : r.pa).toFixed(2);
+    if (!r.pfpa_weeks || !r.pfpa_weeks.length) return "<td>" + val + "</td>";
+    state.pfpaTooltipData[r.roster_id + ":" + kind] = buildPfPaTooltipHtml(r, kind);
+    return '<td class="pfpa-cell" data-pfpa-key="' + r.roster_id + ":" + kind + '">' + val + "</td>";
+  }
+
+  function buildPfPaTooltipHtml(r, kind) {
+    var managers = {};
+    ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
+    var isPf = kind === "pf";
+    var rows = r.pfpa_weeks.map(function (w) {
+      var opp = w.opponent_roster_id != null && managers[w.opponent_roster_id] ? managers[w.opponent_roster_id] : "";
+      var pts = isPf ? w.pf : w.pa;
+      return "<tr" + (w.projected ? ' class="pfpa-projected"' : "") + ">" +
+        '<td class="pfpa-week">Wk ' + w.week + (w.projected ? " (proj)" : "") + "</td>" +
+        '<td class="pfpa-pts">' + pts.toFixed(2) + "</td>" +
+        '<td class="pfpa-opp">' + (opp ? (isPf ? "vs " : "by ") + escapeHtml(opp) : "") + "</td>" +
+        "</tr>";
+    }).join("");
+    var total = isPf ? r.pf : r.pa;
+    return "<strong>" + (isPf ? "Points for" : "Points against") + " by week</strong>" +
+      '<table class="pfpa-table"><tbody>' + rows + "</tbody>" +
+      '<tfoot><tr><td class="pfpa-week">Total</td><td class="pfpa-pts">' + total.toFixed(2) + "</td><td></td></tr></tfoot></table>";
+  }
+
   function renderStreakBadge(streak) {
     if (!streak || typeof streak.result !== "boolean" || !streak.length) return "";
     var win = streak.result;
@@ -3610,6 +3685,7 @@
 
     state.thisWeekTooltipData = {};
     state.qbAdjTooltipData = {};
+    state.pfpaTooltipData = {};
     if (!rows.length) {
       var emptyMsg;
       if (state.historyError) {
@@ -3704,8 +3780,8 @@
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
-          "<td>" + r.pf.toFixed(2) + "</td>" +
-          "<td>" + r.pa.toFixed(2) + "</td>" +
+          pfpaCell(r, "pf") +
+          pfpaCell(r, "pa") +
           "<td>" + formatRecord(r.h2h_w, r.h2h_l) + "</td>" +
           "<td>" + formatRecord(r.vs_field_w, r.vs_field_l) + "</td>" +
           "</tr>";
@@ -3714,6 +3790,7 @@
     flashChangedCells(opts && opts.flash);
     refreshOrHidePtsTooltip();
     refreshOrHideQbAdjTooltip();
+    refreshOrHidePfPaTooltip();
 
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
     els.subtitle.textContent = "DTF Club · " + season + " season";
@@ -4335,6 +4412,82 @@
   // leaves) and a second click un-pins it. On a device with no hover at
   // all, there's no such race, so click is just a plain open/closed toggle
   // there, matching the Pts tooltip's own tap-to-toggle behavior.
+  // ---- PF / PA week-by-week tooltip -------------------------------------
+  // Same hover (desktop) / tap (touch) pattern as the other tooltips.
+  function positionPfPaTooltip(cell) {
+    var tip = els.pfpaTooltip;
+    var rect = cell.getBoundingClientRect();
+    var margin = 6;
+    var tipRect = tip.getBoundingClientRect();
+    var left = rect.right - tipRect.width;
+    var maxLeft = window.innerWidth - tipRect.width - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    var top = rect.bottom + margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = rect.top - tipRect.height - margin;
+      if (top < margin) top = margin;
+    }
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function showPfPaTooltip(cell) {
+    var key = cell.getAttribute("data-pfpa-key");
+    var html = state.pfpaTooltipData && state.pfpaTooltipData[key];
+    if (!html) return;
+    state.activePfPaKey = key;
+    els.pfpaTooltip.innerHTML = html;
+    els.pfpaTooltip.setAttribute("aria-hidden", "false");
+    els.pfpaTooltip.classList.add("visible");
+    positionPfPaTooltip(cell);
+  }
+
+  function hidePfPaTooltip() {
+    if (state.activePfPaKey == null) return;
+    state.activePfPaKey = null;
+    els.pfpaTooltip.classList.remove("visible");
+    els.pfpaTooltip.setAttribute("aria-hidden", "true");
+  }
+
+  function refreshOrHidePfPaTooltip() {
+    var key = state.activePfPaKey;
+    if (key == null) return;
+    var cell = els.body.querySelector('td.pfpa-cell[data-pfpa-key="' + key + '"]');
+    var html = state.pfpaTooltipData && state.pfpaTooltipData[key];
+    if (!cell || !html) { hidePfPaTooltip(); return; }
+    els.pfpaTooltip.innerHTML = html;
+    positionPfPaTooltip(cell);
+  }
+
+  function pfpaCellFromEvent(e) {
+    return e.target && e.target.closest ? e.target.closest("td.pfpa-cell") : null;
+  }
+
+  if (supportsHover) {
+    els.body.addEventListener("mouseover", function (e) {
+      var cell = pfpaCellFromEvent(e);
+      if (cell) showPfPaTooltip(cell);
+    });
+    els.body.addEventListener("mouseout", function (e) {
+      var cell = pfpaCellFromEvent(e);
+      if (cell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) hidePfPaTooltip();
+    });
+  } else {
+    els.body.addEventListener("click", function (e) {
+      var cell = pfpaCellFromEvent(e);
+      if (!cell) return;
+      e.stopPropagation();
+      if (state.activePfPaKey === cell.getAttribute("data-pfpa-key")) hidePfPaTooltip();
+      else showPfPaTooltip(cell);
+    });
+    document.addEventListener("click", function (e) {
+      if (state.activePfPaKey != null && (!e.target.closest || !e.target.closest("td.pfpa-cell"))) hidePfPaTooltip();
+    });
+  }
+  window.addEventListener("scroll", hidePfPaTooltip, true);
+  window.addEventListener("resize", hidePfPaTooltip);
+
   var howtoPinned = false;
 
   function positionHowToTooltip() {
