@@ -333,17 +333,23 @@
     text-decoration-color: var(--panel-border);
     text-underline-offset: 3px;
   }
-  .pfpa-tooltip { max-width: min(92vw, 300px); }
-  .pfpa-tooltip strong { color: var(--text); }
-  .pfpa-table { width: 100%; min-width: 0; border-collapse: collapse; margin-top: 4px; font-size: 0.78rem; }
-  .pfpa-table td { padding: 2px 6px; border: none; text-align: left; white-space: nowrap; }
-  .pfpa-table td.pfpa-week { color: var(--text-dim); padding-left: 0; }
-  .pfpa-table td.pfpa-pts { text-align: right; font-weight: 600; }
-  .pfpa-table td.pfpa-opp { color: var(--text-dim); padding-right: 0; }
-  .pfpa-table tr.pfpa-projected td { font-style: italic; }
+  .pfpa-tooltip { max-width: min(92vw, 300px); padding: 6px 10px 7px; }
+  .pfpa-table { min-width: 0; width: auto; border-collapse: collapse; font-size: 0.78rem; }
+  .pfpa-table th {
+    padding: 2px 10px 4px 0; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-dim); text-align: left; border-bottom: 1px solid var(--panel-border);
+    white-space: nowrap;
+  }
+  .pfpa-table td { padding: 3px 10px 3px 0; border: none; text-align: left; white-space: nowrap; color: var(--text); }
+  .pfpa-table tr:first-child td { padding-top: 5px; }
+  .pfpa-table th:last-child, .pfpa-table td:last-child { padding-right: 0; }
+  .pfpa-table .pfpa-val { text-align: right; font-variant-numeric: tabular-nums; }
+  .pfpa-table td.pfpa-val { font-weight: 600; }
+  .pfpa-table td.pfpa-week { color: var(--text-dim); }
+  .pfpa-proj { font-size: 0.85em; font-style: italic; color: var(--text-dim); }
+  .pfpa-of { font-weight: 400; color: var(--text-dim); }
   .pfpa-table tr.pfpa-win td { color: var(--good); }
   .pfpa-table tr.pfpa-loss td { color: var(--bad); }
-  .pfpa-table tfoot td { border-top: 1px solid var(--panel-border); padding-top: 4px; font-weight: 700; color: var(--text); }
   /* Custom tooltip for the "Pts This Week" cell's per-player breakdown --
      a native title-attribute tooltip works fine on desktop hover, but
      never appears at all on tap on mobile, so this single reusable,
@@ -3599,52 +3605,44 @@
     return '<td class="pfpa-cell" data-pfpa-key="' + r.roster_id + ":" + kind + '">' + val + "</td>";
   }
 
+  // Week-by-week tooltip for PF / PA / H2H / Vs. Field: column headings
+  // plus one row per week, newest first. No totals -- the cell itself
+  // already shows the season figure. H2H rows are green for a win and red
+  // for a loss; a projected (live, Projected tab) week is marked "proj".
   function buildPfPaTooltipHtml(r, kind) {
     var managers = {};
     ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
-    var weekLabel = function (w) { return '<td class="pfpa-week">Wk ' + w.week + (w.projected ? " (proj)" : "") + "</td>"; };
-    var oppName = function (w) { return w.opponent_roster_id != null && managers[w.opponent_roster_id] ? managers[w.opponent_roster_id] : ""; };
+    var oppName = function (w) {
+      return w.opponent_roster_id != null && managers[w.opponent_roster_id] ? escapeHtml(managers[w.opponent_roster_id]) : "&ndash;";
+    };
+    var weekCell = function (w) {
+      return '<td class="pfpa-week">' + w.week + (w.projected ? ' <span class="pfpa-proj">proj</span>' : "") + "</td>";
+    };
+    var headers, rowFor;
     if (kind === "h2h") {
-      // Week, opponent and score; wins green, losses red.
-      var h2hRows = r.pfpa_weeks.map(function (w) {
+      headers = ["Wk", "Opponent", "Score"];
+      rowFor = function (w) {
         var cls = w.win === true ? "pfpa-win" : w.win === false ? "pfpa-loss" : "";
-        var opp = oppName(w);
-        return '<tr class="' + cls + (w.projected ? " pfpa-projected" : "") + '">' + weekLabel(w) +
-          '<td class="pfpa-opp">' + (opp ? "vs " + escapeHtml(opp) : "") + "</td>" +
-          '<td class="pfpa-pts">' + w.pf.toFixed(2) + "&ndash;" + w.pa.toFixed(2) + "</td>" +
-          "</tr>";
-      }).join("");
-      return "<strong>Head-to-head by week</strong>" +
-        '<table class="pfpa-table"><tbody>' + h2hRows + "</tbody>" +
-        '<tfoot><tr><td class="pfpa-week">Record</td><td></td><td class="pfpa-pts">' + formatRecord(r.h2h_w, r.h2h_l) + "</td></tr></tfoot></table>";
+        return '<tr class="' + cls + '">' + weekCell(w) + '<td class="pfpa-opp">' + oppName(w) + "</td>" +
+          '<td class="pfpa-val">' + w.pf.toFixed(2) + "&ndash;" + w.pa.toFixed(2) + "</td></tr>";
+      };
+    } else if (kind === "vf") {
+      headers = ["Wk", "Teams outscored"];
+      rowFor = function (w) {
+        return "<tr>" + weekCell(w) + '<td class="pfpa-val">' + w.outscored +
+          ' <span class="pfpa-of">of ' + (w.outscored + w.outscored_by) + "</span></td></tr>";
+      };
+    } else {
+      var isPf = kind === "pf";
+      headers = ["Wk", "Opponent", isPf ? "PF" : "PA"];
+      rowFor = function (w) {
+        return "<tr>" + weekCell(w) + '<td class="pfpa-opp">' + oppName(w) + "</td>" +
+          '<td class="pfpa-val">' + (isPf ? w.pf : w.pa).toFixed(2) + "</td></tr>";
+      };
     }
-    if (kind === "vf") {
-      // How many teams were outscored each week.
-      var vfRows = r.pfpa_weeks.map(function (w) {
-        var field = w.outscored + w.outscored_by;
-        return "<tr" + (w.projected ? ' class="pfpa-projected"' : "") + ">" + weekLabel(w) +
-          '<td class="pfpa-pts">' + w.outscored + "</td>" +
-          '<td class="pfpa-opp">of ' + field + "</td>" +
-          "</tr>";
-      }).join("");
-      return "<strong>Teams outscored by week</strong>" +
-        '<table class="pfpa-table"><tbody>' + vfRows + "</tbody>" +
-        '<tfoot><tr><td class="pfpa-week">Record</td><td class="pfpa-pts">' + formatRecord(r.vs_field_w, r.vs_field_l) + "</td><td></td></tr></tfoot></table>";
-    }
-    var isPf = kind === "pf";
-    var rows = r.pfpa_weeks.map(function (w) {
-      var opp = w.opponent_roster_id != null && managers[w.opponent_roster_id] ? managers[w.opponent_roster_id] : "";
-      var pts = isPf ? w.pf : w.pa;
-      return "<tr" + (w.projected ? ' class="pfpa-projected"' : "") + ">" +
-        '<td class="pfpa-week">Wk ' + w.week + (w.projected ? " (proj)" : "") + "</td>" +
-        '<td class="pfpa-pts">' + pts.toFixed(2) + "</td>" +
-        '<td class="pfpa-opp">' + (opp ? (isPf ? "vs " : "by ") + escapeHtml(opp) : "") + "</td>" +
-        "</tr>";
-    }).join("");
-    var total = isPf ? r.pf : r.pa;
-    return "<strong>" + (isPf ? "Points for" : "Points against") + " by week</strong>" +
-      '<table class="pfpa-table"><tbody>' + rows + "</tbody>" +
-      '<tfoot><tr><td class="pfpa-week">Total</td><td class="pfpa-pts">' + total.toFixed(2) + "</td><td></td></tr></tfoot></table>";
+    return '<table class="pfpa-table"><thead><tr>' +
+      headers.map(function (h, i) { return '<th' + (i === headers.length - 1 ? ' class="pfpa-val"' : "") + ">" + h + "</th>"; }).join("") +
+      "</tr></thead><tbody>" + r.pfpa_weeks.map(rowFor).join("") + "</tbody></table>";
   }
 
   function renderStreakBadge(streak) {
