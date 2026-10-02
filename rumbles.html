@@ -679,6 +679,9 @@
      value as the strip allows. Every other .badge-live usage (the QB
      Injury Backup Adjustments table, etc) is untouched by this override;
      "This Week" no longer shows a LIVE badge at all. */
+  /* Grayed LIVE pill: this team still has players to play, but none is in
+     a game right now. */
+  .badge-live.badge-live-idle { color: var(--text-dim); border-color: var(--text-dim); opacity: 0.55; }
   td.thisweek-pts .badge-live {
     position: absolute;
     right: 3px;
@@ -903,15 +906,21 @@
   /* H2H streak badge after the manager name (Actual tab only, see
      renderStreakBadge): only the arrow is colored, the "2W"/"3L" text
      stays the normal table text color and weight. */
-  /* Refresh flash (see flashChangedCells): a brief tint that fades out.
-     Drawn as an inset shadow so it sits on top of any row/sticky-cell
-     background without changing it. */
-  @keyframes cellFlash {
-    0% { box-shadow: inset 0 0 0 999px rgba(250, 204, 21, 0.22); }
-    100% { box-shadow: inset 0 0 0 999px rgba(250, 204, 21, 0); }
+  /* Refresh flash (see flashChangedCells): a brief tint that fades out,
+     green when the value went up, red when it went down. Drawn as an inset
+     shadow so it sits on top of any row/sticky-cell background without
+     changing it. */
+  @keyframes cellFlashUp {
+    0% { box-shadow: inset 0 0 0 999px rgba(53, 194, 107, 0.28); }
+    100% { box-shadow: inset 0 0 0 999px rgba(53, 194, 107, 0); }
   }
-  td.cell-flash { animation: cellFlash 1.6s ease-out; }
-  @media (prefers-reduced-motion: reduce) { td.cell-flash { animation: none; } }
+  @keyframes cellFlashDown {
+    0% { box-shadow: inset 0 0 0 999px rgba(229, 72, 77, 0.28); }
+    100% { box-shadow: inset 0 0 0 999px rgba(229, 72, 77, 0); }
+  }
+  td.cell-flash-up { animation: cellFlashUp 1.6s ease-out; }
+  td.cell-flash-down { animation: cellFlashDown 1.6s ease-out; }
+  @media (prefers-reduced-motion: reduce) { td.cell-flash-up, td.cell-flash-down { animation: none; } }
   .h2h-streak {
     display: inline-block;
     margin-left: 5px;
@@ -3355,6 +3364,13 @@
       var hasIncompletePlayer = playersBreakdown
         ? playersBreakdown.some(function (p) { return p.game_status !== "complete"; })
         : true;
+      // Someone on this roster is on the field right now. When players are
+      // still to play but none is in a game, the LIVE pill is grayed out
+      // (idle); with nobody left to play it's hidden entirely (above).
+      // Missing breakdown fails open to an active pill, like above.
+      var hasPlayingPlayer = playersBreakdown
+        ? playersBreakdown.some(function (p) { return p.game_status === "in_progress"; })
+        : true;
 
       // This roster's current H2H winning/losing streak through the last
       // completed week (see computeH2hStreak above) for the manager-name
@@ -3384,6 +3400,8 @@
         // on a number that's just a pregame projection (nothing actually
         // in progress yet) would be misleading.
         this_week_points_live: !!liveInfo && hasIncompletePlayer && kickoffStarted,
+        // LIVE pill shown but grayed: players left to play, none playing now.
+        this_week_points_idle: !hasPlayingPlayer,
         // true/false/null (tie, or no live matchup) -- whether THIS team is
         // currently ahead in its live H2H matchup. Sourced from
         // rumblesSourceInfo (see above), so pre-kickoff this is always
@@ -3667,12 +3685,15 @@
       '<span aria-hidden="true">' + (up ? "\u25B2" : "\u25BC") + "</span>" + n + "</span>";
   }
 
-  // Subtle flash on cells whose value changed since the previous refresh
-  // (render({flash: true}) from the 30-second poll / Refresh now). Values
-  // are remembered per view (tab + selected week), and a view change never
-  // flashes. Skipped entirely under prefers-reduced-motion via CSS.
+  // Subtle flash on the This Week (Rumbles) and Pts This Week cells when
+  // their number changed since the previous refresh (render({flash: true})
+  // from the 30-second poll / Refresh now): green if it went up, red if it
+  // went down. Values are remembered per view (tab + selected week + the
+  // points column's label, so the Pts Last Week -> Pts This Week switch at
+  // kickoff never flashes). Skipped under prefers-reduced-motion via CSS.
   function flashChangedCells(flash) {
-    var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek);
+    var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek) +
+      "|" + COLUMNS.this_week_points.label;
     var prev = state.flashPrev;
     var canFlash = !!flash && prev && prev.viewKey === viewKey;
     var values = {};
@@ -3680,13 +3701,17 @@
     for (var i = 0; i < trs.length; i++) {
       var rid = trs[i].getAttribute("data-rid");
       var tds = trs[i].querySelectorAll("td");
-      for (var c = 0; c < tds.length; c++) {
-        if (c === 1) continue; // manager name
+      // Only the live-moving columns flash: This Week (Rumbles, index 3)
+      // and Pts This Week (index 4).
+      for (var c = 3; c <= 4 && c < tds.length; c++) {
         var key = rid + ":" + c;
-        var text = tds[c].textContent.replace(/\s+/g, " ").trim();
-        values[key] = text;
-        if (canFlash && prev.values[key] !== undefined && prev.values[key] !== text) {
-          tds[c].classList.add("cell-flash");
+        // The cell's number (ignoring the LIVE pill / asterisk text).
+        var m = tds[c].textContent.match(/-?\d+(?:\.\d+)?/);
+        var val = m ? parseFloat(m[0]) : null;
+        values[key] = val;
+        var old = canFlash ? prev.values[key] : undefined;
+        if (val != null && old != null && val !== old) {
+          tds[c].classList.add(val > old ? "cell-flash-up" : "cell-flash-down");
         }
       }
     }
@@ -3820,7 +3845,7 @@
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
-          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live">LIVE</span>' : "") + ptsAsteriskHtml + "</td>" +
+          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live' + (r.this_week_points_idle ? " badge-live-idle" : "") + '"' + (r.this_week_points_idle ? ' title="No players in a game right now"' : "") + ">LIVE</span>" : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
