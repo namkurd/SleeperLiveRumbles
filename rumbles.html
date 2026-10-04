@@ -4345,6 +4345,9 @@
   // all) -- see renderQbAdjustments, which is the only place
   // state.qbAdjCapturedTooltipData gets populated.
   function formatCapturedAt(iso) {
+    // A capture added by hand (the capture workflow missed the game, but
+    // the Out was seen while it was live).
+    if (iso === "manual") return "manually (seen during the game)";
     var d = new Date(iso);
     if (isNaN(d.getTime())) return "at an unknown time";
     try {
