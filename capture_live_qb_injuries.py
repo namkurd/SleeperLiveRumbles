@@ -21,8 +21,8 @@ fully complete, so its same-day check can *never* draw that distinction on
 its own, no matter how "fresh" the run is.
 
 THE FIX: this script runs on a much tighter schedule (a GitHub Actions
-workflow, every ~15 minutes, only during actual NFL game windows -- see
-.github/workflows/live_qb_capture.yml) and watches for the one thing
+workflow that checks every ~15 minutes throughout each game day -- see
+game-day mode below and .github/workflows/live_qb_capture.yml) and watches for the one thing
 that's unambiguous: a backup QB recording real statistical action
 (is_played, via find_backup_qbs) while Sleeper's injury_status for the
 started QB in front of him reads Out/IR/PUP AND that started QB's own
@@ -253,9 +253,8 @@ def find_new_captures(
 
 
 # ---- Watch mode -----------------------------------------------------------
-# The scheduled workflow only fires every 15 minutes (a GitHub Actions
-# minutes-budget choice), which can miss an injury that happens late in a
-# game. Watch mode closes that gap without polling fast all the time: when
+# Regular checks are every 15 minutes (see game-day mode below), which
+# can miss an injury that happens late in a game. Watch mode closes that gap without polling fast all the time: when
 # a check sees a situation that's about to matter, this same run keeps
 # re-checking every WATCH_INTERVAL_SECONDS until it resolves, then exits.
 #
@@ -284,9 +283,23 @@ WATCH_INTERVAL_SECONDS = 5 * 60
 # between scheduled runs by the workflow's Actions cache steps, NOT
 # committed, so it never adds commits or site deploys.
 WATCH_STATE_PATH = os.environ.get("WATCH_STATE_PATH", "watch_state.json")
-# Hard stop for a single run, well under the workflow's own timeout, so a
-# stuck/very long game can never burn unbounded Actions minutes.
-MAX_WATCH_MINUTES = 150
+# ---- Game-day mode ---------------------------------------------------------
+# GitHub's scheduler can't be trusted to fire every 15 minutes: on busy
+# days it delays scheduled runs by hours or drops them outright (Week 4
+# 2026: not one run during the 9:30am ET IND-WAS game in Madrid, so Marcus
+# Mariota's in-game Out was never logged). So one run now covers the whole
+# game day by itself: it keeps checking every GAME_DAY_INTERVAL_SECONDS
+# while any game is in progress, sleeps through gaps until the next
+# kickoff (when it's within KICKOFF_LOOKAHEAD_HOURS), and only exits once
+# no game is live or coming up. The frequent scheduled triggers just make
+# sure SOME run starts early enough; extra ones queue behind the active
+# run (one at a time) and exit right away when there's nothing to do.
+GAME_DAY_INTERVAL_SECONDS = 15 * 60
+KICKOFF_LOOKAHEAD_HOURS = 6
+# One Actions job can run at most 6 hours. Just before that, the run
+# starts its own successor (workflow_dispatch, CAPTURE_CHAIN=1 in the
+# workflow) and exits, so a long Sunday is covered end to end.
+MAX_RUN_MINUTES = 330
 
 
 def capture_key(season, week, roster_id, player_id) -> str:
@@ -512,6 +525,15 @@ def fetch_poll_data() -> dict | None:
             print(f"[info] no live week to watch right now (season_type={season_type!r}, week={week!r}); nothing to do")
             return None
 
+        # The small scoreboard first: when no game is live, skip the heavy
+        # fetches entirely (nothing can be captured until one is).
+        games = get_json(f"{SCORES_BASE}/{season_type}/{season}/{week}")
+        team_game_schedule = build_team_game_schedule(games)
+        game_info = summarize_games(games)
+        if not game_info["any_live"]:
+            print("[info] no game in progress right now")
+            return {"season": season, "week": week, "game_info": game_info, "idle": True}
+
         league_id = discover_current_league_id(season)
         manager_map = build_manager_map(league_id)
         league = get_json(f"{API_BASE}/league/{league_id}")
@@ -526,9 +548,6 @@ def fetch_poll_data() -> dict | None:
 
         stats_arr = get_json(f"{STATS_BASE}/{season}/{week}?season_type={season_type}")
         stats_map = array_to_player_map(stats_arr)
-
-        games = get_json(f"{SCORES_BASE}/{season_type}/{season}/{week}")
-        team_game_schedule = build_team_game_schedule(games)
     except Exception as e:  # noqa: BLE001 - a best-effort poll; never allowed to break the scheduled workflow
         print(f"[warn] couldn't fetch data for this poll ({e}); leaving the capture log untouched", file=sys.stderr)
         return None
@@ -536,7 +555,31 @@ def fetch_poll_data() -> dict | None:
         "season": season, "week": week, "manager_map": manager_map, "scoring_settings": scoring_settings,
         "players_meta": players_meta, "team_qb_index": team_qb_index, "matchups": matchups,
         "stats_map": stats_map, "team_game_schedule": team_game_schedule,
+        "game_info": game_info, "idle": False,
     }
+
+
+def summarize_games(games: list[dict] | None, now_ms: int | None = None) -> dict:
+    """{"any_live": bool, "next_kickoff_ms": int|None} for game-day mode:
+    whether any game is in progress, and the earliest kickoff still ahead."""
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    any_live = False
+    next_kickoff = None
+    for g in games or []:
+        if not g:
+            continue
+        status = normalize_game_status(g)
+        if status == "in_progress":
+            any_live = True
+        elif status == "pre_game":
+            try:
+                start = int(g.get("start_time"))
+            except (TypeError, ValueError):
+                continue
+            if start > now_ms and (next_kickoff is None or start < next_kickoff):
+                next_kickoff = start
+    return {"any_live": any_live, "next_kickoff_ms": next_kickoff}
 
 
 def commit_captures_now() -> None:
@@ -564,12 +607,15 @@ def commit_captures_now() -> None:
         print(f"[warn] commit of live_qb_captures.json failed ({e}); the workflow's final step will retry", file=sys.stderr)
 
 
-def run_poll() -> list[str]:
-    """One check. Logs any new captures (starter or chain) and returns the
-    watch descriptions still open after it (empty = nothing to watch)."""
+def run_poll() -> tuple[list[str], dict | None]:
+    """One check. Logs any new captures (starter or chain) and returns
+    (watch descriptions still open, game_info) -- game_info is None when
+    the check couldn't run."""
     data = fetch_poll_data()
     if data is None:
-        return []
+        return [], None
+    if data.get("idle"):
+        return [], data["game_info"]
     season, week = data["season"], data["week"]
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -603,23 +649,62 @@ def run_poll() -> list[str]:
         commit_captures_now()
     else:
         print(f"[info] poll complete -- no new live QB-injury corroborations this run (week {week}, {len(log['captures'])} existing capture(s))")
-    return starter_targets + chain_targets
+    return starter_targets + chain_targets, data["game_info"]
+
+
+def next_sleep_seconds(targets: list[str], game_info: dict | None, now_ms: int | None = None) -> int | None:
+    """How long to wait before the next check, or None to end the run:
+    5 minutes while watching, 15 while any game is live, until just before
+    the next kickoff when one is coming up within the lookahead, else stop."""
+    if targets:
+        return WATCH_INTERVAL_SECONDS
+    if not game_info:
+        return None
+    if game_info.get("any_live"):
+        return GAME_DAY_INTERVAL_SECONDS
+    kickoff = game_info.get("next_kickoff_ms")
+    if kickoff is None:
+        return None
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    until = (kickoff - now_ms) / 1000
+    if until > KICKOFF_LOOKAHEAD_HOURS * 3600:
+        return None
+    # Wake right at kickoff (a minute after), checking at least every 15
+    # minutes so a schedule change is picked up.
+    return int(max(60, min(until + 60, GAME_DAY_INTERVAL_SECONDS)))
+
+
+def start_successor_run() -> None:
+    """Hand off to a fresh run before this job hits GitHub's 6-hour limit.
+    Only in the workflow (CAPTURE_CHAIN=1); never fatal."""
+    if os.environ.get("CAPTURE_CHAIN") != "1":
+        return
+    ref = os.environ.get("GITHUB_REF_NAME") or "main"
+    try:
+        subprocess.run(["gh", "workflow", "run", "live_qb_capture.yml", "--ref", ref], check=True)
+        print("[game-day] started a successor run to keep covering today's games")
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't start a successor run ({e}); the next scheduled trigger will pick it up", file=sys.stderr)
 
 
 def main() -> None:
     started = time.monotonic()
     while True:
-        targets = run_poll()
-        if not targets:
-            return
+        targets, game_info = run_poll()
         for t in targets:
             print(f"[watch] {t}")
-        elapsed_min = (time.monotonic() - started) / 60
-        if elapsed_min + WATCH_INTERVAL_SECONDS / 60 > MAX_WATCH_MINUTES:
-            print(f"[watch] reached the {MAX_WATCH_MINUTES}-minute cap for one run; the next scheduled check picks it back up")
+        wait = next_sleep_seconds(targets, game_info)
+        if wait is None:
+            print("[game-day] no game live or coming up soon; done")
             return
-        print(f"[watch] checking again in {WATCH_INTERVAL_SECONDS // 60} minutes")
-        time.sleep(WATCH_INTERVAL_SECONDS)
+        elapsed_min = (time.monotonic() - started) / 60
+        if elapsed_min + wait / 60 > MAX_RUN_MINUTES:
+            print(f"[game-day] reached the {MAX_RUN_MINUTES}-minute cap for one run")
+            start_successor_run()
+            return
+        print(f"[game-day] checking again in {round(wait / 60, 1)} minutes")
+        time.sleep(wait)
 
 
 if __name__ == "__main__":
