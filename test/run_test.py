@@ -31,6 +31,7 @@ Scenarios (1a-1f share one live/pregame Week-2 fixture set and its variants,
 """
 import datetime
 import json
+import re
 import os
 
 from playwright.sync_api import sync_playwright
@@ -668,7 +669,7 @@ def scenario_live_blending(browser):
 
         # Cell text is e.g. "35.0LIVE" when the LIVE badge is present --
         # strip the badge suffix before parsing.
-        pts_by_manager = {r[1]: float(r[4].replace("LIVE", "")) for r in rows}
+        pts_by_manager = {r[1]: float(re.match(r"-?[\d.]+", r[4].strip()).group()) for r in rows}
         for manager, expected_pts in expected_points_this_week[mode].items():
             if expected_pts is None:
                 continue
