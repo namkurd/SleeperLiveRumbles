@@ -390,7 +390,7 @@
      as wide, blowing right through the container's shrink-to-fit sizing. */
   .pts-tooltip table { border-collapse: collapse; width: auto; min-width: 0; }
   .pts-tooltip th, .pts-tooltip td {
-    padding: 1px 10px 1px 10px;
+    padding: 1px 6px;
     text-align: center;
     white-space: nowrap;
   }
@@ -412,8 +412,31 @@
      per distinct kickoff time this week, see buildTimeSlotColors) on the
      cell itself whenever one is available, which wins over this. */
   /* Live game Time (minutes left) / Score columns. */
-  .pts-tooltip td.pts-tooltip-game, .pts-tooltip th.pts-tooltip-game { text-align: right; font-variant-numeric: tabular-nums; }
-  .pts-tooltip td.pts-tooltip-game { font-size: 0.72rem; }
+  .pts-tooltip td.pts-tooltip-game, .pts-tooltip th.pts-tooltip-game { text-align: right; font-variant-numeric: tabular-nums; padding-left: 4px; padding-right: 2px; }
+  .pts-tooltip td.pts-tooltip-game { font-size: 0.7rem; }
+  /* Keep the standings table's sticky-column styling (background, divider
+     shadow) off this table's header cells. */
+  #pts-tooltip th, #pts-tooltip td { position: static; box-shadow: none; background: transparent; }
+  /* Phones: tighter cells and short names ("C. McCaffrey") so the whole
+     tooltip, live Time/Score columns included, fits a portrait screen.
+     The full name stays in the text; only its display is swapped. */
+  @media (max-width: 640px) {
+    .pts-tooltip { padding: 6px 7px; font-size: 0.72rem; }
+    /* #id selectors so the standings table's fixed phone column widths
+       ("table thead th:nth-child(n)") don't leak into this table's header
+       and stretch it. */
+    #pts-tooltip th, #pts-tooltip td {
+      width: auto; min-width: 0; max-width: none; overflow: visible;
+      position: static; padding: 1px 3px;
+    }
+    #pts-tooltip th:last-child, #pts-tooltip td:last-child { padding-right: 0; }
+    #pts-tooltip td.pts-tooltip-time, #pts-tooltip th.pts-tooltip-time { padding-left: 0; }
+    #pts-tooltip th.pts-tooltip-actual-total { padding-left: 0; }
+    #pts-tooltip td.pts-tooltip-game, #pts-tooltip th.pts-tooltip-game { padding-left: 3px; }
+    .pts-tooltip .pos-badge { margin-right: 4px; min-width: 2.3em; font-size: 0.62rem; }
+    .pts-tooltip .pts-name { font-size: 0; }
+    .pts-tooltip .pts-name::after { content: attr(data-short); font-size: 0.72rem; }
+  }
   .pts-tooltip td.pts-tooltip-time, .pts-tooltip th.pts-tooltip-time {
     text-align: right;
     padding-left: 0;
@@ -1738,6 +1761,7 @@
     return {
       player_id: pid,
       name: meta ? playerName(meta) : pid,
+      short_name: meta ? shortPlayerName(meta) : null,
       position: meta ? (meta.position || null) : null,
       actual: round2(actualPts),
       proj: round2(projPts),
@@ -2085,6 +2109,21 @@
     if (meta.full_name) return meta.full_name;
     var name = ((meta.first_name || "") + " " + (meta.last_name || "")).trim();
     return name || "Unknown";
+  }
+
+  // Compact name for the points tooltip on phones: "C. McCaffrey", or just
+  // the nickname for a team defense ("Steelers").
+  function shortPlayerName(meta) {
+    if (!meta) return null;
+    var first = meta.first_name || "", last = meta.last_name || "";
+    if (meta.position === "DEF") return last || null;
+    if ((!first || !last) && meta.full_name) {
+      var parts = String(meta.full_name).split(" ");
+      first = parts.shift() || "";
+      last = parts.join(" ");
+    }
+    if (!first || !last) return null;
+    return first.charAt(0) + ". " + last;
   }
 
   function buildTeamQbIndex(playersMeta) {
@@ -3079,6 +3118,7 @@
       var startLabel = showStartTime ? formatGameStartLabel(p.game_start_ms) : "";
       return {
         name: p.name,
+        shortName: p.short_name || null,
         position: p.position || null,
         startLabel: startLabel,
         // Per-timeslot color (see buildTimeSlotColors) -- null when there's
@@ -4103,7 +4143,10 @@
         : "";
       return '<tr class="' + rowClass + '">' +
         timeCellHtml +
-        '<td class="pts-tooltip-name">' + posBadgeHtml(r.position) + escapeHtml(r.name) + "</td>" +
+        '<td class="pts-tooltip-name">' + posBadgeHtml(r.position) +
+          (r.shortName && r.shortName !== r.name
+            ? '<span class="pts-name" data-short="' + escapeHtml(r.shortName) + '">' + escapeHtml(r.name) + "</span>"
+            : escapeHtml(r.name)) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         projCellHtml +
         gameCellsHtml +
