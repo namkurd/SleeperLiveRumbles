@@ -314,7 +314,7 @@
      (a real, common case for "Points This Week" specifically, since
      this_week_points_live can differ row-to-row -- see
      hasIncompletePlayer's comment). */
-  td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; position: relative; padding-right: 33px; }
+  td.thisweek-pts { color: var(--accent-2); font-variant-numeric: tabular-nums; position: relative; padding-right: 45px; }
   /* Only added to a "Pts This Week" cell that actually has a per-player
      breakdown to show (see render()/thisWeekTooltip) -- the dotted
      underline is the only visual hint that it's interactive, since there's
@@ -606,7 +606,7 @@
        itself (~27px incl. border) can't shrink below its own content, so
        the reserved padding-right (inherited from td.thisweek-pts above)
        sets a floor on how far this column can be tightened. */
-    table thead th:nth-child(5), table td.thisweek-pts { width: 76px; }
+    table thead th:nth-child(5), table td.thisweek-pts { width: 86px; }
     /* The Manager column's sticky offset is normally a fixed 64px (see
        "thead th:nth-child(2), td.manager" above), matching the Rank
        column's fixed width on desktop -- since Rank shrinks to 44px here,
@@ -682,12 +682,25 @@
   /* Grayed LIVE pill: this team still has players to play, but none is in
      a game right now. */
   .badge-live.badge-live-idle { color: var(--text-dim); border-color: var(--text-dim); opacity: 0.55; }
-  td.thisweek-pts .badge-live {
+  /* Pill + "×N" count, pinned into the cell's reserved right strip. The
+     pill sits at a fixed spot so pills line up whether or not a count
+     shows. */
+  td.thisweek-pts .live-wrap {
     position: absolute;
-    right: 3px;
+    left: calc(100% - 42px);
     top: 50%;
     transform: translateY(-50%);
-    margin-left: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+  }
+  td.thisweek-pts .badge-live { margin-left: 0; }
+  .live-count {
+    font-size: 0.56rem;
+    font-weight: 700;
+    color: var(--live);
+    font-variant-numeric: tabular-nums;
   }
   footer {
     margin-top: 14px;
@@ -3368,9 +3381,10 @@
       // still to play but none is in a game, the LIVE pill is grayed out
       // (idle); with nobody left to play it's hidden entirely (above).
       // Missing breakdown fails open to an active pill, like above.
-      var hasPlayingPlayer = playersBreakdown
-        ? playersBreakdown.some(function (p) { return p.game_status === "in_progress"; })
-        : true;
+      var playingCount = playersBreakdown
+        ? playersBreakdown.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
+        : null;
+      var hasPlayingPlayer = playingCount == null ? true : playingCount > 0;
 
       // This roster's current H2H winning/losing streak through the last
       // completed week (see computeH2hStreak above) for the manager-name
@@ -3402,6 +3416,9 @@
         this_week_points_live: !!liveInfo && hasIncompletePlayer && kickoffStarted,
         // LIVE pill shown but grayed: players left to play, none playing now.
         this_week_points_idle: !hasPlayingPlayer,
+        // How many of this team's players are in a game right now (shown
+        // as a small "×2" beside the green LIVE pill); null if unknown.
+        this_week_points_playing: playingCount,
         // true/false/null (tie, or no live matchup) -- whether THIS team is
         // currently ahead in its live H2H matchup. Sourced from
         // rumblesSourceInfo (see above), so pre-kickoff this is always
@@ -3691,6 +3708,19 @@
   // went down. Values are remembered per view (tab + selected week + the
   // points column's label, so the Pts Last Week -> Pts This Week switch at
   // kickoff never flashes). Skipped under prefers-reduced-motion via CSS.
+  // Pts This Week LIVE pill: grayed when nobody is playing right now,
+  // otherwise green with a small "×N" for how many players are in a game.
+  function liveBadgeHtml(r) {
+    if (r.this_week_points_idle) {
+      return '<span class="live-wrap"><span class="badge-live badge-live-idle" title="No players in a game right now">LIVE</span></span>';
+    }
+    var n = r.this_week_points_playing;
+    var countHtml = n > 0
+      ? '<span class="live-count" title="' + n + (n === 1 ? " player" : " players") + ' in a game right now">&times;' + n + "</span>"
+      : "";
+    return '<span class="live-wrap"><span class="badge-live">LIVE</span>' + countHtml + "</span>";
+  }
+
   function flashChangedCells(flash) {
     var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek) +
       "|" + COLUMNS.this_week_points.label;
@@ -3845,7 +3875,7 @@
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
-          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? '<span class="badge-live' + (r.this_week_points_idle ? " badge-live-idle" : "") + '"' + (r.this_week_points_idle ? ' title="No players in a game right now"' : "") + ">LIVE</span>" : "") + ptsAsteriskHtml + "</td>" +
+          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
