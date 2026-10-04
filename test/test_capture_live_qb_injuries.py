@@ -325,7 +325,9 @@ def test_chain_watch_quiet_when_no_new_backup():
 
 def test_main_loop_rechecks_every_5_minutes_until_resolved():
     calls, sleeps = [], []
-    results = [["watching"], ["watching"], []]
+    LIVE_INFO = {"any_live": True, "next_kickoff_ms": None}
+    DONE_INFO = {"any_live": False, "next_kickoff_ms": None}
+    results = [(["watching"], LIVE_INFO), (["watching"], LIVE_INFO), ([], DONE_INFO)]
     orig_poll, orig_sleep = capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep
     capture_live_qb_injuries.run_poll = lambda: (calls.append(1), results[len(calls) - 1])[1]
     capture_live_qb_injuries.time.sleep = lambda sec: sleeps.append(sec)
@@ -340,7 +342,7 @@ def test_main_loop_rechecks_every_5_minutes_until_resolved():
 def test_main_loop_single_check_when_nothing_to_watch():
     calls, sleeps = [], []
     orig_poll, orig_sleep = capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep
-    capture_live_qb_injuries.run_poll = lambda: (calls.append(1), [])[1]
+    capture_live_qb_injuries.run_poll = lambda: (calls.append(1), ([], {"any_live": False, "next_kickoff_ms": None}))[1]
     capture_live_qb_injuries.time.sleep = lambda sec: sleeps.append(sec)
     try:
         capture_live_qb_injuries.main()
@@ -348,6 +350,61 @@ def test_main_loop_single_check_when_nothing_to_watch():
         capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep = orig_poll, orig_sleep
     assert calls == [1] and sleeps == []
     print("PASS: with nothing to watch, a run is a single check (no extra Actions minutes)")
+
+
+def test_game_day_keeps_checking_while_games_are_live():
+    nsl = capture_live_qb_injuries.next_sleep_seconds
+    assert nsl([], {"any_live": True, "next_kickoff_ms": None}) == 15 * 60
+    assert nsl(["w"], {"any_live": True, "next_kickoff_ms": None}) == 5 * 60
+    assert nsl([], None) is None
+    print("PASS: game-day mode checks every 15 minutes while any game is live (5 while watching)")
+
+
+def test_game_day_waits_for_upcoming_kickoff_only_within_lookahead():
+    nsl = capture_live_qb_injuries.next_sleep_seconds
+    now = 1_000_000_000
+    # 9:30am international game, run started at 6:00am: sleep in 15-minute steps.
+    assert nsl([], {"any_live": False, "next_kickoff_ms": now + int(3.5 * 3600e3)}, now) == 15 * 60
+    # Kickoff in 4 minutes: wake a minute after kickoff.
+    assert nsl([], {"any_live": False, "next_kickoff_ms": now + 4 * 60_000}, now) == 5 * 60
+    # Next game days away (Sunday night -> Monday night): end the run.
+    assert nsl([], {"any_live": False, "next_kickoff_ms": now + 20 * 3600_000}, now) is None
+    assert nsl([], {"any_live": False, "next_kickoff_ms": None}, now) is None
+    print("PASS: between games, the run waits for a kickoff within 6 hours and otherwise exits")
+
+
+def test_summarize_games():
+    now = 1_000_000_000
+    games = [
+        {"status": "complete", "start_time": now - 4 * 3600_000, "metadata": {"is_over": True}},
+        {"status": "pre_game", "start_time": now + 2 * 3600_000, "metadata": {}},
+        {"status": "pre_game", "start_time": now + 3600_000, "metadata": {}},
+    ]
+    assert capture_live_qb_injuries.summarize_games(games, now) == {"any_live": False, "next_kickoff_ms": now + 3600_000}
+    games.append({"status": "in_game", "start_time": now - 3600_000, "metadata": {}})
+    assert capture_live_qb_injuries.summarize_games(games, now)["any_live"] is True
+    print("PASS: summarize_games finds live games and the next kickoff")
+
+
+def test_run_cap_starts_successor():
+    calls, sleeps, chained = [], [], []
+    info = {"any_live": True, "next_kickoff_ms": None}
+    orig = (capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep,
+            capture_live_qb_injuries.start_successor_run, capture_live_qb_injuries.time.monotonic)
+    clock = [0.0]
+    def fake_sleep(sec):
+        sleeps.append(sec); clock[0] += sec
+    capture_live_qb_injuries.run_poll = lambda: (calls.append(1), ([], info))[1]
+    capture_live_qb_injuries.time.sleep = fake_sleep
+    capture_live_qb_injuries.time.monotonic = lambda: clock[0]
+    capture_live_qb_injuries.start_successor_run = lambda: chained.append(1)
+    try:
+        capture_live_qb_injuries.main()
+    finally:
+        (capture_live_qb_injuries.run_poll, capture_live_qb_injuries.time.sleep,
+         capture_live_qb_injuries.start_successor_run, capture_live_qb_injuries.time.monotonic) = orig
+    assert chained == [1] and sum(sleeps) <= capture_live_qb_injuries.MAX_RUN_MINUTES * 60, (len(calls), sum(sleeps))
+    print("PASS: a run that reaches the time cap mid-game hands off to a successor run")
 
 
 # ---- Watch pausing (starter back in the game) ------------------------------
@@ -467,6 +524,10 @@ def main():
     test_chain_watch_quiet_when_no_new_backup()
     test_main_loop_rechecks_every_5_minutes_until_resolved()
     test_main_loop_single_check_when_nothing_to_watch()
+    test_game_day_keeps_checking_while_games_are_live()
+    test_game_day_waits_for_upcoming_kickoff_only_within_lookahead()
+    test_summarize_games()
+    test_run_cap_starts_successor()
     test_starter_back_in_game_pauses_watch()
     test_backup_accumulating_again_resumes_watch()
     test_attempts_count_even_without_points()
