@@ -1,7 +1,7 @@
 name: Capture live QB injuries
 
-# Polls every 15 minutes, but ONLY during actual NFL game windows (Thu/
-# Sat*/Sun/Mon), for a genuinely-LIVE corroboration of a QB-injury-backup
+# Checks throughout every NFL game (see WHEN IT RUNS below) for a
+# genuinely-LIVE corroboration of a QB-injury-backup
 # situation: a backup QB recording real action while Sleeper's
 # injury_status for the guy in front of him reads Out/IR/PUP AND that
 # game hasn't gone final yet. See capture_live_qb_injuries.py's own
@@ -10,53 +10,34 @@ name: Capture live QB injuries
 # timestamp, so without this, there was no way to tell "ruled out live,
 # mid-game" apart from "flipped to Out sometime after the game ended").
 #
-# *Saturday games only happen in the back half of the season (usually
-# Week 15+), but polling on an empty/no-matchups Saturday is a harmless,
-# cheap no-op (capture_live_qb_injuries.py just logs "nothing to do" and
-# exits) -- simpler and safer than trying to conditionally add/remove a
-# Saturday schedule mid-season.
+# WHEN IT RUNS: one run covers a whole game day by itself ("game-day
+# mode" in capture_live_qb_injuries.py): it checks every 15 minutes while
+# any game is live (every 5 while watching a QB), sleeps through gaps until
+# the next kickoff, and exits when nothing is live or coming up within 6
+# hours. Near GitHub's 6-hour job limit it starts its own successor.
 #
-# GitHub Actions cron is UTC-only and does NOT observe daylight saving,
-# but NFL kickoff times are fixed in US Eastern local time (ET), which
-# shifts between UTC-4 (EDT, roughly mid-March-early November) and UTC-5
-# (EST, the rest of the season -- so effectively all of it after the
-# first ~9 weeks). Rather than maintaining two separate cron schedules
-# that would need manually swapping at the DST changeover, every window
-# below is padded generously enough in UTC to cover BOTH offsets at
-# once -- a little wasted polling right at the edges of the window in
-# exchange for never silently missing real game time. Each game night's
-# window is split into two cron lines because it crosses UTC midnight
-# (a single cron entry can't span two different day-of-week values).
+# The schedule below only has to get ONE run started before kickoff.
+# GitHub's scheduler routinely fires hours late or skips runs (Week 4
+# 2026: no run at all during the 9:30am ET Madrid game), so it fires every
+# half hour, every day, from 8am-midnight ET (12:00-04:59 UTC covers EDT and
+# EST), at :07/:37 to avoid the top-of-hour rush. That also covers
+# international morning games and Thursday/Saturday/holiday games. While a
+# run is active, extra triggers wait behind it (one at a time) and then
+# exit after a single tiny scoreboard check when nothing is live. Public
+# repo, so Actions minutes are free.
 on:
   schedule:
-    # Thursday Night Football: ~7:00pm-11:59pm ET kickoff-to-typical-end,
-    # padded for both EDT (23:00-03:59 UTC) and EST (00:00-04:59 UTC).
-    - cron: "*/15 23 * * 4"   # Thu 23:00-23:59 UTC
-    - cron: "*/15 0-4 * * 5"  # Fri 00:00-04:59 UTC (Thursday night's tail)
-
-    # Saturday games (December/January doubleheaders+), same ~1:00pm-
-    # 11:59pm ET span as Sunday below.
-    - cron: "*/15 16-23 * * 6" # Sat 16:00-23:59 UTC
-    - cron: "*/15 0-4 * * 0"   # Sun 00:00-04:59 UTC (Saturday night's tail)
-
-    # Sunday: early/afternoon/SNF games, ~1:00pm-11:59pm ET.
-    - cron: "*/15 16-23 * * 0" # Sun 16:00-23:59 UTC
-    - cron: "*/15 0-4 * * 1"   # Mon 00:00-04:59 UTC (Sunday night's tail)
-
-    # Monday Night Football: ~7:00pm-11:59pm ET.
-    - cron: "*/15 23 * * 1"   # Mon 23:00-23:59 UTC
-    - cron: "*/15 0-4 * * 2"  # Tue 00:00-04:59 UTC (Monday night's tail)
-  workflow_dispatch: {}  # lets you trigger a poll manually from the Actions tab, e.g. to backfill/test
+    - cron: "7,37 12-23 * * *"
+    - cron: "7,37 0-4 * * *"
+  workflow_dispatch: {}  # manual runs, and how a long run starts its successor
 
 permissions:
   contents: write
+  actions: write  # start a successor run (game-day mode)
 
-# Watch mode (see capture_live_qb_injuries.py): when a check sees a backup
-# QB playing while the starter isn't listed Out yet (or a second backup
-# enters after a capture), that same run keeps checking every 5 minutes
-# until the status flips to Out or the game ends. Only one run at a time,
-# so a long watch just holds the next scheduled check in the queue instead
-# of two runs racing to write live_qb_captures.json.
+# Only one run at a time, so a long game-day run just holds the next
+# scheduled trigger in the queue instead of two runs racing to write
+# live_qb_captures.json.
 concurrency:
   group: live-qb-capture
   cancel-in-progress: false
@@ -64,8 +45,9 @@ concurrency:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    # Script caps a single watch at 150 minutes; this is the hard backstop.
-    timeout-minutes: 170
+    # The script hands off to a successor at 330 minutes; GitHub's own
+    # limit is 360.
+    timeout-minutes: 350
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -100,6 +82,9 @@ jobs:
           # Commit each capture as soon as it's made during a watch, so it
           # shows up on the page without waiting for the run to finish.
           CAPTURE_COMMIT_EACH_POLL: "1"
+          # Near the time limit, start a successor run (gh workflow run).
+          CAPTURE_CHAIN: "1"
+          GH_TOKEN: ${{ github.token }}
         run: python capture_live_qb_injuries.py
 
       - name: Save watch state
