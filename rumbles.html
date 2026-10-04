@@ -411,6 +411,9 @@
      timeslot color -- renderPtsTooltipContent sets an inline color (one
      per distinct kickoff time this week, see buildTimeSlotColors) on the
      cell itself whenever one is available, which wins over this. */
+  /* Live game Time (minutes left) / Score columns. */
+  .pts-tooltip td.pts-tooltip-game, .pts-tooltip th.pts-tooltip-game { text-align: right; font-variant-numeric: tabular-nums; }
+  .pts-tooltip td.pts-tooltip-game { font-size: 0.72rem; }
   .pts-tooltip td.pts-tooltip-time, .pts-tooltip th.pts-tooltip-time {
     text-align: right;
     padding-left: 0;
@@ -696,6 +699,7 @@
     line-height: 1;
   }
   td.thisweek-pts .badge-live { margin-left: 0; }
+  .live-count.live-count-idle { color: var(--text-dim); opacity: 0.7; }
   .live-count {
     font-size: 0.56rem;
     font-weight: 700;
@@ -1739,7 +1743,10 @@
       proj: round2(projPts),
       played: played,
       game_status: (game && game.status) || "unknown",
-      game_start_ms: (game && game.startTimeMs) || null
+      game_start_ms: (game && game.startTimeMs) || null,
+      // Live games only: minutes left and "team-opponent" score.
+      game_minutes_left: game && game.status === "in_progress" && game.minutesLeft != null ? game.minutesLeft : null,
+      game_score: (game && game.status === "in_progress" && game.score) || null
     };
   }
 
@@ -1896,6 +1903,22 @@
     return frac;
   }
 
+  // Game minutes left, rounded: the rest of regulation (halftime reads 30),
+  // or what's left of overtime. null when the clock can't be read.
+  function gameMinutesLeft(meta) {
+    var remStr = meta && meta.time_remaining;
+    var clock = null;
+    if (typeof remStr === "string" && remStr.indexOf(":") !== -1) {
+      var parts = remStr.split(":");
+      var mm = parseInt(parts[0], 10), ss = parseInt(parts[1], 10);
+      if (!isNaN(mm) && !isNaN(ss)) clock = mm + ss / 60;
+    }
+    var qNum = parseInt(meta && meta.quarter_num, 10);
+    if (meta && meta.is_overtime === true || qNum >= 5) return clock == null ? null : Math.round(clock);
+    if (!qNum || qNum < 1) return clock == null ? null : 60;
+    return Math.round(remainingFraction(meta) * 60);
+  }
+
   // Per-team {status, startTimeMs, remainingFraction} lookup built from
   // Sleeper's live-scoreboard feed. startTimeMs prefers the top-level
   // "start_time" epoch-ms field (confirmed live, Sep 2026); metadata.date_time
@@ -1919,11 +1942,20 @@
         if (!isNaN(parsed)) startTimeMs = parsed;
       }
       var remFrac = status === "complete" ? 0 : (status === "in_progress" ? remainingFraction(meta) : 1);
-      var entry = { status: status, startTimeMs: startTimeMs, remainingFraction: remFrac };
       var away = meta.away_team || g.away_team;
       var home = meta.home_team || g.home_team;
-      if (away) map[away] = entry;
-      if (home) map[home] = entry;
+      var live = status === "in_progress";
+      var homeScore = parseInt(meta.home_score, 10);
+      var awayScore = parseInt(meta.away_score, 10);
+      var base = { status: status, startTimeMs: startTimeMs, remainingFraction: remFrac,
+        minutesLeft: live ? gameMinutesLeft(meta) : null };
+      // Each team's own copy carries its score first ("27-20" for the
+      // team that has 27), for the live columns in the points tooltip.
+      var scoreFor = function (mine, theirs) {
+        return live && !isNaN(mine) && !isNaN(theirs) ? mine + "-" + theirs : null;
+      };
+      if (away) map[away] = Object.assign({}, base, { score: scoreFor(awayScore, homeScore) });
+      if (home) map[home] = Object.assign({}, base, { score: scoreFor(homeScore, awayScore) });
     });
     return map;
   }
@@ -3069,6 +3101,8 @@
         // "not computed here."
         diff: showDiffColumn ? round2(num(p.actual) - num(p.proj)) : null,
         live: p.game_status === "in_progress",
+        minutesLeft: p.game_status === "in_progress" ? p.game_minutes_left : null,
+        score: p.game_status === "in_progress" ? p.game_score : null,
         // See appendQbReplacementRows/.pts-tooltip-replacement(-confirmed)
         // -- a replacement row's own tier color always wins over the plain
         // "live" green when both would apply (a replacement row's own
@@ -3098,7 +3132,9 @@
       // The live tooltip always shows its Proj column (unaffected by any
       // of this); the last-week tooltip shows its Diff column only when
       // real pregame projections were actually available to compute it.
-      showProjColumn: !isLastWeek || showDiffColumn
+      showProjColumn: !isLastWeek || showDiffColumn,
+      // Time / Score columns, only while one of these players is in a game.
+      showGameColumns: !isLastWeek && rows.some(function (r) { return r.live; })
     };
   }
 
@@ -3385,6 +3421,10 @@
         ? playersBreakdown.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
         : null;
       var hasPlayingPlayer = playingCount == null ? true : playingCount > 0;
+      // Players still to play (game not finished), for the grayed pill.
+      var leftToPlayCount = playersBreakdown
+        ? playersBreakdown.filter(function (p) { return !p.replacement && p.game_status !== "complete"; }).length
+        : null;
 
       // This roster's current H2H winning/losing streak through the last
       // completed week (see computeH2hStreak above) for the manager-name
@@ -3419,6 +3459,7 @@
         // How many of this team's players are in a game right now (shown
         // as a small "×2" beside the green LIVE pill); null if unknown.
         this_week_points_playing: playingCount,
+        this_week_points_left: leftToPlayCount,
         // true/false/null (tie, or no live matchup) -- whether THIS team is
         // currently ahead in its live H2H matchup. Sourced from
         // rumblesSourceInfo (see above), so pre-kickoff this is always
@@ -3710,9 +3751,14 @@
   // kickoff never flashes). Skipped under prefers-reduced-motion via CSS.
   // Pts This Week LIVE pill: grayed when nobody is playing right now,
   // otherwise green with a small "×N" for how many players are in a game.
+  // The grayed pill's own gray "×N" is how many are still left to play.
   function liveBadgeHtml(r) {
     if (r.this_week_points_idle) {
-      return '<span class="live-wrap"><span class="badge-live badge-live-idle" title="No players in a game right now">LIVE</span></span>';
+      var left = r.this_week_points_left;
+      var leftHtml = left > 0
+        ? '<span class="live-count live-count-idle" title="' + left + (left === 1 ? " player" : " players") + ' left to play">&times;' + left + "</span>"
+        : "";
+      return '<span class="live-wrap"><span class="badge-live badge-live-idle" title="No players in a game right now">LIVE</span>' + leftHtml + "</span>";
     }
     var n = r.this_week_points_playing;
     var countHtml = n > 0
@@ -4051,11 +4097,16 @@
           projCellHtml = '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>";
         }
       }
+      var gameCellsHtml = tooltip.showGameColumns
+        ? '<td class="pts-tooltip-game">' + (r.live && r.minutesLeft != null ? r.minutesLeft : "") + "</td>" +
+          '<td class="pts-tooltip-game">' + (r.live && r.score ? escapeHtml(r.score) : "") + "</td>"
+        : "";
       return '<tr class="' + rowClass + '">' +
         timeCellHtml +
         '<td class="pts-tooltip-name">' + posBadgeHtml(r.position) + escapeHtml(r.name) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         projCellHtml +
+        gameCellsHtml +
         "</tr>";
     }).join("");
     var actualTotalHtml = hasActualTotal
@@ -4064,6 +4115,7 @@
     var projHeaderHtml = showProjColumn ? ("<th>" + (isLastWeek ? "Diff" : "Proj") + "</th>") : "";
     els.ptsTooltip.innerHTML =
       "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th>' + projHeaderHtml +
+      (tooltip.showGameColumns ? '<th class="pts-tooltip-game">Time</th><th class="pts-tooltip-game">Score</th>' : "") +
       "</tr></thead><tbody>" +
       bodyHtml +
       "</tbody></table>";
