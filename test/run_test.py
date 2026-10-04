@@ -297,7 +297,7 @@ def get_tooltip_row_computed_colors(page, manager):
         rows = page.eval_on_selector_all(
             "#pts-tooltip tbody tr",
             """trs => trs.map(tr => {
-                var tds = tr.querySelectorAll('td');
+                var tds = tr.querySelectorAll('td:not(.pts-tooltip-game)');
                 var hasTime = tds.length === 4;
                 var i = hasTime ? 1 : 0;
                 var timeCell = hasTime ? tds[0] : null;
@@ -360,7 +360,7 @@ def get_thisweek_pts_tooltip(page, manager):
         rows = page.eval_on_selector_all(
             "#pts-tooltip tbody tr",
             """trs => trs.map(tr => {
-                var tds = tr.querySelectorAll('td');
+                var tds = tr.querySelectorAll('td:not(.pts-tooltip-game)');
                 var hasTime = tds.length === 4;
                 var i = hasTime ? 1 : 0;
                 return {
@@ -2065,7 +2065,7 @@ def scenario_pregame_week(browser):
             """(name) => {
                 var trs = document.querySelectorAll('#pts-tooltip tbody tr');
                 for (var tr of trs) {
-                    var tds = tr.querySelectorAll('td');
+                    var tds = tr.querySelectorAll('td:not(.pts-tooltip-game)');
                     if ((function (td) { var c = td.cloneNode(true); c.querySelectorAll('.pos-badge').forEach(function (b) { b.remove(); }); return c.textContent.trim(); })(tds[0]) === name) {
                         return getComputedStyle(tds[tds.length - 1]).color;
                     }
