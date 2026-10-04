@@ -1,3 +1,31 @@
 {
-  "captures": []
+  "captures": [
+    {
+      "season": "2026",
+      "week": 4,
+      "roster_id": 10,
+      "manager": "Ryan",
+      "injured_qb": {
+        "player_id": "2307",
+        "name": "Marcus Mariota",
+        "points": 5.49
+      },
+      "backup_qbs": [
+        {
+          "player_id": "13557",
+          "name": "Athan Kaliakmanis",
+          "points": 11.79
+        }
+      ],
+      "backup_points_total": 11.79,
+      "backups_seen": [
+        "13557"
+      ],
+      "team": "WAS",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "manual",
+      "note": "Added by hand: the 9:30am ET Madrid game had no capture run (GitHub skipped the schedule). The page showed him Out while the game was live."
+    }
+  ]
 }
