@@ -4251,7 +4251,7 @@
     var lines = [escapeHtml(injuredName) + " was injured in-game and ruled out " + whenPhrase + "."];
     // When the durable capture log has it, say when his status change to
     // Out was logged during the game.
-    if (adj.captured_at) lines.push("Status change logged " + escapeHtml(formatCapturedAt(adj.captured_at)) + ".");
+    if (adj.captured_at && adj.captured_at !== "manual") lines.push("Status change logged " + escapeHtml(formatCapturedAt(adj.captured_at)) + ".");
 
     // Normally at most one QB is actually in the game for a team at a
     // time -- so among the backups who recorded action, the ones who
@@ -4375,9 +4375,6 @@
   // all) -- see renderQbAdjustments, which is the only place
   // state.qbAdjCapturedTooltipData gets populated.
   function formatCapturedAt(iso) {
-    // A capture added by hand (the capture workflow missed the game, but
-    // the Out was seen while it was live).
-    if (iso === "manual") return "manually (seen during the game)";
     var d = new Date(iso);
     if (isNaN(d.getTime())) return "at an unknown time";
     try {
@@ -4791,7 +4788,9 @@
         // row) showing WHEN that live corroboration was captured -- see
         // buildQbAdjCapturedTooltipHtml/showQbAdjCapturedTooltip below.
         var injuredNameHtml = escapeHtml(r.injured_qb.name);
-        if (r.confidence === "likely" && r.injured_qb && r.injured_qb.player_id) {
+        // A capture added by hand (captured_at "manual") has no logged
+        // time, so it gets no tooltip.
+        if (r.confidence === "likely" && r.injured_qb && r.injured_qb.player_id && r.captured_at !== "manual") {
           var capturedKey = r.week + ":" + r.roster_id + ":" + r.injured_qb.player_id;
           state.qbAdjCapturedTooltipData[capturedKey] = buildQbAdjCapturedTooltipHtml(r);
           injuredNameHtml = '<span class="qb-adj-captured-flag" data-qb-adj-key="' + capturedKey + '">' + injuredNameHtml + "</span>";
