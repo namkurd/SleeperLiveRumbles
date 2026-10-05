@@ -918,13 +918,14 @@
      sets custom_points and the entry moves to "confirmed" -- the credit
      itself stays (see applyQbAdjustmentsToScores' comment on why), just
      this speculative-adjustment cue goes away. */
+  /* Yellow (--replacement), the "likely" tier's color everywhere else. */
   .qb-adj-asterisk {
-    color: var(--accent-2);
+    color: var(--replacement);
     font-weight: 700;
     cursor: help;
     margin-left: 2px;
     text-decoration: underline dotted;
-    text-decoration-color: var(--accent-2);
+    text-decoration-color: var(--replacement);
     text-underline-offset: 2px;
   }
   /* The SAME "*" marker/tooltip mechanism as .qb-adj-asterisk above
@@ -938,6 +939,8 @@
      the QB Injury Backup Adjustments table) rather than the "not yet
      corroborated" blue, since this credit IS already corroborated and
      folded into the total, just not yet commissioner-confirmed. */
+  .pts-qb-adj { color: var(--replacement); font-weight: 700; }
+  .pts-qb-adj.pts-qb-adj-confirmed { color: var(--good); }
   .qb-adj-asterisk.pts-lastweek-yellow {
     color: var(--replacement);
     text-decoration-color: var(--replacement);
@@ -1031,7 +1034,7 @@
     visibility: hidden;
   }
   .qb-adj-tooltip.visible { opacity: 1; visibility: visible; }
-  .qb-adj-tooltip strong { color: var(--accent-2); }
+  .qb-adj-tooltip strong { color: var(--replacement); }
   /* The points-added figure within the tooltip body (see
      buildQbAdjTooltipHtml) -- same yellow as the replacement row in the
      Points This Week tooltip and the "likely"-tier Backup QB Points cell
@@ -3163,10 +3166,17 @@
     var actualPointsLabel = (mode !== "actual" && typeof actualPoints === "number")
       ? actualPoints.toFixed(2) + ": Actual Pts"
       : null;
+    // QB-injury backup points already folded into that actual total, shown
+    // after it as "(+11.79)": yellow while likely, green once confirmed.
+    var qbAdj = opts && opts.qbAdjustment;
+    var actualQbAdj = (actualPointsLabel && qbAdj && typeof qbAdj.delta === "number" && qbAdj.delta !== 0)
+      ? { text: (qbAdj.delta > 0 ? "+" : "") + qbAdj.delta.toFixed(2), confirmed: qbAdj.confidence === "confirmed" }
+      : null;
     return {
       showStartTime: showStartTime,
       rows: rows,
       actualPointsLabel: actualPointsLabel,
+      actualQbAdj: actualQbAdj,
       isLastWeek: isLastWeek,
       // The live tooltip always shows its Proj column (unaffected by any
       // of this); the last-week tooltip shows its Diff column only when
@@ -3911,6 +3921,7 @@
         // state.thisWeekTooltipData with.
         var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown, r.this_week_actual_points, {
           isLastWeek: r.this_week_points_is_last_week,
+          qbAdjustment: r.this_week_points_is_last_week ? null : r.qb_adjustment,
           projectionsAvailable: !!(state.lastWeek && state.lastWeek.projectionsAvailable)
         });
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
@@ -4152,7 +4163,10 @@
         "</tr>";
     }).join("");
     var actualTotalHtml = hasActualTotal
-      ? '<th' + (showStartTime ? ' colspan="2"' : "") + ' class="pts-tooltip-name pts-tooltip-actual-total">' + escapeHtml(tooltip.actualPointsLabel) + "</th>"
+      ? '<th' + (showStartTime ? ' colspan="2"' : "") + ' class="pts-tooltip-name pts-tooltip-actual-total">' + escapeHtml(tooltip.actualPointsLabel) +
+        (tooltip.actualQbAdj
+          ? ' <span class="pts-qb-adj' + (tooltip.actualQbAdj.confirmed ? " pts-qb-adj-confirmed" : "") + '" title="QB injury backup points">(' + escapeHtml(tooltip.actualQbAdj.text) + ")</span>"
+          : "") + "</th>"
       : '<th class="pts-tooltip-name"></th>';
     var projHeaderHtml = showProjColumn ? ("<th>" + (isLastWeek ? "Diff" : "Proj") + "</th>") : "";
     els.ptsTooltip.innerHTML =
