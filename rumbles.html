@@ -2558,6 +2558,7 @@
     return fetchJson(HISTORY_URL)
       .then(function (data) {
         state.history = data;
+        return markConfirmedFromSleeper(data);
       })
       .catch(function (err) {
         // Don't swallow this silently -- an unreachable/missing
@@ -2573,6 +2574,34 @@
           standings: []
         };
       });
+  }
+
+  // A "likely" QB-injury entry from a finished week becomes "confirmed" the
+  // moment the commissioner keys the adjustment into Sleeper (custom_points
+  // set on that roster's matchup). Checked here, straight from Sleeper, so
+  // the table shows it right away instead of waiting for the next
+  // scheduled rumbles_history.json rebuild. Points are unchanged either way
+  // (likely already counts as official). Best-effort; never rejects.
+  function markConfirmedFromSleeper(history) {
+    var leagueId = history && history.league_id;
+    var likely = ((history && history.qb_adjustments) || []).filter(function (e) { return e.confidence === "likely"; });
+    if (!leagueId || !likely.length) return Promise.resolve();
+    var weeks = likely.map(function (e) { return e.week; }).filter(function (w, i, a) { return a.indexOf(w) === i; });
+    return Promise.all(weeks.map(function (w) {
+      return fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + w)
+        .then(function (matchups) {
+          var byRoster = {};
+          (matchups || []).forEach(function (m) { byRoster[m.roster_id] = m; });
+          likely.forEach(function (e) {
+            var m = e.week === w ? byRoster[e.roster_id] : null;
+            if (m && m.custom_points != null) {
+              e.confidence = "confirmed";
+              e.custom_points_delta = round2(num(m.custom_points) - num(m.points));
+            }
+          });
+        })
+        .catch(function () {});
+    }));
   }
 
   // Loads the last COMPLETED week's real, final per-roster player
@@ -4822,8 +4851,10 @@
     if (state.live && state.live.isLive && state.live.hasKickedOff && state.live.week > latestKnownWeek) {
       latestKnownWeek = state.live.week;
     }
+    // Only "possible" rows age out: "likely" counts as official (same as
+    // "confirmed"), so it stays in the log all season.
     histAdjustments = histAdjustments.filter(function (r) {
-      return !(r.confidence !== "confirmed" && r.week < latestKnownWeek);
+      return !(r.confidence === "possible" && r.week < latestKnownWeek);
     });
     var rows = histAdjustments.concat(state.liveQbAdjustments || []);
     // Sorted by confidence tier first -- Likely above Possible above
