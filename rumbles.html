@@ -2938,27 +2938,14 @@
             return qbAdjustmentsPromise.then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
 
-              // Official scores for a finished week: only commissioner-
-              // confirmed QB adjustments count, matching what
-              // build_rumbles.py writes to rumbles_history.json. ("Likely"
-              // credits are a live preview until the commissioner acts.)
-              var scoresOfficial = {};
-              Object.keys(scoresActual).forEach(function (rid) { scoresOfficial[rid] = scoresActual[rid]; });
-              (qbAdjustments || []).forEach(function (entry) {
-                if (entry.confidence === "confirmed" && scoresOfficial[entry.roster_id] !== undefined) {
-                  scoresOfficial[entry.roster_id] = round2(scoresOfficial[entry.roster_id] + round2(entry.custom_points_delta || 0));
-                }
-              });
-
               var adjustmentByRoster = applyQbAdjustmentsToScores(qbAdjustments, scoresActual, scoresCustom);
 
               var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
-              var rumblesOfficial = computeRumblesForWeek(scoresOfficial, pairsByMatchupId);
               var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
 
               var byRoster = {};
               Object.keys(scoresActual).forEach(function (rid) {
-                byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid], official: rumblesOfficial[rid] };
+                byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
                 if (adjustmentByRoster[rid]) byRoster[rid].qbAdjustment = adjustmentByRoster[rid];
               });
 
@@ -3403,11 +3390,9 @@
     var viewWeek = selectedHistoricalWeek();
     var rows = viewWeek != null ? buildHistoricalRows(viewWeek) : histStandings.map(function (s) {
       var rid = s.roster_id;
-      // A finished week in Actual uses the official numbers (see loadLive's
-      // scoresOfficial), so it matches the rebuilt standings exactly.
-      var useOfficial = weekFinal && state.mode === "actual";
-      var liveInfo = liveActive && live.byRoster[rid]
-        ? ((useOfficial && live.byRoster[rid].official) || live.byRoster[rid][state.mode]) : null;
+      // Actual already counts "likely" QB-injury credits as official, the
+      // same way build_rumbles.py does, so a finished week folds in as-is.
+      var liveInfo = liveActive && live.byRoster[rid] ? live.byRoster[rid][state.mode] : null;
       var foldInfo = foldCurrentWeekIntoTotals ? liveInfo : null;
       // Pre-kickoff, "This Week" (Rumbles earned so far) and the live H2H
       // "who's ahead" signal both source from the ACTUAL bucket regardless
@@ -3449,22 +3434,10 @@
       var thisWeekRumbles = showLastWeekPoints
         ? num(s.last_completed_week_rumbles)
         : (rumblesSourceInfo ? rumblesSourceInfo.rumbles : num(s.last_completed_week_rumbles));
-      // A still-"likely" (unconfirmed) QB-injury replacement's estimated
-      // points aren't part of s.last_completed_week_points itself (that's
-      // a frozen, server-computed figure -- see build_rumbles.py's
-      // official_points()/score_week()), so they're folded in here on
-      // top of it, same in spirit as applyQbAdjustmentsToScores already
-      // does for the LIVE week's own totals. Once the commissioner
-      // confirms the adjustment, official_points() switches to their real
-      // custom_points override and that becomes part of
-      // last_completed_week_points on its own -- at which point
-      // pointsDeltaByRoster no longer includes it either (see
-      // loadLastWeekBreakdown), so this addition drops out automatically
-      // rather than needing to be explicitly "removed".
-      var lastWeekPointsDelta = showLastWeekPoints
-        ? num((state.lastWeek && state.lastWeek.pointsDeltaByRoster && state.lastWeek.pointsDeltaByRoster[rid]))
-        : 0;
-      var thisWeekPoints = (showLastWeekPoints || !liveInfo) ? round2(num(s.last_completed_week_points) + lastWeekPointsDelta) : liveInfo.points;
+      // s.last_completed_week_points already includes any "likely" QB-injury
+      // credit (build_rumbles.py counts likely as official), so nothing is
+      // added on top of it here; the yellow "*" below just explains it.
+      var thisWeekPoints = (showLastWeekPoints || !liveInfo) ? round2(num(s.last_completed_week_points)) : liveInfo.points;
 
       // Whether this roster still has a player (a real starter, or an
       // appended QB-injury replacement -- both are in the same `players`
@@ -3597,12 +3570,12 @@
         // null outside the Actual tab -- see h2hStreak above.
         h2h_streak: h2hStreak,
         // Still-"likely" (unconfirmed) QB-injury adjustment folded into
-        // THIS row's "Pts Last Week" total above (see lastWeekPointsDelta)
+        // THIS row's "Pts Last Week" total above (already included in it by build_rumbles.py)
         // -- {delta, confidence: "likely", injured_qb, backup_qbs} (same
         // shape buildQbAdjTooltipHtml already expects) or null. Backs the
         // yellow "*" appended to the "Pts Last Week" cell in render():
         // disappears on its own once the commissioner confirms the
-        // adjustment, for the same reason lastWeekPointsDelta itself does
+        // adjustment, once its entry turns "confirmed"
         // (see loadLastWeekBreakdown) -- a "confirmed" entry is never
         // recorded here in the first place.
         last_week_qb_adjustment: showLastWeekPoints
@@ -3966,7 +3939,7 @@
         // Yellow "*" on "Pts Last Week" itself when a still-"likely"
         // (unconfirmed) QB-injury replacement's estimated points are
         // folded into THIS number (see buildCombinedStandings'
-        // last_week_qb_adjustment/lastWeekPointsDelta) -- reuses the exact
+        // last_week_qb_adjustment) -- reuses the exact
         // same qb-adj-asterisk hover/tap/tooltip mechanism as the manager-
         // name "QB Inj*" marker above (same #qb-adj-tooltip element, same
         // show/hide/position functions, same delegated listeners -- see
