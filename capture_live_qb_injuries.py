@@ -688,6 +688,55 @@ def start_successor_run() -> None:
         print(f"[warn] couldn't start a successor run ({e}); the next scheduled trigger will pick it up", file=sys.stderr)
 
 
+HISTORY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rumbles_history.json")
+
+
+def weeks_needing_build(state_week: int, completed: list, games_by_week: dict) -> list:
+    """Weeks (the current one and the one before) whose games are all final
+    but that rumbles_history.json doesn't include yet."""
+    out = []
+    for wk in (state_week - 1, state_week):
+        if wk < 1 or wk in completed:
+            continue
+        games = [g for g in (games_by_week.get(wk) or []) if g]
+        if games and all(normalize_game_status(g) == "complete" for g in games):
+            out.append(wk)
+    return out
+
+
+def maybe_start_standings_build() -> None:
+    """At the end of a game day (e.g. right after Monday Night Football),
+    start the standings rebuild (update.yml) if a finished week isn't in
+    rumbles_history.json yet, instead of waiting for update.yml's own
+    schedule, which GitHub often runs hours late. The page already shows a
+    finished week as final on its own; this makes it official. Only in the
+    workflow (CAPTURE_CHAIN=1); never fatal."""
+    if os.environ.get("CAPTURE_CHAIN") != "1":
+        return
+    try:
+        state = get_json(f"{API_BASE}/state/nfl")
+        season, week = state["season"], int(state.get("week") or 0)
+        season_type = state.get("season_type") or "regular"
+        if not week or season_type not in ("regular", "post"):
+            return
+        completed = []
+        if os.path.exists(HISTORY_PATH):
+            with open(HISTORY_PATH) as f:
+                completed = [int(w) for w in (json.load(f).get("weeks_completed") or [])]
+        games_by_week = {
+            wk: get_json(f"{SCORES_BASE}/{season_type}/{season}/{wk}")
+            for wk in (week - 1, week) if wk >= 1 and wk not in completed
+        }
+        pending = weeks_needing_build(week, completed, games_by_week)
+        if not pending:
+            return
+        ref = os.environ.get("GITHUB_REF_NAME") or "main"
+        subprocess.run(["gh", "workflow", "run", "update.yml", "--ref", ref], check=True)
+        print(f"[game-day] week(s) {pending} final but not in the standings yet; started the standings rebuild")
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't check/start the standings rebuild ({e})", file=sys.stderr)
+
+
 def main() -> None:
     started = time.monotonic()
     while True:
@@ -697,6 +746,7 @@ def main() -> None:
         wait = next_sleep_seconds(targets, game_info)
         if wait is None:
             print("[game-day] no game live or coming up soon; done")
+            maybe_start_standings_build()
             return
         elapsed_min = (time.monotonic() - started) / 60
         if elapsed_min + wait / 60 > MAX_RUN_MINUTES:
