@@ -2856,6 +2856,11 @@
           // computeWeekKickoffInfo's comment), and it's available before
           // Sleeper posts matchups too.
           var kickoffInfo = computeWeekKickoffInfo(games);
+          // Every game of the week is final. The page then counts the week
+          // in the Actual standings itself, without waiting for the
+          // scheduled rumbles_history.json rebuild (GitHub often runs it
+          // hours late).
+          var weekFinal = !!(games && games.length) && games.every(function (g) { return !g || normalizeGameStatus(g) === "complete"; });
 
           if (!matchups.length) {
             // Sleeper hasn't posted matchups for this week yet (too early
@@ -2946,7 +2951,8 @@
 
               state.live = {
                 week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster,
-                hasKickedOff: kickoffInfo.hasKickedOff, firstGameStartMs: kickoffInfo.firstGameStartMs
+                hasKickedOff: kickoffInfo.hasKickedOff, firstGameStartMs: kickoffInfo.firstGameStartMs,
+                weekFinal: weekFinal
               };
 
               // Attach each roster's per-starter actual/projected breakdown
@@ -3373,7 +3379,10 @@
     // that hasn't been played -- pre-kickoff, Projected is required to
     // match Actual for all of those (see kickoffStarted below).
     var kickoffStarted = !!(live && live.hasKickedOff);
-    var foldCurrentWeekIntoTotals = state.mode !== "actual" && kickoffStarted;
+    // Once every game of the week is final, Actual folds it in too: the
+    // week is over, so its results are official (see loadLive's weekFinal).
+    var weekFinal = !!(liveActive && live.weekFinal);
+    var foldCurrentWeekIntoTotals = (state.mode !== "actual" && kickoffStarted) || weekFinal;
 
     // Actual tab's week picker: a past completed week is rebuilt entirely
     // from the weekly log (see buildHistoricalRows) instead of the live/
@@ -3480,6 +3489,12 @@
       // streak badge. Shown in the Actual tab at all times (pregame and
       // during a live week); the Projected tab doesn't show it.
       var h2hStreak = state.mode === "actual" ? computeH2hStreak(state.history, lastCompletedWeek(), rid) : null;
+      // A final (not yet rebuilt) week extends the streak too.
+      if (h2hStreak && weekFinal && foldInfo && typeof foldInfo.h2hWin === "boolean") {
+        h2hStreak = h2hStreak.result === foldInfo.h2hWin
+          ? { result: h2hStreak.result, length: h2hStreak.length + 1 }
+          : { result: foldInfo.h2hWin, length: 1 };
+      }
 
       return {
         roster_id: rid,
@@ -3587,7 +3602,7 @@
           win: typeof foldInfo.h2hWin === "boolean" ? foldInfo.h2hWin : null,
           outscored: num(foldInfo.teamsOutscored),
           outscored_by: num(foldInfo.teamsOutscoredBy),
-          projected: true
+          projected: !weekFinal
         }] : []).concat(weeklyPfPa(rid, lastCompletedWeek()))
       };
     });
@@ -3998,12 +4013,17 @@
     // kickoff, both show the grey pregame pill instead.
     var isLive = state.live && state.live.isLive;
     var kickoffStarted = !!(state.live && state.live.hasKickedOff);
-    var trulyLive = isLive && kickoffStarted;
+    var liveWeekFinal = !!(isLive && state.live.weekFinal);
+    var trulyLive = isLive && kickoffStarted && !liveWeekFinal;
     els.statusDot.className = "dot" + (trulyLive ? " live" : "");
     // Short versions (portrait phones) go in statusTextShort; see
     // .pill-short in the CSS.
     var shortStatus;
-    if (trulyLive) {
+    if (liveWeekFinal) {
+      els.statusText.textContent = "Week " + state.live.week + " final";
+      shortStatus = "Wk " + state.live.week + " final";
+      els.liveWeekLabel.textContent = "";
+    } else if (trulyLive) {
       els.statusText.textContent = "Live: Week " + state.live.week;
       shortStatus = "Live · Wk " + state.live.week;
       els.liveWeekLabel.textContent = "Showing live Week " + state.live.week + " (" + MODE_LABELS[state.mode] + ")";
