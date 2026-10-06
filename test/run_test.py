@@ -1178,7 +1178,13 @@ def scenario_live_blending(browser):
     print("\n== QB Injury Backup Adjustments ==")
     for r in qb_rows:
         print(r)
-    assert len(qb_rows) == 3, f"expected exactly 3 QB-adjustment rows (1 historical + 2 live), got {len(qb_rows)}"
+    assert len(qb_rows) == 4, f"expected exactly 4 QB-adjustment rows (2 historical + 2 live), got {len(qb_rows)}"
+    # Rohaan's week-1 "likely" row stays in the log after week 2 kicks off:
+    # likely counts as official, so it never ages out (only "possible" does).
+    rohaan_hist = next((r for r in qb_rows if r["manager"] == "Rohaan"), None)
+    assert rohaan_hist is not None and rohaan_hist["week"] == "1" and rohaan_hist["confidence"] == "Likely", (
+        f"expected Rohaan's week-1 'Likely' row to stay listed once week 2 is live, got: {qb_rows}"
+    )
 
     # Roster 8 (Ankit) has a commissioner override but no identifiable
     # backup QB in the fixtures at all -- the override must STILL log a
@@ -1224,8 +1230,10 @@ def scenario_live_blending(browser):
         f"live, got: {qb_rows}"
     )
 
-    assert [r["week"] for r in qb_rows] == ["2", "2", "1"], f"expected rows sorted week descending (both week-2 rows, then week-1), got weeks: {[r['week'] for r in qb_rows]}"
-    assert [r["manager"] for r in qb_rows[:2]] == ["Alex", "Ankit"], f"expected the two week-2 rows sorted by manager A-Z, got: {[r['manager'] for r in qb_rows[:2]]}"
+    # Tier first (Likely above Confirmed), then newest week first.
+    assert [(r["manager"], r["week"]) for r in qb_rows] == [("Alex", "2"), ("Rohaan", "1"), ("Ankit", "2"), ("Ben", "1")], (
+        f"expected rows sorted by tier, then week descending, got: {[(r['manager'], r['week']) for r in qb_rows]}"
+    )
     print("Confirmed a stale, never-confirmed 'possible' entry from an older week is hidden once a newer week is live, even though it's still sitting in the history fixture.")
 
     qb_table_live_badges = page.locator("#qb-adj-table .badge-live").count()
