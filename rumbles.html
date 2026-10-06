@@ -2938,14 +2938,27 @@
             return qbAdjustmentsPromise.then(function (qbAdjustments) {
               state.liveQbAdjustments = qbAdjustments;
 
+              // Official scores for a finished week: only commissioner-
+              // confirmed QB adjustments count, matching what
+              // build_rumbles.py writes to rumbles_history.json. ("Likely"
+              // credits are a live preview until the commissioner acts.)
+              var scoresOfficial = {};
+              Object.keys(scoresActual).forEach(function (rid) { scoresOfficial[rid] = scoresActual[rid]; });
+              (qbAdjustments || []).forEach(function (entry) {
+                if (entry.confidence === "confirmed" && scoresOfficial[entry.roster_id] !== undefined) {
+                  scoresOfficial[entry.roster_id] = round2(scoresOfficial[entry.roster_id] + round2(entry.custom_points_delta || 0));
+                }
+              });
+
               var adjustmentByRoster = applyQbAdjustmentsToScores(qbAdjustments, scoresActual, scoresCustom);
 
               var rumblesActual = computeRumblesForWeek(scoresActual, pairsByMatchupId);
+              var rumblesOfficial = computeRumblesForWeek(scoresOfficial, pairsByMatchupId);
               var rumblesCustom = computeRumblesForWeek(scoresCustom, pairsByMatchupId);
 
               var byRoster = {};
               Object.keys(scoresActual).forEach(function (rid) {
-                byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid] };
+                byRoster[rid] = { actual: rumblesActual[rid], custom: rumblesCustom[rid], official: rumblesOfficial[rid] };
                 if (adjustmentByRoster[rid]) byRoster[rid].qbAdjustment = adjustmentByRoster[rid];
               });
 
@@ -3390,7 +3403,11 @@
     var viewWeek = selectedHistoricalWeek();
     var rows = viewWeek != null ? buildHistoricalRows(viewWeek) : histStandings.map(function (s) {
       var rid = s.roster_id;
-      var liveInfo = liveActive && live.byRoster[rid] ? live.byRoster[rid][state.mode] : null;
+      // A finished week in Actual uses the official numbers (see loadLive's
+      // scoresOfficial), so it matches the rebuilt standings exactly.
+      var useOfficial = weekFinal && state.mode === "actual";
+      var liveInfo = liveActive && live.byRoster[rid]
+        ? ((useOfficial && live.byRoster[rid].official) || live.byRoster[rid][state.mode]) : null;
       var foldInfo = foldCurrentWeekIntoTotals ? liveInfo : null;
       // Pre-kickoff, "This Week" (Rumbles earned so far) and the live H2H
       // "who's ahead" signal both source from the ACTUAL bucket regardless
