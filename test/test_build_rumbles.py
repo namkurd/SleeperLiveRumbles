@@ -77,6 +77,26 @@ def test_official_points_prefers_custom_points_when_set():
     print("PASS: official_points prefers custom_points, falls back to points, then 0.0")
 
 
+def test_likely_qb_credit_counts_in_week_score():
+    # Ryan (10) vs Ankit (8), Week 4 2026: Ryan's 122.84 + 11.79 "likely"
+    # backup credit beats Ankit's 127.95 -- likely counts as official.
+    matchups = [
+        {"roster_id": 10, "matchup_id": 1, "points": 122.84, "custom_points": None},
+        {"roster_id": 8, "matchup_id": 1, "points": 127.95, "custom_points": None},
+    ]
+    adjustments = [
+        {"roster_id": 10, "confidence": "likely", "backup_points_total": 11.79},
+        {"roster_id": 8, "confidence": "possible", "backup_points_total": 4.0},
+        {"roster_id": 8, "confidence": "confirmed", "backup_points_total": 9.0, "custom_points_delta": 9.0},
+    ]
+    extra = build_rumbles.likely_extra_points(adjustments)
+    assert extra == {10: 11.79}, extra
+    r = score_week(matchups, {10: "Ryan", 8: "Ankit"}, extra)
+    assert r[10]["points"] == 134.63 and r[10]["h2h_win"] is True, r[10]
+    assert r[8]["opponent_points"] == 134.63 and r[8]["h2h_win"] is False, r[8]
+    print("PASS: a likely QB-injury credit counts in the official week score (possible/confirmed don't add)")
+
+
 def test_score_week_applies_override_to_pf():
     result = score_week(make_matchups(), MANAGER_MAP)
     assert approx(result[1]["points"], 160.08), f"Alpha's PF should be the override 160.08, got {result[1]['points']}"
@@ -822,6 +842,7 @@ def main():
     test_determine_fresh_week_no_completed_weeks_yet()
     test_determine_fresh_week_missing_previous_data_defaults_to_fresh()
     test_possible_tier_carried_through_next_weeks_span_then_dropped_end_to_end()
+    test_likely_qb_credit_counts_in_week_score()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 
