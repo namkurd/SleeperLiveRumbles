@@ -386,6 +386,21 @@ def test_summarize_games():
     print("PASS: summarize_games finds live games and the next kickoff")
 
 
+def test_weeks_needing_build():
+    fin = {"status": "complete", "metadata": {"is_over": True}}
+    live = {"status": "in_game", "metadata": {}}
+    pre = {"status": "pre_game", "metadata": {}}
+    f = capture_live_qb_injuries.weeks_needing_build
+    # Right after MNF: week 4 all final, not built yet.
+    assert f(4, [1, 2, 3], {4: [fin, fin]}) == [4]
+    # Tuesday after Sleeper flips to week 5: week 4 still needs it.
+    assert f(5, [1, 2, 3], {4: [fin], 5: [pre, pre]}) == [4]
+    # Already built, or a game still going: nothing to do.
+    assert f(5, [1, 2, 3, 4], {5: [pre]}) == []
+    assert f(4, [1, 2, 3], {4: [fin, live]}) == []
+    print("PASS: a finished week missing from the standings triggers the rebuild")
+
+
 def test_run_cap_starts_successor():
     calls, sleeps, chained = [], [], []
     info = {"any_live": True, "next_kickoff_ms": None}
@@ -528,6 +543,7 @@ def main():
     test_game_day_waits_for_upcoming_kickoff_only_within_lookahead()
     test_summarize_games()
     test_run_cap_starts_successor()
+    test_weeks_needing_build()
     test_starter_back_in_game_pauses_watch()
     test_backup_accumulating_again_resumes_watch()
     test_attempts_count_even_without_points()
