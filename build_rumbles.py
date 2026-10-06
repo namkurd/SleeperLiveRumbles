@@ -180,12 +180,22 @@ def official_points(m: dict) -> float:
     return m.get("points") or 0.0
 
 
-def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, dict]:
+def score_week(matchups: list[dict], manager_map: dict[int, str], extra_points: dict[int, float] | None = None) -> dict[int, dict]:
     """Given raw /matchups/{week} data, compute each roster's Rumbles etc.
+
+    extra_points: roster_id -> points added on top of Sleeper's official
+    score (the "likely" QB-injury backup credit, which counts as official
+    in this league before the commissioner keys it into Sleeper).
 
     Returns roster_id -> {points, opponent_roster_id, opponent_points,
     h2h_win, rumbles, teams_outscored, teams_outscored_by}
     """
+    extra_points = extra_points or {}
+
+    def week_points(m: dict) -> float:
+        extra = extra_points.get(m["roster_id"], 0.0)
+        return round(official_points(m) + extra, 2) if extra else official_points(m)
+
     by_roster = {m["roster_id"]: m for m in matchups}
     # Pair up rosters that share a matchup_id (the scheduled H2H game).
     pairs: dict[int, list[dict]] = {}
@@ -193,21 +203,21 @@ def score_week(matchups: list[dict], manager_map: dict[int, str]) -> dict[int, d
         pairs.setdefault(m["matchup_id"], []).append(m)
 
     result: dict[int, dict] = {}
-    all_scores = {rid: official_points(by_roster[rid]) for rid in by_roster}
+    all_scores = {rid: week_points(by_roster[rid]) for rid in by_roster}
 
     for _, pair in pairs.items():
         if len(pair) != 2:
             # Bye week or malformed data -- no H2H opponent to score against.
             for m in pair:
                 result[m["roster_id"]] = {
-                    "points": official_points(m),
+                    "points": week_points(m),
                     "opponent_roster_id": None,
                     "opponent_points": None,
                     "h2h_win": None,
                 }
             continue
         a, b = pair
-        pa, pb = official_points(a), official_points(b)
+        pa, pb = week_points(a), week_points(b)
         a_win = pa > pb
         b_win = pb > pa
         result[a["roster_id"]] = {
@@ -744,14 +754,13 @@ def build_history(
         matchups = get_json(f"{API_BASE}/league/{league_id}/matchups/{week}")
         if not matchups:
             continue
-        week_result = score_week(matchups, manager_map)
-        weekly[str(week)] = week_result
 
+        week_adjustments: list[dict] = []
         if can_detect_qb_adjustments:
             try:
                 stats_arr = get_json(f"{STATS_BASE}/{season}/{week}?season_type={season_type}")
                 stats_map = array_to_player_map(stats_arr)
-                qb_adjustments.extend(
+                week_adjustments = (
                     compute_qb_adjustments_for_week(
                         week,
                         matchups,
@@ -768,6 +777,14 @@ def build_history(
                 )
             except Exception as e:  # noqa: BLE001 - this is a nice-to-have overlay, never fatal to the main standings
                 print(f"[warn] QB-adjustment detection failed for week {week} ({e}); skipping", file=sys.stderr)
+        qb_adjustments.extend(week_adjustments)
+
+        # "Likely" QB-injury credits count as official (the commissioner's
+        # Sleeper adjustment is just bookkeeping). Once it's keyed in, the
+        # entry becomes "confirmed" and Sleeper's own custom_points already
+        # carries it, so it's never added twice.
+        week_result = score_week(matchups, manager_map, likely_extra_points(week_adjustments))
+        weekly[str(week)] = week_result
 
         for rid, info in week_result.items():
             if rid not in cumulative:
@@ -825,6 +842,15 @@ def build_history(
         "weekly": weekly,
         "qb_adjustments": qb_adjustments,
     }
+
+
+def likely_extra_points(adjustments: list[dict]) -> dict[int, float]:
+    """roster_id -> backup points to add for this week's "likely" entries."""
+    extra: dict[int, float] = {}
+    for a in adjustments or []:
+        if a.get("confidence") == "likely" and a.get("roster_id") is not None:
+            extra[a["roster_id"]] = round(extra.get(a["roster_id"], 0.0) + float(a.get("backup_points_total") or 0.0), 2)
+    return extra
 
 
 def load_previous_qb_adjustments() -> dict[int, dict[int, list[dict]]]:
