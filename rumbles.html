@@ -5223,7 +5223,13 @@
   state.view = "standings";
   state.rb = { me: null, asked: false, auto: true, sel: {}, density: "compact", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
 
-  function rbColor(rid) { return RB_COLORS[(Number(rid) - 1 + RB_COLORS.length) % RB_COLORS.length]; }
+  // Opponents share a color: the same matchup colors the standings use
+  // for this week's pairs (state.matchupColorByRosterId). Falls back to a
+  // per-manager color if a team has no matchup this week.
+  function rbColor(rid) {
+    return (state.matchupColorByRosterId && state.matchupColorByRosterId[rid]) ||
+      RB_COLORS[(Number(rid) - 1 + RB_COLORS.length) % RB_COLORS.length];
+  }
 
   // Every team with live matchup data, ordered by projected total.
   function rbTeams() {
@@ -5335,7 +5341,6 @@
         el = document.createElement("button");
         el.type = "button";
         el.className = "rb-chip";
-        el.style.setProperty("--c", rbColor(t.rid));
         el.addEventListener("click", function () {
           rb.auto = false;
           if (rb.sel[t.rid]) delete rb.sel[t.rid]; else rb.sel[t.rid] = true;
@@ -5343,6 +5348,7 @@
         });
         rb.chipEls[t.rid] = el;
       }
+      el.style.setProperty("--c", rbColor(t.rid));
       el.classList.toggle("on", !!shownSet[t.rid]);
       el.classList.toggle("me", t.rid === rb.me);
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
@@ -5364,9 +5370,9 @@
       if (!el) {
         el = document.createElement("div");
         el.className = "rb-card";
-        el.style.setProperty("--c", rbColor(t.rid));
         rb.cardEls[t.rid] = el;
       }
+      el.style.setProperty("--c", rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
       var place = teams.indexOf(t) + 1;
       el.innerHTML = rbCardHtml(t, place);
