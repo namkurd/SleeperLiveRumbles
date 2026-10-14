@@ -1041,6 +1041,92 @@
      above, so this page's one yellow consistently means "this page's own
      estimate, not yet commissioner-confirmed." */
   .qb-adj-tooltip-yellow { color: var(--replacement); font-weight: 700; }
+
+  /* ---- Rumblin' tab ------------------------------------------------- */
+  #rumblin-view[hidden], #standings-view[hidden] { display: none; }
+  .rb-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+  .rb-chip {
+    --c: var(--accent-2);
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--panel-border); background: var(--panel); color: var(--text-dim);
+    border-radius: 999px; padding: 3px 10px 3px 8px; font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer;
+  }
+  .rb-chip .rb-rank { font-size: 0.66rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .rb-chip .rb-proj { font-size: 0.66rem; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
+  .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
+  .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .rb-controls .spacer { flex: 1; }
+  .rb-small { border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); font: inherit; font-size: 0.76rem; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  .rb-small.active { border-color: var(--accent); color: var(--accent); }
+  .rb-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--rb-cardw, 270px), 1fr)); align-items: start; }
+  .rb-card {
+    --c: var(--accent-2);
+    position: relative; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden;
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, transparent), transparent 64px);
+  }
+  .rb-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
+  /* Your own card: a soft glow in your color. */
+  .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
+  .rb-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 7px 13px; }
+  .rb-place { font-weight: 800; color: var(--text-dim); font-size: 0.8rem; width: 1.4em; }
+  .rb-who-name { flex: 1; min-width: 0; }
+  .rb-mgr { display: block; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
+  .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
+  .rb-tot { text-align: right; }
+  .rb-tot .rb-a { font-size: 1.12rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .rb-tot .rb-p { font-size: 0.68rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  #rumblin-view table.rb-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.76rem; }
+  #rumblin-view .rb-table th { position: static; background: none; box-shadow: none; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; text-align: center; padding: 1px 4px; border: 0; width: auto; min-width: 0; }
+  #rumblin-view .rb-table td { position: static; background: none; box-shadow: none; padding: 3px 4px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; width: auto; min-width: 0; }
+  #rumblin-view .rb-table td.rb-nm { text-align: left; padding-left: 13px; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 62%; }
+  #rumblin-view .rb-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--row-alt) 70%, transparent); }
+  .rb-meta { color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; }
+  /* Only players in a game right now stand out; everyone else is faded. */
+  .rb-table tr.rb-off td { opacity: 0.5; }
+  .rb-table tr.rb-live td.rb-nm .rb-n, .rb-table tr.rb-live td.rb-act { color: var(--live); }
+  .rb-table tr.rb-live .rb-meta { color: var(--live); opacity: 0.85; }
+  .rb-table tr.rb-repl td.rb-nm .rb-n { color: var(--replacement); }
+  .rb-table td.rb-proj { color: var(--text-dim); }
+  .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
+  .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
+  .rb-table tfoot td { border-top: 1px solid var(--panel-border) !important; font-weight: 700; padding: 5px 4px 7px; }
+  .rb-table tfoot td.rb-nm { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .rb-grid.compact { --rb-cardw: 190px; }
+  .rb-grid.compact .rb-bench, .rb-grid.compact .rb-bench-h, .rb-grid.compact thead { display: none; }
+  .rb-grid.compact .rb-table { font-size: 0.7rem; }
+  .rb-grid.compact .rb-table td { padding: 1px 3px; }
+  .rb-grid.compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
+  .rb-grid.totals { --rb-cardw: 150px; }
+  /* Phones: two compact cards per row. */
+  @media (max-width: 640px) {
+    .rb-grid { gap: 8px; }
+    .rb-grid.compact { --rb-cardw: 150px; }
+    .rb-grid.compact .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
+    .rb-grid.compact .rb-tot .rb-a { font-size: 0.95rem; }
+    .rb-grid.compact .rb-place { display: none; }
+    #rumblin-view .rb-grid.compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
+    .rb-grid.compact .rb-table .pos-badge { display: none; }
+    .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
+    .rb-grid.compact .rb-meta { display: block; margin-left: 0; line-height: 1.1; }
+    .rb-grid.totals { --rb-cardw: 140px; }
+  }
+  .rb-grid.totals .rb-table { display: none; }
+  .rb-empty { color: var(--text-dim); padding: 30px 10px; text-align: center; }
+  .rb-flash-up { animation: rbUp 1.2s ease-out; } .rb-flash-down { animation: rbDown 1.2s ease-out; }
+  @keyframes rbUp { 0% { background: rgba(53,194,107,.35); } 100% { background: transparent; } }
+  @keyframes rbDown { 0% { background: rgba(229,72,77,.35); } 100% { background: transparent; } }
+  /* "Which manager are you?" picker */
+  .rb-who-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .rb-who-overlay[hidden] { display: none; }
+  .rb-who-box { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px; max-width: 420px; width: 100%; box-shadow: 0 12px 30px rgba(0,0,0,0.4); }
+  .rb-who-box h3 { margin: 0 0 4px; font-size: 1rem; }
+  .rb-who-box p { margin: 0 0 12px; color: var(--text-dim); font-size: 0.8rem; }
+  .rb-who-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+  .rb-who-list button { --c: var(--accent-2); border: 1px solid color-mix(in srgb, var(--c) 60%, var(--panel-border)); background: color-mix(in srgb, var(--c) 10%, var(--panel)); color: var(--text); border-radius: 8px; padding: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+  .rb-who-skip { margin-top: 10px; background: none; border: 0; color: var(--text-dim); font: inherit; font-size: 0.76rem; cursor: pointer; text-decoration: underline; }
+  @media (prefers-reduced-motion: reduce) { .rb-flash-up, .rb-flash-down { animation: none; } }
 </style>
 </head>
 <body>
@@ -1060,6 +1146,7 @@
       <div class="toggle-group" role="group" aria-label="Scoring source">
         <button type="button" id="mode-actual" class="active">Actual</button>
         <button type="button" id="mode-custom">Projected</button>
+        <button type="button" id="mode-rumblin">Rumblin'</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
@@ -1073,6 +1160,33 @@
 
   <div class="error-banner" id="error-banner"></div>
 
+  <!-- Rumblin': side-by-side live matchup cards for any managers. -->
+  <div id="rumblin-view" hidden>
+    <div class="rb-strip" id="rb-strip" aria-label="Managers by projected score"></div>
+    <div class="rb-controls">
+      <div class="toggle-group" role="group" aria-label="Card size" id="rb-density">
+        <button type="button" data-d="full">Full</button>
+        <button type="button" data-d="compact" class="active">Compact</button>
+        <button type="button" data-d="totals">Totals</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="rb-small" id="rb-around">Around me</button>
+      <button type="button" class="rb-small" id="rb-all">Everyone</button>
+      <button type="button" class="rb-small" id="rb-change">Change me</button>
+    </div>
+    <div class="rb-grid compact" id="rb-grid"></div>
+    <div class="rb-empty" id="rb-empty" hidden></div>
+  </div>
+  <div class="rb-who-overlay" id="rb-who" hidden>
+    <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
+      <h3 id="rb-who-title">Which manager are you?</h3>
+      <p>You'll see your team with the 3 teams projected just above and below you.</p>
+      <div class="rb-who-list" id="rb-who-list"></div>
+      <button type="button" class="rb-who-skip" id="rb-who-skip">Skip, show everyone</button>
+    </div>
+  </div>
+
+  <div id="standings-view">
   <div class="table-panel">
     <div class="scroll-hint">Swipe to see more stats →</div>
     <div class="table-scroll">
@@ -1133,6 +1247,7 @@
     <li><strong>Possible:</strong> your QB played and a backup from his team also played, but his status was not caught changing to Out during the game. This could just be a normal substitution, so no points are added unless the commissioner confirms it.</li>
     <li><strong>Commissioner Adjustment</strong> is the number of points the commissioner actually added.</li>
   </ul>
+  </div>
 </div>
 
 <div id="pts-tooltip" class="pts-tooltip" role="tooltip" aria-hidden="true"></div>
@@ -1271,6 +1386,7 @@
     errorBanner: document.getElementById("error-banner"),
     body: document.getElementById("standings-body"),
     modeActual: document.getElementById("mode-actual"),
+    modeRumblin: document.getElementById("mode-rumblin"),
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     weekSelect: document.getElementById("week-select"),
@@ -3003,6 +3119,13 @@
                     breakdown, adj ? adj.backup_qbs : null, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule,
                     adj ? adj.confidence : null
                   );
+                  // Bench, for the Rumblin' tab's cards.
+                  var starterSet = {};
+                  (m.starters || []).forEach(function (pid) { starterSet[pid] = true; });
+                  state.live.byRoster[rid].bench = (m.players || [])
+                    .filter(function (pid) { return pid && pid !== "0" && !starterSet[pid]; })
+                    .map(function (pid) { return computePlayerBreakdownEntry(pid, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule); })
+                    .sort(function (a, b) { return tooltipSlotRank(a.position) - tooltipSlotRank(b.position); });
                 }
               });
             });
@@ -4015,6 +4138,7 @@
       }).join("");
     }
     flashChangedCells(opts && opts.flash);
+    if (state.view === "rumblin") renderRumblin();
     refreshOrHidePtsTooltip();
     refreshOrHideQbAdjTooltip();
     refreshOrHidePfPaTooltip();
@@ -4996,8 +5120,20 @@
 
   function setMode(mode) {
     state.mode = mode;
-    els.modeActual.classList.toggle("active", mode === "actual");
-    els.modeCustom.classList.toggle("active", mode === "custom");
+    setView("standings");
+  }
+
+  // Standings (Actual / Projected) vs. the Rumblin' cards.
+  function setView(view) {
+    state.view = view;
+    var rb = view === "rumblin";
+    els.modeActual.classList.toggle("active", !rb && state.mode === "actual");
+    els.modeCustom.classList.toggle("active", !rb && state.mode === "custom");
+    els.modeRumblin.classList.toggle("active", rb);
+    document.getElementById("standings-view").hidden = rb;
+    document.getElementById("rumblin-view").hidden = !rb;
+    els.weekSelectWrap && (els.weekSelectWrap.style.visibility = rb ? "hidden" : "");
+    if (rb && state.rb.me == null && !state.rb.asked) openWhoPicker();
     render();
   }
 
@@ -5065,6 +5201,224 @@
     state.viewWeek = v === "" ? null : parseInt(v, 10);
     render();
   });
+
+
+  // ---- Rumblin' tab ----------------------------------------------------
+  // Any managers' live cards side by side, ordered by projected score
+  // (highest first), with every starter and the bench. You pick which
+  // manager you are once per visit; the view then shows you plus the 3
+  // teams projected just above and below you ("Around me"), and follows
+  // as the order changes. Tapping names picks teams by hand instead.
+  var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
+  state.view = "standings";
+  state.rb = { me: null, asked: false, auto: true, sel: {}, density: "compact", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
+
+  function rbColor(rid) { return RB_COLORS[(Number(rid) - 1 + RB_COLORS.length) % RB_COLORS.length]; }
+
+  // Every team with live matchup data, ordered by projected total.
+  function rbTeams() {
+    var live = state.live;
+    if (!live || !live.isLive) return [];
+    var managers = {};
+    ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
+    return Object.keys(live.byRoster).map(function (rid) {
+      var b = live.byRoster[rid];
+      var players = b.players || [];
+      return {
+        rid: Number(rid),
+        name: managers[rid] || ("Roster " + rid),
+        act: num(b.actual && b.actual.points),
+        proj: num(b.custom && b.custom.points),
+        players: players,
+        bench: b.bench || [],
+        liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
+      };
+    }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
+  }
+
+  function rbAroundMe(teams) {
+    var idx = teams.findIndex(function (t) { return t.rid === state.rb.me; });
+    if (idx === -1) return teams;
+    var start = Math.max(0, Math.min(idx - 3, teams.length - 7));
+    return teams.slice(start, start + 7);
+  }
+
+  function rbPlayerRow(p, bench) {
+    var status = p.game_status;
+    var live = status === "in_progress";
+    var meta = "";
+    if (live) {
+      meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
+    } else if (status === "complete") {
+      meta = "Final";
+    } else if (status === "pre_game") {
+      meta = formatGameStartLabel(p.game_start_ms);
+    } else {
+      meta = "Bye";
+    }
+    var cls = (live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (p.replacement ? " rb-repl" : "");
+    var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
+    return '<tr class="' + cls + '"><td class="rb-nm">' + posBadgeHtml(p.position) + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
+      (meta ? '<span class="rb-meta">' + escapeHtml(meta) + "</span>" : "") + "</td>" +
+      '<td class="rb-act">' + shown + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
+  }
+
+  function rbCardHtml(t, place) {
+    var me = t.rid === state.rb.me;
+    var rows = t.players.map(function (p) { return rbPlayerRow(p, false); }).join("");
+    var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
+    return '<div class="rb-head"><span class="rb-place">' + place + '</span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+      (me ? '<span class="rb-you">YOU</span>' : "") +
+      (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
+      '<div class="rb-tot"><div class="rb-a">' + t.act.toFixed(2) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
+      '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
+      (bench ? '<tr class="rb-bench-h"><td colspan="3">Bench</td></tr>' + bench : "") +
+      '</tbody><tfoot><tr><td class="rb-nm">Starters</td><td>' + t.act.toFixed(2) + "</td><td>" + t.proj.toFixed(2) + "</td></tr></tfoot></table>";
+  }
+
+  // Slide elements from where they were to where they are now.
+  function rbFlip(els, before) {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    Object.keys(els).forEach(function (k) {
+      var el = els[k], f = before[k];
+      if (!el.isConnected) return;
+      if (!f) { if (el.animate) el.animate([{ opacity: 0, transform: "scale(.97)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" }); return; }
+      var l = el.getBoundingClientRect();
+      var dx = f.left - l.left, dy = f.top - l.top;
+      if ((dx || dy) && el.animate) el.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" });
+    });
+  }
+  function rbRects(els) {
+    var out = {};
+    Object.keys(els).forEach(function (k) { if (els[k].isConnected) out[k] = els[k].getBoundingClientRect(); });
+    return out;
+  }
+
+  function renderRumblin() {
+    var rb = state.rb;
+    var teams = rbTeams();
+    var grid = document.getElementById("rb-grid");
+    var strip = document.getElementById("rb-strip");
+    var empty = document.getElementById("rb-empty");
+    if (!teams.length) {
+      grid.innerHTML = ""; strip.innerHTML = ""; rb.cardEls = {}; rb.chipEls = {};
+      empty.hidden = false;
+      empty.textContent = state.live && state.live.week ? "Week " + state.live.week + " matchups aren't posted yet." : "No live week right now.";
+      return;
+    }
+    empty.hidden = true;
+    var shown = rb.auto ? (rb.me != null ? rbAroundMe(teams) : teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
+    var shownSet = {};
+    shown.forEach(function (t) { shownSet[t.rid] = true; });
+    rb.sel = shownSet;
+    document.getElementById("rb-around").classList.toggle("active", rb.auto && rb.me != null);
+    document.getElementById("rb-around").hidden = rb.me == null;
+
+    // Name strip, in projected order.
+    var chipBefore = rbRects(rb.chipEls);
+    teams.forEach(function (t, i) {
+      var el = rb.chipEls[t.rid];
+      if (!el) {
+        el = document.createElement("button");
+        el.type = "button";
+        el.className = "rb-chip";
+        el.style.setProperty("--c", rbColor(t.rid));
+        el.addEventListener("click", function () {
+          rb.auto = false;
+          if (rb.sel[t.rid]) delete rb.sel[t.rid]; else rb.sel[t.rid] = true;
+          renderRumblin();
+        });
+        rb.chipEls[t.rid] = el;
+      }
+      el.classList.toggle("on", !!shownSet[t.rid]);
+      el.classList.toggle("me", t.rid === rb.me);
+      el.innerHTML = '<span class="rb-rank">' + (i + 1) + "</span>" + escapeHtml(t.name) + '<span class="rb-proj">' + t.proj.toFixed(1) + "</span>";
+      strip.appendChild(el);
+    });
+    rbFlip(rb.chipEls, chipBefore);
+
+    // Cards.
+    var before = rbRects(rb.cardEls);
+    Object.keys(rb.cardEls).forEach(function (rid) {
+      if (!shownSet[rid]) { rb.cardEls[rid].remove(); delete rb.cardEls[rid]; }
+    });
+    shown.forEach(function (t) {
+      var el = rb.cardEls[t.rid];
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "rb-card";
+        el.style.setProperty("--c", rbColor(t.rid));
+        rb.cardEls[t.rid] = el;
+      }
+      el.classList.toggle("me", t.rid === rb.me);
+      var place = teams.indexOf(t) + 1;
+      el.innerHTML = rbCardHtml(t, place);
+      var prev = rb.lastTotals[t.rid];
+      if (prev != null && Math.abs(prev - t.act) > 0.001) {
+        el.querySelector(".rb-a").classList.add(t.act > prev ? "rb-flash-up" : "rb-flash-down");
+      }
+      rb.lastTotals[t.rid] = t.act;
+      grid.appendChild(el);
+    });
+    rbFlip(rb.cardEls, before);
+
+    // Bring your card to the middle of the screen once, right after picking.
+    if (rb.centerOnce && rb.cardEls[rb.me]) {
+      rb.centerOnce = false;
+      rb.cardEls[rb.me].scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+
+  function openWhoPicker() {
+    state.rb.asked = true;
+    var list = document.getElementById("rb-who-list");
+    var teams = rbTeams();
+    if (!teams.length) {
+      teams = ((state.history && state.history.standings) || []).map(function (st) { return { rid: st.roster_id, name: st.manager }; });
+    }
+    list.innerHTML = "";
+    teams.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.style.setProperty("--c", rbColor(t.rid));
+      b.textContent = t.name;
+      b.addEventListener("click", function () {
+        state.rb.me = t.rid;
+        state.rb.auto = true;
+        state.rb.centerOnce = true;
+        document.getElementById("rb-who").hidden = true;
+        renderRumblin();
+      });
+      list.appendChild(b);
+    });
+    document.getElementById("rb-who").hidden = false;
+  }
+
+  document.getElementById("rb-who-skip").addEventListener("click", function () {
+    state.rb.me = null;
+    state.rb.auto = true;
+    document.getElementById("rb-who").hidden = true;
+    renderRumblin();
+  });
+  document.getElementById("rb-around").addEventListener("click", function () { state.rb.auto = true; state.rb.centerOnce = true; renderRumblin(); });
+  document.getElementById("rb-all").addEventListener("click", function () {
+    state.rb.auto = false;
+    rbTeams().forEach(function (t) { state.rb.sel[t.rid] = true; });
+    renderRumblin();
+  });
+  document.getElementById("rb-change").addEventListener("click", openWhoPicker);
+  document.getElementById("rb-density").addEventListener("click", function (e) {
+    var d = e.target && e.target.getAttribute("data-d");
+    if (!d) return;
+    state.rb.density = d;
+    [].forEach.call(this.children, function (b) { b.classList.toggle("active", b === e.target); });
+    var grid = document.getElementById("rb-grid");
+    grid.classList.toggle("compact", d === "compact");
+    grid.classList.toggle("totals", d === "totals");
+    var before = rbRects(state.rb.cardEls);
+    rbFlip(state.rb.cardEls, before);
+  });
+  els.modeRumblin.addEventListener("click", function () { setView("rumblin"); });
 
   // ---- boot ------------------------------------------------------------
 
