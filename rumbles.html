@@ -1075,7 +1075,7 @@
   /* Your opponent this week: the whole card turns red (tint, stripe and
      name), with a red OPP tag. Overrides the matchup color set inline. */
   .rb-card.opp { --c: var(--bad) !important; border-color: color-mix(in srgb, var(--bad) 55%, var(--panel-border)); }
-  .rb-you.rb-opp { background: var(--bad); color: #fff; }
+  .rb-you.rb-opp { background: var(--bad); color: var(--bg); }
   .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
   .rb-tot { text-align: right; }
@@ -5369,7 +5369,7 @@
         });
         rb.chipEls[t.rid] = el;
       }
-      el.style.setProperty("--c", rbColor(t.rid));
+      el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("on", !!shownSet[t.rid]);
       el.classList.toggle("me", t.rid === rb.me);
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
@@ -5393,7 +5393,8 @@
         el.className = "rb-card";
         rb.cardEls[t.rid] = el;
       }
-      el.style.setProperty("--c", rbColor(t.rid));
+      // Your opponent's card is red, overriding its matchup color.
+      el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
       el.classList.toggle("opp", rbIsOpponent(t.rid));
       var place = teams.indexOf(t) + 1;
