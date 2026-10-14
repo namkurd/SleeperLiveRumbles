@@ -1072,8 +1072,9 @@
   .rb-place { font-weight: 800; color: var(--text-dim); font-size: 0.8rem; width: 1.4em; }
   .rb-who-name { flex: 1; min-width: 0; }
   .rb-mgr { display: block; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* Your opponent this week: red tag and a red glow. */
-  .rb-card.opp { border-color: color-mix(in srgb, var(--bad) 70%, transparent); box-shadow: 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 35%, transparent); }
+  /* Your opponent this week: the whole card turns red (tint, stripe and
+     name), with a red OPP tag. Overrides the matchup color set inline. */
+  .rb-card.opp { --c: var(--bad) !important; border-color: color-mix(in srgb, var(--bad) 55%, var(--panel-border)); }
   .rb-you.rb-opp { background: var(--bad); color: #fff; }
   .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
