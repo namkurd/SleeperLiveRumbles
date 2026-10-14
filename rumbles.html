@@ -1180,7 +1180,7 @@
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
       <h3 id="rb-who-title">Which manager are you?</h3>
-      <p>You'll see your team with the 3 teams projected just above and below you.</p>
+      <p>You'll see your team with the 2 teams projected just above and below you.</p>
       <div class="rb-who-list" id="rb-who-list"></div>
       <button type="button" class="rb-who-skip" id="rb-who-skip">Skip, show everyone</button>
     </div>
@@ -2983,7 +2983,9 @@
           fetchJson(LIVE_CAPTURES_URL).catch(function (err) {
             console.warn("[rumbles] couldn't load live_qb_captures.json (QB-injury 'likely' entries will fall back to the same-day check, with no hover timestamp):", err);
             return { captures: [] };
-          })
+          }),
+          // Rosters, only for each team's IR list on the Rumblin' cards.
+          fetchJson(API_V1 + "/league/" + leagueId + "/rosters").catch(function () { return []; })
         ]).then(function (results) {
           var league = results[0];
           var matchups = results[1] || [];
@@ -2992,6 +2994,12 @@
           var games = results[4] || [];
           var teamGameSchedule = buildTeamGameSchedule(games);
           var liveCaptures = buildLiveCapturesLookup(results[5], season);
+          var reserveByRoster = {};
+          (results[6] || []).forEach(function (r) {
+            var set = {};
+            (r.reserve || []).forEach(function (pid) { set[pid] = true; });
+            reserveByRoster[r.roster_id] = set;
+          });
           state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
@@ -3119,13 +3127,15 @@
                     breakdown, adj ? adj.backup_qbs : null, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule,
                     adj ? adj.confidence : null
                   );
-                  // Bench, for the Rumblin' tab's cards.
+                  // Bench and IR, for the Rumblin' tab's cards.
                   var starterSet = {};
                   (m.starters || []).forEach(function (pid) { starterSet[pid] = true; });
-                  state.live.byRoster[rid].bench = (m.players || [])
-                    .filter(function (pid) { return pid && pid !== "0" && !starterSet[pid]; })
-                    .map(function (pid) { return computePlayerBreakdownEntry(pid, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule); })
-                    .sort(function (a, b) { return tooltipSlotRank(a.position) - tooltipSlotRank(b.position); });
+                  var reserve = reserveByRoster[rid] || {};
+                  var entryFor = function (pid) { return computePlayerBreakdownEntry(pid, statsMap, projMap, scoringSettings, playersMeta, teamGameSchedule); };
+                  var byPos = function (a, b) { return tooltipSlotRank(a.position) - tooltipSlotRank(b.position); };
+                  var others = (m.players || []).filter(function (pid) { return pid && pid !== "0" && !starterSet[pid]; });
+                  state.live.byRoster[rid].bench = others.filter(function (pid) { return !reserve[pid]; }).map(entryFor).sort(byPos);
+                  state.live.byRoster[rid].ir = others.filter(function (pid) { return reserve[pid]; }).map(entryFor).sort(byPos);
                 }
               });
             });
@@ -5206,7 +5216,7 @@
   // ---- Rumblin' tab ----------------------------------------------------
   // Any managers' live cards side by side, ordered by projected score
   // (highest first), with every starter and the bench. You pick which
-  // manager you are once per visit; the view then shows you plus the 3
+  // manager you are once per visit; the view then shows you plus the 2
   // teams projected just above and below you ("Around me"), and follows
   // as the order changes. Tapping names picks teams by hand instead.
   var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
@@ -5231,6 +5241,7 @@
         proj: num(b.custom && b.custom.points),
         players: players,
         bench: b.bench || [],
+        ir: b.ir || [],
         liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
@@ -5239,8 +5250,8 @@
   function rbAroundMe(teams) {
     var idx = teams.findIndex(function (t) { return t.rid === state.rb.me; });
     if (idx === -1) return teams;
-    var start = Math.max(0, Math.min(idx - 3, teams.length - 7));
-    return teams.slice(start, start + 7);
+    var start = Math.max(0, Math.min(idx - 2, teams.length - 5));
+    return teams.slice(start, start + 5);
   }
 
   function rbPlayerRow(p, bench) {
@@ -5267,12 +5278,14 @@
     var me = t.rid === state.rb.me;
     var rows = t.players.map(function (p) { return rbPlayerRow(p, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
+    var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
     return '<div class="rb-head"><span class="rb-place">' + place + '</span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
       (me ? '<span class="rb-you">YOU</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
       '<div class="rb-tot"><div class="rb-a">' + t.act.toFixed(2) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
       '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
       (bench ? '<tr class="rb-bench-h"><td colspan="3">Bench</td></tr>' + bench : "") +
+      (ir ? '<tr class="rb-bench-h"><td colspan="3">IR</td></tr>' + ir : "") +
       '</tbody><tfoot><tr><td class="rb-nm">Starters</td><td>' + t.act.toFixed(2) + "</td><td>" + t.proj.toFixed(2) + "</td></tr></tfoot></table>";
   }
 
