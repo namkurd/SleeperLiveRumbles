@@ -1088,7 +1088,14 @@
   #rumblin-view .rb-table td { position: static; background: none; box-shadow: none; padding: 3px 4px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; width: auto; min-width: 0; }
   #rumblin-view .rb-table td.rb-nm { text-align: left; padding-left: 13px; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 62%; }
   #rumblin-view .rb-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--row-alt) 70%, transparent); }
-  .rb-meta { color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; }
+  /* Name shrinks (with an ellipsis) before the game time does. */
+  .rb-nmwrap { display: flex; align-items: baseline; min-width: 0; }
+  .rb-nmwrap .pos-badge { flex-shrink: 0; align-self: center; }
+  .rb-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
+  .rb-meta .rb-ms { display: none; }
+  .rb-grid.compact .rb-meta .rb-ml { display: none; }
+  .rb-grid.compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
   .rb-table tr.rb-off td { opacity: 0.5; }
   .rb-table tr.rb-live td.rb-nm .rb-n, .rb-table tr.rb-live td.rb-act { color: var(--live); }
@@ -1096,7 +1103,7 @@
   .rb-table tr.rb-repl td.rb-nm .rb-n { color: var(--replacement); }
   .rb-table td.rb-proj { color: var(--text-dim); }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
-  .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
+  #rumblin-view .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
   .rb-table tfoot td { border-top: 1px solid var(--panel-border) !important; font-weight: 700; padding: 5px 4px 7px; }
   .rb-table tfoot td.rb-nm { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
   .rb-grid.compact { --rb-cardw: 190px; }
@@ -1115,7 +1122,7 @@
     #rumblin-view .rb-grid.compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
     .rb-grid.compact .rb-table .pos-badge { display: none; }
     .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
-    .rb-grid.compact .rb-meta { display: block; margin-left: 0; line-height: 1.1; }
+    .rb-grid.compact .rb-meta { margin-left: 4px; }
     .rb-grid.totals { --rb-cardw: 140px; }
   }
   .rb-grid.totals .rb-table { display: none; }
@@ -5282,23 +5289,33 @@
     return shown;
   }
 
+  // Kickoff time squeezed for Compact cards: "Sun 8pm" -> "Su8p".
+  function rbShortStart(ms) {
+    if (typeof ms !== "number" || isNaN(ms)) return "";
+    var d = new Date(ms);
+    var h = d.getHours(), h12 = h % 12 || 12;
+    return TOOLTIP_DAY_NAMES[d.getDay()].slice(0, 2) + h12 + (h >= 12 ? "p" : "a");
+  }
+
   function rbPlayerRow(p, bench) {
     var status = p.game_status;
     var live = status === "in_progress";
-    var meta = "";
+    var meta = "", metaShort = "";
     if (live) {
       meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
+      metaShort = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " " : "") + p.game_score : "");
     } else if (status === "complete") {
-      meta = "Final";
+      meta = "Final"; metaShort = "F";
     } else if (status === "pre_game") {
       meta = formatGameStartLabel(p.game_start_ms);
+      metaShort = rbShortStart(p.game_start_ms);
     } else {
-      meta = "Bye";
+      meta = "Bye"; metaShort = "Bye";
     }
     var cls = (live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (p.replacement ? " rb-repl" : "");
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
-    return '<tr class="' + cls + '"><td class="rb-nm">' + posBadgeHtml(p.position) + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
-      (meta ? '<span class="rb-meta">' + escapeHtml(meta) + "</span>" : "") + "</td>" +
+    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + posBadgeHtml(p.position) + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
+      (meta ? '<span class="rb-meta"><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + shown + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
 
