@@ -5345,7 +5345,11 @@
       }
       el.classList.toggle("on", !!shownSet[t.rid]);
       el.classList.toggle("me", t.rid === rb.me);
-      el.innerHTML = '<span class="rb-rank">' + (i + 1) + "</span>" + escapeHtml(t.name) + '<span class="rb-proj">' + t.proj.toFixed(1) + "</span>";
+      // Projected Vs. Field Rumbles: teams this one is projected to outscore
+      // (11 for the top projection, 0 for the bottom).
+      var outscored = teams.filter(function (o) { return o.rid !== t.rid && t.proj > o.proj; }).length;
+      el.title = "Projected to outscore " + outscored + (outscored === 1 ? " team" : " teams");
+      el.innerHTML = '<span class="rb-rank">' + outscored + "</span>" + escapeHtml(t.name) + '<span class="rb-proj">' + t.proj.toFixed(1) + "</span>";
       strip.appendChild(el);
     });
     rbFlip(rb.chipEls, chipBefore);
