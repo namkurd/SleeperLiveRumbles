@@ -1180,7 +1180,7 @@
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
       <h3 id="rb-who-title">Which manager are you?</h3>
-      <p>You'll see your team with the 2 teams projected just above and below you.</p>
+      <p>You'll see your team, your opponent, and the 2 teams projected just above and below you.</p>
       <div class="rb-who-list" id="rb-who-list"></div>
       <button type="button" class="rb-who-skip" id="rb-who-skip">Skip, show everyone</button>
     </div>
@@ -5216,8 +5216,9 @@
   // ---- Rumblin' tab ----------------------------------------------------
   // Any managers' live cards side by side, ordered by projected score
   // (highest first), with every starter and the bench. You pick which
-  // manager you are once per visit; the view then shows you plus the 2
-  // teams projected just above and below you ("Around me"), and follows
+  // manager you are once per visit; the view then shows you, your
+  // opponent, and the 2 teams projected just above and below you
+  // ("Around me"), and follows
   // as the order changes. Tapping names picks teams by hand instead.
   var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
   state.view = "standings";
@@ -5248,6 +5249,7 @@
         players: players,
         bench: b.bench || [],
         ir: b.ir || [],
+        opp: b.actual && b.actual.opponentRosterId != null ? Number(b.actual.opponentRosterId) : null,
         liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
@@ -5257,7 +5259,13 @@
     var idx = teams.findIndex(function (t) { return t.rid === state.rb.me; });
     if (idx === -1) return teams;
     var start = Math.max(0, Math.min(idx - 2, teams.length - 5));
-    return teams.slice(start, start + 5);
+    var shown = teams.slice(start, start + 5);
+    // Always include this week's opponent, wherever they're projected.
+    var opp = teams[idx].opp;
+    if (opp != null && !shown.some(function (t) { return t.rid === opp; })) {
+      shown = teams.filter(function (t) { return t.rid === opp || shown.indexOf(t) !== -1; });
+    }
+    return shown;
   }
 
   function rbPlayerRow(p, bench) {
