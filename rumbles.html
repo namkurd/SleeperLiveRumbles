@@ -1057,8 +1057,10 @@
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .rb-controls .spacer { flex: 1; }
-  .rb-small { border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); font: inherit; font-size: 0.76rem; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
-  .rb-small.active { border-color: var(--accent); color: var(--accent); }
+  /* Team-picker group: same pill style as the size toggle, in the page's
+     blue accent so the two groups read as separate controls. */
+  .rb-view-group button.active { background: var(--accent-2); color: var(--bg); }
+  .rb-view-group button[hidden] { display: none; }
   .rb-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--rb-cardw, 270px), 1fr)); align-items: start; }
   .rb-card {
     --c: var(--accent-2);
@@ -1075,8 +1077,8 @@
   /* Your opponent this week: the whole card turns red (tint, stripe and
      name), with a red OPP tag. Overrides the matchup color set inline. */
   .rb-card.opp { --c: var(--bad) !important; border-color: color-mix(in srgb, var(--bad) 70%, transparent); box-shadow: 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 35%, transparent); }
-  .rb-you.rb-opp { background: var(--bad); color: #0f1115; }
-  .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: #0f1115; background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
+  .rb-you.rb-opp { background: var(--bad); color: var(--bg); }
+  .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
   .rb-tot { text-align: right; }
   .rb-tot .rb-a { font-size: 1.12rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1173,10 +1175,11 @@
         <button type="button" data-d="compact" class="active">Compact</button>
         <button type="button" data-d="totals">Totals</button>
       </div>
-      <span class="spacer"></span>
-      <button type="button" class="rb-small" id="rb-around">Around me</button>
-      <button type="button" class="rb-small" id="rb-all">Everyone</button>
-      <button type="button" class="rb-small" id="rb-change">Change me</button>
+      <div class="toggle-group rb-view-group" role="group" aria-label="Which teams">
+        <button type="button" id="rb-around">Around me</button>
+        <button type="button" id="rb-all">Everyone</button>
+        <button type="button" id="rb-change">Change me</button>
+      </div>
     </div>
     <div class="rb-grid compact" id="rb-grid"></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
@@ -5352,6 +5355,7 @@
     shown.forEach(function (t) { shownSet[t.rid] = true; });
     rb.sel = shownSet;
     document.getElementById("rb-around").classList.toggle("active", rb.auto && rb.me != null);
+    document.getElementById("rb-all").classList.toggle("active", shown.length === teams.length && !(rb.auto && rb.me != null));
     document.getElementById("rb-around").hidden = rb.me == null;
 
     // Name strip, in projected order.
