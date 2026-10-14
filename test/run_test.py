@@ -66,6 +66,10 @@ SUN_START_UTC = datetime.datetime.fromtimestamp(
 
 
 def install_routes(page, routes):
+    # League rosters (only used for the Rumblin' cards' IR lists) default
+    # to "no one on IR" unless a scenario supplies its own.
+    routes = dict(routes)
+    routes.setdefault("**/v1/league/TESTLEAGUE1/rosters", [])
     for pattern, payload in routes.items():
         def handler(route, request=None, payload=payload):
             route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
