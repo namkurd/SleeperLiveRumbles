@@ -1110,7 +1110,7 @@
   .rb-table .rb-plus { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
   .rb-table .rb-plus svg { display: block; }
   /* Out players: no longer live, so the clock goes gray and points white. */
-  .rb-table tr.rb-outrow .rb-meta { color: var(--text-dim) !important; }
+  .rb-table tr.rb-outrow .rb-meta { color: var(--text-dim) !important; text-decoration: line-through; }
   .rb-table tr.rb-outrow td.rb-act { color: var(--text); }
   .rb-table td.rb-proj { color: var(--text-dim); }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
@@ -5277,7 +5277,8 @@
         ir: b.ir || [],
         adj: b.qbAdjustment || null,
         opp: b.actual && b.actual.opponentRosterId != null ? Number(b.actual.opponentRosterId) : null,
-        liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress" && !rbRuledOut(p); }).length
+        // In a game right now: a QB-injury backup counts; anyone ruled Out doesn't.
+        liveCount: players.filter(function (p) { return p.game_status === "in_progress" && !rbRuledOut(p); }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
   }
