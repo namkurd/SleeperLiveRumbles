@@ -1107,7 +1107,11 @@
   /* QB-injury backup slot ("+"): yellow while likely, green once confirmed. */
   .rb-table tr.rb-repl td.rb-nm .rb-n, .rb-table tr.rb-repl td.rb-act, .rb-table tr.rb-repl td.rb-proj { color: var(--replacement); opacity: 1; }
   .rb-table tr.rb-repl.rb-repl-ok td.rb-nm .rb-n, .rb-table tr.rb-repl.rb-repl-ok td.rb-act, .rb-table tr.rb-repl.rb-repl-ok td.rb-proj { color: var(--good); }
-  .rb-table .rb-plus { font-size: 0.72rem; line-height: 1.15; }
+  .rb-table .rb-plus { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
+  .rb-table .rb-plus svg { display: block; }
+  /* Out players: no longer live, so the clock goes gray and points white. */
+  .rb-table tr.rb-outrow .rb-meta { color: var(--text-dim) !important; }
+  .rb-table tr.rb-outrow td.rb-act { color: var(--text); }
   .rb-table td.rb-proj { color: var(--text-dim); }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
   #rumblin-view .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
@@ -5273,7 +5277,7 @@
         ir: b.ir || [],
         adj: b.qbAdjustment || null,
         opp: b.actual && b.actual.opponentRosterId != null ? Number(b.actual.opponentRosterId) : null,
-        liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
+        liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress" && !rbRuledOut(p); }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
   }
@@ -5306,6 +5310,14 @@
     return TOOLTIP_DAY_NAMES[d.getDay()].slice(0, 2) + h12 + (h >= 12 ? "p" : "a");
   }
 
+  // A medical-style cross for the QB-injury backup slot.
+  var RB_MED_CROSS = '<svg viewBox="0 0 10 10" width="11" height="11" aria-hidden="true"><path d="M3.6 1h2.8v2.6H9v2.8H6.4V9H3.6V6.4H1V3.6h2.6z" fill="#fff"/></svg>';
+
+  // Ruled Out after his game started (he played, then his status flipped).
+  function rbRuledOut(p) {
+    return !p.replacement && isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played;
+  }
+
   function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";
@@ -5325,10 +5337,12 @@
     }
     // Ruled Out during his game (or the starter a QB-injury credit replaces):
     // name struck through and grayed; points unchanged.
-    var out = struck || (isOutStatus(p.injury_status) && status !== "pre_game" && p.played);
-    var cls = (live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
+    var out = struck || rbRuledOut(p);
+    // An Out player is no longer live, even while his game is.
+    if (out) live = false;
+    var cls = (out ? "rb-outrow" : live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
-    var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus">+</span>' : posBadgeHtml(p.position);
+    var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
     return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
