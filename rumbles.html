@@ -1072,6 +1072,9 @@
   .rb-place { font-weight: 800; color: var(--text-dim); font-size: 0.8rem; width: 1.4em; }
   .rb-who-name { flex: 1; min-width: 0; }
   .rb-mgr { display: block; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Your opponent this week: red tag and a red glow. */
+  .rb-card.opp { border-color: color-mix(in srgb, var(--bad) 70%, transparent); box-shadow: 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 35%, transparent); }
+  .rb-you.rb-opp { background: var(--bad); color: #fff; }
   .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
   .rb-tot { text-align: right; }
@@ -5255,6 +5258,13 @@
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
   }
 
+  // Whether roster `rid` is the picked manager's opponent this week.
+  function rbIsOpponent(rid) {
+    var me = state.rb.me;
+    var b = me != null && state.live && state.live.byRoster ? state.live.byRoster[me] : null;
+    return !!(b && b.actual && b.actual.opponentRosterId != null && Number(b.actual.opponentRosterId) === Number(rid));
+  }
+
   function rbAroundMe(teams) {
     var idx = teams.findIndex(function (t) { return t.rid === state.rb.me; });
     if (idx === -1) return teams;
@@ -5290,11 +5300,13 @@
 
   function rbCardHtml(t, place) {
     var me = t.rid === state.rb.me;
+    var isOpp = rbIsOpponent(t.rid);
     var rows = t.players.map(function (p) { return rbPlayerRow(p, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
     return '<div class="rb-head"><span class="rb-place">' + place + '</span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
       (me ? '<span class="rb-you">YOU</span>' : "") +
+      (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
       '<div class="rb-tot"><div class="rb-a">' + t.act.toFixed(2) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
       '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
@@ -5382,6 +5394,7 @@
       }
       el.style.setProperty("--c", rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
+      el.classList.toggle("opp", rbIsOpponent(t.rid));
       var place = teams.indexOf(t) + 1;
       el.innerHTML = rbCardHtml(t, place);
       var prev = rb.lastTotals[t.rid];
