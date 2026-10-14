@@ -1102,7 +1102,12 @@
   .rb-table tr.rb-off .rb-meta { opacity: 0.9; }
   .rb-table tr.rb-live td.rb-nm .rb-n, .rb-table tr.rb-live td.rb-act { color: var(--live); }
   .rb-table tr.rb-live .rb-meta { color: var(--live); opacity: 0.85; }
-  .rb-table tr.rb-repl td.rb-nm .rb-n { color: var(--replacement); }
+  /* Ruled out mid-game: struck through and grayed; points left as-is. */
+  .rb-table tr.rb-out td.rb-nm .rb-n { text-decoration: line-through; color: var(--text-dim); opacity: 0.6; }
+  /* QB-injury backup slot ("+"): yellow while likely, green once confirmed. */
+  .rb-table tr.rb-repl td.rb-nm .rb-n, .rb-table tr.rb-repl td.rb-act, .rb-table tr.rb-repl td.rb-proj { color: var(--replacement); opacity: 1; }
+  .rb-table tr.rb-repl.rb-repl-ok td.rb-nm .rb-n, .rb-table tr.rb-repl.rb-repl-ok td.rb-act, .rb-table tr.rb-repl.rb-repl-ok td.rb-proj { color: var(--good); }
+  .rb-table .rb-plus { font-size: 0.72rem; line-height: 1.15; }
   .rb-table td.rb-proj { color: var(--text-dim); }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
   #rumblin-view .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
@@ -1900,6 +1905,7 @@
       actual: round2(actualPts),
       proj: round2(projPts),
       played: played,
+      injury_status: meta ? (meta.injury_status || null) : null,
       game_status: (game && game.status) || "unknown",
       game_start_ms: (game && game.startTimeMs) || null,
       // Live games only: minutes left and "team-opponent" score.
@@ -5265,6 +5271,7 @@
         players: players,
         bench: b.bench || [],
         ir: b.ir || [],
+        adj: b.qbAdjustment || null,
         opp: b.actual && b.actual.opponentRosterId != null ? Number(b.actual.opponentRosterId) : null,
         liveCount: players.filter(function (p) { return !p.replacement && p.game_status === "in_progress"; }).length
       };
@@ -5299,7 +5306,7 @@
     return TOOLTIP_DAY_NAMES[d.getDay()].slice(0, 2) + h12 + (h >= 12 ? "p" : "a");
   }
 
-  function rbPlayerRow(p, bench) {
+  function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";
     var meta = "", metaShort = "", slotColor = null;
@@ -5316,9 +5323,14 @@
     } else {
       meta = "Bye"; metaShort = "Bye";
     }
-    var cls = (live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (p.replacement ? " rb-repl" : "");
+    // Ruled Out during his game (or the starter a QB-injury credit replaces):
+    // name struck through and grayed; points unchanged.
+    var out = struck || (isOutStatus(p.injury_status) && status !== "pre_game" && p.played);
+    var cls = (live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
+      (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
+    var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus">+</span>' : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
-    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + posBadgeHtml(p.position) + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
+    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + shown + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
@@ -5326,7 +5338,18 @@
   function rbCardHtml(t, place) {
     var me = t.rid === state.rb.me;
     var isOpp = rbIsOpponent(t.rid);
-    var rows = t.players.map(function (p) { return rbPlayerRow(p, false); }).join("");
+    // QB-injury backups go in their own "+" slot right under the starter
+    // they replace, who is struck through.
+    var injuredId = t.adj && t.adj.injured_qb ? String(t.adj.injured_qb.player_id) : null;
+    var repl = t.players.filter(function (p) { return p.replacement; });
+    var rows = "";
+    t.players.forEach(function (p) {
+      if (p.replacement) return;
+      var isInjured = injuredId != null && String(p.player_id) === injuredId && repl.length > 0;
+      rows += rbPlayerRow(p, false, isInjured);
+      if (isInjured) { rows += repl.map(function (r) { return rbPlayerRow(r, false); }).join(""); repl = []; }
+    });
+    rows += repl.map(function (r) { return rbPlayerRow(r, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
     return '<div class="rb-head"><span class="rb-place">' + place + '</span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
