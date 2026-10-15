@@ -2586,6 +2586,9 @@ def scenario_rumblin_controls(browser):
     assert not page.is_visible("#rb-who"), "the picker should not open on its own"
     assert len(cards()) == 12 and active("#rb-all"), "Everyone should be the default view"
     assert not page.is_visible("#rb-sub"), "In Play / Matchup should only show in the Me view"
+    # Only Alex has a live player (Kyler Murray's backup), so every other card fades.
+    idle = page.evaluate("[...document.querySelectorAll('.rb-card.rb-idle .rb-mgr')].map(e => e.textContent).sort()")
+    assert len(idle) == 11 and "Alex" not in idle, f"cards without live players should fade, got faded: {idle}"
     # Tapping Me opens the picker; picking yourself goes to the Me view.
     page.click("#rb-me")
     page.wait_for_timeout(300)
