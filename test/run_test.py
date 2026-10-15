@@ -2596,11 +2596,12 @@ def scenario_rumblin_controls(browser):
     page.click("#rb-all")
     page.wait_for_timeout(300)
     assert len(cards()) == 12
-    # Everyone is green (apart from Me's blue), and Change me only exists in the Me view.
+    # The selected button is the page's green, and Change me only exists in the Me view.
     assert not page.is_visible("#rb-change"), "Change me should be hidden outside the Me view"
-    everyone_bg = page.evaluate("getComputedStyle(document.getElementById('rb-all')).backgroundColor")
-    me_bg = page.evaluate("(() => { var b = document.getElementById('rb-me'); b.classList.add('active'); var c = getComputedStyle(b).backgroundColor; b.classList.remove('active'); return c; })()")
-    assert everyone_bg != me_bg, "the Everyone button should be a different color from Me"
+    green_rgb = page.evaluate(
+        "(() => { var p = document.createElement('span'); p.style.color = getComputedStyle(document.documentElement).getPropertyValue('--good').trim(); document.body.appendChild(p); var c = getComputedStyle(p).color; p.remove(); return c; })()"
+    )
+    assert page.evaluate("getComputedStyle(document.getElementById('rb-all')).backgroundColor") == green_rgb, "the selected Everyone button should be green"
 
     # Me -> In Play (default): Aidan has 2.50 actual / 15.00 projected, so
     # only teams whose actual is under 15 (Joe, 0.00) are in play, plus the
@@ -2609,6 +2610,8 @@ def scenario_rumblin_controls(browser):
     page.wait_for_timeout(400)
     assert active("#rb-me") and active("#rb-inplay") and page.is_visible("#rb-sub")
     assert page.is_visible("#rb-change"), "Change me should show once Me is selected"
+    assert page.evaluate("getComputedStyle(document.getElementById('rb-me')).backgroundColor") == green_rgb, "the selected Me button should be green"
+    assert page.evaluate("getComputedStyle(document.getElementById('rb-inplay')).backgroundColor") == green_rgb, "the selected In Play button should be green"
     assert sorted(cards()) == ["Aidan", "Ben", "Joe"], f"unexpected In Play cards: {cards()}"
 
     # Matchup: just you and your opponent.
