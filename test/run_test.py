@@ -2549,6 +2549,84 @@ def scenario_history_load_failure(browser):
     print("\nSCENARIO 3 PASSED")
 
 
+def scenario_rumblin_controls(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Rumblin' team controls (Everyone / Me -> In Play / Matchup)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    routes = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/state/nfl": load("state.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL)
+    page.wait_for_timeout(2500)
+    page.click("#mode-rumblin")
+    page.wait_for_timeout(400)
+
+    def cards():
+        return page.evaluate(
+            "[...document.querySelectorAll('.rb-card')].map(c => c.querySelector('.rb-mgr').textContent)"
+        )
+
+    def active(sel):
+        return page.evaluate("s => document.querySelector(s).classList.contains('active')", sel)
+
+    # Picking yourself keeps the default Everyone view (all 12 cards).
+    assert page.is_visible("#rb-who"), "the 'Which manager are you?' picker should open"
+    page.click("#rb-who-list button:has-text('Aidan')")
+    page.wait_for_timeout(400)
+    assert len(cards()) == 12 and active("#rb-all"), "Everyone should be the default view after picking a manager"
+    assert not page.is_visible("#rb-sub"), "In Play / Matchup should only show in the Me view"
+    # Your card gets the 'me' highlight, and it is green.
+    green = page.evaluate(
+        """() => {
+            var good = getComputedStyle(document.documentElement).getPropertyValue('--good').trim();
+            var me = document.querySelector('.rb-card.me');
+            var probe = document.createElement('span'); probe.style.color = good; document.body.appendChild(probe);
+            var goodRgb = getComputedStyle(probe).color; probe.remove();
+            return getComputedStyle(me.querySelector('.rb-you')).backgroundColor === goodRgb;
+        }"""
+    )
+    assert green, "the YOU tag on your card should use the page's green"
+
+    # Me -> In Play (default): Aidan has 2.50 actual / 15.00 projected, so
+    # only teams whose actual is under 15 (Joe, 0.00) are in play, plus the
+    # opponent (Ben) is always shown.
+    page.click("#rb-me")
+    page.wait_for_timeout(400)
+    assert active("#rb-me") and active("#rb-inplay") and page.is_visible("#rb-sub")
+    assert sorted(cards()) == ["Aidan", "Ben", "Joe"], f"unexpected In Play cards: {cards()}"
+
+    # Matchup: just you and your opponent.
+    page.click("#rb-matchup")
+    page.wait_for_timeout(400)
+    assert sorted(cards()) == ["Aidan", "Ben"], f"unexpected Matchup cards: {cards()}"
+
+    # Everyone again; tapping a name makes a custom selection (no toggle active).
+    page.click("#rb-all")
+    page.wait_for_timeout(300)
+    assert len(cards()) == 12
+    page.click("#rb-strip .rb-chip >> nth=0")
+    page.wait_for_timeout(300)
+    assert len(cards()) == 11 and not active("#rb-all") and not active("#rb-me")
+
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nRUMBLIN CONTROLS SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -2568,6 +2646,7 @@ def main():
         scenario_pointer_ahead_of_history(browser)
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
+        scenario_rumblin_controls(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
