@@ -1056,7 +1056,6 @@
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-  .rb-controls .spacer { flex: 1; }
   /* Team-picker group: same pill style as the size toggle, in the page's
      blue accent so the two groups read as separate controls. */
   .rb-view-group button.active { background: var(--accent-2); color: var(--bg); }
@@ -1071,7 +1070,12 @@
   /* Your own card: a soft glow in your color. */
   .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
   .rb-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 7px 13px; }
-  .rb-place { font-weight: 800; color: var(--text-dim); font-size: 0.8rem; width: 1.4em; }
+  /* Projected Rumbles (big) with the vs. Field part underneath (small). */
+  .rb-rum { display: flex; flex-direction: column; align-items: center; min-width: 3.4em; line-height: 1.1; }
+  .rb-rum-n { font-weight: 800; font-size: 1.3rem; color: var(--c); font-variant-numeric: tabular-nums; }
+  .rb-rum-m { display: none; font-size: 0.6rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .rb-rum-m b { color: var(--c); font-size: 0.72rem; font-weight: 800; }
+  .rb-rum-f { font-size: 0.56rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .rb-who-name { flex: 1; min-width: 0; }
   .rb-mgr { display: block; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Your opponent this week: the whole card turns red (tint, stripe and
@@ -1129,7 +1133,10 @@
     .rb-grid.compact { --rb-cardw: 150px; }
     .rb-grid.compact .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
     .rb-grid.compact .rb-tot .rb-a { font-size: 0.95rem; }
-    .rb-grid.compact .rb-place { display: none; }
+    /* Phone compact cards are narrow: show the Rumbles under the name
+       instead of in their own column, so names keep their room. */
+    .rb-grid.compact .rb-rum { display: none; }
+    .rb-grid.compact .rb-rum-m { display: block; }
     #rumblin-view .rb-grid.compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
     .rb-grid.compact .rb-table .pos-badge { display: none; }
     .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
@@ -1268,7 +1275,7 @@
   </div>
   <ul class="footnote qb-adj-legend">
     <li><strong>Confirmed:</strong> the commissioner has added the backup's points to your official score.</li>
-    <li><strong>Likely:</strong> your starter's status changed to Out during the game and a backup from his team came in and scored. The backup's points are added to your score on this page until the commissioner makes it official. Hover or tap the QB's name to see when the change was logged.</li>
+    <li><strong>Likely:</strong> your starter's status changed to Out during the game and a backup from his team came in and scored. The backup's points count toward your score. It becomes Confirmed once the commissioner enters it in Sleeper. Hover or tap the QB's name to see when the change was logged.</li>
     <li><strong>Possible:</strong> your QB played and a backup from his team also played, but his status was not caught changing to Out during the game. This could just be a normal substitution, so no points are added unless the commissioner confirms it.</li>
     <li><strong>Commissioner Adjustment</strong> is the number of points the commissioner actually added.</li>
   </ul>
@@ -4599,7 +4606,7 @@
     lines.push(isLastWeek
       ? '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Pts Last Week."
       : '<span class="qb-adj-tooltip-yellow">' + deltaStr + " pts</span> added to Actual &amp; Projected.");
-    lines.push("Pending the commissioner&rsquo;s official adjustment.");
+    lines.push("Confirmed once the commissioner enters it.");
 
     return "<strong>QB injury adjustment (likely)</strong><br>" + lines.join("<br>");
   }
@@ -5264,7 +5271,7 @@
     if (!live || !live.isLive) return [];
     var managers = {};
     ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
-    return Object.keys(live.byRoster).map(function (rid) {
+    var teams = Object.keys(live.byRoster).map(function (rid) {
       var b = live.byRoster[rid];
       var players = b.players || [];
       return {
@@ -5281,6 +5288,22 @@
         liveCount: players.filter(function (p) { return p.game_status === "in_progress" && !rbRuledOut(p); }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
+    return rbWithRumbles(teams);
+  }
+
+  // Projected Rumbles for the week, same math as the standings: +1 per team
+  // projected to be outscored (vsField), plus 9 if projected to beat the
+  // opponent.
+  function rbWithRumbles(teams) {
+    var byRid = {};
+    teams.forEach(function (t) { byRid[t.rid] = t; });
+    teams.forEach(function (t) {
+      t.vsField = teams.filter(function (o) { return o.rid !== t.rid && t.proj > o.proj; }).length;
+      var o = t.opp != null ? byRid[t.opp] : null;
+      t.h2hWin = !!(o && t.proj > o.proj);
+      t.rumbles = t.vsField + (t.h2hWin ? RUMBLES_PER_WIN : 0);
+    });
+    return teams;
   }
 
   // Whether roster `rid` is the picked manager's opponent this week.
@@ -5350,7 +5373,7 @@
       '<td class="rb-act">' + shown + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
 
-  function rbCardHtml(t, place) {
+  function rbCardHtml(t) {
     var me = t.rid === state.rb.me;
     var isOpp = rbIsOpponent(t.rid);
     // QB-injury backups go in their own "+" slot right under the starter
@@ -5367,7 +5390,8 @@
     rows += repl.map(function (r) { return rbPlayerRow(r, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
-    return '<div class="rb-head"><span class="rb-place">' + place + '</span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+    return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + t.rumbles + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+      '<span class="rb-rum-m"><b>' + t.rumbles + "</b> &middot; vs. Field " + t.vsField + "</span>" +
       (me ? '<span class="rb-you">YOU</span>' : "") +
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
@@ -5437,7 +5461,7 @@
       el.classList.toggle("me", t.rid === rb.me);
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
       // (11 for the top projection, 0 for the bottom).
-      var outscored = teams.filter(function (o) { return o.rid !== t.rid && t.proj > o.proj; }).length;
+      var outscored = t.vsField;
       el.title = "Projected to outscore " + outscored + (outscored === 1 ? " team" : " teams");
       el.innerHTML = '<span class="rb-rank">' + outscored + "</span>" + escapeHtml(t.name) + '<span class="rb-proj">' + t.proj.toFixed(1) + "</span>";
       strip.appendChild(el);
@@ -5460,8 +5484,7 @@
       el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
       el.classList.toggle("opp", rbIsOpponent(t.rid));
-      var place = teams.indexOf(t) + 1;
-      el.innerHTML = rbCardHtml(t, place);
+      el.innerHTML = rbCardHtml(t);
       var prev = rb.lastTotals[t.rid];
       if (prev != null && Math.abs(prev - t.act) > 0.001) {
         el.querySelector(".rb-a").classList.add(t.act > prev ? "rb-flash-up" : "rb-flash-down");
