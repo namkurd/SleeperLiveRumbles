@@ -5,6 +5,31 @@ scoring system, served straight from GitHub Pages. Separate project from
 the career head-to-head matrix -- its own repo, its own data, its own
 page.
 
+## Quick start
+
+- **Live page:** https://namkurd.github.io/SleeperLiveRumbles/rumbles.html
+  (GitHub Pages, `main` branch). One file, no build step.
+- **Tabs:** *Actual* (official standings), *Projected* (standings if the live
+  week ended on current projections) and *Rumblin'* (live matchup cards side
+  by side). On a Rumblin' card, the big number is that team's projected
+  Rumbles this week (9 for projected to win the H2H, plus 1 per team
+  projected to be outscored); "vs. Field" underneath is the second part.
+- **Files:** `rumbles.html` (the site), `build_rumbles.py` (nightly history
+  build), `capture_live_qb_injuries.py` (in-game QB-Out logger), the
+  `rumbles_history.json` / `live_qb_captures.json` data files, and `test/`.
+- **Run the tests** (from the repo root):
+
+  ```bash
+  for f in test/*.js; do node $f; done
+  python3 test/test_build_rumbles.py
+  python3 test/test_capture_live_qb_injuries.py
+  # end to end (needs Playwright + Chromium):
+  python3 -m http.server 8123 &
+  (cd test && python3 make_fixtures.py)
+  python3 test/run_test.py          # expect "ALL SCENARIOS PASSED"
+  git checkout test/fixtures && git clean -fd test/fixtures
+  ```
+
 ## The Rumbles formula
 
 For each week:
