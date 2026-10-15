@@ -1394,6 +1394,11 @@ def scenario_live_blending(browser):
     # floor (640px) -- if the table's own scroll container ever needs to
     # scroll at any of these, its content is too wide again.
     original_viewport = page.viewport_size
+    # Pin a standard font for this width check. The page's own font stack
+    # (-apple-system, Segoe UI, Roboto, ...) resolves to whatever the machine
+    # has -- on a bare Linux box that can be a noticeably wider font, which
+    # would fail the 640px case for reasons unrelated to the layout.
+    font_pin = page.add_style_tag(content='body, table, button { font-family: Arial, Helvetica, "Liberation Sans", sans-serif !important; }')
     for width in (1280, 980, 700, 640):
         page.set_viewport_size({"width": width, "height": 800})
         page.wait_for_timeout(50)
@@ -1408,6 +1413,7 @@ def scenario_live_blending(browser):
             f"expected the QB Injury Backup Adjustments table to fit without horizontal scrolling at {width}px wide, "
             f"but its content ({overflow['scrollWidth']}px) exceeds its container ({overflow['clientWidth']}px)"
         )
+    font_pin.evaluate("el => el.remove()")
     if original_viewport:
         page.set_viewport_size(original_viewport)
     print("Confirmed the QB Injury Backup Adjustments table needs no horizontal scrolling at 1280/980/700/640px wide (desktop through landscape-phone widths).")
