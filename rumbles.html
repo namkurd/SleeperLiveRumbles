@@ -1129,7 +1129,15 @@
   .rb-grid.compact .rb-table { font-size: 0.7rem; }
   .rb-grid.compact .rb-table td { padding: 1px 3px; }
   .rb-grid.compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
-  .rb-grid.totals { --rb-cardw: 150px; }
+  .rb-grid.totals { --rb-cardw: 190px; }
+  /* Totals cards are narrow too: same stacked layout as phone compact
+     (Rumbles and season under the name) so names aren't cut off. */
+  .rb-grid.totals .rb-rum { display: none; }
+  .rb-grid.totals .rb-rum-m { display: block; }
+  .rb-grid.totals .rb-season { font-size: 0.6rem; }
+  .rb-grid.totals .rb-season b { font-size: 0.72rem; }
+  .rb-grid.totals .rb-season small { display: inline; font-size: 0.52rem; }
+  .rb-grid.totals .rb-season small::before { content: "\00b7  "; }
   /* Phones: two compact cards per row. */
   @media (max-width: 640px) {
     .rb-grid { gap: 8px; }
@@ -1148,7 +1156,9 @@
     .rb-grid.compact .rb-table .pos-badge { display: none; }
     .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
     .rb-grid.compact .rb-meta { margin-left: 4px; }
-    .rb-grid.totals { --rb-cardw: 140px; }
+    .rb-grid.totals { --rb-cardw: 150px; }
+    .rb-grid.totals .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
+    .rb-grid.totals .rb-tot .rb-a { font-size: 0.95rem; }
   }
   .rb-grid.totals .rb-table { display: none; }
   .rb-empty { color: var(--text-dim); padding: 30px 10px; text-align: center; }
