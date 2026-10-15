@@ -1239,7 +1239,7 @@
       <h3 id="rb-who-title">Which manager are you?</h3>
       <p>Your team gets a green highlight. Use Me to see only the teams still in play against you, or just your matchup.</p>
       <div class="rb-who-list" id="rb-who-list"></div>
-      <button type="button" class="rb-who-skip" id="rb-who-skip">Skip, show everyone</button>
+      <button type="button" class="rb-who-skip" id="rb-who-skip">Cancel</button>
     </div>
   </div>
 
@@ -5201,7 +5201,6 @@
     document.getElementById("standings-view").hidden = rb;
     document.getElementById("rumblin-view").hidden = !rb;
     els.weekSelectWrap && (els.weekSelectWrap.style.visibility = rb ? "hidden" : "");
-    if (rb && state.rb.me == null && !state.rb.asked) openWhoPicker();
     render();
   }
 
@@ -5582,9 +5581,8 @@
   }
 
   document.getElementById("rb-who-skip").addEventListener("click", function () {
-    state.rb.me = null;
+    // Cancel: just close the picker; nothing about your pick changes.
     state.rb.wantMe = false;
-    if (state.rb.mode === "me") state.rb.mode = "all";
     document.getElementById("rb-who").hidden = true;
     renderRumblin();
   });
