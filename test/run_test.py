@@ -2582,12 +2582,20 @@ def scenario_rumblin_controls(browser):
     def active(sel):
         return page.evaluate("s => document.querySelector(s).classList.contains('active')", sel)
 
-    # Picking yourself keeps the default Everyone view (all 12 cards).
-    assert page.is_visible("#rb-who"), "the 'Which manager are you?' picker should open"
+    # Opening the tab shows everyone and does NOT pop up the picker.
+    assert not page.is_visible("#rb-who"), "the picker should not open on its own"
+    assert len(cards()) == 12 and active("#rb-all"), "Everyone should be the default view"
+    assert not page.is_visible("#rb-sub"), "In Play / Matchup should only show in the Me view"
+    # Tapping Me opens the picker; picking yourself goes to the Me view.
+    page.click("#rb-me")
+    page.wait_for_timeout(300)
+    assert page.is_visible("#rb-who"), "tapping Me should open the 'Which manager are you?' picker"
     page.click("#rb-who-list button:has-text('Aidan')")
     page.wait_for_timeout(400)
-    assert len(cards()) == 12 and active("#rb-all"), "Everyone should be the default view after picking a manager"
-    assert not page.is_visible("#rb-sub"), "In Play / Matchup should only show in the Me view"
+    assert active("#rb-me") and active("#rb-inplay"), "picking from Me should land in Me / In Play"
+    page.click("#rb-all")
+    page.wait_for_timeout(300)
+    assert len(cards()) == 12
     # Your card gets the 'me' highlight, and it is green.
     green = page.evaluate(
         """() => {
@@ -2612,6 +2620,14 @@ def scenario_rumblin_controls(browser):
     page.click("#rb-matchup")
     page.wait_for_timeout(400)
     assert sorted(cards()) == ["Aidan", "Ben"], f"unexpected Matchup cards: {cards()}"
+
+    # Change me reopens the picker.
+    page.click("#rb-change")
+    page.wait_for_timeout(300)
+    assert page.is_visible("#rb-who"), "Change me should open the picker"
+    page.click("#rb-who-skip")
+    page.wait_for_timeout(300)
+    assert not page.is_visible("#rb-who") and active("#rb-me"), "Cancel should just close the picker"
 
     # Everyone again; tapping a name makes a custom selection (no toggle active).
     page.click("#rb-all")
