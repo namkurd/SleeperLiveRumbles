@@ -1054,13 +1054,15 @@
   .rb-chip .rb-rank { font-size: 0.66rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
   .rb-chip .rb-proj { font-size: 0.66rem; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.8; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
-  .rb-chip.me { box-shadow: 0 0 0 1px var(--good); }
+  .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
   .rb-note[hidden], .rb-view-group[hidden] { display: none; }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   /* Team-picker group: same pill style as the size toggle, in the page's
      blue accent so the two groups read as separate controls. */
   .rb-view-group button.active { background: var(--accent-2); color: var(--bg); }
+  /* Everyone gets the page's green so it reads apart from Me. */
+  .rb-view-group #rb-all.active { background: var(--good); }
   .rb-view-group button[hidden] { display: none; }
   .rb-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--rb-cardw, 270px), 1fr)); align-items: start; }
   .rb-card {
@@ -1069,9 +1071,8 @@
     background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, transparent), transparent 64px);
   }
   .rb-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
-  /* Your own card: a soft green glow, the page's "good" green. */
-  .rb-card.me { border-color: color-mix(in srgb, var(--good) 70%, transparent); box-shadow: 0 0 0 1px var(--good), 0 0 22px color-mix(in srgb, var(--good) 35%, transparent); }
-  .rb-card.me .rb-you:not(.rb-opp) { background: var(--good); }
+  /* Your own card: a soft glow in your color. */
+  .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
   .rb-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 7px 13px; }
   /* Projected Rumbles (big) with the vs. Field part underneath (small). */
   .rb-rum { display: flex; flex-direction: column; align-items: center; min-width: 3.4em; line-height: 1.1; }
@@ -1223,11 +1224,11 @@
       <div class="toggle-group rb-view-group" role="group" aria-label="Which teams">
         <button type="button" id="rb-all" class="active">Everyone</button>
         <button type="button" id="rb-me">Me</button>
-        <button type="button" id="rb-change">Change me</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
         <button type="button" id="rb-inplay" class="active">In Play</button>
         <button type="button" id="rb-matchup">Matchup</button>
+        <button type="button" id="rb-change">Change me</button>
       </div>
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
@@ -1237,7 +1238,7 @@
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
       <h3 id="rb-who-title">Which manager are you?</h3>
-      <p>Your team gets a green highlight. Use Me to see only the teams still in play against you, or just your matchup.</p>
+      <p>Your team gets a highlight. Use Me to see only the teams still in play against you, or just your matchup.</p>
       <div class="rb-who-list" id="rb-who-list"></div>
       <button type="button" class="rb-who-skip" id="rb-who-skip">Cancel</button>
     </div>
