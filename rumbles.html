@@ -1071,7 +1071,7 @@
   .rb-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
   /* Your own card: a soft glow in your color. */
   .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
-  /* Cards with nobody in a game right now fade back (once anyone is live). */
+  /* Cards with nobody in a game right now fade back. */
   .rb-card { transition: opacity 0.4s; }
   .rb-card.rb-idle { opacity: 0.5; }
   .rb-card.rb-idle:hover { opacity: 0.85; }
@@ -5486,9 +5486,6 @@
     empty.hidden = true;
     if (rb.mode === "me" && rb.me == null) rb.mode = "all";
     var shown = rb.mode === "all" ? teams : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
-    // Fade cards with no live players, but only while someone is live
-    // (before kickoff everything would just be faded).
-    var anyLive = teams.some(function (t) { return t.liveCount > 0; });
     var shownSet = {};
     shown.forEach(function (t) { shownSet[t.rid] = true; });
     rb.sel = shownSet;
@@ -5542,7 +5539,7 @@
       el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
       el.classList.toggle("opp", rbIsOpponent(t.rid));
-      el.classList.toggle("rb-idle", anyLive && !t.liveCount);
+      el.classList.toggle("rb-idle", !t.liveCount);
       el.innerHTML = rbCardHtml(t);
       var prev = rb.lastTotals[t.rid];
       if (prev != null && Math.abs(prev - t.act) > 0.001) {
