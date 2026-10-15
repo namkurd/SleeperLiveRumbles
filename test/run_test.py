@@ -1340,7 +1340,7 @@ def scenario_live_blending(browser):
         f"expected a line stating the replacement QB(s) came in and their points will be credited to this roster, got: {tooltip_text!r}"
     )
     assert "+21.90" in tooltip_text, f"expected the tooltip to state the exact points added (+21.90), got: {tooltip_text!r}"
-    assert "pending the commissioner" in tooltip_text.lower(), f"expected a final line noting this is pending the commissioner's official adjustment, got: {tooltip_text!r}"
+    assert "confirmed once the commissioner enters it" in tooltip_text.lower(), f"expected a final line noting this is Confirmed once the commissioner enters it, got: {tooltip_text!r}"
     for banned in ("IR", "PUP", "house rule"):
         assert banned not in tooltip_text, f"expected the tooltip wording to make no mention of {banned!r} (no injury-status jargon, no house-rule language), got: {tooltip_text!r}"
     print(f"Confirmed Alex's '*' tooltip names the injured QB, the replacement QB, and the exact points added, with no IR/PUP/house-rule language: {tooltip_text!r}")
@@ -2155,7 +2155,7 @@ def scenario_pregame_week(browser):
         "Week1 Rohaan Injured QB was injured in-game and ruled out last week.\n"
         "Week1 Rohaan Backup QB came in; their points were credited to this roster.\n"
         "+20.00 pts added to Pts Last Week.\n"
-        "Pending the commissioner’s official adjustment."
+        "Confirmed once the commissioner enters it."
     ), f"unexpected 'Pts Last Week' '*' tooltip content: {lw_tip_text!r}"
     page.mouse.move(0, 0)
     page.wait_for_timeout(150)
