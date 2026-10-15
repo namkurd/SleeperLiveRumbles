@@ -85,7 +85,7 @@ check(
     "Kyler Murray was injured in-game and ruled out this week.",
     "Carson Wentz came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+21.90 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -105,7 +105,7 @@ check(
     "Starter One was injured in-game and ruled out this week.",
     "Backup A, Backup B came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+15.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -122,7 +122,7 @@ check(
     "Starter One was injured in-game and ruled out this week.",
     "A backup QB came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+12.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -144,7 +144,7 @@ check(
     "Backup One was also injured in-game and ruled out this week.",
     "Backup Two came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+22.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -167,7 +167,7 @@ check(
     "Backup One was also injured in-game and ruled out this week.",
     "Backup Two, Backup Three came in; their points will be credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+25.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -189,7 +189,7 @@ check(
     "Backup One was also injured in-game and ruled out this week.",
     "No other QB was available to step in.",
     '<span class="qb-adj-tooltip-yellow">+9.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -213,7 +213,7 @@ check(
     "Backup One was also injured in-game and ruled out this week.",
     "No other QB has recorded action to step in.",
     '<span class="qb-adj-tooltip-yellow">+9.00 pts</span> added to Actual &amp; Projected.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -249,7 +249,7 @@ check(
     "Kyler Murray was injured in-game and ruled out last week.",
     "Carson Wentz came in; their points were credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+21.90 pts</span> added to Pts Last Week.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
@@ -271,7 +271,7 @@ check(
     "Backup One was also injured in-game and ruled out last week.",
     "Backup Two came in; their points were credited to this roster.",
     '<span class="qb-adj-tooltip-yellow">+14.00 pts</span> added to Pts Last Week.',
-    "Pending the commissioner&rsquo;s official adjustment.",
+    "Confirmed once the commissioner enters it.",
   ]
 );
 
