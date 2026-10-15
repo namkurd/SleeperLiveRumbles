@@ -1054,7 +1054,9 @@
   .rb-chip .rb-rank { font-size: 0.66rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
   .rb-chip .rb-proj { font-size: 0.66rem; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.8; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
-  .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
+  .rb-chip.me { box-shadow: 0 0 0 1px var(--good); }
+  .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
+  .rb-note[hidden], .rb-view-group[hidden] { display: none; }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   /* Team-picker group: same pill style as the size toggle, in the page's
      blue accent so the two groups read as separate controls. */
@@ -1067,8 +1069,9 @@
     background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, transparent), transparent 64px);
   }
   .rb-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
-  /* Your own card: a soft glow in your color. */
-  .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
+  /* Your own card: a soft green glow, the page's "good" green. */
+  .rb-card.me { border-color: color-mix(in srgb, var(--good) 70%, transparent); box-shadow: 0 0 0 1px var(--good), 0 0 22px color-mix(in srgb, var(--good) 35%, transparent); }
+  .rb-card.me .rb-you:not(.rb-opp) { background: var(--good); }
   .rb-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 7px 13px; }
   /* Projected Rumbles (big) with the vs. Field part underneath (small). */
   .rb-rum { display: flex; flex-direction: column; align-items: center; min-width: 3.4em; line-height: 1.1; }
@@ -1218,18 +1221,23 @@
         <button type="button" data-d="totals">Totals</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which teams">
-        <button type="button" id="rb-around">Around me</button>
-        <button type="button" id="rb-all">Everyone</button>
+        <button type="button" id="rb-all" class="active">Everyone</button>
+        <button type="button" id="rb-me">Me</button>
         <button type="button" id="rb-change">Change me</button>
       </div>
+      <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
+        <button type="button" id="rb-inplay" class="active">In Play</button>
+        <button type="button" id="rb-matchup">Matchup</button>
+      </div>
     </div>
+    <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid compact" id="rb-grid"></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
   </div>
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
       <h3 id="rb-who-title">Which manager are you?</h3>
-      <p>You'll see your team, your opponent, and the 2 teams projected just above and below you.</p>
+      <p>Your team gets a green highlight. Use Me to see only the teams still in play against you, or just your matchup.</p>
       <div class="rb-who-list" id="rb-who-list"></div>
       <button type="button" class="rb-who-skip" id="rb-who-skip">Skip, show everyone</button>
     </div>
@@ -5272,7 +5280,7 @@
   // as the order changes. Tapping names picks teams by hand instead.
   var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
   state.view = "standings";
-  state.rb = { me: null, asked: false, auto: true, sel: {}, density: "compact", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
+  state.rb = { me: null, asked: false, mode: "all", sub: "inplay", wantMe: false, sel: {}, density: "compact", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
 
   // Opponents share a color: the same matchup colors the standings use
   // for this week's pairs (state.matchupColorByRosterId). Falls back to a
@@ -5347,17 +5355,23 @@
     return !!(b && b.actual && b.actual.opponentRosterId != null && Number(b.actual.opponentRosterId) === Number(rid));
   }
 
-  function rbAroundMe(teams) {
-    var idx = teams.findIndex(function (t) { return t.rid === state.rb.me; });
-    if (idx === -1) return teams;
-    var start = Math.max(0, Math.min(idx - 2, teams.length - 5));
-    var shown = teams.slice(start, start + 5);
-    // Always include this week's opponent, wherever they're projected.
-    var opp = teams[idx].opp;
-    if (opp != null && !shown.some(function (t) { return t.rid === opp; })) {
-      shown = teams.filter(function (t) { return t.rid === opp || shown.indexOf(t) !== -1; });
-    }
-    return shown;
+  // "In Play": a Rumble between two teams is still in play while each
+  // team's points so far are below the other's projection. Once one team's
+  // actual points are past the other's projected total, that Rumble is
+  // effectively decided.
+  function rbInPlay(a, b) {
+    return a.act < b.proj && b.act < a.proj;
+  }
+
+  // The "Me" view: you, plus either every team still in play against you
+  // (always with your opponent, whose H2H is worth 9) or just your matchup.
+  function rbMeView(teams) {
+    var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
+    if (!me) return teams;
+    return teams.filter(function (t) {
+      if (t === me || t.rid === me.opp) return true;
+      return state.rb.sub === "inplay" && rbInPlay(me, t);
+    });
   }
 
   // Kickoff time squeezed for Compact cards: "Sun 8pm" -> "Su8p".
@@ -5468,13 +5482,17 @@
       return;
     }
     empty.hidden = true;
-    var shown = rb.auto ? (rb.me != null ? rbAroundMe(teams) : teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
+    if (rb.mode === "me" && rb.me == null) rb.mode = "all";
+    var shown = rb.mode === "all" ? teams : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
     var shownSet = {};
     shown.forEach(function (t) { shownSet[t.rid] = true; });
     rb.sel = shownSet;
-    document.getElementById("rb-around").classList.toggle("active", rb.auto && rb.me != null);
-    document.getElementById("rb-all").classList.toggle("active", shown.length === teams.length && !(rb.auto && rb.me != null));
-    document.getElementById("rb-around").hidden = rb.me == null;
+    document.getElementById("rb-all").classList.toggle("active", rb.mode === "all");
+    document.getElementById("rb-me").classList.toggle("active", rb.mode === "me");
+    document.getElementById("rb-sub").hidden = rb.mode !== "me";
+    document.getElementById("rb-inplay").classList.toggle("active", rb.sub === "inplay");
+    document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
+    document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
 
     // Name strip, in projected order.
     var chipBefore = rbRects(rb.chipEls);
@@ -5485,7 +5503,7 @@
         el.type = "button";
         el.className = "rb-chip";
         el.addEventListener("click", function () {
-          rb.auto = false;
+          rb.mode = "custom";
           if (rb.sel[t.rid]) delete rb.sel[t.rid]; else rb.sel[t.rid] = true;
           renderRumblin();
         });
@@ -5551,7 +5569,9 @@
       b.textContent = t.name;
       b.addEventListener("click", function () {
         state.rb.me = t.rid;
-        state.rb.auto = true;
+        // Picking yourself from the Me button goes straight to the Me view.
+        if (state.rb.wantMe) state.rb.mode = "me";
+        state.rb.wantMe = false;
         state.rb.centerOnce = true;
         document.getElementById("rb-who").hidden = true;
         renderRumblin();
@@ -5563,16 +5583,23 @@
 
   document.getElementById("rb-who-skip").addEventListener("click", function () {
     state.rb.me = null;
-    state.rb.auto = true;
+    state.rb.wantMe = false;
+    if (state.rb.mode === "me") state.rb.mode = "all";
     document.getElementById("rb-who").hidden = true;
     renderRumblin();
   });
-  document.getElementById("rb-around").addEventListener("click", function () { state.rb.auto = true; state.rb.centerOnce = true; renderRumblin(); });
-  document.getElementById("rb-all").addEventListener("click", function () {
-    state.rb.auto = false;
-    rbTeams().forEach(function (t) { state.rb.sel[t.rid] = true; });
+  document.getElementById("rb-me").addEventListener("click", function () {
+    if (state.rb.me == null) { state.rb.wantMe = true; openWhoPicker(); return; }
+    state.rb.mode = "me";
+    state.rb.centerOnce = true;
     renderRumblin();
   });
+  document.getElementById("rb-all").addEventListener("click", function () {
+    state.rb.mode = "all";
+    renderRumblin();
+  });
+  document.getElementById("rb-inplay").addEventListener("click", function () { state.rb.sub = "inplay"; renderRumblin(); });
+  document.getElementById("rb-matchup").addEventListener("click", function () { state.rb.sub = "matchup"; renderRumblin(); });
   document.getElementById("rb-change").addEventListener("click", openWhoPicker);
   document.getElementById("rb-density").addEventListener("click", function (e) {
     var d = e.target && e.target.getAttribute("data-d");
