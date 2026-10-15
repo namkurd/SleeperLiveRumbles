@@ -2596,17 +2596,11 @@ def scenario_rumblin_controls(browser):
     page.click("#rb-all")
     page.wait_for_timeout(300)
     assert len(cards()) == 12
-    # Your card gets the 'me' highlight, and it is green.
-    green = page.evaluate(
-        """() => {
-            var good = getComputedStyle(document.documentElement).getPropertyValue('--good').trim();
-            var me = document.querySelector('.rb-card.me');
-            var probe = document.createElement('span'); probe.style.color = good; document.body.appendChild(probe);
-            var goodRgb = getComputedStyle(probe).color; probe.remove();
-            return getComputedStyle(me.querySelector('.rb-you')).backgroundColor === goodRgb;
-        }"""
-    )
-    assert green, "the YOU tag on your card should use the page's green"
+    # Everyone is green (apart from Me's blue), and Change me only exists in the Me view.
+    assert not page.is_visible("#rb-change"), "Change me should be hidden outside the Me view"
+    everyone_bg = page.evaluate("getComputedStyle(document.getElementById('rb-all')).backgroundColor")
+    me_bg = page.evaluate("(() => { var b = document.getElementById('rb-me'); b.classList.add('active'); var c = getComputedStyle(b).backgroundColor; b.classList.remove('active'); return c; })()")
+    assert everyone_bg != me_bg, "the Everyone button should be a different color from Me"
 
     # Me -> In Play (default): Aidan has 2.50 actual / 15.00 projected, so
     # only teams whose actual is under 15 (Joe, 0.00) are in play, plus the
@@ -2614,6 +2608,7 @@ def scenario_rumblin_controls(browser):
     page.click("#rb-me")
     page.wait_for_timeout(400)
     assert active("#rb-me") and active("#rb-inplay") and page.is_visible("#rb-sub")
+    assert page.is_visible("#rb-change"), "Change me should show once Me is selected"
     assert sorted(cards()) == ["Aidan", "Ben", "Joe"], f"unexpected In Play cards: {cards()}"
 
     # Matchup: just you and your opponent.
