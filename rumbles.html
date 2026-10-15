@@ -1058,11 +1058,9 @@
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
   .rb-note[hidden], .rb-view-group[hidden] { display: none; }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-  /* Team-picker group: same pill style as the size toggle, in the page's
-     blue accent so the two groups read as separate controls. */
-  .rb-view-group button.active { background: var(--accent-2); color: var(--bg); }
-  /* Everyone gets the page's green so it reads apart from Me. */
-  .rb-view-group #rb-all.active { background: var(--good); }
+  /* Team-picker groups: same pill style as the size toggle, in the page's
+     green so they read as separate controls from the orange size toggle. */
+  .rb-view-group button.active { background: var(--good); color: var(--bg); }
   .rb-view-group button[hidden] { display: none; }
   .rb-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--rb-cardw, 270px), 1fr)); align-items: start; }
   .rb-card {
