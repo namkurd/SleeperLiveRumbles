@@ -1074,6 +1074,9 @@
   .rb-rum { display: flex; flex-direction: column; align-items: center; min-width: 3.4em; line-height: 1.1; }
   .rb-rum-n { font-weight: 800; font-size: 1.3rem; color: var(--c); font-variant-numeric: tabular-nums; }
   .rb-rum-m { display: none; font-size: 0.6rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .rb-season { display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .rb-season b { color: var(--text); font-size: 0.8rem; font-weight: 800; }
+  .rb-season small { display: block; font-size: 0.6rem; font-weight: 600; }
   .rb-rum-m b { color: var(--c); font-size: 0.72rem; font-weight: 800; }
   .rb-rum-f { font-size: 0.56rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .rb-who-name { flex: 1; min-width: 0; }
@@ -1137,6 +1140,10 @@
        instead of in their own column, so names keep their room. */
     .rb-grid.compact .rb-rum { display: none; }
     .rb-grid.compact .rb-rum-m { display: block; }
+    .rb-grid.compact .rb-season { font-size: 0.6rem; }
+    .rb-grid.compact .rb-season b { font-size: 0.72rem; }
+    .rb-grid.compact .rb-season small { display: inline; font-size: 0.52rem; }
+    .rb-grid.compact .rb-season small::before { content: "\00b7  "; }
     #rumblin-view .rb-grid.compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
     .rb-grid.compact .rb-table .pos-badge { display: none; }
     .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
@@ -5269,11 +5276,12 @@
   function rbTeams() {
     var live = state.live;
     if (!live || !live.isLive) return [];
-    var managers = {};
-    ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; });
+    var managers = {}, season = {};
+    ((state.history && state.history.standings) || []).forEach(function (st) { managers[st.roster_id] = st.manager; season[st.roster_id] = st; });
     var teams = Object.keys(live.byRoster).map(function (rid) {
       var b = live.byRoster[rid];
       var players = b.players || [];
+      var se = rbSeasonTotals(season[rid], b, live.weekFinal);
       return {
         rid: Number(rid),
         name: managers[rid] || ("Roster " + rid),
@@ -5284,11 +5292,27 @@
         ir: b.ir || [],
         adj: b.qbAdjustment || null,
         opp: b.actual && b.actual.opponentRosterId != null ? Number(b.actual.opponentRosterId) : null,
+        // Season Rumbles and H2H record: the same official totals as the
+        // Actual tab (finished weeks, plus this week once every game is final).
+        seasonRumbles: se.rumbles,
+        seasonW: se.w,
+        seasonL: se.l,
         // In a game right now: a QB-injury backup counts; anyone ruled Out doesn't.
         liveCount: players.filter(function (p) { return p.game_status === "in_progress" && !rbRuledOut(p); }).length
       };
     }).sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); });
     return rbWithRumbles(teams);
+  }
+
+  // Official season totals for one team: the history file's totals, plus
+  // the live week's result once the whole week is final (as Actual does).
+  function rbSeasonTotals(st, b, weekFinal) {
+    var a = weekFinal && b && b.actual ? b.actual : null;
+    return {
+      rumbles: num(st && st.rumbles) + (a ? num(a.rumbles) : 0),
+      w: num(st && st.h2h_w) + (a && a.h2hWin === true ? 1 : 0),
+      l: num(st && st.h2h_l) + (a && a.h2hWin === false ? 1 : 0)
+    };
   }
 
   // Projected Rumbles for the week, same math as the standings: +1 per team
@@ -5391,6 +5415,7 @@
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
     return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + t.rumbles + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+      '<span class="rb-season" title="Season: ' + t.seasonRumbles + ' Rumbles, ' + t.seasonW + '-' + t.seasonL + ' head-to-head"><b>' + t.seasonRumbles + "</b> season <small>H2H " + t.seasonW + "-" + t.seasonL + "</small></span>" +
       '<span class="rb-rum-m"><b>' + t.rumbles + "</b> &middot; vs. Field " + t.vsField + "</span>" +
       (me ? '<span class="rb-you">YOU</span>' : "") +
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
