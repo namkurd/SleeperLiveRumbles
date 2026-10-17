@@ -1107,8 +1107,8 @@
   .rb-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
-  .rb-grid.compact .rb-meta .rb-ml { display: none; }
-  .rb-grid.compact .rb-meta .rb-ms { display: inline; }
+  .rb-compact .rb-meta .rb-ml { display: none; }
+  .rb-compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
   .rb-table tr.rb-off .rb-n, .rb-table tr.rb-off .pos-badge, .rb-table tr.rb-off td.rb-act, .rb-table tr.rb-off td.rb-proj { opacity: 0.5; }
   /* Kickoff times stay readable in their time-slot color. */
@@ -1131,10 +1131,10 @@
   .rb-table tfoot td { border-top: 1px solid var(--panel-border) !important; font-weight: 700; padding: 5px 4px 7px; }
   .rb-table tfoot td.rb-nm { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
   .rb-grid.compact { --rb-cardw: 190px; }
-  .rb-grid.compact .rb-bench, .rb-grid.compact .rb-bench-h, .rb-grid.compact thead { display: none; }
-  .rb-grid.compact .rb-table { font-size: 0.7rem; }
-  .rb-grid.compact .rb-table td { padding: 1px 3px; }
-  .rb-grid.compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
+  .rb-compact .rb-bench, .rb-compact .rb-bench-h, .rb-compact thead { display: none; }
+  .rb-compact .rb-table { font-size: 0.7rem; }
+  .rb-compact .rb-table td { padding: 1px 3px; }
+  .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
   .rb-grid.totals { --rb-cardw: 190px; }
   /* Totals cards are narrow too: same stacked layout as phone compact
      (Rumbles and season under the name) so names aren't cut off. */
@@ -1146,6 +1146,8 @@
   .rb-grid.totals .rb-season small::before { content: "\00b7  "; }
   /* Phones: two compact cards per row. */
   @media (max-width: 640px) {
+    /* Keep the toggles on screen while scrolling through the cards. */
+    .rb-controls { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 8px 0 6px; margin: 0 0 8px; box-shadow: 0 1px 0 var(--panel-border); }
     .rb-grid { gap: 8px; }
     .rb-grid.compact { --rb-cardw: 150px; }
     .rb-grid.compact .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
@@ -1158,15 +1160,36 @@
     .rb-grid.compact .rb-season b { font-size: 0.72rem; }
     .rb-grid.compact .rb-season small { display: inline; font-size: 0.52rem; }
     .rb-grid.compact .rb-season small::before { content: "\00b7  "; }
-    #rumblin-view .rb-grid.compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
-    .rb-grid.compact .rb-table .pos-badge { display: none; }
-    .rb-grid.compact .rb-table td.rb-proj, .rb-grid.compact .rb-table tfoot td:last-child { display: none; }
-    .rb-grid.compact .rb-meta { margin-left: 4px; }
+    #rumblin-view .rb-compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
+    .rb-compact .rb-table .pos-badge { display: none; }
+    .rb-compact .rb-table td.rb-proj, .rb-compact .rb-table tfoot td:last-child { display: none; }
+    .rb-compact .rb-meta { margin-left: 4px; }
     .rb-grid.totals { --rb-cardw: 150px; }
     .rb-grid.totals .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
     .rb-grid.totals .rb-tot .rb-a { font-size: 0.95rem; }
   }
-  .rb-grid.totals .rb-table { display: none; }
+  /* Totals: tap a card to open it (it then shows the Compact table). */
+  .rb-grid.totals .rb-card:not(.rb-open) .rb-table { display: none; }
+  .rb-grid.totals .rb-card { cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .rb-grid.totals .rb-card:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
+  .rb-live-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-border); font-weight: 700; }
+  .rb-live-head small { color: var(--text-dim); font-weight: 400; }
+  .rb-live-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .rb-live-t th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); text-align: left; padding: 8px 12px; cursor: pointer; user-select: none; white-space: nowrap; }
+  .rb-live-t th.n, .rb-live-t td.n { text-align: right; }
+  .rb-live-t th.sorted { color: var(--accent); }
+  .rb-live-t td { padding: 7px 12px; border-top: 1px solid var(--panel-border); }
+  .rb-live-t tbody tr:nth-child(even) { background: var(--row-alt); }
+  .rb-live-t td.pl { font-weight: 600; text-align: left; }
+  .rb-live-t td.pl small { color: var(--text-dim); font-weight: 400; margin-left: 6px; font-size: 0.68rem; }
+  .rb-live-t td.mg { text-align: left; color: var(--c); font-weight: 700; white-space: nowrap; }
+  .rb-live-t td.mg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 7px; }
+  .rb-live-t td.ac { color: var(--live); font-weight: 700; }
+  .rb-live-t .up { color: var(--good); } .rb-live-t .dn { color: var(--bad); }
+  .rb-live-empty { padding: 14px 12px; color: var(--text-dim); }
+  @media (max-width: 560px) { .rb-live-t th, .rb-live-t td { padding: 7px 8px; } .rb-live-t .hm { display: none; } }
+  .rb-legend { color: var(--text-dim); font-size: 0.72rem; margin: 12px 0 0; line-height: 1.5; }
   .rb-empty { color: var(--text-dim); padding: 30px 10px; text-align: center; }
   .rb-flash-up { animation: rbUp 1.2s ease-out; } .rb-flash-down { animation: rbDown 1.2s ease-out; }
   @keyframes rbUp { 0% { background: rgba(53,194,107,.35); } 100% { background: transparent; } }
@@ -1220,22 +1243,25 @@
     <div class="rb-controls">
       <div class="toggle-group" role="group" aria-label="Card size" id="rb-density">
         <button type="button" data-d="full">Full</button>
-        <button type="button" data-d="compact" class="active">Compact</button>
-        <button type="button" data-d="totals">Totals</button>
+        <button type="button" data-d="compact">Compact</button>
+        <button type="button" data-d="totals" class="active">Totals</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which teams">
         <button type="button" id="rb-all" class="active">Everyone</button>
         <button type="button" id="rb-me">Me</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
-        <button type="button" id="rb-inplay" class="active">In Play</button>
-        <button type="button" id="rb-matchup">Matchup</button>
+        <button type="button" id="rb-inplay">In Play</button>
+        <button type="button" id="rb-matchup" class="active">Matchup</button>
         <button type="button" id="rb-change">Change me</button>
+        <button type="button" id="rb-copy">Copy link</button>
       </div>
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
-    <div class="rb-grid compact" id="rb-grid"></div>
+    <div class="rb-grid totals" id="rb-grid"></div>
+    <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
+    <p class="rb-legend">Big number: projected Rumbles this week (9 for beating your opponent, plus 1 for each team you outscore). vs. Field: teams you're projected to outscore. Season Rumbles and H2H record are under the name. In Totals, tap a card to open it.</p>
   </div>
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
@@ -1327,6 +1353,9 @@
   <p class="howto-heading">Projected</p>
   <p>Where the standings would land if every player finishes at their projection.</p>
   <p>Tap a team's points to see each player's score. Names share a color with this week's opponent.</p>
+  <p class="howto-heading">Rumblin'</p>
+  <p>Live cards for every team. Everyone shows all 12. Me shows your Matchup, or In Play: the teams whose Rumble against you is still undecided. Faded cards have nobody in a game right now.</p>
+  <p>Your pick is remembered on this device. Copy link (in Me) makes a link that opens straight to your view.</p>
   <p class="howto-note">Updates every 30 seconds during games.</p>
 </div>
 
@@ -5210,6 +5239,7 @@
   function refreshNow() {
     if (state.refreshing) return;
     state.refreshing = true;
+    state.lastPollAt = Date.now();
     els.refreshBtn.disabled = true;
     els.refreshBtn.textContent = "Refreshing…";
     loadLive()
@@ -5282,7 +5312,7 @@
   // as the order changes. Tapping names picks teams by hand instead.
   var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
   state.view = "standings";
-  state.rb = { me: null, asked: false, mode: "all", sub: "inplay", wantMe: false, sel: {}, density: "compact", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
+  state.rb = { me: null, asked: false, mode: "all", sub: "matchup", wantMe: false, open: {}, liveSort: { k: "a", dir: -1 }, sel: {}, density: "totals", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
 
   // Opponents share a color: the same matchup colors the standings use
   // for this week's pairs (state.matchupColorByRosterId). Falls back to a
@@ -5471,6 +5501,46 @@
     return out;
   }
 
+  // Started players in games that are live right now, for the teams shown above.
+  function rbRenderLive(shown) {
+    var box = document.getElementById("rb-live");
+    var ls = state.rb.liveSort;
+    var rows = [];
+    shown.forEach(function (t) {
+      t.players.forEach(function (p) {
+        if (p.game_status !== "in_progress" || rbRuledOut(p)) return;
+        if (isOutStatus(p.injury_status) && !p.replacement) return;
+        var a = num(p.actual), j = num(p.proj);
+        rows.push({ p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j, d: a - j });
+      });
+    });
+    rows.sort(function (x, y) {
+      var a = x[ls.k], b = y[ls.k];
+      var c = typeof a === "string" ? a.localeCompare(b) : a - b;
+      return c * ls.dir || y.a - x.a;
+    });
+    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["a", "Actual", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n hm"]];
+    var head = "<tr>" + cols.map(function (c) {
+      return '<th class="' + c[2] + (ls.k === c[0] ? " sorted" : "") + '" data-k="' + c[0] + '">' + c[1] + (ls.k === c[0] ? (ls.dir > 0 ? " \u25B2" : " \u25BC") : "") + "</th>";
+    }).join("") + "</tr>";
+    var body = rows.map(function (r) {
+      var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
+      return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + escapeHtml(r.p) + "<small>" + escapeHtml(r.pos) + "</small></td>" +
+        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td>" +
+        '<td class="n hm ' + (r.d >= 0 ? "up" : "dn") + '">' + (r.d >= 0 ? "+" : "") + r.d.toFixed(2) + "</td></tr>";
+    }).join("");
+    box.hidden = false;
+    box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
+      (rows.length ? '<table class="rb-live-t"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>" : '<div class="rb-live-empty">No started players are in a live game right now.</div>');
+  }
+  document.getElementById("rb-live").addEventListener("click", function (e) {
+    var th = e.target.closest && e.target.closest("th[data-k]");
+    if (!th) return;
+    var ls = state.rb.liveSort, k = th.getAttribute("data-k");
+    if (ls.k === k) ls.dir = -ls.dir; else { ls.k = k; ls.dir = (k === "p" || k === "m") ? 1 : -1; }
+    renderRumblin();
+  });
+
   function renderRumblin() {
     var rb = state.rb;
     var teams = rbTeams();
@@ -5492,6 +5562,10 @@
     document.getElementById("rb-all").classList.toggle("active", rb.mode === "all");
     document.getElementById("rb-me").classList.toggle("active", rb.mode === "me");
     document.getElementById("rb-sub").hidden = rb.mode !== "me";
+    // "In Play (N)": how many other cards that view would show next to yours.
+    var meTeam = rb.me != null ? teams.filter(function (t) { return t.rid === rb.me; })[0] : null;
+    var inPlayCount = meTeam ? teams.filter(function (t) { return t !== meTeam && (t.rid === meTeam.opp || rbInPlay(meTeam, t)); }).length : null;
+    document.getElementById("rb-inplay").textContent = inPlayCount == null ? "In Play" : "In Play (" + inPlayCount + ")";
     document.getElementById("rb-inplay").classList.toggle("active", rb.sub === "inplay");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
     document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
@@ -5522,6 +5596,7 @@
       strip.appendChild(el);
     });
     rbFlip(rb.chipEls, chipBefore);
+    rbRenderLive(shown);
 
     // Cards.
     var before = rbRects(rb.cardEls);
@@ -5534,11 +5609,36 @@
         el = document.createElement("div");
         el.className = "rb-card";
         rb.cardEls[t.rid] = el;
+        (function (rid) {
+          // In Totals, tap a card to open it into the Compact view; tap again to close.
+          function toggle() {
+            if (state.rb.density !== "totals") return;
+            state.rb.open[rid] = !state.rb.open[rid];
+            renderRumblin();
+          }
+          el.addEventListener("click", toggle);
+          el.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+          });
+        })(t.rid);
       }
       // Your opponent's card is red, overriding its matchup color.
       el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("me", t.rid === rb.me);
       el.classList.toggle("opp", rbIsOpponent(t.rid));
+      var inTotals = rb.density === "totals";
+      var isOpen = inTotals && !!rb.open[t.rid];
+      el.classList.toggle("rb-open", isOpen);
+      el.classList.toggle("rb-compact", isOpen);
+      if (inTotals) {
+        el.tabIndex = 0;
+        el.setAttribute("role", "button");
+        el.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      } else {
+        el.removeAttribute("tabindex");
+        el.removeAttribute("role");
+        el.removeAttribute("aria-expanded");
+      }
       el.classList.toggle("rb-idle", !t.liveCount);
       el.innerHTML = rbCardHtml(t);
       var prev = rb.lastTotals[t.rid];
@@ -5572,8 +5672,9 @@
       b.textContent = t.name;
       b.addEventListener("click", function () {
         state.rb.me = t.rid;
+        rbSaveMe(t.rid);
         // Picking yourself from the Me button goes straight to the Me view.
-        if (state.rb.wantMe) state.rb.mode = "me";
+        if (state.rb.wantMe) rbEnterMe();
         state.rb.wantMe = false;
         state.rb.centerOnce = true;
         document.getElementById("rb-who").hidden = true;
@@ -5590,9 +5691,73 @@
     document.getElementById("rb-who").hidden = true;
     renderRumblin();
   });
+  // ---- remembering who you are (this device only) ----------------------
+  var RB_ME_KEY = "rumbles.me";
+  function rbSaveMe(rid) {
+    try { localStorage.setItem(RB_ME_KEY, String(rid)); } catch (e) { /* storage blocked: fine */ }
+  }
+  function rbLoadMe() {
+    try { return localStorage.getItem(RB_ME_KEY); } catch (e) { return null; }
+  }
+  // A standings row for a roster id or a manager name (any capitalization).
+  function rbFindManager(token) {
+    if (token == null || String(token).trim() === "") return null;
+    var t = String(token).trim().toLowerCase();
+    var rows = (state.history && state.history.standings) || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].roster_id) === t || String(rows[i].manager).toLowerCase() === t) return rows[i];
+    }
+    return null;
+  }
+  // On load: restore who you are, and open a shared link like
+  // ?tab=rumblin&me=Ben straight to that manager's Me view.
+  function rbInit() {
+    var params = null;
+    try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
+    var linkMe = params ? rbFindManager(params.get("me")) : null;
+    var me = linkMe || rbFindManager(rbLoadMe());
+    if (me) state.rb.me = Number(me.roster_id);
+    if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
+    if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
+  }
+  function rbCopyText(text) {
+    function fallback() {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand("copy");
+        ta.remove();
+        return Promise.resolve(!!ok);
+      } catch (e) { return Promise.resolve(false); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, fallback);
+    }
+    return fallback();
+  }
+  document.getElementById("rb-copy").addEventListener("click", function () {
+    var btn = this;
+    var row = rbFindManager(state.rb.me);
+    if (!row) return;
+    var url = location.href.split(/[?#]/)[0] + "?tab=rumblin&me=" + encodeURIComponent(row.manager);
+    rbCopyText(url).then(function (ok) {
+      btn.textContent = ok ? "Copied!" : "Couldn't copy";
+      setTimeout(function () { btn.textContent = "Copy link"; }, 1500);
+    });
+  });
+
+  // Entering the Me view starts on your Matchup, in Compact cards.
+  function rbEnterMe() {
+    if (state.rb.mode !== "me") {
+      state.rb.sub = "matchup";
+      rbSetDensity("compact");
+    }
+    state.rb.mode = "me";
+  }
   document.getElementById("rb-me").addEventListener("click", function () {
     if (state.rb.me == null) { state.rb.wantMe = true; openWhoPicker(); return; }
-    state.rb.mode = "me";
+    rbEnterMe();
     state.rb.centerOnce = true;
     renderRumblin();
   });
@@ -5603,16 +5768,27 @@
   document.getElementById("rb-inplay").addEventListener("click", function () { state.rb.sub = "inplay"; renderRumblin(); });
   document.getElementById("rb-matchup").addEventListener("click", function () { state.rb.sub = "matchup"; renderRumblin(); });
   document.getElementById("rb-change").addEventListener("click", openWhoPicker);
+  // Full / Compact / Totals card size.
+  function rbSetDensity(d) {
+    state.rb.density = d;
+    [].forEach.call(document.getElementById("rb-density").children, function (b) { b.classList.toggle("active", b.getAttribute("data-d") === d); });
+    var grid = document.getElementById("rb-grid");
+    var before = rbRects(state.rb.cardEls);
+    grid.classList.toggle("compact", d === "compact");
+    grid.classList.toggle("rb-compact", d === "compact");
+    grid.classList.toggle("totals", d === "totals");
+    if (d !== "totals") state.rb.open = {};
+    // Opened cards only exist in Totals.
+    Object.keys(state.rb.cardEls).forEach(function (k) {
+      var c = state.rb.cardEls[k];
+      c.classList.remove("rb-open");
+      if (d !== "totals") c.classList.remove("rb-compact");
+    });
+    rbFlip(state.rb.cardEls, before);
+  }
   document.getElementById("rb-density").addEventListener("click", function (e) {
     var d = e.target && e.target.getAttribute("data-d");
-    if (!d) return;
-    state.rb.density = d;
-    [].forEach.call(this.children, function (b) { b.classList.toggle("active", b === e.target); });
-    var grid = document.getElementById("rb-grid");
-    grid.classList.toggle("compact", d === "compact");
-    grid.classList.toggle("totals", d === "totals");
-    var before = rbRects(state.rb.cardEls);
-    rbFlip(state.rb.cardEls, before);
+    if (d) rbSetDensity(d);
   });
   els.modeRumblin.addEventListener("click", function () { setView("rumblin"); });
 
@@ -5620,15 +5796,26 @@
 
   loadHistory()
     .then(loadLive)
+    .then(function () { rbInit(); })
     .then(render)
     .catch(function (err) {
       console.error("[rumbles] boot failed:", err);
       render();
     })
     .finally(function () {
-      state.pollTimer = setInterval(function () {
+      state.lastPollAt = Date.now();
+      function pollNow() {
+        if (state.refreshing) return;
+        state.lastPollAt = Date.now();
         loadLive().then(function () { render({ flash: true }); });
+      }
+      // Don't poll Sleeper while the tab is hidden; catch up as soon as it is shown again.
+      state.pollTimer = setInterval(function () {
+        if (!document.hidden) pollNow();
       }, POLL_MS);
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden && Date.now() - state.lastPollAt > 5000) pollNow();
+      });
     });
 })();
 </script>
