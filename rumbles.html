@@ -1187,8 +1187,10 @@
   .rb-live-t td.mg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 7px; }
   .rb-live-t td.ac { color: var(--live); font-weight: 700; }
   .rb-live-t .up { color: var(--good); } .rb-live-t .dn { color: var(--bad); }
+  .rb-live-t td.gm { color: var(--live); opacity: 0.85; white-space: nowrap; font-size: 0.8rem; }
+  .rb-live-t td.gm .gs { display: none; }
   .rb-live-empty { padding: 14px 12px; color: var(--text-dim); }
-  @media (max-width: 560px) { .rb-live-t th, .rb-live-t td { padding: 7px 8px; } .rb-live-t .hm { display: none; } }
+  @media (max-width: 560px) { .rb-live-t th, .rb-live-t td { padding: 7px 8px; } .rb-live-t .hm { display: none; } .rb-live-t td.gm .gl { display: none; } .rb-live-t td.gm .gs { display: inline; } .rb-live-t td.gm { font-size: 0.72rem; } }
   .rb-legend { color: var(--text-dim); font-size: 0.72rem; margin: 12px 0 0; line-height: 1.5; }
   .rb-empty { color: var(--text-dim); padding: 30px 10px; text-align: center; }
   .rb-flash-up { animation: rbUp 1.2s ease-out; } .rb-flash-down { animation: rbDown 1.2s ease-out; }
@@ -5511,7 +5513,10 @@
         if (p.game_status !== "in_progress" || rbRuledOut(p)) return;
         if (isOutStatus(p.injury_status) && !p.replacement) return;
         var a = num(p.actual), j = num(p.proj);
-        rows.push({ p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j, d: a - j });
+        var ml = p.game_minutes_left != null ? p.game_minutes_left + "m" : "";
+        var gl = ml + (p.game_score ? (ml ? " \u00b7 " : "") + p.game_score : "");
+        var gs = ml + (p.game_score ? (ml ? " " : "") + p.game_score : "");
+        rows.push({ g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j, d: a - j });
       });
     });
     rows.sort(function (x, y) {
@@ -5519,14 +5524,14 @@
       var c = typeof a === "string" ? a.localeCompare(b) : a - b;
       return c * ls.dir || y.a - x.a;
     });
-    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["a", "Actual", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n hm"]];
+    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["g", "Game", ""], ["a", "Actual", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n hm"]];
     var head = "<tr>" + cols.map(function (c) {
       return '<th class="' + c[2] + (ls.k === c[0] ? " sorted" : "") + '" data-k="' + c[0] + '">' + c[1] + (ls.k === c[0] ? (ls.dir > 0 ? " \u25B2" : " \u25BC") : "") + "</th>";
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
       return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + escapeHtml(r.p) + "<small>" + escapeHtml(r.pos) + "</small></td>" +
-        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td>" +
+        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td>" +
         '<td class="n hm ' + (r.d >= 0 ? "up" : "dn") + '">' + (r.d >= 0 ? "+" : "") + r.d.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
