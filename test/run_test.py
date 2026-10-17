@@ -2585,6 +2585,7 @@ def scenario_rumblin_controls(browser):
     # Opening the tab shows everyone and does NOT pop up the picker.
     assert not page.is_visible("#rb-who"), "the picker should not open on its own"
     assert len(cards()) == 12 and active("#rb-all"), "Everyone should be the default view"
+    assert active("#rb-density [data-d=totals]") and page.evaluate("document.getElementById('rb-grid').classList.contains('totals')"), "Totals should be the default card size"
     assert not page.is_visible("#rb-sub"), "In Play / Matchup should only show in the Me view"
     # Only Alex has a live player (Kyler Murray's backup), so every other card fades.
     idle = page.evaluate("[...document.querySelectorAll('.rb-card.rb-idle .rb-mgr')].map(e => e.textContent).sort()")
@@ -2595,7 +2596,8 @@ def scenario_rumblin_controls(browser):
     assert page.is_visible("#rb-who"), "tapping Me should open the 'Which manager are you?' picker"
     page.click("#rb-who-list button:has-text('Aidan')")
     page.wait_for_timeout(400)
-    assert active("#rb-me") and active("#rb-inplay"), "picking from Me should land in Me / In Play"
+    assert active("#rb-me") and active("#rb-matchup"), "picking from Me should land in Me / Matchup"
+    assert active("#rb-density [data-d=compact]") and page.evaluate("document.getElementById('rb-grid').classList.contains('compact')"), "the Me view should switch to Compact cards"
     page.click("#rb-all")
     page.wait_for_timeout(300)
     assert len(cards()) == 12
@@ -2606,21 +2608,22 @@ def scenario_rumblin_controls(browser):
     )
     assert page.evaluate("getComputedStyle(document.getElementById('rb-all')).backgroundColor") == green_rgb, "the selected Everyone button should be green"
 
-    # Me -> In Play (default): Aidan has 2.50 actual / 15.00 projected, so
-    # only teams whose actual is under 15 (Joe, 0.00) are in play, plus the
-    # opponent (Ben) is always shown.
+    # Me defaults to Matchup: just you and your opponent.
     page.click("#rb-me")
     page.wait_for_timeout(400)
-    assert active("#rb-me") and active("#rb-inplay") and page.is_visible("#rb-sub")
+    assert active("#rb-me") and active("#rb-matchup") and page.is_visible("#rb-sub")
     assert page.is_visible("#rb-change"), "Change me should show once Me is selected"
     assert page.evaluate("getComputedStyle(document.getElementById('rb-me')).backgroundColor") == green_rgb, "the selected Me button should be green"
-    assert page.evaluate("getComputedStyle(document.getElementById('rb-inplay')).backgroundColor") == green_rgb, "the selected In Play button should be green"
-    assert sorted(cards()) == ["Aidan", "Ben", "Joe"], f"unexpected In Play cards: {cards()}"
-
-    # Matchup: just you and your opponent.
-    page.click("#rb-matchup")
-    page.wait_for_timeout(400)
+    assert page.evaluate("getComputedStyle(document.getElementById('rb-matchup')).backgroundColor") == green_rgb, "the selected Matchup button should be green"
     assert sorted(cards()) == ["Aidan", "Ben"], f"unexpected Matchup cards: {cards()}"
+    assert active("#rb-density [data-d=compact]"), "the Me view should be on Compact cards"
+
+    # In Play: Aidan has 2.50 actual / 15.00 projected, so only teams whose
+    # actual is under 15 (Joe, 0.00) are in play, plus the opponent (Ben)
+    # is always shown.
+    page.click("#rb-inplay")
+    page.wait_for_timeout(400)
+    assert sorted(cards()) == ["Aidan", "Ben", "Joe"], f"unexpected In Play cards: {cards()}"
 
     # Change me reopens the picker.
     page.click("#rb-change")
@@ -2644,6 +2647,105 @@ def scenario_rumblin_controls(browser):
     print("\nRUMBLIN CONTROLS SCENARIO PASSED")
 
 
+def scenario_rumblin_qol(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Rumblin' QoL (tap-to-expand, remember me, deep link, sticky, refresh)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    polls = {"n": 0}
+    base = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+    install_routes(page, base)
+    state_body = load("state.json")
+
+    def count_state(route):
+        polls["n"] += 1
+        install_state(route)
+    def install_state(route):
+        route.fulfill(status=200, content_type="application/json", body=state_body if isinstance(state_body, str) else json.dumps(state_body))
+    page.route("**/v1/state/nfl", count_state)
+
+    def cards():
+        return page.evaluate("[...document.querySelectorAll('.rb-card')].map(c => c.querySelector('.rb-mgr').textContent)")
+    def active(sel):
+        return page.evaluate("s => document.querySelector(s).classList.contains('active')", sel)
+
+    page.goto(PAGE_URL)
+    page.wait_for_timeout(2500)
+    page.click("#mode-rumblin")
+    page.wait_for_timeout(400)
+
+    # Tap a Totals card to expand it to Compact, tap again to collapse.
+    card = page.locator(".rb-card").first
+    assert not card.locator(".rb-table").is_visible(), "totals cards start collapsed"
+    card.click()
+    page.wait_for_timeout(200)
+    assert card.evaluate("c => c.classList.contains('rb-open')") and card.locator(".rb-table").is_visible(), "tap should expand"
+    card.click()
+    page.wait_for_timeout(200)
+    assert not card.evaluate("c => c.classList.contains('rb-open')") and not card.locator(".rb-table").is_visible(), "second tap should collapse"
+
+    # Live Players table: only started players in live games, for the teams shown.
+    def live_rows():
+        return page.evaluate("[...document.querySelectorAll('#rb-live tbody tr')].map(r => [...r.children].map(c => c.textContent))")
+    lr = live_rows()
+    assert len(lr) == 1 and "Alex" in lr[0][1], f"only Alex has a live starter, got {lr}"
+    assert page.evaluate("document.querySelector('#rb-live tbody tr').style.getPropertyValue('--c')"), "manager color set"
+    page.click("#rb-live th[data-k=p]"); page.wait_for_timeout(100)
+    assert "sorted" in (page.get_attribute("#rb-live th[data-k=p]", "class") or ""), "header click sorts"
+
+    # Me remembers who you are; In Play shows a count; legend present.
+    page.click("#rb-me"); page.wait_for_timeout(200)
+    page.click("#rb-who-list button:has-text('Aidan')"); page.wait_for_timeout(300)
+    assert page.evaluate("localStorage.getItem('rumbles.me')"), "me should be saved"
+    label = page.inner_text("#rb-inplay")
+    assert "(2)" in label, f"In Play label should carry a count, got {label!r}"
+    assert page.is_visible(".rb-legend")
+    page.reload(); page.wait_for_timeout(2500)
+    page.click("#mode-rumblin"); page.wait_for_timeout(300)
+    page.click("#rb-me"); page.wait_for_timeout(300)
+    assert not page.is_visible("#rb-who") and active("#rb-me") and active("#rb-matchup"), "saved me skips the picker"
+    assert sorted(cards()) == ["Aidan", "Ben"]
+
+    # Deep link opens Rumblin' directly as that manager.
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    assert page.is_visible("#rumblin-view") and active("#rb-me") and active("#rb-matchup")
+    assert "Ben" in cards() and not page.is_visible("#rb-who")
+
+    # Sticky controls on phone.
+    page.set_viewport_size({"width": 390, "height": 700})
+    page.click("#rb-all"); page.click("#rb-density [data-d=full]"); page.wait_for_timeout(300)
+    page.evaluate("window.scrollTo(0, 600)"); page.wait_for_timeout(200)
+    top = page.evaluate("document.querySelector('.rb-controls').getBoundingClientRect().top")
+    assert abs(top) < 2, f"controls should stick to the top on phones, top={top}"
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.evaluate("window.scrollTo(0, 0)")
+
+    # Returning to the tab refreshes right away.
+    before = polls["n"]
+    page.wait_for_timeout(5500)
+    before = polls["n"]
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    page.wait_for_timeout(800)
+    assert polls["n"] > before, "visibilitychange after >5s should poll"
+
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nRUMBLIN QOL SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -2664,6 +2766,7 @@ def main():
         scenario_cumulative_only(browser)
         scenario_history_load_failure(browser)
         scenario_rumblin_controls(browser)
+        scenario_rumblin_qol(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
