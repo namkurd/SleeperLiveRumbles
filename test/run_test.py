@@ -2702,6 +2702,7 @@ def scenario_rumblin_qol(browser):
     lr = live_rows()
     assert len(lr) == 1 and "Alex" in lr[0][1], f"only Alex has a live starter, got {lr}"
     assert page.evaluate("document.querySelector('#rb-live tbody tr').style.getPropertyValue('--c')"), "manager color set"
+    assert lr[0][2].strip() and ('m' in lr[0][2]), f"Game column should show minutes left and score, got {lr[0]}"
     page.click("#rb-live th[data-k=p]"); page.wait_for_timeout(100)
     assert "sorted" in (page.get_attribute("#rb-live th[data-k=p]", "class") or ""), "header click sorts"
 
