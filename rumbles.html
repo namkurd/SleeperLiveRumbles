@@ -1175,22 +1175,41 @@
   .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
   .rb-live-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-border); font-weight: 700; }
   .rb-live-head small { color: var(--text-dim); font-weight: 400; }
-  .rb-live-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .rb-live-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed; min-width: 0; }
+  .rb-live-t th, .rb-live-t td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb-live-t th:nth-child(1) { width: 26%; } .rb-live-t th:nth-child(2) { width: 20%; } .rb-live-t th:nth-child(3) { width: 20%; }
+  .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 11%; } .rb-live-t th:nth-child(6) { width: 12%; }
   .rb-live-t th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); text-align: left; padding: 8px 12px; cursor: pointer; user-select: none; white-space: nowrap; }
   .rb-live-t th.n, .rb-live-t td.n { text-align: right; }
   .rb-live-t th.sorted { color: var(--accent); }
   .rb-live-t td { padding: 7px 12px; border-top: 1px solid var(--panel-border); }
   .rb-live-t tbody tr:nth-child(even) { background: var(--row-alt); }
   .rb-live-t td.pl { font-weight: 600; text-align: left; }
-  .rb-live-t td.pl small { color: var(--text-dim); font-weight: 400; margin-left: 6px; font-size: 0.68rem; }
+  .rb-live-t .pw { display: flex; align-items: baseline; min-width: 0; }
+  .rb-live-t .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .rb-live-t td.pl small { flex: none; color: var(--text-dim); font-weight: 400; margin-left: 6px; font-size: 0.68rem; }
   .rb-live-t td.mg { text-align: left; color: var(--c); font-weight: 700; white-space: nowrap; }
   .rb-live-t td.mg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 7px; }
   .rb-live-t td.ac { color: var(--live); font-weight: 700; }
   .rb-live-t .up { color: var(--good); } .rb-live-t .dn { color: var(--bad); }
-  .rb-live-t td.gm { color: var(--live); opacity: 0.85; white-space: nowrap; font-size: 0.8rem; }
+  .rb-live-t td.gm { text-align: left; color: var(--live); opacity: 0.85; white-space: nowrap; font-size: 0.8rem; }
   .rb-live-t td.gm .gs { display: none; }
   .rb-live-empty { padding: 14px 12px; color: var(--text-dim); }
-  @media (max-width: 560px) { .rb-live-t th, .rb-live-t td { padding: 7px 8px; } .rb-live-t .hm { display: none; } .rb-live-t td.gm .gl { display: none; } .rb-live-t td.gm .gs { display: inline; } .rb-live-t td.gm { font-size: 0.72rem; } }
+  /* Phones: everything fits with no sideways scroll. */
+  @media (max-width: 560px) {
+    .rb-live-head { padding: 8px 10px; font-size: 0.9rem; }
+    .rb-live-t { font-size: 0.68rem; }
+    .rb-live-t th { font-size: 0.56rem; letter-spacing: 0; padding: 6px 3px; }
+    .rb-live-t td { padding: 6px 3px; }
+    .rb-live-t th:first-child, .rb-live-t td:first-child { padding-left: 8px; }
+    .rb-live-t th:last-child, .rb-live-t td:last-child { padding-right: 8px; }
+    .rb-live-t th:nth-child(1) { width: 29%; } .rb-live-t th:nth-child(2) { width: 16%; } .rb-live-t th:nth-child(3) { width: 16%; }
+    .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 13%; } .rb-live-t th:nth-child(6) { width: 13%; }
+    .rb-live-t td.pl small { margin-left: 3px; font-size: 0.55rem; }
+    .rb-live-t td.mg i { display: none; }
+    .rb-live-t td.gm .gl { display: none; } .rb-live-t td.gm .gs { display: inline; } .rb-live-t td.gm { font-size: 0.62rem; }
+  }
+  @media (max-width: 380px) { .rb-live-t { font-size: 0.62rem; } .rb-live-t td.gm { font-size: 0.58rem; } .rb-live-t th { font-size: 0.52rem; } }
   .rb-legend { color: var(--text-dim); font-size: 0.72rem; margin: 12px 0 0; line-height: 1.5; }
   .rb-empty { color: var(--text-dim); padding: 30px 10px; text-align: center; }
   .rb-flash-up { animation: rbUp 1.2s ease-out; } .rb-flash-down { animation: rbDown 1.2s ease-out; }
@@ -5524,15 +5543,15 @@
       var c = typeof a === "string" ? a.localeCompare(b) : a - b;
       return c * ls.dir || y.a - x.a;
     });
-    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["g", "Game", ""], ["a", "Actual", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n hm"]];
+    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["g", "Game", ""], ["a", "Act", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n"]];
     var head = "<tr>" + cols.map(function (c) {
       return '<th class="' + c[2] + (ls.k === c[0] ? " sorted" : "") + '" data-k="' + c[0] + '">' + c[1] + (ls.k === c[0] ? (ls.dir > 0 ? " \u25B2" : " \u25BC") : "") + "</th>";
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
-      return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + escapeHtml(r.p) + "<small>" + escapeHtml(r.pos) + "</small></td>" +
+      return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
         '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td>" +
-        '<td class="n hm ' + (r.d >= 0 ? "up" : "dn") + '">' + (r.d >= 0 ? "+" : "") + r.d.toFixed(2) + "</td></tr>";
+        '<td class="n ' + (r.d >= 0 ? "up" : "dn") + '">' + (r.d >= 0 ? "+" : "") + r.d.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
