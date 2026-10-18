@@ -1177,8 +1177,8 @@
   .rb-live-head small { color: var(--text-dim); font-weight: 400; }
   .rb-live-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed; min-width: 0; }
   .rb-live-t th, .rb-live-t td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rb-live-t th:nth-child(1) { width: 26%; } .rb-live-t th:nth-child(2) { width: 20%; } .rb-live-t th:nth-child(3) { width: 20%; }
-  .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 11%; } .rb-live-t th:nth-child(6) { width: 12%; }
+  .rb-live-t th:nth-child(1) { width: 28%; } .rb-live-t th:nth-child(2) { width: 22%; } .rb-live-t th:nth-child(3) { width: 22%; }
+  .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 14%; }
   .rb-live-t th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); text-align: left; padding: 8px 12px; cursor: pointer; user-select: none; white-space: nowrap; }
   .rb-live-t th.n, .rb-live-t td.n { text-align: right; }
   .rb-live-t th.sorted { color: var(--accent); }
@@ -1191,7 +1191,6 @@
   .rb-live-t td.mg { text-align: left; color: var(--c); font-weight: 700; white-space: nowrap; }
   .rb-live-t td.mg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 7px; }
   .rb-live-t td.ac { color: var(--live); font-weight: 700; }
-  .rb-live-t .up { color: var(--good); } .rb-live-t .dn { color: var(--bad); }
   .rb-live-t td.gm { text-align: left; color: var(--live); opacity: 0.85; white-space: nowrap; font-size: 0.8rem; }
   .rb-live-t td.gm .gs { display: none; }
   .rb-live-empty { padding: 14px 12px; color: var(--text-dim); }
@@ -1203,8 +1202,8 @@
     .rb-live-t td { padding: 6px 3px; }
     .rb-live-t th:first-child, .rb-live-t td:first-child { padding-left: 8px; }
     .rb-live-t th:last-child, .rb-live-t td:last-child { padding-right: 8px; }
-    .rb-live-t th:nth-child(1) { width: 29%; } .rb-live-t th:nth-child(2) { width: 16%; } .rb-live-t th:nth-child(3) { width: 16%; }
-    .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 13%; } .rb-live-t th:nth-child(6) { width: 13%; }
+    .rb-live-t th:nth-child(1) { width: 33%; } .rb-live-t th:nth-child(2) { width: 19%; } .rb-live-t th:nth-child(3) { width: 20%; }
+    .rb-live-t th:nth-child(4), .rb-live-t th:nth-child(5) { width: 14%; }
     .rb-live-t td.pl small { margin-left: 3px; font-size: 0.55rem; }
     .rb-live-t td.mg i { display: none; }
     .rb-live-t td.gm .gl { display: none; } .rb-live-t td.gm .gs { display: inline; } .rb-live-t td.gm { font-size: 0.62rem; }
@@ -5535,7 +5534,7 @@
         var ml = p.game_minutes_left != null ? p.game_minutes_left + "m" : "";
         var gl = ml + (p.game_score ? (ml ? " \u00b7 " : "") + p.game_score : "");
         var gs = ml + (p.game_score ? (ml ? " " : "") + p.game_score : "");
-        rows.push({ g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j, d: a - j });
+        rows.push({ g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j });
       });
     });
     rows.sort(function (x, y) {
@@ -5543,15 +5542,14 @@
       var c = typeof a === "string" ? a.localeCompare(b) : a - b;
       return c * ls.dir || y.a - x.a;
     });
-    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["g", "Game", ""], ["a", "Act", "n"], ["j", "Proj", "n"], ["d", "+/\u2212", "n"]];
+    var cols = [["p", "Player", ""], ["m", "Manager", ""], ["g", "Game", ""], ["a", "Act", "n"], ["j", "Proj", "n"]];
     var head = "<tr>" + cols.map(function (c) {
       return '<th class="' + c[2] + (ls.k === c[0] ? " sorted" : "") + '" data-k="' + c[0] + '">' + c[1] + (ls.k === c[0] ? (ls.dir > 0 ? " \u25B2" : " \u25BC") : "") + "</th>";
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
       return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
-        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td>" +
-        '<td class="n ' + (r.d >= 0 ? "up" : "dn") + '">' + (r.d >= 0 ? "+" : "") + r.d.toFixed(2) + "</td></tr>";
+        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
