@@ -4118,7 +4118,9 @@
   // Any <span data-flap="key">12.34</span> becomes flap tiles. When the same key
   // last showed a different number of the same length, only the digits that
   // changed flip (rolling through the digits between, ripple right to left).
-  var FLAP_HALF_MS = 55;
+  // How long a change takes grows with the size of the change: 2.5 s for 10 points or more,
+  // proportionally less below that (never under one quick flip).
+  var FLAP_MAX_MS = 2500, FLAP_MAX_DELTA = 10;
   function fl(key, text) {
     return '<span data-flap="' + escapeHtml(key) + '">' + escapeHtml(String(text)) + "</span>";
   }
@@ -4156,18 +4158,34 @@
       };
     });
   }
-  function flapRoll(c, to) {
-    var from = c._v;
-    if (from === to) return;
-    if (!/\d/.test(from) || !/\d/.test(to)) { flapFlipOnce(c, from, to, FLAP_HALF_MS * 1.5); return; }
-    var seq = [], x = +from;
-    while (x !== +to && seq.length < 5) { x = (x + 1) % 10; seq.push(String(x)); }
-    if (seq[seq.length - 1] !== to) seq = [to];
-    var p = Promise.resolve(), cur = from;
-    seq.forEach(function (n) {
-      var f = cur;
-      p = p.then(function () { return flapFlipOnce(c, f, n, seq.length > 2 ? FLAP_HALF_MS : FLAP_HALF_MS * 1.6); });
-      cur = n;
+  // Count the number from old to new in steps; every step flips the digits that differ.
+  function flapAnimate(cells, oldText, text) {
+    var o = parseFloat(oldText), n = parseFloat(text), steps = [text];
+    var T = 0;
+    if (isFinite(o) && isFinite(n)) T = Math.min(Math.abs(n - o), FLAP_MAX_DELTA) / FLAP_MAX_DELTA * FLAP_MAX_MS;
+    T = Math.max(T, 230);
+    var N = Math.max(1, Math.floor(T / 230));
+    var dec = (text.split(".")[1] || "").length;
+    if (isFinite(o) && isFinite(n) && N > 1) {
+      steps = [];
+      for (var k = 1; k < N; k++) {
+        var f = 1 - Math.pow(1 - k / N, 2);
+        var str = (o + (n - o) * f).toFixed(dec);
+        if (str.length === text.length && (steps.length ? steps[steps.length - 1] : oldText) !== str) steps.push(str);
+      }
+      steps.push(text);
+    }
+    var stepMs = T / steps.length;
+    var half = Math.max(69, Math.min(130, (stepMs - 90) / 2));
+    steps.forEach(function (str, si) {
+      cells.forEach(function (c, idx) {
+        setTimeout(function () {
+          c._p = (c._p || Promise.resolve()).then(function () {
+            var to = str.charAt(idx);
+            return c._v === to ? null : flapFlipOnce(c, c._v, to, half);
+          });
+        }, si * stepMs + (cells.length - 1 - idx) * 20);
+      });
     });
   }
   function flapScan(root) {
@@ -4185,12 +4203,7 @@
       for (var k = 0; k < from.length; k++) { var c = flapMakeCell(from.charAt(k)); cells.push(c); wrap.appendChild(c); }
       el.appendChild(sr); el.appendChild(wrap);
       prev[key] = text;
-      if (animate) {
-        cells.forEach(function (c, idx) {
-          var to = text.charAt(idx);
-          if (c._v !== to) setTimeout(function () { flapRoll(c, to); }, (text.length - 1 - idx) * 40);
-        });
-      }
+      if (animate) flapAnimate(cells, old, text);
     }
   }
 
@@ -4348,8 +4361,8 @@
         return '<tr data-rid="' + r.roster_id + '">' +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
-          '<td class="rumbles">' + fl(flapNs + r.roster_id + ":r", r.rumbles.toFixed(0)) + "</td>" +
-          '<td class="thisweek"' + thisWeekCellAttrs + ">" + fl(flapNs + r.roster_id + ":w", r.this_week.toFixed(0)) + "</td>" +
+          '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
+          '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2)) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
