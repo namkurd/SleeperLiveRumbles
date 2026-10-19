@@ -1192,6 +1192,14 @@
   .fc .lf { backface-visibility: hidden; -webkit-backface-visibility: hidden; z-index: 3; }
   .fc .lf.t { transform-origin: 50% 100%; } .fc .lf.b { transform-origin: 50% 0; }
   .rb-rum-n .fc { --sfl: 0.4; } .rb-a .fc { --sfl: 0.3; }
+  /* Score Pop (+/- amount) and Credit (who scored it) share the same corner and motion:
+     they pop in over the upper right of the number, hold, then drift up and fade. */
+  .sfp, .sfc { position: absolute; right: -8px; top: -0.6em; display: flex; gap: 6px; font-size: 0.74em; font-weight: 800; line-height: 1; letter-spacing: 0.2px; white-space: nowrap; pointer-events: none; z-index: 9; opacity: 0; transform-origin: 100% 100%; text-shadow: 0 0 3px var(--panel), 0 1px 2px var(--panel); }
+  .sfp.gain, .sfc b.gain { color: var(--good); } .sfp.loss, .sfc b.loss { color: var(--bad); } .sfc b.more { color: var(--text-dim); }
+  .rb-tot .sfp, .rb-tot .sfc { font-size: 0.6em; }
+  .rb-card { overflow: visible; } .rb-card::before { border-radius: 10px 0 0 10px; }
+  .rb-live-wrap { overflow: visible; } .rb-live-t td.ac { overflow: visible; }
+  @media (prefers-reduced-motion: reduce) { .sfp, .sfc { display: none; } }
   @media (prefers-reduced-motion: reduce) { .fc .lf { display: none; } }
   .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
   .rb-live-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-border); font-weight: 700; }
@@ -3274,6 +3282,7 @@
         });
       })
       .then(function (result) {
+        updateCredits();
         // Join the "last week" fetch kicked off above -- it was already
         // running in parallel with everything else in this function, this
         // just makes sure loadLive()'s own promise (and so every
@@ -4114,15 +4123,62 @@
     return '<span class="live-wrap"><span class="badge-live">LIVE</span>' + countHtml + "</span>";
   }
 
+  // Who scored since the last refresh: per roster, the starters whose actual points changed
+  // (name and amount). Read by flapScan to credit the scorers under each team total.
+  function updateCredits() {
+    var live = state.live;
+    if (!live || !live.isLive) return;
+    if (state.credPrevWeek !== live.week) { state.credPrev = {}; state.credPrevWeek = live.week; }
+    var prevAll = state.credPrev, credit = {};
+    Object.keys(live.byRoster).forEach(function (rid) {
+      var pl = live.byRoster[rid].players || [], prev = prevAll[rid] || null, cur = {}, list = [];
+      pl.forEach(function (p) {
+        var k = p.player_id + (p.replacement ? ":r" : ""), a = num(p.actual);
+        cur[k] = a;
+        if (prev && prev[k] != null) {
+          var d = Math.round((a - prev[k]) * 100) / 100;
+          if (Math.abs(d) >= 0.005) list.push({ n: p.short_name || p.name, d: d });
+        }
+      });
+      prevAll[rid] = cur;
+      if (list.length) credit[rid] = list;
+    });
+    state.credit = credit;
+  }
+
   // ---- split-flap numbers ----------------------------------------------
   // Any <span data-flap="key">12.34</span> becomes flap tiles. When the same key
   // last showed a different number of the same length, only the digits that
   // changed flip (rolling through the digits between, ripple right to left).
   // How long a change takes grows with the size of the change: 2.5 s for 10 points or more,
   // proportionally less below that (never under 0.5 s).
-  var FLAP_MAX_MS = 2500, FLAP_MAX_DELTA = 10;
-  function fl(key, text) {
-    return '<span data-flap="' + escapeHtml(key) + '">' + escapeHtml(String(text)) + "</span>";
+  var FLAP_MIN_MS = 1000, FLAP_MAX_MS = 3000, FLAP_MAX_DELTA = 10;
+  // Score Pop: the amount pops in, holds, then fades upward while the flip runs; the Credit
+  // (who scored it) then takes the same corner with the same motion.
+  var FLAP_POP_HOLD = 1000, FLAP_POP_FADE = 1400;
+  // opt.pop: "act" = pop the number's own change; "cr" = pop the actual points scored (and
+  // only animate when some player's actual changed: Projected tab). opt.cr = roster id whose
+  // scorers are credited.
+  function fl(key, text, opt) {
+    return '<span data-flap="' + escapeHtml(key) + '"' + (opt && opt.pop ? ' data-pop="' + opt.pop + '"' : "") +
+      (opt && opt.cr != null ? ' data-cr="' + opt.cr + '"' : "") + ">" + escapeHtml(String(text)) + "</span>";
+  }
+  function flapDuration(o, n) {
+    if (!isFinite(o) || !isFinite(n)) return FLAP_MIN_MS;
+    return Math.max(Math.min(Math.abs(n - o), FLAP_MAX_DELTA) / FLAP_MAX_DELTA * FLAP_MAX_MS, FLAP_MIN_MS);
+  }
+  // Pop/Credit motion: appear, hold FLAP_POP_HOLD, then drift up and fade over FLAP_POP_FADE.
+  function flapPlayLabel(node, delay) {
+    var total = FLAP_POP_HOLD + FLAP_POP_FADE;
+    if (!node.animate) { node.remove(); return; }
+    var a = node.animate([
+      { offset: 0, opacity: 0, transform: "translateY(4px) scale(.7)" },
+      { offset: 0.02, opacity: 1, transform: "translateY(0) scale(1.3)" },
+      { offset: 140 / total, opacity: 1, transform: "translateY(0) scale(1)" },
+      { offset: FLAP_POP_HOLD / total, opacity: 1, transform: "translateY(0) scale(1)" },
+      { offset: 1, opacity: 0, transform: "translateY(-22px) scale(.95)" }
+    ], { duration: total, delay: delay, easing: "ease-out", fill: "both" });
+    a.onfinish = function () { node.remove(); };
   }
   function flapSetHalves(c, top, bot) {
     c.children[0].setAttribute("data-c", top);
@@ -4159,11 +4215,10 @@
     });
   }
   // Count the number from old to new in steps; every step flips the digits that differ.
-  function flapAnimate(cells, oldText, text) {
+  function flapAnimate(cells, oldText, text, delay) {
     var o = parseFloat(oldText), n = parseFloat(text), steps = [text];
-    var T = 0;
-    if (isFinite(o) && isFinite(n)) T = Math.min(Math.abs(n - o), FLAP_MAX_DELTA) / FLAP_MAX_DELTA * FLAP_MAX_MS;
-    T = Math.max(T, 500);
+    var T = flapDuration(o, n);
+    delay = delay || 0;
     var N = Math.max(1, Math.floor(T / 230));
     var dec = (text.split(".")[1] || "").length;
     if (isFinite(o) && isFinite(n) && N > 1) {
@@ -4184,7 +4239,7 @@
             var to = str.charAt(idx);
             return c._v === to ? null : flapFlipOnce(c, c._v, to, half);
           });
-        }, si * stepMs + (cells.length - 1 - idx) * 20);
+        }, delay + si * stepMs + (cells.length - 1 - idx) * 20);
       });
     });
   }
@@ -4194,7 +4249,12 @@
     for (var i = 0; i < els.length; i++) {
       var el = els[i], key = el.getAttribute("data-flap"), text = el.textContent, old = prev[key];
       el.setAttribute("data-flap-done", "1");
-      var animate = old != null && old !== text && old.length === text.length && !document.hidden;
+      var popMode = el.getAttribute("data-pop"), crRid = el.getAttribute("data-cr");
+      var credit = crRid != null && state.credit ? state.credit[crRid] : null;
+      var changed = old != null && old !== text && !document.hidden;
+      // Projected-tab numbers only animate when somebody's actual points changed.
+      if (changed && popMode === "cr" && !(credit && credit.length)) changed = false;
+      var animate = changed && old.length === text.length;
       var from = animate ? old : text;
       el.textContent = "";
       var sr = document.createElement("span"); sr.className = "sf-sr"; sr.textContent = text;
@@ -4203,7 +4263,27 @@
       for (var k = 0; k < from.length; k++) { var c = flapMakeCell(from.charAt(k)); cells.push(c); wrap.appendChild(c); }
       el.appendChild(sr); el.appendChild(wrap);
       prev[key] = text;
-      if (animate) flapAnimate(cells, old, text);
+      var popAmt = null;
+      if (changed && popMode === "act") popAmt = Math.round((parseFloat(text) - parseFloat(old)) * 100) / 100;
+      else if (changed && popMode === "cr") popAmt = Math.round(credit.reduce(function (s, c) { return s + c.d; }, 0) * 100) / 100;
+      var hasPop = popAmt != null && isFinite(popAmt) && popAmt !== 0;
+      var T = flapDuration(parseFloat(old), parseFloat(text));
+      if (animate) flapAnimate(cells, old, text, hasPop ? FLAP_POP_HOLD : 0);
+      if (hasPop) {
+        var pop = document.createElement("span");
+        pop.className = "sfp " + (popAmt > 0 ? "gain" : "loss");
+        pop.setAttribute("aria-hidden", "true");
+        pop.textContent = (popAmt > 0 ? "+" : "\u2212") + Math.abs(popAmt).toFixed(2);
+        el.appendChild(pop); flapPlayLabel(pop, 0);
+        if (credit && credit.length && crRid != null) {
+          var cr = document.createElement("span");
+          cr.className = "sfc"; cr.setAttribute("aria-hidden", "true");
+          var sorted = credit.slice().sort(function (x, y) { return Math.abs(y.d) - Math.abs(x.d); });
+          cr.innerHTML = sorted.slice(0, 3).map(function (c) { return '<b class="' + (c.d > 0 ? "gain" : "loss") + '">' + escapeHtml(c.n) + "</b>"; }).join("") +
+            (sorted.length > 3 ? '<b class="more">+' + (sorted.length - 3) + "</b>" : "");
+          el.appendChild(cr); flapPlayLabel(cr, FLAP_POP_HOLD + Math.max(animate ? T : 0, FLAP_POP_FADE));
+        }
+      }
     }
   }
 
@@ -4363,7 +4443,7 @@
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
-          "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2)) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
+          "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2), { pop: state.mode === "actual" ? "act" : "cr", cr: r.roster_id }) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
@@ -5587,7 +5667,7 @@
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
     return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
-      '<td class="rb-act">' + fl(flapKey, shown) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
+      '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
 
   var rbFlapCtx = "";
@@ -5615,7 +5695,7 @@
       (me ? '<span class="rb-you">YOU</span>' : "") +
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
-      '<div class="rb-tot"><div class="rb-a">' + fl("rb:" + t.rid + ":act", t.act.toFixed(2)) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
+      '<div class="rb-tot"><div class="rb-a">' + fl("rb:" + t.rid + ":act", t.act.toFixed(2), { pop: "act", cr: t.rid }) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
       '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
       (bench ? '<tr class="rb-bench-h"><td colspan="3">Bench</td></tr>' + bench : "") +
       (ir ? '<tr class="rb-bench-h"><td colspan="3">IR</td></tr>' + ir : "") +
@@ -5668,7 +5748,7 @@
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
       return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
-        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2)) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
+        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2), { pop: "act" }) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
