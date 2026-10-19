@@ -47,6 +47,7 @@
     --matchup-4: #008300;
     --matchup-5: #14b8a6;
     --matchup-6: #a13d54;
+    --flap-bg: color-mix(in srgb, #000 30%, var(--panel));
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -68,6 +69,7 @@
       --matchup-4: #008300;
       --matchup-5: #0d9488;
       --matchup-6: #8a2e42;
+      --flap-bg: color-mix(in srgb, #000 7%, var(--panel));
     }
   }
   * { box-sizing: border-box; }
@@ -1172,6 +1174,25 @@
   .rb-grid.totals .rb-card:not(.rb-open) .rb-table { display: none; }
   .rb-grid.totals .rb-card { cursor: pointer; user-select: none; -webkit-user-select: none; }
   .rb-grid.totals .rb-card:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  /* Split-flap numbers (see flapScan). The real number stays in .sf-sr once, so copy/paste,
+     screen readers and text lookups still see one plain number; the flaps are decoration. */
+  [data-flap] { position: relative; display: inline-block; white-space: nowrap; }
+  /* The plain number stays in the layout (invisible), so rows and cards keep exactly their
+     old size; the tiles are drawn over it. */
+  .sf-sr { color: transparent; }
+  .sf { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; pointer-events: none; }
+  .fc { --sfl: 0.14; position: relative; display: block; flex: none; height: 1.22em; line-height: 1.22em; text-align: center; perspective: 260px; }
+  .fc.dg { width: 1ch; } .fc.sy { width: 0.3em; }
+  .fc .h { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--flap-bg); }
+  .fc .h::before { content: attr(data-c); position: absolute; left: 0; right: 0; height: 1.22em; line-height: 1.22em; text-align: center; }
+  .fc .t { top: 0; border-radius: 3px 3px 0 0; } .fc .t::before { top: 0; }
+  .fc .b { bottom: 0; border-radius: 0 0 3px 3px; } .fc .b::before { bottom: 0; }
+  .fc::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0, 0, 0, var(--sfl)); z-index: 5; transform: translateY(-0.5px); }
+  .fc.sy .h { background: transparent; } .fc.sy::after { display: none; }
+  .fc .lf { backface-visibility: hidden; -webkit-backface-visibility: hidden; z-index: 3; }
+  .fc .lf.t { transform-origin: 50% 100%; } .fc .lf.b { transform-origin: 50% 0; }
+  .rb-rum-n .fc { --sfl: 0.4; } .rb-a .fc { --sfl: 0.3; }
+  @media (prefers-reduced-motion: reduce) { .fc .lf { display: none; } }
   .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
   .rb-live-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-border); font-weight: 700; }
   .rb-live-head small { color: var(--text-dim); font-weight: 400; }
@@ -4093,6 +4114,86 @@
     return '<span class="live-wrap"><span class="badge-live">LIVE</span>' + countHtml + "</span>";
   }
 
+  // ---- split-flap numbers ----------------------------------------------
+  // Any <span data-flap="key">12.34</span> becomes flap tiles. When the same key
+  // last showed a different number of the same length, only the digits that
+  // changed flip (rolling through the digits between, ripple right to left).
+  var FLAP_HALF_MS = 55;
+  function fl(key, text) {
+    return '<span data-flap="' + escapeHtml(key) + '">' + escapeHtml(String(text)) + "</span>";
+  }
+  function flapSetHalves(c, top, bot) {
+    c.children[0].setAttribute("data-c", top);
+    c.children[1].setAttribute("data-c", bot);
+  }
+  function flapMakeCell(ch) {
+    var c = document.createElement("span");
+    c.className = "fc " + (/\d/.test(ch) ? "dg" : "sy");
+    c._v = ch;
+    c.innerHTML = '<span class="h t"></span><span class="h b"></span>';
+    flapSetHalves(c, ch, ch);
+    return c;
+  }
+  function flapLeaf(c, cls, ch) {
+    var l = document.createElement("span");
+    l.className = "h lf " + cls;
+    l.setAttribute("data-c", ch);
+    c.appendChild(l);
+    return l;
+  }
+  function flapFlipOnce(c, from, to, ms) {
+    return new Promise(function (resolve) {
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduce || !c.animate || !c.isConnected) { flapSetHalves(c, to, to); c._v = to; return resolve(); }
+      flapSetHalves(c, to, from);
+      var t = flapLeaf(c, "t", from);
+      t.animate([{ transform: "rotateX(0)" }, { transform: "rotateX(-90deg)" }], { duration: ms, easing: "ease-in", fill: "forwards" }).onfinish = function () {
+        t.remove();
+        var b = flapLeaf(c, "b", to);
+        b.animate([{ transform: "rotateX(90deg)" }, { transform: "rotateX(0)" }], { duration: ms, easing: "ease-out", fill: "forwards" }).onfinish = function () {
+          flapSetHalves(c, to, to); b.remove(); c._v = to; resolve();
+        };
+      };
+    });
+  }
+  function flapRoll(c, to) {
+    var from = c._v;
+    if (from === to) return;
+    if (!/\d/.test(from) || !/\d/.test(to)) { flapFlipOnce(c, from, to, FLAP_HALF_MS * 1.5); return; }
+    var seq = [], x = +from;
+    while (x !== +to && seq.length < 5) { x = (x + 1) % 10; seq.push(String(x)); }
+    if (seq[seq.length - 1] !== to) seq = [to];
+    var p = Promise.resolve(), cur = from;
+    seq.forEach(function (n) {
+      var f = cur;
+      p = p.then(function () { return flapFlipOnce(c, f, n, seq.length > 2 ? FLAP_HALF_MS : FLAP_HALF_MS * 1.6); });
+      cur = n;
+    });
+  }
+  function flapScan(root) {
+    var prev = state.flapPrev || (state.flapPrev = {});
+    var els = (root || document).querySelectorAll("[data-flap]:not([data-flap-done])");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], key = el.getAttribute("data-flap"), text = el.textContent, old = prev[key];
+      el.setAttribute("data-flap-done", "1");
+      var animate = old != null && old !== text && old.length === text.length && !document.hidden;
+      var from = animate ? old : text;
+      el.textContent = "";
+      var sr = document.createElement("span"); sr.className = "sf-sr"; sr.textContent = text;
+      var wrap = document.createElement("span"); wrap.className = "sf"; wrap.setAttribute("aria-hidden", "true");
+      var cells = [];
+      for (var k = 0; k < from.length; k++) { var c = flapMakeCell(from.charAt(k)); cells.push(c); wrap.appendChild(c); }
+      el.appendChild(sr); el.appendChild(wrap);
+      prev[key] = text;
+      if (animate) {
+        cells.forEach(function (c, idx) {
+          var to = text.charAt(idx);
+          if (c._v !== to) setTimeout(function () { flapRoll(c, to); }, (text.length - 1 - idx) * 40);
+        });
+      }
+    }
+  }
+
   function flashChangedCells(flash) {
     var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek) +
       "|" + COLUMNS.this_week_points.label;
@@ -4164,6 +4265,7 @@
       }
       els.body.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
+      var flapNs = "st:" + state.mode + "|" + (histWeek == null ? "cur" : histWeek) + ":";
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
@@ -4246,9 +4348,9 @@
         return '<tr data-rid="' + r.roster_id + '">' +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
-          '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
-          '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
-          "<td" + ptsCellAttrs + ">" + r.this_week_points.toFixed(2) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
+          '<td class="rumbles">' + fl(flapNs + r.roster_id + ":r", r.rumbles.toFixed(0)) + "</td>" +
+          '<td class="thisweek"' + thisWeekCellAttrs + ">" + fl(flapNs + r.roster_id + ":w", r.this_week.toFixed(0)) + "</td>" +
+          "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2)) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
@@ -4258,6 +4360,7 @@
       }).join("");
     }
     flashChangedCells(opts && opts.flash);
+    flapScan(els.body);
     if (state.view === "rumblin") renderRumblin();
     refreshOrHidePtsTooltip();
     refreshOrHideQbAdjTooltip();
@@ -5468,12 +5571,15 @@
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
+    var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
     return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
-      '<td class="rb-act">' + shown + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
+      '<td class="rb-act">' + fl(flapKey, shown) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
 
+  var rbFlapCtx = "";
   function rbCardHtml(t) {
+    rbFlapCtx = t.rid;
     var me = t.rid === state.rb.me;
     var isOpp = rbIsOpponent(t.rid);
     // QB-injury backups go in their own "+" slot right under the starter
@@ -5490,13 +5596,13 @@
     rows += repl.map(function (r) { return rbPlayerRow(r, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
-    return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + t.rumbles + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
-      '<span class="rb-season" title="Season: ' + t.seasonRumbles + ' Rumbles, ' + t.seasonW + '-' + t.seasonL + ' head-to-head"><b>' + t.seasonRumbles + "</b> season <small>H2H " + t.seasonW + "-" + t.seasonL + "</small></span>" +
-      '<span class="rb-rum-m"><b>' + t.rumbles + "</b> &middot; vs. Field " + t.vsField + "</span>" +
+    return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + fl("rb:" + t.rid + ":rum", t.rumbles) + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+      '<span class="rb-season" title="Season: ' + t.seasonRumbles + ' Rumbles, ' + t.seasonW + '-' + t.seasonL + ' head-to-head"><b>' + fl("rb:" + t.rid + ":season", t.seasonRumbles) + "</b> season <small>H2H " + t.seasonW + "-" + t.seasonL + "</small></span>" +
+      '<span class="rb-rum-m"><b>' + fl("rb:" + t.rid + ":rumm", t.rumbles) + "</b> &middot; vs. Field " + t.vsField + "</span>" +
       (me ? '<span class="rb-you">YOU</span>' : "") +
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
-      '<div class="rb-tot"><div class="rb-a">' + t.act.toFixed(2) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
+      '<div class="rb-tot"><div class="rb-a">' + fl("rb:" + t.rid + ":act", t.act.toFixed(2)) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
       '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
       (bench ? '<tr class="rb-bench-h"><td colspan="3">Bench</td></tr>' + bench : "") +
       (ir ? '<tr class="rb-bench-h"><td colspan="3">IR</td></tr>' + ir : "") +
@@ -5534,7 +5640,7 @@
         var ml = p.game_minutes_left != null ? p.game_minutes_left + "m" : "";
         var gl = ml + (p.game_score ? (ml ? " \u00b7 " : "") + p.game_score : "");
         var gs = ml + (p.game_score ? (ml ? " " : "") + p.game_score : "");
-        rows.push({ g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j });
+        rows.push({ id: p.player_id, g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j });
       });
     });
     rows.sort(function (x, y) {
@@ -5549,11 +5655,12 @@
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
       return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
-        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + r.a.toFixed(2) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
+        '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2)) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
       (rows.length ? '<table class="rb-live-t"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>" : '<div class="rb-live-empty">No started players are in a live game right now.</div>');
+    flapScan(box);
   }
   document.getElementById("rb-live").addEventListener("click", function (e) {
     var th = e.target.closest && e.target.closest("th[data-k]");
@@ -5671,6 +5778,7 @@
       grid.appendChild(el);
     });
     rbFlip(rb.cardEls, before);
+    flapScan(grid);
 
     // Bring your card to the middle of the screen once, right after picking.
     if (rb.centerOnce && rb.cardEls[rb.me]) {
