@@ -2741,6 +2741,28 @@ def scenario_rumblin_qol(browser):
     page.wait_for_timeout(800)
     assert polls["n"] > before, "visibilitychange after >5s should poll"
 
+    # Split-flap numbers: plain number stays readable once, first paint doesn't flip,
+    # and a changed number flips only after a refresh brings new data.
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    assert page.evaluate("document.querySelectorAll('#standings-view [data-flap]').length") > 20, "standings numbers should be flap cells"
+    assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "nothing should flip on first paint"
+    first_pts = page.evaluate("document.querySelector('#standings-view tbody tr td:nth-child(5) [data-flap]').textContent")
+    assert re.fullmatch(r"-?\d+\.\d\d", first_pts), f"plain number should be intact and single, got {first_pts!r}"
+    stats = load("stats_week2.json")
+    for r in stats:
+        if r["player_id"] == "P3":
+            r["stats"]["pts_ppr"] = 26.4; r["stats"]["pass_yd"] = 300; r["stats"]["pass_td"] = 3
+    page.unroute("**/stats/nfl/2026/2*")
+    page.route("**/stats/nfl/2026/2*", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(stats)))
+    page.click("#refresh-btn")
+    seen = 0
+    for _ in range(12):
+        page.wait_for_timeout(60)
+        seen = max(seen, page.evaluate("document.querySelectorAll('.fc .lf').length"))
+    assert seen > 0, "a changed number should flip after a refresh"
+    page.wait_for_timeout(1500)
+    assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "flaps should settle"
+
     page.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
