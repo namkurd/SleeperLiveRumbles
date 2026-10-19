@@ -2755,13 +2755,21 @@ def scenario_rumblin_qol(browser):
     page.unroute("**/stats/nfl/2026/2*")
     page.route("**/stats/nfl/2026/2*", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(stats)))
     page.click("#refresh-btn")
-    seen = 0
-    for _ in range(12):
+    page.wait_for_timeout(500)
+    # Hold: the Pop is up over the old number and nothing flips yet.
+    pops = page.evaluate("[...document.querySelectorAll('.sfp')].map(e => e.textContent)")
+    assert pops and all(re.fullmatch(r"[+\u2212]\d+\.\d\d", t) for t in pops), f"score Pops expected during hold, got {pops!r}"
+    assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "no flip during the 1s hold"
+    seen_lf = 0; seen_cr = []
+    for _ in range(60):
         page.wait_for_timeout(60)
-        seen = max(seen, page.evaluate("document.querySelectorAll('.fc .lf').length"))
-    assert seen > 0, "a changed number should flip after a refresh"
-    page.wait_for_timeout(3000)
+        seen_lf = max(seen_lf, page.evaluate("document.querySelectorAll('.fc .lf').length"))
+        seen_cr += page.evaluate("[...document.querySelectorAll('.sfc')].map(e => e.textContent)")
+    assert seen_lf > 0, "a changed number should flip after the hold"
+    assert seen_cr and all(t.strip() for t in seen_cr), "a Credit naming the scorer should appear after the flip"
+    page.wait_for_timeout(4000)
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "flaps should settle"
+    assert page.evaluate("document.querySelectorAll('.sfp, .sfc').length") == 0, "Pop and Credit should clean themselves up"
 
     page.close()
     assert not console_errors, f"console errors: {console_errors}"
