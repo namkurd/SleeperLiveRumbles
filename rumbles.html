@@ -4119,7 +4119,7 @@
   // last showed a different number of the same length, only the digits that
   // changed flip (rolling through the digits between, ripple right to left).
   // How long a change takes grows with the size of the change: 2.5 s for 10 points or more,
-  // proportionally less below that (never under one quick flip).
+  // proportionally less below that (never under 0.5 s).
   var FLAP_MAX_MS = 2500, FLAP_MAX_DELTA = 10;
   function fl(key, text) {
     return '<span data-flap="' + escapeHtml(key) + '">' + escapeHtml(String(text)) + "</span>";
@@ -4163,7 +4163,7 @@
     var o = parseFloat(oldText), n = parseFloat(text), steps = [text];
     var T = 0;
     if (isFinite(o) && isFinite(n)) T = Math.min(Math.abs(n - o), FLAP_MAX_DELTA) / FLAP_MAX_DELTA * FLAP_MAX_MS;
-    T = Math.max(T, 230);
+    T = Math.max(T, 500);
     var N = Math.max(1, Math.floor(T / 230));
     var dec = (text.split(".")[1] || "").length;
     if (isFinite(o) && isFinite(n) && N > 1) {
