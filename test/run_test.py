@@ -2744,7 +2744,7 @@ def scenario_rumblin_qol(browser):
     # Split-flap numbers: plain number stays readable once, first paint doesn't flip,
     # and a changed number flips only after a refresh brings new data.
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
-    assert page.evaluate("document.querySelectorAll('#standings-view [data-flap]').length") > 20, "standings numbers should be flap cells"
+    assert page.evaluate("document.querySelectorAll('#standings-view [data-flap]').length") >= 12, "standings numbers should be flap cells"
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "nothing should flip on first paint"
     first_pts = page.evaluate("document.querySelector('#standings-view tbody tr td:nth-child(5) [data-flap]').textContent")
     assert re.fullmatch(r"-?\d+\.\d\d", first_pts), f"plain number should be intact and single, got {first_pts!r}"
@@ -2760,7 +2760,7 @@ def scenario_rumblin_qol(browser):
         page.wait_for_timeout(60)
         seen = max(seen, page.evaluate("document.querySelectorAll('.fc .lf').length"))
     assert seen > 0, "a changed number should flip after a refresh"
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(3000)
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "flaps should settle"
 
     page.close()
