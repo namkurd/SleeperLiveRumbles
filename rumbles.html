@@ -3201,16 +3201,7 @@
           fetchJson(API_V1 + "/league/" + leagueId),
           fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + targetWeek),
           fetchJson(STATS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
-          // Projections barely move once a week starts, so reuse them for 10 minutes instead of
-          // re-downloading the whole league's list every 30 seconds.
-          (function () {
-            var pc = state.projCache, key = season + "/" + targetWeek + seasonTypeParam;
-            if (pc && pc.key === key && pc.data.length && Date.now() - pc.t < 600000) return Promise.resolve(pc.data);
-            return fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).then(function (d) {
-              state.projCache = { key: key, t: Date.now(), data: d || [] };
-              return d;
-            }).catch(function () { return []; });
-          })(),
+          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
           // Best-effort -- see SCORES_BASE's comment. Never allowed to
           // block the rest of live scoring if it 404s/errors; the
           // tooltip just falls back to "unknown" game status for
