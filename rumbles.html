@@ -2795,13 +2795,42 @@
     return byRoster;
   }
 
+  // Sleeper's full player database is several MB. The page only reads six small fields from
+  // it, so keep just those (and only players who can score), and remember them on the phone:
+  // open the page from the cached copy, then refresh it quietly in the background.
+  var PLAYERS_CACHE_KEY = "rumbles.players.v1";
+  var PLAYERS_CACHE_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
+  var PLAYER_KEEP_POS = { QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DEF: 1 };
+  function slimPlayers(data) {
+    var out = {};
+    Object.keys(data || {}).forEach(function (pid) {
+      var m = data[pid];
+      if (!m || !(m.team || PLAYER_KEEP_POS[m.position])) return;
+      out[pid] = { team: m.team || null, position: m.position || null, injury_status: m.injury_status || null,
+        first_name: m.first_name || null, last_name: m.last_name || null, full_name: m.full_name || null };
+    });
+    return out;
+  }
+  function playersCacheRead() {
+    try {
+      var c = JSON.parse(localStorage.getItem(PLAYERS_CACHE_KEY) || "null");
+      if (c && c.d && c.t && Date.now() - c.t < PLAYERS_CACHE_MAX_AGE_MS) return c;
+    } catch (e) { /* storage blocked: fine */ }
+    return null;
+  }
   function fetchPlayersMeta() {
-    return fetchJson(PLAYERS_URL).then(function (data) {
-      state.playersMeta = data || {};
+    if (state.playersPending) return state.playersPending;
+    var p = fetchJson(PLAYERS_URL).then(function (data) {
+      state.playersMeta = slimPlayers(data);
       state.teamQbIndex = buildTeamQbIndex(state.playersMeta);
       state.playersMetaFetchedAt = Date.now();
+      try { localStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify({ t: state.playersMetaFetchedAt, d: state.playersMeta })); } catch (e) { /* storage blocked: fine */ }
       return state.playersMeta;
     });
+    var done = function () { state.playersPending = null; };
+    p.then(done, done);
+    state.playersPending = p;
+    return p;
   }
 
   // Fetch once if we've never fetched at all; otherwise reuse the cached
@@ -2810,6 +2839,16 @@
   // worth re-checking for a current injury_status).
   function ensurePlayersMeta() {
     if (state.playersMeta) return Promise.resolve(state.playersMeta);
+    var cached = playersCacheRead();
+    if (cached) {
+      // Instant start from the saved copy; its age is kept so the usual "stale" check still
+      // triggers a fresh download when an injury needs re-checking. Refresh quietly meanwhile.
+      state.playersMeta = cached.d;
+      state.teamQbIndex = buildTeamQbIndex(state.playersMeta);
+      state.playersMetaFetchedAt = cached.t;
+      fetchPlayersMeta().catch(function () { /* keep the saved copy */ });
+      return Promise.resolve(state.playersMeta);
+    }
     return fetchPlayersMeta().catch(function (err) {
       console.warn("[rumbles] couldn't load player metadata for QB-adjustment detection:", err);
       return state.playersMeta || {};
@@ -3162,7 +3201,16 @@
           fetchJson(API_V1 + "/league/" + leagueId),
           fetchJson(API_V1 + "/league/" + leagueId + "/matchups/" + targetWeek),
           fetchJson(STATS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
-          fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).catch(function () { return []; }),
+          // Projections barely move once a week starts, so reuse them for 10 minutes instead of
+          // re-downloading the whole league's list every 30 seconds.
+          (function () {
+            var pc = state.projCache, key = season + "/" + targetWeek + seasonTypeParam;
+            if (pc && pc.key === key && pc.data.length && Date.now() - pc.t < 600000) return Promise.resolve(pc.data);
+            return fetchJson(PROJECTIONS_BASE + "/" + season + "/" + targetWeek + seasonTypeParam).then(function (d) {
+              state.projCache = { key: key, t: Date.now(), data: d || [] };
+              return d;
+            }).catch(function () { return []; });
+          })(),
           // Best-effort -- see SCORES_BASE's comment. Never allowed to
           // block the rest of live scoring if it 404s/errors; the
           // tooltip just falls back to "unknown" game status for
