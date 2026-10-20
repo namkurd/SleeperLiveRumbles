@@ -4,6 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>DTF Club — Rumble Central</title>
+<meta name="theme-color" content="#0f1115" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Rumbles" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="data:image/png;base64,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" />
 <style>
   :root {
     --bg: #0f1115;
@@ -1046,15 +1053,24 @@
 
   /* ---- Rumblin' tab ------------------------------------------------- */
   #rumblin-view[hidden], #standings-view[hidden] { display: none; }
-  .rb-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+  /* Manager chips: one fixed grid so every chip is the same size and they stack in neat columns. */
+  .rb-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 2px 0 10px; }
   .rb-chip {
     --c: var(--accent-2);
-    display: inline-flex; align-items: center; gap: 6px;
+    display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; height: 26px;
     border: 1px solid var(--panel-border); background: var(--panel); color: var(--text-dim);
-    border-radius: 999px; padding: 3px 10px 3px 8px; font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer;
+    border-radius: 999px; padding: 0 10px 0 8px; font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer;
   }
-  .rb-chip .rb-rank { font-size: 0.66rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
-  .rb-chip .rb-proj { font-size: 0.66rem; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .rb-chip .rb-rank { flex: none; width: 1.5em; text-align: right; font-size: 0.66rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .rb-chip .rb-cn { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb-chip .rb-proj { flex: none; font-size: 0.66rem; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .rb-chip .rb-ps { display: none; }
+  /* Phones: three per row, whole-number scores so the names fit. */
+  @media (max-width: 560px) {
+    .rb-strip { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .rb-chip { gap: 4px; padding: 0 7px 0 5px; font-size: 0.7rem; height: 25px; }
+    .rb-chip .rb-pl { display: none; } .rb-chip .rb-ps { display: inline; }
+  }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
@@ -1253,6 +1269,46 @@
   .rb-who-list button { --c: var(--accent-2); border: 1px solid color-mix(in srgb, var(--c) 60%, var(--panel-border)); background: color-mix(in srgb, var(--c) 10%, var(--panel)); color: var(--text); border-radius: 8px; padding: 8px; font: inherit; font-weight: 600; cursor: pointer; }
   .rb-who-skip { margin-top: 10px; background: none; border: 0; color: var(--text-dim); font: inherit; font-size: 0.76rem; cursor: pointer; text-decoration: underline; }
   @media (prefers-reduced-motion: reduce) { .rb-flash-up, .rb-flash-down { animation: none; } }
+
+  /* ---- Own row, sticky headers, dimmed finished players, Score Feed, pull-to-refresh ---- */
+  html { overscroll-behavior-y: contain; }
+  .upd-next { color: var(--text-dim); }
+  #standings-scroll { max-height: max(280px, calc(100vh - 190px)); overflow: auto; }
+  #standings-table thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); }
+  #standings-table thead th:first-child, #standings-table thead th:nth-child(2) { z-index: 5; }
+  /* Your own row: tinted, accent stripe, and it stays pinned at the bottom while you scroll above it. */
+  #standings-table tr.me-row td { position: sticky; bottom: 0; z-index: 2; background-color: var(--panel); background-image: linear-gradient(color-mix(in srgb, var(--accent-2) 14%, transparent), color-mix(in srgb, var(--accent-2) 14%, transparent)); border-top: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--panel-border)); }
+  #standings-table tr.me-row td.rank, #standings-table tr.me-row td.manager { z-index: 4; }
+  #standings-table tr.me-row td.rank { box-shadow: inset 3px 0 0 var(--accent-2); }
+  #standings-table tr.me-row td.manager { box-shadow: 1px 0 0 var(--panel-border); }
+  .rb-live-t thead th { position: sticky; top: var(--rb-stick, 0px); z-index: 6; background: var(--panel); }
+  .rb-live-t tbody tr.me { background-image: linear-gradient(color-mix(in srgb, var(--accent-2) 12%, transparent), color-mix(in srgb, var(--accent-2) 12%, transparent)); }
+  .rb-live-t tbody tr.me td:first-child { box-shadow: inset 3px 0 0 var(--accent-2); }
+  /* Finished players recede; players still to play stay a little brighter. */
+  .rb-table tr.rb-off.rb-final:not(.rb-repl) .rb-n, .rb-table tr.rb-off.rb-final:not(.rb-repl) .pos-badge, .rb-table tr.rb-off.rb-final:not(.rb-repl) td.rb-act, .rb-table tr.rb-off.rb-final:not(.rb-repl) td.rb-proj { opacity: 0.4; }
+  .rb-table tr.rb-off:not(.rb-final):not(.rb-repl) .rb-n, .rb-table tr.rb-off:not(.rb-final):not(.rb-repl) .pos-badge, .rb-table tr.rb-off:not(.rb-final):not(.rb-repl) td.rb-act, .rb-table tr.rb-off:not(.rb-final):not(.rb-repl) td.rb-proj { opacity: 0.78; }
+  /* Score Feed: last five scoring plays, scroll for the rest. */
+  .rb-feed-wrap { --fr: 32px; --fh: 28px; }
+  .rb-feed-scroll { max-height: calc(var(--fh) + 5 * var(--fr)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .rb-feed-t.rb-live-t th { height: var(--fh); padding-top: 0; padding-bottom: 0; cursor: default; }
+  .rb-feed-t.rb-live-t td { height: var(--fr); padding-top: 0; padding-bottom: 0; }
+  .rb-feed-t.rb-live-t thead th { top: 0; }
+  .rb-feed-t.rb-live-t th:nth-child(1) { width: 17%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 29%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 22%; }
+  .rb-feed-t.rb-live-t th:nth-child(4), .rb-feed-t.rb-live-t th:nth-child(5) { width: 16%; }
+  .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
+  .rb-feed-t td.ch { font-weight: 800; } .rb-feed-t td.ch.gain { color: var(--good); } .rb-feed-t td.ch.loss { color: var(--bad); }
+  .rb-feed-t tr.rb-new td { animation: rb-feed-new 2.4s ease-out; }
+  @keyframes rb-feed-new { from { background: color-mix(in srgb, var(--accent) 28%, transparent); } to { background: transparent; } }
+  @media (max-width: 560px) {
+    .rb-feed-wrap { --fr: 30px; --fh: 26px; }
+    .rb-feed-t td.tm { font-size: 0.6rem; }
+    .rb-feed-t.rb-live-t th:nth-child(1) { width: 17%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 30%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 21%; }
+    .rb-feed-t.rb-live-t th:nth-child(4), .rb-feed-t.rb-live-t th:nth-child(5) { width: 16%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .rb-feed-t tr.rb-new td { animation: none; } }
+  /* Pull down at the top of the page to refresh. */
+  #ptr { position: fixed; top: 8px; left: 50%; z-index: 90; padding: 5px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-border); color: var(--text-dim); font-size: 0.76rem; font-weight: 600; opacity: 0; pointer-events: none; transform: translate(-50%, -30px); }
+  #ptr.go { color: var(--text); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -1281,7 +1337,7 @@
 
   <div class="status-row" style="margin-bottom:12px;">
     <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text" class="pill-full">Checking status…</span><span id="status-text-short" class="pill-short">Checking…</span></span>
-    <span class="status-pill"><span id="updated-pill" class="pill-full">Last updated —</span><span id="updated-pill-short" class="pill-short">Updated —</span></span>
+    <span class="status-pill"><span id="updated-pill" class="pill-full">Last updated —</span><span id="updated-pill-short" class="pill-short">Updated —</span><span id="updated-next" class="pill-full upd-next"></span><span id="updated-next-short" class="pill-short upd-next"></span></span>
   </div>
 
   <div class="error-banner" id="error-banner"></div>
@@ -1308,6 +1364,7 @@
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid totals" id="rb-grid"></div>
+    <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
     <p class="rb-legend">Big number: projected Rumbles this week (9 for beating your opponent, plus 1 for each team you outscore). vs. Field: teams you're projected to outscore. Season Rumbles and H2H record are under the name. In Totals, tap a card to open it.</p>
@@ -1324,7 +1381,7 @@
   <div id="standings-view">
   <div class="table-panel">
     <div class="scroll-hint">Swipe to see more stats →</div>
-    <div class="table-scroll">
+    <div class="table-scroll" id="standings-scroll">
     <table id="standings-table">
       <thead>
         <tr>
@@ -4129,7 +4186,8 @@
     var live = state.live;
     if (!live || !live.isLive) return;
     if (state.credPrevWeek !== live.week) { state.credPrev = {}; state.credPrevWeek = live.week; }
-    var prevAll = state.credPrev, credit = {};
+    var prevAll = state.credPrev, credit = {}, feedNew = [], now = Date.now();
+    feedLoad(live.week);
     Object.keys(live.byRoster).forEach(function (rid) {
       var pl = live.byRoster[rid].players || [], prev = prevAll[rid] || null, cur = {}, list = [];
       pl.forEach(function (p) {
@@ -4137,13 +4195,36 @@
         cur[k] = a;
         if (prev && prev[k] != null) {
           var d = Math.round((a - prev[k]) * 100) / 100;
-          if (Math.abs(d) >= 0.005) list.push({ n: p.short_name || p.name, d: d });
+          if (Math.abs(d) >= 0.005) {
+            list.push({ n: p.short_name || p.name, d: d });
+            feedNew.push({ ts: now, rid: Number(rid), pid: p.player_id, n: p.short_name || p.name, pos: p.replacement ? "QB+" : p.position, d: d, a: a });
+          }
         }
       });
       prevAll[rid] = cur;
       if (list.length) credit[rid] = list;
     });
     state.credit = credit;
+    if (feedNew.length) {
+      feedNew.sort(function (x, y) { return Math.abs(y.d) - Math.abs(x.d); });
+      state.feed = feedNew.concat(state.feed).slice(0, FEED_MAX);
+      feedSave(live.week);
+    }
+  }
+
+  // Score Feed: every change in a starter's actual points since the last refresh, newest
+  // first, kept for the week (this device) so a reload doesn't empty it.
+  var FEED_KEY = "rumbles.feed", FEED_MAX = 200;
+  function feedLoad(week) {
+    if (state.feedWeek === week) return;
+    state.feedWeek = week; state.feed = [];
+    try {
+      var saved = JSON.parse(localStorage.getItem(FEED_KEY) || "null");
+      if (saved && saved.week === week && Array.isArray(saved.items)) state.feed = saved.items.slice(0, FEED_MAX);
+    } catch (e) { /* storage blocked: fine */ }
+  }
+  function feedSave(week) {
+    try { localStorage.setItem(FEED_KEY, JSON.stringify({ week: week, items: state.feed })); } catch (e) { /* storage blocked: fine */ }
   }
 
   // ---- split-flap numbers ----------------------------------------------
@@ -4315,6 +4396,7 @@
   }
 
   function render(opts) {
+    prefsSave();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();
     var rows = buildCombinedStandings();
@@ -4438,7 +4520,7 @@
           thisWeekCellAttrs = ' style="color:' + r.matchup_color + '"';
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
-        return '<tr data-rid="' + r.roster_id + '">' +
+        return '<tr data-rid="' + r.roster_id + '"' + (state.rb && Number(r.roster_id) === state.rb.me ? ' class="me-row"' : "") + ">" +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
@@ -4512,6 +4594,7 @@
     var nowForPill = new Date();
     els.updatedPill.textContent = "Last updated " + nowForPill.toLocaleTimeString();
     els.updatedPillShort.textContent = "Updated " + nowForPill.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    tickNext();
 
     if (state.historyError && rows.length) {
       // We have rows (from a prior successful load) but the most recent
@@ -5660,7 +5743,7 @@
     var out = struck || rbRuledOut(p);
     // An Out player is no longer live, even while his game is.
     if (out) live = false;
-    var cls = (out ? "rb-outrow" : live ? "rb-live" : "rb-off") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
+    var cls = (out ? "rb-outrow" : live ? "rb-live" : "rb-off") + (status === "complete" ? " rb-final" : "") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
@@ -5720,6 +5803,42 @@
     return out;
   }
 
+  // What to say when nobody is in a live game: when the next kickoff is, or that it's all over.
+  function rbEmptyLiveNote(shown) {
+    var next = null, anyFinal = false;
+    shown.forEach(function (t) {
+      t.players.forEach(function (p) {
+        if (p.game_status === "pre_game" && typeof p.game_start_ms === "number" && (next == null || p.game_start_ms < next)) next = p.game_start_ms;
+        if (p.game_status === "complete") anyFinal = true;
+      });
+    });
+    if (next != null) return "No started players are in a live game right now. Next kickoff: " + formatGameStartLabel(next) + ".";
+    if (anyFinal) return "No started players are in a live game right now. Every game for these teams is final.";
+    return "No started players are in a live game right now.";
+  }
+
+  // Score Feed table: the last five scoring plays for the teams shown, scroll for older ones.
+  function rbRenderFeed(shown) {
+    var box = document.getElementById("rb-feed");
+    var teams = {};
+    shown.forEach(function (t) { teams[t.rid] = t; });
+    var items = (state.feed || []).filter(function (f) { return teams[f.rid]; });
+    var scroller = box.querySelector(".rb-feed-scroll");
+    var top = scroller ? scroller.scrollTop : 0;
+    var now = Date.now();
+    var body = items.map(function (f) {
+      var t = teams[f.rid], col = rbIsOpponent(f.rid) ? "var(--bad)" : rbColor(f.rid);
+      var tm = new Date(f.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm">' + escapeHtml(tm) + '</td><td class="pl"><div class="pw"><span class="pn">' + escapeHtml(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
+        '<td class="mg"><i></i>' + escapeHtml(t.name) + '</td><td class="n ch ' + (f.d > 0 ? "gain" : "loss") + '">' + (f.d > 0 ? "+" : "\u2212") + Math.abs(f.d).toFixed(2) + '</td><td class="n">' + num(f.a).toFixed(2) + "</td></tr>";
+    }).join("");
+    box.hidden = false;
+    box.innerHTML = '<div class="rb-live-head"><span>Score Feed</span><small>' + (items.length > 5 ? "latest 5 of " + items.length + " \u00b7 scroll for more" : items.length ? items.length + (items.length === 1 ? " play" : " plays") : "") + "</small></div>" +
+      (items.length ? '<div class="rb-feed-scroll"><table class="rb-live-t rb-feed-t"><thead><tr><th>Time</th><th>Player</th><th>Manager</th><th class="n">Change</th><th class="n">Act</th></tr></thead><tbody>' + body + "</tbody></table></div>"
+        : '<div class="rb-live-empty">No scoring yet. New points show up here within 30 seconds of a play.</div>');
+    if (top) { var sc = box.querySelector(".rb-feed-scroll"); if (sc) sc.scrollTop = top; }
+  }
+
   // Started players in games that are live right now, for the teams shown above.
   function rbRenderLive(shown) {
     var box = document.getElementById("rb-live");
@@ -5747,12 +5866,12 @@
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
-      return '<tr style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
+      return '<tr' + (r.rid === state.rb.me ? ' class="me"' : "") + ' style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
         '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2), { pop: "act" }) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Live Players</span><small>' + rows.length + " started in live games</small></div>" +
-      (rows.length ? '<table class="rb-live-t"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>" : '<div class="rb-live-empty">No started players are in a live game right now.</div>');
+      (rows.length ? '<table class="rb-live-t"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>" : '<div class="rb-live-empty">' + escapeHtml(rbEmptyLiveNote(shown)) + "</div>");
     flapScan(box);
   }
   document.getElementById("rb-live").addEventListener("click", function (e) {
@@ -5771,6 +5890,7 @@
     var empty = document.getElementById("rb-empty");
     if (!teams.length) {
       grid.innerHTML = ""; strip.innerHTML = ""; rb.cardEls = {}; rb.chipEls = {};
+      document.getElementById("rb-feed").hidden = true;
       empty.hidden = false;
       empty.textContent = state.live && state.live.week ? "Week " + state.live.week + " matchups aren't posted yet." : "No live week right now.";
       return;
@@ -5814,10 +5934,11 @@
       // (11 for the top projection, 0 for the bottom).
       var outscored = t.vsField;
       el.title = "Projected to outscore " + outscored + (outscored === 1 ? " team" : " teams");
-      el.innerHTML = '<span class="rb-rank">' + outscored + "</span>" + escapeHtml(t.name) + '<span class="rb-proj">' + t.proj.toFixed(1) + "</span>";
+      el.innerHTML = '<span class="rb-rank">' + outscored + "</span>" + '<span class="rb-cn">' + escapeHtml(t.name) + '</span><span class="rb-proj"><span class="rb-pl">' + t.proj.toFixed(1) + '</span><span class="rb-ps">' + t.proj.toFixed(0) + "</span></span>";
       strip.appendChild(el);
     });
     rbFlip(rb.chipEls, chipBefore);
+    rbRenderFeed(shown);
     rbRenderLive(shown);
 
     // Cards.
@@ -5878,7 +5999,16 @@
       rb.centerOnce = false;
       rb.cardEls[rb.me].scrollIntoView({ block: "center", behavior: "smooth" });
     }
+    rbStickOffset();
+    prefsSave();
   }
+  // Table headers stick just under the (phone-sticky) controls bar.
+  function rbStickOffset() {
+    var c = document.querySelector(".rb-controls");
+    var h = c && getComputedStyle(c).position === "sticky" ? c.offsetHeight : 0;
+    document.documentElement.style.setProperty("--rb-stick", h + "px");
+  }
+  window.addEventListener("resize", rbStickOffset);
 
   function openWhoPicker() {
     state.rb.asked = true;
@@ -5934,14 +6064,46 @@
   }
   // On load: restore who you are, and open a shared link like
   // ?tab=rumblin&me=Ben straight to that manager's Me view.
+  // Remember where you were (this device only): which tab, scoring mode, Rumblin' view, card size,
+  // table sorts and custom team picks.
+  var PREFS_KEY = "rumbles.prefs";
+  function prefsSave() {
+    if (!state.prefsReady) return;
+    var rb = state.rb;
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({
+        v: state.view, m: state.mode, sort: state.userSorted ? state.sort : null,
+        rb: { mode: rb.mode, sub: rb.sub, density: rb.density, liveSort: rb.liveSort, sel: Object.keys(rb.sel) }
+      }));
+    } catch (e) { /* storage blocked: fine */ }
+  }
+  function prefsRestore() {
+    var p = null;
+    try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || "null"); } catch (e) { p = null; }
+    if (!p || typeof p !== "object") return;
+    var rb = state.rb;
+    if (p.m === "actual" || p.m === "custom") state.mode = p.m;
+    if (p.sort && COLUMNS[p.sort.key] && (p.sort.dir === "asc" || p.sort.dir === "desc")) { state.userSorted = true; state.sort = { key: p.sort.key, dir: p.sort.dir }; }
+    var r = p.rb || {};
+    if (r.sub === "inplay" || r.sub === "matchup") rb.sub = r.sub;
+    if (r.liveSort && ["p", "m", "g", "a", "j"].indexOf(r.liveSort.k) !== -1 && (r.liveSort.dir === 1 || r.liveSort.dir === -1)) rb.liveSort = { k: r.liveSort.k, dir: r.liveSort.dir };
+    if (Array.isArray(r.sel)) { rb.sel = {}; r.sel.forEach(function (k) { rb.sel[k] = true; }); }
+    if (r.mode === "me" && rb.me != null) rb.mode = "me";
+    else if (r.mode === "custom" && Object.keys(rb.sel).length) rb.mode = "custom";
+    else rb.mode = "all";
+    if (r.density === "full" || r.density === "compact" || r.density === "totals") rbSetDensity(r.density);
+    if (p.v === "rumblin" || p.v === "standings") setView(p.v);
+  }
   function rbInit() {
     var params = null;
     try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
     var linkMe = params ? rbFindManager(params.get("me")) : null;
     var me = linkMe || rbFindManager(rbLoadMe());
     if (me) state.rb.me = Number(me.roster_id);
+    prefsRestore();
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
     if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
+    state.prefsReady = true;
   }
   function rbCopyText(text) {
     function fallback() {
@@ -6008,12 +6170,71 @@
       if (d !== "totals") c.classList.remove("rb-compact");
     });
     rbFlip(state.rb.cardEls, before);
+    prefsSave();
   }
   document.getElementById("rb-density").addEventListener("click", function (e) {
     var d = e.target && e.target.getAttribute("data-d");
     if (d) rbSetDensity(d);
   });
   els.modeRumblin.addEventListener("click", function () { setView("rumblin"); });
+
+  // "next update in 18s" beside the Last updated time.
+  function tickNext() {
+    var full = document.getElementById("updated-next"), short = document.getElementById("updated-next-short");
+    if (!full || !short) return;
+    var f = "", sh = "";
+    if (state.refreshing) { f = " \u00b7 refreshing\u2026"; sh = " \u00b7 \u2026"; }
+    else if (state.lastPollAt) {
+      if (document.hidden) { f = " \u00b7 paused"; sh = " \u00b7 paused"; }
+      else {
+        var secs = Math.max(0, Math.ceil((state.lastPollAt + POLL_MS - Date.now()) / 1000));
+        f = " \u00b7 next update in " + secs + "s"; sh = " \u00b7 " + secs + "s";
+      }
+    }
+    full.textContent = f; short.textContent = sh;
+  }
+  setInterval(tickNext, 1000);
+
+  // Pull down at the top of the page to refresh.
+  (function () {
+    var ind = document.createElement("div");
+    ind.id = "ptr"; ind.setAttribute("aria-hidden", "true");
+    document.body.appendChild(ind);
+    var y0 = null, dy = 0, THRESH = 70;
+    function scrolledInside(t) {
+      var e = t && t.closest ? t.closest(".rb-feed-scroll, #standings-scroll") : null;
+      return !!(e && e.scrollTop > 0);
+    }
+    function reset() {
+      y0 = null; dy = 0;
+      ind.style.transition = "opacity .2s, transform .2s"; ind.style.opacity = "0"; ind.style.transform = "translate(-50%, -30px)"; ind.classList.remove("go");
+    }
+    document.addEventListener("touchstart", function (e) {
+      y0 = (window.scrollY <= 0 && e.touches.length === 1 && !state.refreshing && !scrolledInside(e.target)) ? e.touches[0].clientY : null;
+      dy = 0;
+    }, { passive: true });
+    document.addEventListener("touchmove", function (e) {
+      if (y0 == null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      if (window.scrollY > 0) { reset(); return; }
+      if (dy < 8) return;
+      ind.style.transition = "none";
+      ind.textContent = dy >= THRESH ? "Release to refresh" : "Pull to refresh";
+      ind.classList.toggle("go", dy >= THRESH);
+      ind.style.opacity = String(Math.min(1, dy / THRESH));
+      ind.style.transform = "translate(-50%, " + (Math.min(dy, 120) * 0.5 - 20) + "px)";
+    }, { passive: true });
+    document.addEventListener("touchend", function () {
+      var go = y0 != null && dy >= THRESH;
+      reset();
+      if (go) refreshNow();
+    }, { passive: true });
+  })();
+
+  // Lets phones offer "Add to Home Screen" (the worker itself caches nothing).
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    try { navigator.serviceWorker.register("sw.js").catch(function () { /* optional */ }); } catch (e) { /* optional */ }
+  }
 
   // ---- boot ------------------------------------------------------------
 
