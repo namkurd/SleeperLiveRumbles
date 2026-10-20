@@ -2827,6 +2827,11 @@ def scenario_ux_batch(browser):
     page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
     assert active("#mode-rumblin"), "Rumblin' tab should be remembered"
+    # ---- player database is slimmed and saved on the phone ----
+    pc = page.evaluate("JSON.parse(localStorage.getItem('rumbles.players.v1') || 'null')")
+    assert pc and pc["d"] and pc["t"], "slim player cache should be saved"
+    some = next(iter(pc["d"].values()))
+    assert set(some) == {"team", "position", "injury_status", "first_name", "last_name", "full_name"}, "cache keeps only the fields the page reads: %s" % sorted(some)
     assert active("#rb-me") and active("#rb-density button[data-d=full]"), "Me view and card size should be remembered"
     page.click("#rb-all"); page.wait_for_timeout(300)
     page.click("#rb-live th[data-k=p]"); page.wait_for_timeout(300)
