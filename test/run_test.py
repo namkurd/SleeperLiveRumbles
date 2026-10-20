@@ -2828,6 +2828,16 @@ def scenario_ux_batch(browser):
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
     assert active("#mode-rumblin"), "Rumblin' tab should be remembered"
     # ---- player database is slimmed and saved on the phone ----
+    # an error/empty reply from Sleeper must never replace or poison the saved player copy
+    good = page.evaluate("localStorage.getItem('rumbles.players.v1')")
+    page.route("**/v1/players/nfl", lambda route: route.fulfill(status=200, content_type="application/json", body='{"error":"rate limited"}'))
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    cardtxt = page.evaluate("document.querySelector('#rumblin-view').innerText")
+    assert any(n in cardtxt for n in ("Starter One", "Murray", "St. Brown")), "player names missing after a bad players reply: " + cardtxt[:300]
+    assert page.evaluate("localStorage.getItem('rumbles.players.v1')") == good, "bad reply must not overwrite the saved copy"
+    page.unroute("**/v1/players/nfl")
+    install_routes(page, {"**/v1/players/nfl": load("players.json")})
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
     pc = page.evaluate("JSON.parse(localStorage.getItem('rumbles.players.v1') || 'null')")
     assert pc and pc["d"] and pc["t"], "slim player cache should be saved"
     some = next(iter(pc["d"].values()))
