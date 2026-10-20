@@ -2814,14 +2814,17 @@
   function playersCacheRead() {
     try {
       var c = JSON.parse(localStorage.getItem(PLAYERS_CACHE_KEY) || "null");
-      if (c && c.d && c.t && Date.now() - c.t < PLAYERS_CACHE_MAX_AGE_MS) return c;
+      if (c && c.d && c.t && Date.now() - c.t < PLAYERS_CACHE_MAX_AGE_MS && Object.keys(c.d).length) return c;
     } catch (e) { /* storage blocked: fine */ }
     return null;
   }
   function fetchPlayersMeta() {
     if (state.playersPending) return state.playersPending;
     var p = fetchJson(PLAYERS_URL).then(function (data) {
-      state.playersMeta = slimPlayers(data);
+      var slim = slimPlayers(data);
+      // A rate-limit / error reply has no players in it: never let it replace (or be saved over) good data.
+      if (!Object.keys(slim).length) throw new Error("players response had no players");
+      state.playersMeta = slim;
       state.teamQbIndex = buildTeamQbIndex(state.playersMeta);
       state.playersMetaFetchedAt = Date.now();
       try { localStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify({ t: state.playersMetaFetchedAt, d: state.playersMeta })); } catch (e) { /* storage blocked: fine */ }
