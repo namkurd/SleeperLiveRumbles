@@ -2641,6 +2641,15 @@ def scenario_rumblin_controls(browser):
     page.wait_for_timeout(300)
     assert len(cards()) == 11 and not active("#rb-all") and not active("#rb-me")
 
+    # Manager chips are one standard size and line up in columns (desktop and phone).
+    for w in (1100, 390):
+        page.set_viewport_size({"width": w, "height": 900}); page.wait_for_timeout(300)
+        boxes = page.evaluate("[...document.querySelectorAll('#rb-strip .rb-chip')].map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), Math.round(r.left)]; })")
+        assert len(set((b[0], b[1]) for b in boxes)) == 1, f"chips differ in size at {w}px: {boxes}"
+        assert len(set(b[2] for b in boxes)) <= 6, f"chips don't line up in columns at {w}px: {boxes}"
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"sideways scroll at {w}px"
+    assert page.evaluate("getComputedStyle(document.querySelector('#rb-strip .rb-ps')).display") == "inline", "phone chips show whole-number scores"
+
     page.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
@@ -2744,6 +2753,7 @@ def scenario_rumblin_qol(browser):
     # Split-flap numbers: plain number stays readable once, first paint doesn't flip,
     # and a changed number flips only after a refresh brings new data.
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    page.click("#mode-actual"); page.wait_for_timeout(300)  # the page now reopens on the last tab used
     assert page.evaluate("document.querySelectorAll('#standings-view [data-flap]').length") >= 12, "standings numbers should be flap cells"
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "nothing should flip on first paint"
     first_pts = page.evaluate("document.querySelector('#standings-view tbody tr td:nth-child(5) [data-flap]').textContent")
@@ -2777,6 +2787,131 @@ def scenario_rumblin_qol(browser):
     print("\nRUMBLIN QOL SCENARIO PASSED")
 
 
+def scenario_ux_batch(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: UX batch (remembered view, own row, sticky headers, countdown, pull-to-refresh, Score Feed, PWA)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    polls = {"n": 0}
+    base = {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+    install_routes(page, base)
+    state_body = load("state.json")
+
+    def count_state(route):
+        polls["n"] += 1
+        route.fulfill(status=200, content_type="application/json", body=state_body if isinstance(state_body, str) else json.dumps(state_body))
+    page.route("**/v1/state/nfl", count_state)
+    active = lambda sel: page.evaluate("s => document.querySelector(s).classList.contains('active')", sel)
+
+    # ---- remembered view: tab, scoring mode, Rumblin' view, card size, sorts ----
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    page.click("#mode-custom"); page.wait_for_timeout(300)
+    page.reload(); page.wait_for_timeout(2500)
+    assert active("#mode-custom"), "Projected should be remembered after a reload"
+    page.click("#mode-actual"); page.click("#th-pf"); page.wait_for_timeout(300)
+    page.reload(); page.wait_for_timeout(2500)
+    assert active("#mode-actual") and page.evaluate("document.querySelector('#th-pf').classList.contains('sort-active')"), "Standings sort should be remembered"
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    assert active("#mode-rumblin"), "Rumblin' tab should be remembered"
+    assert active("#rb-me") and active("#rb-density button[data-d=full]"), "Me view and card size should be remembered"
+    page.click("#rb-all"); page.wait_for_timeout(300)
+    page.click("#rb-live th[data-k=p]"); page.wait_for_timeout(300)
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    assert active("#rb-all") and page.evaluate("document.querySelector('#rb-live th[data-k=p]').classList.contains('sorted')"), "Live Players sort should be remembered"
+
+    # ---- own row highlight + sticky headers ----
+    assert page.evaluate("[...document.querySelectorAll('#rb-live tbody tr.me .mg')].every(e => e.textContent.trim() === 'Ben')"), "only Ben's live rows are marked as yours"
+    assert page.evaluate("getComputedStyle(document.querySelector('#rb-live thead th')).position") == "sticky", "Live Players header should stick"
+    page.click("#mode-actual"); page.wait_for_timeout(300)
+    assert page.evaluate("document.querySelectorAll('#standings-body tr.me-row').length") == 1, "your standings row should be highlighted"
+    assert page.evaluate("document.querySelector('#standings-body tr.me-row .manager').textContent").strip().startswith("Ben")
+    assert page.evaluate("getComputedStyle(document.querySelector('#standings-table thead th')).position") == "sticky", "standings header should stick"
+    assert page.evaluate("getComputedStyle(document.querySelector('#standings-body tr.me-row td:nth-child(3)')).position") == "sticky", "your row should pin"
+
+    # ---- update countdown ----
+    txt = page.text_content("#updated-next"); short = page.text_content("#updated-next-short")
+    assert re.search(r"next update in \d+s", txt or ""), f"countdown missing: {txt!r}"
+    assert re.fullmatch(r".*\d+s", short or ""), f"short countdown missing: {short!r}"
+
+    # ---- pull to refresh ----
+    page.evaluate("window.scrollTo(0, 0)")
+    before = polls["n"]
+    page.evaluate("""() => {
+      const fire = (type, y) => { const e = new Event(type, {bubbles: true}); Object.defineProperty(e, 'touches', {value: type === 'touchend' ? [] : [{clientY: y, clientX: 50}]}); document.body.dispatchEvent(e); };
+      fire('touchstart', 100); fire('touchmove', 140); fire('touchmove', 230);
+    }""")
+    assert page.text_content("#ptr") == "Release to refresh", "pulling far enough should arm the refresh"
+    page.evaluate("document.body.dispatchEvent(Object.assign(new Event('touchend', {bubbles: true}), {}))")
+    page.wait_for_timeout(1500)
+    assert polls["n"] > before, "releasing a pull should refresh now"
+
+    # ---- Score Feed ----
+    page.click("#mode-rumblin"); page.wait_for_timeout(400)
+    assert page.is_visible("#rb-feed"), "Score Feed shows on the Rumblin' tab"
+    assert page.evaluate("document.querySelector('#rb-feed').compareDocumentPosition(document.querySelector('#rb-live')) & Node.DOCUMENT_POSITION_FOLLOWING"), "Score Feed sits above Live Players"
+    assert "No scoring yet" in page.text_content("#rb-feed")
+    # A real refresh with new stats adds a play to the feed.
+    stats = load("stats_week2.json")
+    for r in stats:
+        if r["player_id"] == "P3":
+            r["stats"]["pts_ppr"] = 26.4; r["stats"]["pass_yd"] = 300; r["stats"]["pass_td"] = 3
+    page.unroute("**/stats/nfl/2026/2*")
+    page.route("**/stats/nfl/2026/2*", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(stats)))
+    page.click("#refresh-btn"); page.wait_for_timeout(1500)
+    fed = page.evaluate("[...document.querySelectorAll('#rb-feed tbody tr')].map(t => t.textContent)")
+    assert fed and re.search(r"[+\u2212]\d+\.\d\d", fed[0]), f"a refresh with new points should add a Score Feed row: {fed}"
+    rids = page.evaluate("Object.keys(JSON.parse(JSON.stringify(Object.fromEntries([...document.querySelectorAll('.rb-card')].map(c => [c.dataset.rid || '', 1]))))).filter(Boolean)")
+    seed = page.evaluate("""() => { const rows = [...document.querySelectorAll('#rb-strip .rb-chip')].length; return rows; }""")
+    assert seed == 12
+    page.evaluate("""() => {
+      const now = Date.now(), items = [];
+      for (let i = 0; i < 8; i++) items.push({ts: now - i * 60000, rid: 1 + (i % 3), pid: 'X' + i, n: 'Test Player ' + i, pos: 'WR', d: i % 2 ? -1.5 : 2.4, a: 10 + i});
+      localStorage.setItem('rumbles.feed', JSON.stringify({week: 2, items}));
+    }""")
+    page.reload(); page.wait_for_timeout(2500)
+    head = page.text_content("#rb-feed .rb-live-head")
+    assert "latest 5 of 8" in head, f"feed header: {head!r}"
+    geo = page.evaluate("""() => { const sc = document.querySelector('#rb-feed .rb-feed-scroll'), r = sc.getBoundingClientRect();
+      const rows = [...sc.querySelectorAll('tbody tr')].map(t => t.getBoundingClientRect());
+      return {scrollable: sc.scrollHeight > sc.clientHeight + 1, fifthInside: rows[4].bottom <= r.bottom + 1, sixthCut: rows[5].bottom > r.bottom + 1, n: rows.length}; }""")
+    assert geo["n"] == 8 and geo["scrollable"] and geo["fifthInside"] and geo["sixthCut"], f"feed should show exactly 5 rows and scroll: {geo}"
+    first = page.evaluate("document.querySelector('#rb-feed tbody tr td.ch').textContent")
+    assert re.fullmatch(r"[+\u2212]\d+\.\d\d", first), first
+    # Only the selected teams' plays are listed.
+    page.click("#rb-all"); page.wait_for_timeout(200)
+    all_n = page.evaluate("document.querySelectorAll('#rb-feed tbody tr').length")
+    assert all_n == 8, all_n
+    page.click("#rb-strip .rb-chip >> nth=0"); page.wait_for_timeout(300)
+    shown = page.evaluate("[...document.querySelectorAll('.rb-card .rb-mgr')].map(e => e.textContent)")
+    feed_mgrs = set(page.evaluate("[...document.querySelectorAll('#rb-feed tbody td.mg')].map(e => e.textContent.trim())"))
+    assert feed_mgrs <= set(shown), f"feed lists teams that aren't selected: {feed_mgrs} vs {shown}"
+
+    # ---- installable: manifest + icons ----
+    man = page.evaluate("fetch(document.querySelector('link[rel=manifest]').href).then(r => r.json())")
+    assert man["name"] == "Rumble Central" and man["display"] == "standalone", man.get("name")
+    assert any(i["sizes"] == "192x192" for i in man["icons"]) and any(i["sizes"] == "512x512" for i in man["icons"])
+    assert page.evaluate("document.querySelector('link[rel=apple-touch-icon]').href.startsWith('data:image/png')")
+
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nUX BATCH SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -2798,6 +2933,7 @@ def main():
         scenario_history_load_failure(browser)
         scenario_rumblin_controls(browser)
         scenario_rumblin_qol(browser)
+        scenario_ux_batch(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
