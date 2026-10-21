@@ -1313,6 +1313,8 @@
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
   .rb-scen { margin-top: 12px; }
+  #rb-scen[disabled] { opacity: 0.45; cursor: default; }
+  #rb-scen small { display: block; font-size: 0.6rem; font-weight: 500; line-height: 1.1; }
   .sc-blk { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
   .sc-bh { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
   .sc-bh b { font-size: 1.05rem; } .sc-vs { color: var(--text-dim); font-size: 0.8rem; }
@@ -6013,7 +6015,7 @@
       var et = rbEtParts(c.start);
       if (et && et.day === "Sun" && et.mins >= 750 && et.mins <= 810) anchor = i;
     });
-    if (anchor < 0 || !clusters[anchor].done) return null;
+    if (anchor < 0 || !clusters[anchor].done) return { wait: true };
     for (var i = anchor + 1; i < clusters.length; i++) {
       if (!clusters[i].done) return { key: clusters[i].start, clusters: clusters, cur: i };
     }
@@ -6294,8 +6296,14 @@
     document.getElementById("rb-inplay").classList.toggle("active", rb.sub === "inplay");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
     var scenWin = rb.mode === "me" ? rbScenWindow() : null;
+    var scenWait = !!(scenWin && scenWin.wait);
+    if (scenWait) scenWin = null;
     var scenBtn = document.getElementById("rb-scen");
-    scenBtn.hidden = !scenWin;
+    // Before the 1pm games end: shown but faded, with when it opens. After the week: gone.
+    scenBtn.hidden = !(scenWin || scenWait);
+    scenBtn.disabled = scenWait;
+    scenBtn.title = scenWait ? "Opens once the Sunday 1pm games are final" : "";
+    scenBtn.innerHTML = scenWait ? "Scenarios<small>after 1pm games end</small>" : "Scenarios";
     if (!scenWin && rb.sub === "scenarios") rb.sub = "matchup";
     scenBtn.classList.toggle("active", rb.sub === "scenarios");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
