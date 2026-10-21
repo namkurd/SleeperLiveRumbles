@@ -1312,6 +1312,36 @@
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
+  .rb-scen { margin-top: 12px; }
+  .sc-blk { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .sc-bh { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .sc-bh b { font-size: 1.05rem; } .sc-vs { color: var(--text-dim); font-size: 0.8rem; }
+  .sc-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: color-mix(in srgb, var(--text-dim) 20%, transparent); color: var(--text-dim); vertical-align: 2px; margin-left: 4px; white-space: nowrap; }
+  .sc-chip.h2h { background: var(--accent-2, #8b3df0); color: #fff; }
+  .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
+  .sc-gap span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
+  .sc-gap b { font-size: 1.6rem !important; font-variant-numeric: tabular-nums; }
+  .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
+  .sc-hl { font-size: 0.88rem; font-weight: 600; margin: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 0 6px 12px; }
+  .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
+  .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
+  .sc-dot.bad { background: var(--bad); } .sc-dot.ok { background: var(--good); } .sc-dot.even { background: #d98a1c; }
+  .sc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sc-side { border: 1px solid var(--panel-border); border-top: 3px solid var(--c); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+  .sc-sh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .sc-sh b { color: var(--c); } .sc-sh span { font-size: 0.68rem; color: var(--text-dim); font-weight: 600; }
+  .sc-pj { font-size: 0.68rem; color: var(--text-dim); margin-bottom: 4px; } .sc-pj b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .sc-p { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "b n a" "b g a"; column-gap: 5px; align-items: center; padding: 4px 0; border-top: 1px solid var(--panel-border); }
+  .sc-p .pos-badge, .sc-p .rb-plus { grid-area: b; min-width: 2.4em; font-size: 0.58rem; }
+  .sc-nw { grid-area: n; display: flex; align-items: center; min-width: 0; }
+  .sc-n { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .sc-nw .fld { flex-shrink: 0; }
+  .sc-g { grid-area: g; font-size: 0.66rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-a { grid-area: a; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; color: var(--text-dim); }
+  .sc-a.gain { color: var(--good); } .sc-a.loss { color: var(--bad); }
+  .sc-n .nl { display: none; }
+  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.78rem; } .sc-gap b { font-size: 1.4rem !important; } }
   .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
   .rb-feed-t td.ch { font-weight: 800; } .rb-feed-t td.ch.gain { color: var(--good); } .rb-feed-t td.ch.loss { color: var(--bad); }
@@ -1380,12 +1410,14 @@
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
         <button type="button" id="rb-inplay">In Play</button>
         <button type="button" id="rb-matchup" class="active">Matchup</button>
+        <button type="button" id="rb-scen" hidden>Scenarios</button>
         <button type="button" id="rb-change">Change me</button>
         <button type="button" id="rb-copy">Copy link</button>
       </div>
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid totals" id="rb-grid"></div>
+    <div class="rb-scen" id="rb-scen-view" hidden></div>
     <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
@@ -5939,6 +5971,138 @@
   }
   function fieldIcon(f) { return f && FIELD_ICON[f] ? FIELD_ICON[f] : ""; }
 
+  // ---- Scenarios tab ------------------------------------------------------
+  // Opens after the Sunday 1pm games are final and stays until the week's last game is final. Each
+  // "game window" is a cluster of kickoffs (Sun 1pm, Sun 4pm, Sun night, Mon night...). Within a window
+  // every Rumble still in play for you shows the starters who have yet to play (or are playing now),
+  // and the points one side needs to score over the other.
+  var SCEN_CLUSTER_GAP_MS = 90 * 60 * 1000;
+  var scenEtFmt = null;
+  function rbEtParts(ms) {
+    try {
+      scenEtFmt = scenEtFmt || new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "numeric", hourCycle: "h23" });
+      var o = {};
+      scenEtFmt.formatToParts(new Date(ms)).forEach(function (x) { o[x.type] = x.value; });
+      return { day: o.weekday, mins: (parseInt(o.hour, 10) % 24) * 60 + parseInt(o.minute, 10) };
+    } catch (e) { return null; }
+  }
+  // null when the tab should be hidden; else {key, clusters, cur}.
+  function rbScenWindow() {
+    var sched = state.live && state.live.sched;
+    if (!sched) return null;
+    var seen = {}, games = [];
+    Object.keys(sched).forEach(function (tm) {
+      var g = sched[tm];
+      if (!g || typeof g.startTimeMs !== "number") return;
+      var k = [tm, g.opp || ""].sort().join("@") + g.startTimeMs;
+      if (seen[k]) return;
+      seen[k] = true;
+      games.push({ ms: g.startTimeMs, done: g.status === "complete" });
+    });
+    if (!games.length) return null;
+    games.sort(function (a, b) { return a.ms - b.ms; });
+    var clusters = [];
+    games.forEach(function (g) {
+      var c = clusters[clusters.length - 1];
+      if (c && g.ms - c.end <= SCEN_CLUSTER_GAP_MS) { c.end = g.ms; c.done = c.done && g.done; }
+      else clusters.push({ start: g.ms, end: g.ms, done: g.done });
+    });
+    var anchor = -1;
+    clusters.forEach(function (c, i) {
+      if (anchor >= 0) return;
+      var et = rbEtParts(c.start);
+      if (et && et.day === "Sun" && et.mins >= 750 && et.mins <= 810) anchor = i;
+    });
+    if (anchor < 0 || !clusters[anchor].done) return null;
+    for (var i = anchor + 1; i < clusters.length; i++) {
+      if (!clusters[i].done) return { key: clusters[i].start, clusters: clusters, cur: i };
+    }
+    return null;
+  }
+  function rbScenCluster(win, ms) {
+    if (typeof ms !== "number") return -1;
+    for (var i = 0; i < win.clusters.length; i++) {
+      if (ms >= win.clusters[i].start && ms <= win.clusters[i].end) return i;
+    }
+    return -1;
+  }
+  // Starters whose game is in this window or a later one (same Out filters as Live Players).
+  function rbScenPlayers(t, win) {
+    return t.players.filter(function (p) {
+      if (rbRuledOut(p)) return false;
+      if (isOutStatus(p.injury_status) && !p.replacement) return false;
+      var ci = rbScenCluster(win, p.game_start_ms);
+      return ci >= win.cur;
+    });
+  }
+  function rbSum(list) { return list.reduce(function (s, p) { return s + num(p.actual); }, 0); }
+
+  function rbScenSentence(startGap, n, m) {
+    var g = Math.abs(startGap).toFixed(2);
+    function verb(k) { return k === 1 ? "needs" : "need"; }
+    if (startGap < -0.004) {
+      if (!m) return "Your " + n + " " + verb(n) + " " + g + " to catch up";
+      return "Your " + n + " " + verb(n) + " to outscore their " + m + " by " + g;
+    }
+    if (startGap > 0.004) {
+      if (!n) return "Their " + m + " " + verb(m) + " " + g + " to catch you";
+      return "Their " + m + " " + verb(m) + " to outscore your " + n + " by " + g;
+    }
+    return "Dead even: your " + n + " vs. their " + m;
+  }
+
+  function rbScenSideHtml(t, list, win) {
+    var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
+    var rows = list.map(function (p) {
+      var st = p.game_status, meta;
+      if (st === "in_progress") meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
+      else if (st === "complete") meta = "Final";
+      else meta = formatGameStartLabel(p.game_start_ms);
+      var a = num(p.actual), pre = st === "pre_game";
+      var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
+      return '<div class="sc-p">' + badge + '<span class="sc-nw"><span class="sc-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (st === "in_progress" ? fieldIcon(p.field) : "") + "</span>" +
+        '<span class="sc-g">' + escapeHtml(meta || "") + '</span><span class="sc-a ' + (pre ? "" : a > 0 ? "gain" : a < 0 ? "loss" : "") + '">' + (pre ? "–" : a.toFixed(2)) + "</span></div>";
+    }).join("");
+    return '<div class="sc-side" style="--c:' + col + '"><div class="sc-sh"><b>' + escapeHtml(t.name) + "</b><span>" + list.length + " left</span></div>" +
+      '<div class="sc-pj">act <b>' + t.act.toFixed(2) + "</b> &middot; proj <b>" + t.proj.toFixed(2) + "</b></div>" + rows + "</div>";
+  }
+
+  function rbRenderScenarios(teams, win) {
+    var box = document.getElementById("rb-scen-view");
+    var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
+    if (!me) { box.innerHTML = ""; return; }
+    if (!state.scenFrozen || state.scenFrozen.key !== win.key) state.scenFrozen = { key: win.key, by: {} };
+    var mine = rbScenPlayers(me, win);
+    var blocks = [];
+    teams.filter(function (t) { return t !== me && rbInPlay(me, t); })
+      .sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); })
+      .forEach(function (t) {
+        var theirs = rbScenPlayers(t, win);
+        var gap = me.act - t.act;
+        var mineN = mine.length, theirN = theirs.length;
+        if (!mineN && !theirN) return;
+        if (gap < -0.004 && !mineN) return;
+        if (gap > 0.004 && !theirN) return;
+        var fz = state.scenFrozen.by[t.rid];
+        if (!fz) {
+          fz = state.scenFrozen.by[t.rid] = { start: gap - (rbSum(mine) - rbSum(theirs)), n: mineN, m: theirN };
+          fz.text = rbScenSentence(fz.start, fz.n, fz.m);
+        }
+        var h2h = t.rid === me.opp;
+        var cls = gap < -0.004 ? "bad" : gap > 0.004 ? "ok" : "even";
+        var label = gap < -0.004 ? "You trail by" : gap > 0.004 ? "You lead by" : "All tied up";
+        var scale = Math.max(10, Math.abs(fz.start) * 2);
+        var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
+        var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
+        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span></div>' +
+          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + "</b></div></div>" +
+          '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div>" +
+          '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
+          '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
+      });
+    box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">No Rumbles are still in play against you right now.</div>';
+  }
+
   function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";
@@ -6129,7 +6293,27 @@
     document.getElementById("rb-inplay").textContent = inPlayCount == null ? "In Play" : "In Play (" + inPlayCount + ")";
     document.getElementById("rb-inplay").classList.toggle("active", rb.sub === "inplay");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
+    var scenWin = rb.mode === "me" ? rbScenWindow() : null;
+    var scenBtn = document.getElementById("rb-scen");
+    scenBtn.hidden = !scenWin;
+    if (!scenWin && rb.sub === "scenarios") rb.sub = "matchup";
+    scenBtn.classList.toggle("active", rb.sub === "scenarios");
+    document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
+    var scenOn = !!scenWin && rb.sub === "scenarios";
+    var scenView = document.getElementById("rb-scen-view");
+    scenView.hidden = !scenOn;
+    grid.style.display = strip.style.display = scenOn ? "none" : "";
+    var legend = document.querySelector(".rb-legend");
+    if (legend) legend.style.display = scenOn ? "none" : "";
     document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
+    if (scenOn) {
+      document.getElementById("rb-feed").hidden = true;
+      document.getElementById("rb-live").hidden = true;
+      rbRenderScenarios(teams, scenWin);
+      rbStickOffset();
+      prefsSave();
+      return;
+    }
 
     // Name strip, in projected order.
     var chipBefore = rbRects(rb.chipEls);
@@ -6304,7 +6488,7 @@
     if (p.m === "actual" || p.m === "custom") state.mode = p.m;
     if (p.sort && COLUMNS[p.sort.key] && (p.sort.dir === "asc" || p.sort.dir === "desc")) { state.userSorted = true; state.sort = { key: p.sort.key, dir: p.sort.dir }; }
     var r = p.rb || {};
-    if (r.sub === "inplay" || r.sub === "matchup") rb.sub = r.sub;
+    if (r.sub === "inplay" || r.sub === "matchup" || r.sub === "scenarios") rb.sub = r.sub;
     if (r.liveSort && ["p", "m", "g", "a", "j"].indexOf(r.liveSort.k) !== -1 && (r.liveSort.dir === 1 || r.liveSort.dir === -1)) rb.liveSort = { k: r.liveSort.k, dir: r.liveSort.dir };
     if (Array.isArray(r.sel)) { rb.sel = {}; r.sel.forEach(function (k) { rb.sel[k] = true; }); }
     if (r.mode === "me" && rb.me != null) rb.mode = "me";
@@ -6371,6 +6555,7 @@
   });
   document.getElementById("rb-inplay").addEventListener("click", function () { state.rb.sub = "inplay"; renderRumblin(); });
   document.getElementById("rb-matchup").addEventListener("click", function () { state.rb.sub = "matchup"; renderRumblin(); });
+  document.getElementById("rb-scen").addEventListener("click", function () { state.rb.sub = "scenarios"; renderRumblin(); });
   document.getElementById("rb-change").addEventListener("click", openWhoPicker);
   // Full / Compact / Totals card size.
   function rbSetDensity(d) {
