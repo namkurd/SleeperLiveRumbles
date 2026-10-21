@@ -2927,6 +2927,114 @@ def scenario_ux_batch(browser):
     print("\nUX BATCH SCENARIO PASSED")
 
 
+def scenario_play_column(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Score Feed Play column, drive summaries for defenses, on-field icons")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    league = load("league.json")
+    league["scoring_settings"].update({"tkl_loss": 0.2, "yds_allow": -0.02, "pts_allow": -0.23, "sack": 1, "int": 2, "def_td": 6, "pass_int_td": -2, "rush_fd": 0.5})
+    players = {
+        "P1": {"first_name": "Wes", "last_name": "Receiver", "full_name": "Wes Receiver", "position": "WR", "team": "MIN"},
+        "P2": {"first_name": "Quinn", "last_name": "Passer", "full_name": "Quinn Passer", "position": "QB", "team": "MIN"},
+        "P3": {"first_name": "Ray", "last_name": "Runner", "full_name": "Ray Runner", "position": "RB", "team": "CHI"},
+        "CHI": {"first_name": "Chicago", "last_name": "Bears", "full_name": "Chicago Bears", "position": "DEF", "team": "CHI"},
+    }
+    matchups = load("matchups_week2.json")
+    for m in matchups:
+        if m["roster_id"] == 1: m["starters"] = ["P1", "P2"]
+        if m["roster_id"] == 2: m["starters"] = ["P3", "CHI"]
+    scores = load("scores_week2.json")
+    for g in scores:
+        if g.get("status") == "in_progress": g["possession"] = "MIN"
+    stats = [
+        {"player_id": "P1", "stats": {"rec": 2, "rec_yd": 20}},
+        {"player_id": "P2", "stats": {"pass_cmp": 7, "pass_yd": 80, "pass_int": 0}},
+        {"player_id": "P3", "stats": {"rush_att": 5, "rush_yd": 20, "rush_fd": 0}},
+        {"player_id": "CHI", "stats": {"sack": 1, "tkl_loss": 0, "yds_allow": 100, "pts_allow": 7, "def_td": 0}},
+    ]
+    cur = {"stats": stats, "scores": scores}
+    install_routes(page, {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": league,
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": players,
+        "**/v1/state/nfl": load("state.json"),
+    })
+    page.route("**/stats/nfl/2026/2*", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(cur["stats"])))
+    page.route("**/scores/nfl/regular/2026/2", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(cur["scores"])))
+
+    def st(pid):
+        return next(r for r in cur["stats"] if r["player_id"] == pid)["stats"]
+    def poll():
+        page.click("#refresh-btn"); page.wait_for_timeout(1500)
+    def feed():
+        return page.evaluate("[...document.querySelectorAll('#rb-feed tbody tr')].map(t => t.querySelector('td.pp') ? t.querySelector('td.pp').textContent : '')")
+    def possession(team):
+        for g in cur["scores"]:
+            if g.get("status") == "in_progress": g["possession"] = team
+
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    page.click("#rb-all"); page.wait_for_timeout(300)
+    page.evaluate("localStorage.removeItem('rumbles.feed')")
+
+    # on-field icons: MIN has the ball -> football by the MIN players, fence by the CHI defense
+    icons = page.evaluate("""() => ({off: document.querySelectorAll('.rb-card .fld-off').length, def: document.querySelectorAll('.rb-card .fld-def').length,
+      liveOff: document.querySelectorAll('#rb-live .fld-off').length, liveDef: document.querySelectorAll('#rb-live .fld-def').length})""")
+    assert icons["off"] == 2 and icons["def"] == 1, f"card icons: {icons}"
+    assert icons["liveOff"] == 2 and icons["liveDef"] == 1, f"Live Players icons: {icons}"
+
+    # plain plays are named; defense yardage is held back
+    st("P1").update({"rec": 3, "rec_yd": 22})
+    st("P3").update({"rush_att": 6, "rush_yd": 27, "rush_fd": 1})
+    st("P2").update({"pass_cmp": 8, "pass_yd": 92})
+    st("CHI").update({"tkl_loss": 1, "yds_allow": 130})
+    poll()
+    f = feed()
+    assert "2-yd catch" in f, f
+    assert "7-yd run FD" in f, f
+    assert "TFL" in f, f
+    assert not any("Opp. drive" in t for t in f), f"drive summary must wait for the possession change: {f}"
+    assert any("completion" in t for t in f), f
+
+    # possession changes -> one drive summary row for the defense
+    possession("CHI")
+    st("CHI").update({"yds_allow": 140})
+    poll()
+    f = feed()
+    assert any(t.startswith("Opp. drive: 40 yds") for t in f), f"drive summary after the ball changes hands: {f}"
+    icons = page.evaluate("({off: [...document.querySelectorAll('#rb-live .fld-off')].length, def: document.querySelectorAll('#rb-live .fld-def').length})")
+    assert icons["off"] == 1 and icons["def"] == 0, f"icons follow the ball: {icons}"
+
+    # pick six: QB interception while the other defense scores
+    st("P2").update({"pass_int": 1}); st("CHI").update({"def_td": 1})
+    poll()
+    f = feed()
+    assert "Pick 6!" in f, f
+
+    # phone layout: Play column visible, no sideways scroll, five rows fit
+    geo = page.evaluate("""() => { const sc = document.querySelector('#rb-feed .rb-feed-scroll'), r = sc.getBoundingClientRect();
+      const th = [...document.querySelectorAll('#rb-feed thead th')].map(t => getComputedStyle(t).display);
+      const rows = [...sc.querySelectorAll('tbody tr')].map(t => t.getBoundingClientRect());
+      const pp = [...sc.querySelectorAll('td.pp span')].map(e => e.scrollWidth <= e.clientWidth + 1 || e.scrollHeight <= e.clientHeight + 1);
+      return {th, overflowX: document.documentElement.scrollWidth - window.innerWidth, n: rows.length, fifthInside: rows.length < 5 || rows[4].bottom <= r.bottom + 1, rowH: rows.map(x => Math.round(x.height))}; }""")
+    assert geo["th"][2] != "none" and geo["th"][5] == "none", f"Play shows and Act hides on a phone: {geo}"
+    assert geo["overflowX"] <= 1, f"page must not scroll sideways: {geo}"
+    assert geo["fifthInside"], geo
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nPLAY COLUMN SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -2949,6 +3057,7 @@ def main():
         scenario_rumblin_controls(browser)
         scenario_rumblin_qol(browser)
         scenario_ux_batch(browser)
+        scenario_play_column(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
