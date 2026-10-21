@@ -1125,6 +1125,9 @@
   .rb-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
+  .rb-n .nl { display: none; }
+  .rb-compact .rb-n .nf { display: none; } .rb-compact .rb-n .nl { display: inline; }
+  .rb-compact .rb-sc { display: none; }
   .rb-compact .rb-meta .rb-ml { display: none; }
   .rb-compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
@@ -5938,7 +5941,8 @@
     var meta = "", metaShort = "", slotColor = null;
     if (live) {
       meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
-      metaShort = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " " : "") + p.game_score : "");
+      // Compact cards drop the score (the .rb-sc part) to save room.
+      metaShort = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? '<span class="rb-sc">' + (p.game_minutes_left != null ? " " : "") + escapeHtml(p.game_score) + "</span>" : "");
     } else if (status === "complete") {
       meta = "Final"; metaShort = "F";
     } else if (status === "pre_game") {
@@ -5959,8 +5963,8 @@
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
-    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
-      (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
+    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
+      (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
 
