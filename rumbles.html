@@ -1303,6 +1303,8 @@
   .fld svg { height: 0.78em; width: auto; display: block; }
   .fld-off { color: #c8843a; } .fld-def { color: #8fb4d9; }
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
+  .rb-live-t .pn .nl { display: none; }
+  @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
   .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
   .rb-feed-t td.ch { font-weight: 800; } .rb-feed-t td.ch.gain { color: var(--good); } .rb-feed-t td.ch.loss { color: var(--bad); }
@@ -5923,6 +5925,11 @@
     off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 16 10" aria-hidden="true"><ellipse cx="8" cy="5" rx="7.4" ry="4.3" fill="currentColor"/><path d="M5.2 5h5.6M6.8 3.4v3.2M8 3.2v3.6M9.2 3.4v3.2" stroke="#1b1b1f" stroke-width=".7" stroke-linecap="round"/></svg></span>',
     def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 16 11" aria-hidden="true"><path d="M.8 3.2L2.5.9l1.7 2.3v7.3H.8zM6.2 3.2L8 .9l1.8 2.3v7.3H6.2zM11.8 3.2l1.7-2.3 1.7 2.3v7.3h-3.4z" fill="currentColor"/><path d="M0 5.6h16M0 8.6h16" stroke="#1b1b1f" stroke-width=".9"/></svg></span>'
   };
+  // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
+  function nameSpans(n) {
+    n = String(n == null ? "" : n);
+    return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n.replace(/^[A-Z]\.\s+/, "")) + "</span>";
+  }
   function fieldIcon(f) { return f && FIELD_ICON[f] ? FIELD_ICON[f] : ""; }
 
   function rbPlayerRow(p, bench, struck) {
@@ -6033,7 +6040,7 @@
     var body = items.map(function (f) {
       var t = teams[f.rid], col = rbIsOpponent(f.rid) ? "var(--bad)" : rbColor(f.rid);
       var tm = new Date(f.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm"><span class="tl">' + escapeHtml(tm) + '</span><span class="ts">' + escapeHtml(tm.replace(/\s*[AP]M$/i, "")) + '</span></td><td class="pl"><div class="pw"><span class="pn">' + escapeHtml(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
+      return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm"><span class="tl">' + escapeHtml(tm) + '</span><span class="ts">' + escapeHtml(tm.replace(/\s*[AP]M$/i, "")) + '</span></td><td class="pl"><div class="pw"><span class="pn">' + nameSpans(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
         '<td class="pp ' + (f.d > 0 ? "gain" : "loss") + '" title="' + escapeHtml(f.p || "") + '"><span>' + escapeHtml(f.p || "\u2014") + "</span></td>" +
         '<td class="mg"><i></i>' + escapeHtml(t.name) + '</td><td class="n ch ' + (f.d > 0 ? "gain" : "loss") + '">' + (f.d > 0 ? "+" : "\u2212") + Math.abs(f.d).toFixed(2) + '</td><td class="n">' + num(f.a).toFixed(2) + "</td></tr>";
     }).join("");
@@ -6071,7 +6078,7 @@
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
-      return '<tr' + (r.rid === state.rb.me ? ' class="me"' : "") + ' style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span>" + fieldIcon(r.fld) + "<small>" + escapeHtml(r.pos) + "</small></div></td>" +
+      return '<tr' + (r.rid === state.rb.me ? ' class="me"' : "") + ' style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + nameSpans(r.p) + "</span>" + fieldIcon(r.fld) + "<small>" + escapeHtml(r.pos) + "</small></div></td>" +
         '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2), { pop: "act" }) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
