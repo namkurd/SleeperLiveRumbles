@@ -1127,7 +1127,6 @@
   .rb-meta .rb-ms { display: none; }
   .rb-n .nl { display: none; }
   .rb-compact .rb-n .nf { display: none; } .rb-compact .rb-n .nl { display: inline; }
-  .rb-compact .rb-sc { display: none; }
   .rb-compact .rb-meta .rb-ml { display: none; }
   .rb-compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
@@ -1156,6 +1155,9 @@
   .rb-compact .rb-table { font-size: 0.7rem; }
   .rb-compact .rb-table td { padding: 1px 3px; }
   .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
+  /* Live rows in compact cards: clock and score sit on a small second line so names never get cut. */
+  .rb-compact tr.rb-live .rb-nmwrap { flex-wrap: wrap; row-gap: 0; }
+  .rb-compact tr.rb-live .rb-meta { flex-basis: 100%; margin-left: 0; font-size: 0.56rem; line-height: 1.05; }
   .rb-grid.totals { --rb-cardw: 190px; }
   /* Totals cards are narrow too: same stacked layout as phone compact
      (Rumbles and season under the name) so names aren't cut off. */
@@ -1303,8 +1305,10 @@
   .rb-feed-t td.pp span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.12; white-space: normal; }
   /* On-field markers (football / picket fence) next to player names. */
   .fld { display: inline-flex; flex: none; align-items: center; margin-left: 4px; line-height: 1; }
-  .fld svg { height: 0.78em; width: auto; display: block; }
-  .fld-off { color: #c8843a; } .fld-def { color: #8fb4d9; }
+  .fld { position: relative; top: -1px; }
+  .fld svg { height: 0.95em; width: auto; display: block; }
+  .fld-def svg { height: 0.82em; }
+  .fld-off { color: #b5651d; } .fld-def { color: #8fb4d9; }
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
@@ -5925,7 +5929,7 @@
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
   // defense while the other team has it.
   var FIELD_ICON = {
-    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 16 10" aria-hidden="true"><ellipse cx="8" cy="5" rx="7.4" ry="4.3" fill="currentColor"/><path d="M5.2 5h5.6M6.8 3.4v3.2M8 3.2v3.6M9.2 3.4v3.2" stroke="#1b1b1f" stroke-width=".7" stroke-linecap="round"/></svg></span>',
+    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.6 7C3 2 11 2 13.4 7C11 12 3 12 .6 7Z" fill="currentColor" stroke="#6b3410" stroke-width=".8" stroke-linejoin="round"/><path d="M3.1 4.7Q2.5 7 3.1 9.3M10.9 4.7Q11.5 7 10.9 9.3" fill="none" stroke="#fff" stroke-width=".8" stroke-linecap="round"/><path d="M4.9 7h4.2M5.8 5.7v2.6M7 5.5v3M8.2 5.7v2.6" stroke="#fff" stroke-width=".75" stroke-linecap="round"/></g></svg></span>',
     def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 16 11" aria-hidden="true"><path d="M.8 3.2L2.5.9l1.7 2.3v7.3H.8zM6.2 3.2L8 .9l1.8 2.3v7.3H6.2zM11.8 3.2l1.7-2.3 1.7 2.3v7.3h-3.4z" fill="currentColor"/><path d="M0 5.6h16M0 8.6h16" stroke="#1b1b1f" stroke-width=".9"/></svg></span>'
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
@@ -5941,7 +5945,6 @@
     var meta = "", metaShort = "", slotColor = null;
     if (live) {
       meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
-      // Compact cards drop the score (the .rb-sc part) to save room.
       metaShort = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? '<span class="rb-sc">' + (p.game_minutes_left != null ? " " : "") + escapeHtml(p.game_score) + "</span>" : "");
     } else if (status === "complete") {
       meta = "Final"; metaShort = "F";
