@@ -3035,6 +3035,108 @@ def scenario_play_column(browser):
     print("\nPLAY COLUMN SCENARIO PASSED")
 
 
+def scenario_scenarios_tab(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Scenarios tab (windows, frozen sentence, ordering, resets)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    def ms(iso): return int(datetime.datetime.fromisoformat(iso).replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+    players = {
+        "B1": {"first_name": "Bo", "last_name": "Onewide", "full_name": "Bo Onewide", "position": "WR", "team": "DAL"},
+        "B2": {"first_name": "Quinn", "last_name": "Passer", "full_name": "Quinn Passer", "position": "QB", "team": "MIN"},
+        "B3": {"first_name": "Rex", "last_name": "Runner", "full_name": "Rex Runner", "position": "RB", "team": "SF"},
+        "A1": {"first_name": "Al", "last_name": "Early", "full_name": "Al Early", "position": "WR", "team": "PHI"},
+        "A2": {"first_name": "Rob", "last_name": "Bearback", "full_name": "Rob Bearback", "position": "RB", "team": "CHI"},
+        "J1": {"first_name": "Tim", "last_name": "Monday", "full_name": "Tim Monday", "position": "TE", "team": "KC"},
+    }
+    matchups = load("matchups_week2.json")
+    for m in matchups:
+        m["starters"] = {1: ["A1", "A2"], 2: ["B1", "B2", "B3"], 3: ["J1"]}.get(m["roster_id"], [])
+        m["players"] = list(m["starters"])
+    def game(away, home, iso, status, extra=None):
+        g = {"status": status, "game_id": away + home, "week": 2, "away_team": away, "home_team": home, "start_time": ms(iso), "quarter": "F" if status == "complete" else "3" if status == "in_progress" else "1"}
+        g.update(extra or {})
+        return g
+    cur = {"scores": [], "stats": []}
+    def setgames(one, four, snf, mnf):
+        cur["scores"] = [game("DAL", "PHI", "2026-09-20T17:00:00", one), game("MIN", "CHI", "2026-09-20T20:25:00", four), game("SF", "SEA", "2026-09-21T00:20:00", snf), game("KC", "LV", "2026-09-22T00:15:00", mnf)]
+    def setstats(b2=100):
+        cur["stats"] = [{"player_id": "B1", "stats": {"rec_yd": 100}}, {"player_id": "B2", "stats": {"pass_yd": b2}}, {"player_id": "A1", "stats": {"rec_yd": 200}}]
+    proj = lambda pid, st: {"player_id": pid, "stats": st, "week": 2, "season": "2026", "season_type": "regular", "category": "proj"}
+    projections = [proj("B1", {"rec_yd": 100}), proj("B2", {"pass_yd": 100}), proj("B3", {"rush_yd": 300}), proj("A1", {"rec_yd": 200}), proj("A2", {"rush_yd": 200}), proj("J1", {"rec_yd": 1000})]
+    setgames("in_progress", "pre_game", "pre_game", "pre_game"); setstats()
+    install_routes(page, {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": projections,
+        "**/v1/players/nfl": players,
+        "**/v1/state/nfl": load("state.json"),
+    })
+    page.route("**/stats/nfl/2026/2*", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(cur["stats"])))
+    page.route("**/scores/nfl/regular/2026/2", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(cur["scores"])))
+    def poll():
+        page.click("#refresh-btn"); page.wait_for_timeout(1500)
+    def blocks():
+        return [x for x in blocks_all() if x["who"] in ("Jake", "Aidan")]
+    def blocks_all():
+        return page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({
+          who: b.querySelector('.sc-bh b').textContent, chip: b.querySelector('.sc-chip').textContent,
+          gap: b.querySelector('.sc-gap span').textContent + ' ' + b.querySelector('.sc-gap b').textContent,
+          hl: b.querySelector('.sc-hl').textContent, hlH: b.querySelector('.sc-hl').getBoundingClientRect().height,
+          sides: [...b.querySelectorAll('.sc-side')].map(s => ({left: s.querySelector('.sc-sh span').textContent, names: [...s.querySelectorAll('.sc-n .nl')].map(n => n.textContent)}))}))""")
+
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    page.click("#rb-me"); page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('rb-scen').offsetParent === null"), "no Scenarios tab while the 1pm games are still on"
+
+    # the 1pm games end -> the tab opens, 4:25 window is current
+    setgames("complete", "in_progress", "pre_game", "pre_game"); poll()
+    assert page.evaluate("document.getElementById('rb-scen').offsetParent !== null"), "Scenarios opens once the 1pm games are final"
+    page.click("#rb-scen"); page.wait_for_timeout(400)
+    assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent === null && document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "other sections hidden in Scenarios"
+    assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
+    b = blocks()
+    assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
+    assert b[1]["chip"].startswith("H2H") and b[0]["chip"].startswith("Field"), b
+    assert b[0]["hl"] == "Their 1 needs to outscore your 2 by 10.00", b[0]
+    assert b[1]["hl"] == "Your 2 need to outscore their 1 by 10.00", b[1]
+    assert b[0]["gap"] == "You lead by 14.00" and b[1]["gap"] == "You trail by 6.00", b
+    assert b[1]["sides"][0]["names"] == ["Passer", "Runner"], f"1pm player Onewide is gone: {b[1]['sides']}"
+    assert b[0]["hlH"] < 30, "sentence stays on one line on a phone"
+
+    # points move: the gap moves, the sentence does not
+    setstats(b2=200); poll()
+    b = blocks()
+    assert b[0]["gap"] == "You lead by 18.00" and b[1]["gap"] == "You trail by 2.00", b
+    assert b[0]["hl"] == "Their 1 needs to outscore your 2 by 10.00", f"sentence frozen: {b[0]}"
+    assert page.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1, "no sideways scroll"
+
+    # 4:25 game ends -> next window: finished player drops off, sentence rewritten
+    setgames("complete", "complete", "pre_game", "pre_game"); poll()
+    b = blocks()
+    assert [x["who"] for x in b] == ["Jake", "Aidan"], b
+    assert b[0]["hl"] == "Their 1 needs to outscore your 1 by 18.00", b[0]
+    assert b[1]["hl"] == "Your 1 needs 2.00 to catch up", b[1]
+    assert b[1]["sides"][0]["names"] == ["Runner"], b[1]
+
+    # last game final -> tab disappears and the page falls back to Matchup
+    setgames("complete", "complete", "complete", "complete"); poll()
+    assert page.evaluate("document.getElementById('rb-scen').offsetParent === null && document.getElementById('rb-scen-view').hidden"), "tab gone when the week is over"
+    assert page.evaluate("document.getElementById('rb-matchup').classList.contains('active')"), "falls back to Matchup"
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nSCENARIOS TAB SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -3058,6 +3160,7 @@ def main():
         scenario_rumblin_qol(browser)
         scenario_ux_batch(browser)
         scenario_play_column(browser)
+        scenario_scenarios_tab(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
