@@ -1293,17 +1293,30 @@
   .rb-feed-t.rb-live-t th { height: var(--fh); padding-top: 0; padding-bottom: 0; cursor: default; }
   .rb-feed-t.rb-live-t td { height: var(--fr); padding-top: 0; padding-bottom: 0; }
   .rb-feed-t.rb-live-t thead th { top: 0; }
-  .rb-feed-t.rb-live-t th:nth-child(1) { width: 17%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 29%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 22%; }
-  .rb-feed-t.rb-live-t th:nth-child(4), .rb-feed-t.rb-live-t th:nth-child(5) { width: 16%; }
+  .rb-feed-t.rb-live-t th:nth-child(1) { width: 11%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 20%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 27%; }
+  .rb-feed-t.rb-live-t th:nth-child(4) { width: 16%; } .rb-feed-t.rb-live-t th:nth-child(5), .rb-feed-t.rb-live-t th:nth-child(6) { width: 13%; }
+  .rb-feed-t td.pp { text-align: left; font-weight: 700; font-size: 0.76rem; }
+  .rb-feed-t td.pp.gain { color: var(--good); } .rb-feed-t td.pp.loss { color: var(--bad); }
+  .rb-feed-t td.pp span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.12; white-space: normal; }
+  /* On-field markers (football / picket fence) next to player names. */
+  .fld { display: inline-flex; flex: none; align-items: center; margin-left: 4px; line-height: 1; }
+  .fld svg { height: 0.78em; width: auto; display: block; }
+  .fld-off { color: #c8843a; } .fld-def { color: #8fb4d9; }
+  .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
+  .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
   .rb-feed-t td.ch { font-weight: 800; } .rb-feed-t td.ch.gain { color: var(--good); } .rb-feed-t td.ch.loss { color: var(--bad); }
   .rb-feed-t tr.rb-new td { animation: rb-feed-new 2.4s ease-out; }
   @keyframes rb-feed-new { from { background: color-mix(in srgb, var(--accent) 28%, transparent); } to { background: transparent; } }
   @media (max-width: 560px) {
     .rb-feed-wrap { --fr: 30px; --fh: 26px; }
-    .rb-feed-t td.tm { font-size: 0.6rem; }
-    .rb-feed-t.rb-live-t th:nth-child(1) { width: 17%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 30%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 21%; }
-    .rb-feed-t.rb-live-t th:nth-child(4), .rb-feed-t.rb-live-t th:nth-child(5) { width: 16%; }
+    .rb-feed-t td.tm { font-size: 0.56rem; }
+    .rb-feed-t td.tm .tl { display: none; } .rb-feed-t td.tm .ts { display: inline; }
+    .rb-feed-t td.pl small { display: none; }
+    .rb-feed-t td.pp { font-size: 0.56rem; }
+    .rb-feed-t.rb-live-t th:nth-child(1) { width: 13%; } .rb-feed-t.rb-live-t th:nth-child(2) { width: 21%; } .rb-feed-t.rb-live-t th:nth-child(3) { width: 31%; }
+    .rb-feed-t.rb-live-t th:nth-child(4) { width: 19%; } .rb-feed-t.rb-live-t th:nth-child(5) { width: 16%; }
+    .rb-feed-t.rb-live-t th:nth-child(6), .rb-feed-t.rb-live-t td:nth-child(6) { display: none; }
   }
   @media (prefers-reduced-motion: reduce) { .rb-feed-t tr.rb-new td { animation: none; } }
   /* Pull down at the top of the page to refresh. */
@@ -2080,6 +2093,10 @@
       proj: round2(projPts),
       played: played,
       injury_status: meta ? (meta.injury_status || null) : null,
+      team: team || null,
+      // "off": his team has the ball (football icon). "def": a defense while the other team has it (fence icon).
+      field: game && game.status === "in_progress" && game.poss && team
+        ? (meta.position === "DEF" ? (game.poss !== team ? "def" : null) : (game.poss === team ? "off" : null)) : null,
       game_status: (game && game.status) || "unknown",
       game_start_ms: (game && game.startTimeMs) || null,
       // Live games only: minutes left and "team-opponent" score.
@@ -2286,14 +2303,16 @@
       var homeScore = parseInt(meta.home_score, 10);
       var awayScore = parseInt(meta.away_score, 10);
       var base = { status: status, startTimeMs: startTimeMs, remainingFraction: remFrac,
-        minutesLeft: live ? gameMinutesLeft(meta) : null };
+        minutesLeft: live ? gameMinutesLeft(meta) : null,
+        // Team (abbreviation) that has the ball right now; "" between plays or when Sleeper doesn't say.
+        poss: live ? String(meta.possession || g.possession || "").toUpperCase() : "" };
       // Each team's own copy carries its score first ("27-20" for the
       // team that has 27), for the live columns in the points tooltip.
       var scoreFor = function (mine, theirs) {
         return live && !isNaN(mine) && !isNaN(theirs) ? mine + "-" + theirs : null;
       };
-      if (away) map[away] = Object.assign({}, base, { score: scoreFor(awayScore, homeScore) });
-      if (home) map[home] = Object.assign({}, base, { score: scoreFor(homeScore, awayScore) });
+      if (away) map[away] = Object.assign({}, base, { score: scoreFor(awayScore, homeScore), opp: home || null });
+      if (home) map[home] = Object.assign({}, base, { score: scoreFor(homeScore, awayScore), opp: away || null });
     });
     return map;
   }
@@ -3343,7 +3362,9 @@
               state.live = {
                 week: targetWeek, season: season, seasonType: seasonType, isLive: true, byRoster: byRoster,
                 hasKickedOff: kickoffInfo.hasKickedOff, firstGameStartMs: kickoffInfo.firstGameStartMs,
-                weekFinal: weekFinal
+                weekFinal: weekFinal,
+                // Raw stat lines, scoring and game table: read by updateCredits to name each play.
+                stats: statsMap, scoring: scoringSettings, sched: teamGameSchedule
               };
 
               // Attach each roster's per-starter actual/projected breakdown
@@ -4222,30 +4243,163 @@
     return '<span class="live-wrap"><span class="badge-live">LIVE</span>' + countHtml + "</span>";
   }
 
+  // ---- naming the play behind a score change ---------------------------------------
+  // Sleeper only sends running stat totals, so a play is inferred from what changed in a player's
+  // stat line since the last refresh (every 30 seconds). Two plays inside one refresh are
+  // summarised ("2 runs, 13 yds"), never guessed as one play.
+  var PLAY_KEYS = {};
+  ("pass_cmp pass_yd pass_td pass_int pass_int_td pass_fd pass_sack pass_2pt rush_att rush_yd rush_td rush_fd rush_2pt " +
+   "rec rec_yd rec_td rec_fd rec_2pt bonus_fd_qb bonus_fd_rb bonus_fd_wr bonus_fd_te fum fum_lost fum_rec fum_rec_td " +
+   "kr_yd pr_yd st_td fgm fgm_yds fgmiss xpm xpmiss sack tkl_loss int int_ret_yd ff def_td safe blk_kick " +
+   "def_3_and_out def_4_and_stop def_2pt def_st_td def_st_ff def_st_fum_rec int_ret_td").split(" ").forEach(function (k) { PLAY_KEYS[k] = 1; });
+  var PLAY_NOISE_RE = /^(yds_allow|pts_allow)/;
+  function playSnap(stats) {
+    var o = {};
+    if (!stats) return o;
+    Object.keys(stats).forEach(function (k) {
+      if ((PLAY_KEYS[k] || PLAY_NOISE_RE.test(k)) && typeof stats[k] === "number") o[k] = stats[k];
+    });
+    return o;
+  }
+  function playDelta(prev, cur) {
+    var d = {}, keys = {};
+    Object.keys(cur || {}).forEach(function (k) { keys[k] = 1; });
+    Object.keys(prev || {}).forEach(function (k) { keys[k] = 1; });
+    Object.keys(keys).forEach(function (k) {
+      var diff = (Number(cur && cur[k]) || 0) - (Number(prev && prev[k]) || 0);
+      if (diff && isFinite(diff)) d[k] = Math.round(diff * 1000) / 1000;
+    });
+    return d;
+  }
+  // {text, noise}: the live play (empty for a defense's yardage / points-allowed drift) and the
+  // fantasy points + yards + points allowed that drift accounts for.
+  function playInfo(pos, d, scoring, oppDefTd) {
+    var parts = [], n;
+    var noise = { d: 0, yds: d.yds_allow || 0, pts: d.pts_allow || 0 };
+    Object.keys(d).forEach(function (k) { if (PLAY_NOISE_RE.test(k)) noise.d += (Number(scoring[k]) || 0) * d[k]; });
+    noise.d = Math.round(noise.d * 100) / 100;
+    var times = function (label, c) { return c > 1 ? label + " ×" + c : label; };
+    var yd = function (v) { return v + "-yd"; };
+    if (pos === "DEF") {
+      if (d.def_td > 0) parts.push(times("Defensive TD", d.def_td));
+      if (d.int > 0) parts.push(times("INT", d.int) + (d.int_ret_yd > 0 ? " (" + d.int_ret_yd + "-yd return)" : ""));
+      if (d.sack > 0) parts.push(times("Sack", d.sack));
+      if (d.tkl_loss > 0) parts.push(times("TFL", d.tkl_loss));
+      if (d.ff > 0) parts.push(times("Forced fumble", d.ff));
+      if (d.fum_rec > 0) parts.push(times("Fumble recovery", d.fum_rec));
+      if (d.safe > 0) parts.push(times("Safety", d.safe));
+      if (d.blk_kick > 0) parts.push(times("Blocked kick", d.blk_kick));
+      if (d.def_3_and_out > 0) parts.push(times("3-and-out", d.def_3_and_out));
+      if (d.def_4_and_stop > 0) parts.push(times("4th-down stop", d.def_4_and_stop));
+      if (d.def_st_td > 0 || d.st_td > 0) parts.push("Return TD");
+      if (d.def_2pt > 0) parts.push("2-pt defense");
+      return { text: parts.join(" + "), noise: noise };
+    }
+    var fdP = d.pass_fd > 0, fdR = d.rush_fd > 0, fdC = d.rec_fd > 0;
+    if (!fdP && !fdR && !fdC && (d.bonus_fd_qb > 0 || d.bonus_fd_rb > 0 || d.bonus_fd_wr > 0 || d.bonus_fd_te > 0)) {
+      if (d.pass_cmp > 0) fdP = true; else if (d.rush_att > 0) fdR = true; else fdC = true;
+    }
+    var pc = d.pass_cmp || 0, py = d.pass_yd || 0;
+    if (d.pass_td > 0) parts.push((pc <= 1 && py ? yd(py) + " " : "") + times("TD pass", d.pass_td));
+    else if (pc > 0) parts.push(pc === 1 ? yd(py) + " completion" + (fdP ? " FD" : "") : pc + " completions, " + py + " yds" + (fdP ? " (FD)" : ""));
+    else if (py) parts.push(py + " pass yds (correction)");
+    if (d.pass_int > 0 || d.pass_int_td > 0) {
+      var six = d.pass_int_td > 0 || oppDefTd > 0;
+      parts.push(six ? "Pick 6!" : times("Interception", d.pass_int));
+    }
+    if (d.pass_sack > 0) parts.push(times("Sacked", d.pass_sack));
+    if (d.pass_2pt > 0) parts.push("2-pt pass");
+    var ra = d.rush_att || 0, ry = d.rush_yd || 0;
+    if (d.rush_td > 0) parts.push((ra <= 1 && ry ? yd(ry) + " " : "") + times("rush TD", d.rush_td));
+    else if (ra > 0) parts.push(ra === 1 ? yd(ry) + " run" + (fdR ? " FD" : "") : ra + " runs, " + ry + " yds" + (fdR ? " (FD)" : ""));
+    else if (ry) parts.push(ry + " rush yds (correction)");
+    if (d.rush_2pt > 0) parts.push("2-pt run");
+    var rc = d.rec || 0, ryd = d.rec_yd || 0;
+    if (d.rec_td > 0) parts.push((rc <= 1 && ryd ? yd(ryd) + " " : "") + times("TD catch", d.rec_td));
+    else if (rc > 0) parts.push(rc === 1 ? yd(ryd) + " catch" + (fdC ? " FD" : "") : rc + " catches, " + ryd + " yds" + (fdC ? " (FD)" : ""));
+    else if (ryd) parts.push(ryd + " rec yds (correction)");
+    if (d.rec_2pt > 0) parts.push("2-pt catch");
+    if (d.fum_lost > 0) parts.push("Fumble lost");
+    else if (d.fum > 0) parts.push("Fumble");
+    if (d.fum_rec_td > 0) parts.push("Fumble return TD");
+    if (d.kr_yd > 0) parts.push(yd(d.kr_yd) + " kick return");
+    if (d.pr_yd > 0) parts.push(yd(d.pr_yd) + " punt return");
+    if (d.st_td > 0) parts.push("Return TD");
+    if (d.fgm > 0) parts.push((d.fgm_yds > 0 && d.fgm === 1 ? yd(d.fgm_yds) + " " : "") + times("FG", d.fgm));
+    if (d.fgmiss > 0) parts.push("Missed FG");
+    if (d.xpm > 0) parts.push(times("XP", d.xpm));
+    if (d.xpmiss > 0) parts.push("Missed XP");
+    return { text: parts.join(" + "), noise: noise };
+  }
+  function driveText(acc) {
+    var t = "Opp. drive: " + Math.round(acc.yds) + " yds";
+    if (acc.pts) t += ", " + Math.round(acc.pts) + " pts allowed";
+    return t;
+  }
+
   // Who scored since the last refresh: per roster, the starters whose actual points changed
-  // (name and amount). Read by flapScan to credit the scorers under each team total.
+  // (name and amount). Read by flapScan to credit the scorers under each team total. Also
+  // writes the Score Feed rows, each with the play behind it.
   function updateCredits() {
     var live = state.live;
     if (!live || !live.isLive) return;
-    if (state.credPrevWeek !== live.week) { state.credPrev = {}; state.credPrevWeek = live.week; }
+    if (state.credPrevWeek !== live.week) {
+      state.credPrev = {}; state.credPrevWeek = live.week;
+      state.statPrev = {}; state.defAcc = {}; state.possLast = {}; state.defTdPrev = null;
+    }
     var prevAll = state.credPrev, credit = {}, feedNew = [], now = Date.now();
+    var stats = live.stats || {}, scoring = live.scoring || {}, sched = live.sched || {};
+    state.statPrev = state.statPrev || {}; state.defAcc = state.defAcc || {}; state.possLast = state.possLast || {};
     feedLoad(live.week);
+    // Defensive touchdowns per team since the last refresh (a QB's pick 6 is the other team's score).
+    var tdNow = {}, tdPrev = state.defTdPrev;
+    Object.keys(sched).forEach(function (t) { var st = stats[t]; tdNow[t] = st ? (Number(st.def_td) || 0) : 0; });
+    var oppTdFor = function (team) {
+      var g = team && sched[team], o = g && g.opp;
+      return o && tdPrev ? (tdNow[o] || 0) - (tdPrev[o] || 0) : 0;
+    };
     Object.keys(live.byRoster).forEach(function (rid) {
       var pl = live.byRoster[rid].players || [], prev = prevAll[rid] || null, cur = {}, list = [];
       pl.forEach(function (p) {
         var k = p.player_id + (p.replacement ? ":r" : ""), a = num(p.actual);
         cur[k] = a;
-        if (prev && prev[k] != null) {
-          var d = Math.round((a - prev[k]) * 100) / 100;
-          if (Math.abs(d) >= 0.005) {
-            list.push({ n: p.short_name || p.name, d: d });
-            feedNew.push({ ts: now, rid: Number(rid), pid: p.player_id, n: p.short_name || p.name, pos: p.replacement ? "QB+" : p.position, d: d, a: a });
+        var snapNow = playSnap(stats[p.player_id]), snapPrev = state.statPrev[k] || null;
+        state.statPrev[k] = snapNow;
+        var isDef = p.position === "DEF", name = p.short_name || p.name, pos = p.replacement ? "QB+" : p.position;
+        var info = { text: "", noise: { d: 0, yds: 0, pts: 0 } };
+        var d = prev && prev[k] != null ? Math.round((a - prev[k]) * 100) / 100 : 0;
+        if (snapPrev && prev && prev[k] != null) info = playInfo(p.position, playDelta(snapPrev, snapNow), scoring, oppTdFor(p.team));
+        var acc = isDef ? (state.defAcc[k] || (state.defAcc[k] = { yds: 0, pts: 0, d: 0, polls: 0 })) : null;
+        if (acc) { acc.yds += info.noise.yds; acc.pts += info.noise.pts; acc.d = Math.round((acc.d + info.noise.d) * 100) / 100; }
+        if (Math.abs(d) >= 0.005) {
+          list.push({ n: name, d: d });
+          // A defense's drift in yards / points allowed is held back for the drive summary below.
+          var shownD = isDef ? Math.round((d - info.noise.d) * 100) / 100 : d;
+          var text = info.text || (snapPrev && Math.abs(shownD) >= 0.05 ? "Stat update" : "");
+          if (Math.abs(shownD) >= 0.005 && (!isDef || text)) {
+            feedNew.push({ ts: now, rid: Number(rid), pid: p.player_id, n: name, pos: pos, d: shownD, a: a, p: text });
+          }
+        }
+        // A defense's yardage / points allowed wait for the end of the drive (the ball changing hands).
+        if (isDef) {
+          var acc2 = state.defAcc[k], g = sched[p.team], poss = g ? g.poss : "";
+          if (acc2 && (acc2.yds || acc2.pts || Math.abs(acc2.d) >= 0.005)) {
+            var last = state.possLast[p.team], flip = poss && last && poss !== last;
+            if (!poss) acc2.polls++; else acc2.polls = 0;
+            var over = g && g.status === "complete";
+            if (flip || over || acc2.polls >= 5) {
+              if (Math.abs(acc2.d) >= 0.005) feedNew.push({ ts: now, rid: Number(rid), pid: p.player_id, n: name, pos: pos, d: acc2.d, a: a, p: driveText(acc2) });
+              state.defAcc[k] = { yds: 0, pts: 0, d: 0, polls: 0 };
+            }
           }
         }
       });
       prevAll[rid] = cur;
       if (list.length) credit[rid] = list;
     });
+    // Remember who had the ball, and the defensive TD counts, for the next refresh.
+    Object.keys(sched).forEach(function (t) { if (sched[t].poss) state.possLast[t] = sched[t].poss; });
+    state.defTdPrev = tdNow;
     state.credit = credit;
     if (feedNew.length) {
       feedNew.sort(function (x, y) { return Math.abs(y.d) - Math.abs(x.d); });
@@ -5763,6 +5917,14 @@
     return !p.replacement && isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played;
   }
 
+  // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
+  // defense while the other team has it.
+  var FIELD_ICON = {
+    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 16 10" aria-hidden="true"><ellipse cx="8" cy="5" rx="7.4" ry="4.3" fill="currentColor"/><path d="M5.2 5h5.6M6.8 3.4v3.2M8 3.2v3.6M9.2 3.4v3.2" stroke="#1b1b1f" stroke-width=".7" stroke-linecap="round"/></svg></span>',
+    def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 16 11" aria-hidden="true"><path d="M.8 3.2L2.5.9l1.7 2.3v7.3H.8zM6.2 3.2L8 .9l1.8 2.3v7.3H6.2zM11.8 3.2l1.7-2.3 1.7 2.3v7.3h-3.4z" fill="currentColor"/><path d="M0 5.6h16M0 8.6h16" stroke="#1b1b1f" stroke-width=".9"/></svg></span>'
+  };
+  function fieldIcon(f) { return f && FIELD_ICON[f] ? FIELD_ICON[f] : ""; }
+
   function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";
@@ -5790,7 +5952,7 @@
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
-    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" +
+    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + escapeHtml(metaShort) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
   }
@@ -5871,12 +6033,13 @@
     var body = items.map(function (f) {
       var t = teams[f.rid], col = rbIsOpponent(f.rid) ? "var(--bad)" : rbColor(f.rid);
       var tm = new Date(f.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm">' + escapeHtml(tm) + '</td><td class="pl"><div class="pw"><span class="pn">' + escapeHtml(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
+      return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm"><span class="tl">' + escapeHtml(tm) + '</span><span class="ts">' + escapeHtml(tm.replace(/\s*[AP]M$/i, "")) + '</span></td><td class="pl"><div class="pw"><span class="pn">' + escapeHtml(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
+        '<td class="pp ' + (f.d > 0 ? "gain" : "loss") + '" title="' + escapeHtml(f.p || "") + '"><span>' + escapeHtml(f.p || "\u2014") + "</span></td>" +
         '<td class="mg"><i></i>' + escapeHtml(t.name) + '</td><td class="n ch ' + (f.d > 0 ? "gain" : "loss") + '">' + (f.d > 0 ? "+" : "\u2212") + Math.abs(f.d).toFixed(2) + '</td><td class="n">' + num(f.a).toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Score Feed</span><small>' + (items.length > 5 ? "latest 5 of " + items.length + " \u00b7 scroll for more" : items.length ? items.length + (items.length === 1 ? " play" : " plays") : "") + "</small></div>" +
-      (items.length ? '<div class="rb-feed-scroll"><table class="rb-live-t rb-feed-t"><thead><tr><th>Time</th><th>Player</th><th>Manager</th><th class="n">Change</th><th class="n">Act</th></tr></thead><tbody>' + body + "</tbody></table></div>"
+      (items.length ? '<div class="rb-feed-scroll"><table class="rb-live-t rb-feed-t"><thead><tr><th>Time</th><th>Player</th><th>Play</th><th>Manager</th><th class="n">Change</th><th class="n">Act</th></tr></thead><tbody>' + body + "</tbody></table></div>"
         : '<div class="rb-live-empty">No scoring yet. New points show up here within 30 seconds of a play.</div>');
     if (top) { var sc = box.querySelector(".rb-feed-scroll"); if (sc) sc.scrollTop = top; }
   }
@@ -5894,7 +6057,7 @@
         var ml = p.game_minutes_left != null ? p.game_minutes_left + "m" : "";
         var gl = ml + (p.game_score ? (ml ? " \u00b7 " : "") + p.game_score : "");
         var gs = ml + (p.game_score ? (ml ? " " : "") + p.game_score : "");
-        rows.push({ id: p.player_id, g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j });
+        rows.push({ id: p.player_id, g: p.game_minutes_left != null ? p.game_minutes_left : 999, gl: gl, gs: gs, p: p.short_name || p.name, full: p.name, pos: p.replacement ? "QB+" : p.position, m: t.name, rid: t.rid, a: a, j: j, fld: p.field });
       });
     });
     rows.sort(function (x, y) {
@@ -5908,7 +6071,7 @@
     }).join("") + "</tr>";
     var body = rows.map(function (r) {
       var col = rbIsOpponent(r.rid) ? "var(--bad)" : rbColor(r.rid);
-      return '<tr' + (r.rid === state.rb.me ? ' class="me"' : "") + ' style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span><small>" + escapeHtml(r.pos) + "</small></div></td>" +
+      return '<tr' + (r.rid === state.rb.me ? ' class="me"' : "") + ' style="--c:' + col + '"><td class="pl" title="' + escapeHtml(r.full) + '">' + '<div class="pw"><span class="pn">' + escapeHtml(r.p) + "</span>" + fieldIcon(r.fld) + "<small>" + escapeHtml(r.pos) + "</small></div></td>" +
         '<td class="mg"><i></i>' + escapeHtml(r.m) + '</td><td class="gm"><span class="gl">' + escapeHtml(r.gl) + '</span><span class="gs">' + escapeHtml(r.gs) + '</span></td><td class="n ac">' + fl("lv:" + r.rid + ":" + r.id, r.a.toFixed(2), { pop: "act" }) + '</td><td class="n">' + r.j.toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
