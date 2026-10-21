@@ -3095,11 +3095,11 @@ def scenario_scenarios_tab(browser):
 
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
     page.click("#rb-me"); page.wait_for_timeout(300)
-    assert page.evaluate("document.getElementById('rb-scen').offsetParent === null"), "no Scenarios tab while the 1pm games are still on"
+    assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && b.disabled && /after 1pm games end/.test(b.textContent) && getComputedStyle(b).opacity < 0.6; })()"), "Scenarios shows faded with its opening time while the 1pm games are still on"
 
     # the 1pm games end -> the tab opens, 4:25 window is current
     setgames("complete", "in_progress", "pre_game", "pre_game"); poll()
-    assert page.evaluate("document.getElementById('rb-scen').offsetParent !== null"), "Scenarios opens once the 1pm games are final"
+    assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && !b.disabled && b.textContent === 'Scenarios'; })()"), "Scenarios opens once the 1pm games are final"
     page.click("#rb-scen"); page.wait_for_timeout(400)
     assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent === null && document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "other sections hidden in Scenarios"
     assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
