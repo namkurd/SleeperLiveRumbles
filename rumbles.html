@@ -1307,8 +1307,8 @@
   .fld { display: inline-flex; flex: none; align-items: center; margin-left: 4px; line-height: 1; }
   .fld { position: relative; top: -1px; }
   .fld svg { height: 0.95em; width: auto; display: block; }
-  .fld-def svg { height: 0.82em; }
-  .fld-off { color: #b5651d; } .fld-def { color: #8fb4d9; }
+  .fld-def svg { height: 0.85em; }
+  .fld-off { color: #6b3a14; }
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
@@ -5929,8 +5929,8 @@
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
   // defense while the other team has it.
   var FIELD_ICON = {
-    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.6 7C3 2 11 2 13.4 7C11 12 3 12 .6 7Z" fill="currentColor" stroke="#6b3410" stroke-width=".8" stroke-linejoin="round"/><path d="M3.1 4.7Q2.5 7 3.1 9.3M10.9 4.7Q11.5 7 10.9 9.3" fill="none" stroke="#fff" stroke-width=".8" stroke-linecap="round"/><path d="M4.9 7h4.2M5.8 5.7v2.6M7 5.5v3M8.2 5.7v2.6" stroke="#fff" stroke-width=".75" stroke-linecap="round"/></g></svg></span>',
-    def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 16 11" aria-hidden="true"><path d="M.8 3.2L2.5.9l1.7 2.3v7.3H.8zM6.2 3.2L8 .9l1.8 2.3v7.3H6.2zM11.8 3.2l1.7-2.3 1.7 2.3v7.3h-3.4z" fill="currentColor"/><path d="M0 5.6h16M0 8.6h16" stroke="#1b1b1f" stroke-width=".9"/></svg></span>'
+    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.6 7C3 2.2 11 2.2 13.4 7C11 11.8 3 11.8 .6 7Z" fill="currentColor" stroke="#2e1505" stroke-width=".7" stroke-linejoin="round"/><path d="M4.6 7h4.8M5.6 5.6v2.8M7 5.4v3.2M8.4 5.6v2.8" stroke="#fff" stroke-width=".8" stroke-linecap="round"/></g></svg></span>',
+    def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 20 12" aria-hidden="true"><rect x="0" y="3.1" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><rect x="0" y="7.3" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><g fill="#fff" stroke="#587493" stroke-width=".95" stroke-linejoin="round"><path d="M.9 3.4L2.7.6l1.8 2.8v8H.9z"/><path d="M5.9 3.4L7.7.6l1.8 2.8v8H5.9z"/><path d="M10.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/><path d="M15.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/></g></svg></span>'
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
   function nameSpans(n) {
