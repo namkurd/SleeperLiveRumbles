@@ -4397,6 +4397,7 @@
     var stats = live.stats || {}, scoring = live.scoring || {}, sched = live.sched || {};
     state.statPrev = state.statPrev || {}; state.defAcc = state.defAcc || {}; state.possLast = state.possLast || {};
     feedLoad(live.week);
+    feedPrune(live);
     // Defensive touchdowns per team since the last refresh (a QB's pick 6 is the other team's score).
     var tdNow = {}, tdPrev = state.defTdPrev;
     Object.keys(sched).forEach(function (t) { var st = stats[t]; tdNow[t] = st ? (Number(st.def_td) || 0) : 0; });
@@ -4456,17 +4457,45 @@
 
   // Score Feed: every change in a starter's actual points since the last refresh, newest
   // first, kept for the week (this device) so a reload doesn't empty it.
-  var FEED_KEY = "rumbles.feed", FEED_MAX = 200;
+  // Sleeper only reports running totals, not play-by-play, so the feed is built from what this page
+  // sees between refreshes. A game's rows are therefore dropped two hours after that game ends.
+  var FEED_KEY = "rumbles.feed", FEED_MAX = 200, FEED_TTL_MS = 2 * 3600 * 1000, GAME_LEN_MS = 3.5 * 3600 * 1000;
   function feedLoad(week) {
     if (state.feedWeek === week) return;
-    state.feedWeek = week; state.feed = [];
+    state.feedWeek = week; state.feed = []; state.feedEnds = {};
     try {
       var saved = JSON.parse(localStorage.getItem(FEED_KEY) || "null");
-      if (saved && saved.week === week && Array.isArray(saved.items)) state.feed = saved.items.slice(0, FEED_MAX);
+      if (saved && saved.week === week && Array.isArray(saved.items)) {
+        state.feed = saved.items.slice(0, FEED_MAX);
+        if (saved.ends && typeof saved.ends === "object") state.feedEnds = saved.ends;
+      }
     } catch (e) { /* storage blocked: fine */ }
   }
   function feedSave(week) {
-    try { localStorage.setItem(FEED_KEY, JSON.stringify({ week: week, items: state.feed })); } catch (e) { /* storage blocked: fine */ }
+    try { localStorage.setItem(FEED_KEY, JSON.stringify({ week: week, items: state.feed, ends: state.feedEnds || {} })); } catch (e) { /* storage blocked: fine */ }
+  }
+  // Note when each team's game ended (seen live, else estimated from kickoff) and clear its rows after 2 hours.
+  function feedPrune(live) {
+    var sched = live.sched || {}, now = Date.now(), ends = state.feedEnds = state.feedEnds || {}, changed = false;
+    state.gameSeen = state.gameSeen || {};
+    Object.keys(sched).forEach(function (t) {
+      var g = sched[t], was = state.gameSeen[t];
+      state.gameSeen[t] = g.status;
+      if (g.status === "complete" && ends[t] == null) {
+        ends[t] = was && was !== "complete" ? now : (typeof g.startTimeMs === "number" ? g.startTimeMs + GAME_LEN_MS : now);
+        changed = true;
+      }
+    });
+    var team = {};
+    Object.keys(live.byRoster).forEach(function (rid) {
+      (live.byRoster[rid].players || []).forEach(function (p) { if (p.team) team[p.player_id] = p.team; });
+    });
+    var keep = (state.feed || []).filter(function (f) {
+      var e = team[f.pid] ? ends[team[f.pid]] : null;
+      return !(e != null && now - e > FEED_TTL_MS);
+    });
+    if (keep.length !== state.feed.length) { state.feed = keep; changed = true; }
+    if (changed) feedSave(live.week);
   }
 
   // ---- split-flap numbers ----------------------------------------------
