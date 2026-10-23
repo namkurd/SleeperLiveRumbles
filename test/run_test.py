@@ -3019,6 +3019,26 @@ def scenario_play_column(browser):
     poll()
     f = feed()
     assert "Pick 6!" in f, f
+    neg = page.evaluate("[...document.querySelectorAll('#rb-feed td.pp .neg')].map(e => e.textContent + ':' + getComputedStyle(e).color)")
+    assert any(n.startswith("Pick 6!") for n in neg), f"negative plays are marked: {neg}"
+    red = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--bad').trim()")
+    assert len(set(n.split(':', 1)[1] for n in neg)) == 1 and neg, neg
+
+    # Live view: only managers with a player in a live game
+    page.click("#rb-livemode"); page.wait_for_timeout(400)
+    live_cards = page.evaluate("document.querySelectorAll('#rb-grid .rb-card').length")
+    page.click("#rb-all"); page.wait_for_timeout(400)
+    all_cards = page.evaluate("document.querySelectorAll('#rb-grid .rb-card').length")
+    assert page.evaluate("[...document.querySelectorAll('.rb-controls .rb-view-group:nth-of-type(2) button')].map(b => b.textContent).join()") == "Everyone,Live,Me", "button order"
+    assert 0 < live_cards < all_cards and live_cards == 2, f"Live shows only managers with live players: {live_cards} of {all_cards}"
+    page.click("#rb-livemode"); page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('rb-livemode').classList.contains('active')")
+
+    # phones: the Live Players header must not sit on top of the first player
+    page.evaluate("(() => { const w = document.getElementById('rb-live'); window.scrollTo(0, w.getBoundingClientRect().top + window.scrollY - 140); })()")
+    page.wait_for_timeout(300)
+    g = page.evaluate("""() => { const th = document.querySelector('#rb-live thead th').getBoundingClientRect(), tr = document.querySelector('#rb-live tbody tr').getBoundingClientRect(); return {thBottom: th.bottom, rowTop: tr.top, rowBottom: tr.bottom}; }""")
+    assert g["rowTop"] >= g["thBottom"] - 1, f"first Live Players row hidden under the header: {g}"
 
     # phone layout: Play column visible, no sideways scroll, five rows fit
     geo = page.evaluate("""() => { const sc = document.querySelector('#rb-feed .rb-feed-scroll'), r = sc.getBoundingClientRect();
