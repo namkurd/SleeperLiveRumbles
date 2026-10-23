@@ -3157,6 +3157,55 @@ def scenario_scenarios_tab(browser):
     print("\nSCENARIOS TAB SCENARIO PASSED")
 
 
+def scenario_feed_expiry(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Score Feed rows clear two hours after their game ends")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    players = {
+        "P1": {"first_name": "Wes", "last_name": "Receiver", "full_name": "Wes Receiver", "position": "WR", "team": "MIN"},
+        "P3": {"first_name": "Ray", "last_name": "Runner", "full_name": "Ray Runner", "position": "RB", "team": "DET"},
+    }
+    matchups = load("matchups_week2.json")
+    for m in matchups:
+        if m["roster_id"] == 1: m["starters"] = ["P1"]
+        if m["roster_id"] == 2: m["starters"] = ["P3"]
+    scores = load("scores_week2.json")
+    for g in scores:
+        g["status"] = "complete"
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    seed = {"week": 2, "ends": {"MIN": now_ms - 3 * 3600 * 1000, "DET": now_ms - 3600 * 1000, "CHI": now_ms - 3 * 3600 * 1000, "GB": now_ms - 3600 * 1000},
+            "items": [{"ts": now_ms - 4000000, "rid": 1, "pid": "P1", "n": "Receiver", "pos": "WR", "d": 1.2, "a": 5, "p": "2-yd catch"},
+                      {"ts": now_ms - 3000000, "rid": 2, "pid": "P3", "n": "Runner", "pos": "RB", "d": 0.8, "a": 3, "p": "8-yd run"}]}
+    page.add_init_script("if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('rumbles.feed', %s); }" % json.dumps(json.dumps(seed)))
+    install_routes(page, {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/stats/nfl/2026/2*": [],
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/scores/nfl/regular/2026/2": scores,
+        "**/v1/players/nfl": players,
+        "**/v1/state/nfl": load("state.json"),
+    })
+    page.goto(PAGE_URL + "?tab=rumblin"); page.wait_for_timeout(3000)
+    rows = page.evaluate("[...document.querySelectorAll('#rb-feed tbody tr td.pp')].map(t => t.textContent)")
+    assert rows == ["8-yd run"], f"only the row from the game that ended under 2 hours ago stays: {rows}"
+    saved = page.evaluate("JSON.parse(localStorage.getItem('rumbles.feed')).items.length")
+    assert saved == 1, "the cleared row is gone from the saved copy too"
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nFEED EXPIRY SCENARIO PASSED")
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -3181,6 +3230,7 @@ def main():
         scenario_ux_batch(browser)
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
+        scenario_feed_expiry(browser)
         browser.close()
 
     print("\nALL SCENARIOS PASSED")
