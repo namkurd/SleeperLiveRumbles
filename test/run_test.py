@@ -3159,7 +3159,7 @@ def scenario_scenarios_tab(browser):
 
 def scenario_feed_expiry(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO: Score Feed rows clear two hours after their game ends")
+    print("SCENARIO: Score Feed rows clear 4.5 hours after their game's kickoff")
     print("=" * 70)
     console_errors, page_errors = [], []
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, timezone_id="UTC")
@@ -3175,10 +3175,11 @@ def scenario_feed_expiry(browser):
         if m["roster_id"] == 1: m["starters"] = ["P1"]
         if m["roster_id"] == 2: m["starters"] = ["P3"]
     scores = load("scores_week2.json")
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
     for g in scores:
         g["status"] = "complete"
-    now_ms = int(datetime.datetime.now().timestamp() * 1000)
-    seed = {"week": 2, "ends": {"MIN": now_ms - 3 * 3600 * 1000, "DET": now_ms - 3600 * 1000, "CHI": now_ms - 3 * 3600 * 1000, "GB": now_ms - 3600 * 1000},
+        g["start_time"] = now_ms - (5 * 3600 * 1000 if "MIN" in (g.get("away_team"), g.get("home_team"), (g.get("metadata") or {}).get("away_team"), (g.get("metadata") or {}).get("home_team")) else 4 * 3600 * 1000)
+    seed = {"week": 2,
             "items": [{"ts": now_ms - 4000000, "rid": 1, "pid": "P1", "n": "Receiver", "pos": "WR", "d": 1.2, "a": 5, "p": "2-yd catch"},
                       {"ts": now_ms - 3000000, "rid": 2, "pid": "P3", "n": "Runner", "pos": "RB", "d": 0.8, "a": 3, "p": "8-yd run"}]}
     page.add_init_script("if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('rumbles.feed', %s); }" % json.dumps(json.dumps(seed)))
@@ -3197,7 +3198,7 @@ def scenario_feed_expiry(browser):
     })
     page.goto(PAGE_URL + "?tab=rumblin"); page.wait_for_timeout(3000)
     rows = page.evaluate("[...document.querySelectorAll('#rb-feed tbody tr td.pp')].map(t => t.textContent)")
-    assert rows == ["8-yd run"], f"only the row from the game that ended under 2 hours ago stays: {rows}"
+    assert rows == ["8-yd run"], f"only the row from the game that kicked off under 4.5 hours ago stays: {rows}"
     saved = page.evaluate("JSON.parse(localStorage.getItem('rumbles.feed')).items.length")
     assert saved == 1, "the cleared row is gone from the saved copy too"
     ctx.close()
