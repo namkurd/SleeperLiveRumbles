@@ -1222,7 +1222,8 @@
   .rb-live-wrap { overflow: visible; } .rb-live-t td.ac { overflow: visible; }
   @media (prefers-reduced-motion: reduce) { .sfp, .sfc { display: none; } }
   @media (prefers-reduced-motion: reduce) { .fc .lf { display: none; } }
-  .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
+  /* clip, not hidden: hidden makes the box a scroll container, which pushed the sticky header down over the first row on phones */
+  .rb-live-wrap { margin-top: 18px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; overflow: clip; }
   .rb-live-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-border); font-weight: 700; }
   .rb-live-head small { color: var(--text-dim); font-weight: 400; }
   .rb-live-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed; min-width: 0; }
@@ -1302,7 +1303,7 @@
   .rb-feed-t.rb-live-t th:nth-child(4) { width: 16%; } .rb-feed-t.rb-live-t th:nth-child(5), .rb-feed-t.rb-live-t th:nth-child(6) { width: 13%; }
   .rb-feed-t td.pp { text-align: left; font-weight: 700; font-size: 0.76rem; }
   .rb-feed-t td.pp.gain { color: var(--good); } .rb-feed-t td.pp.loss { color: var(--bad); }
-  .rb-feed-t td.pp span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.12; white-space: normal; }
+  .rb-feed-t td.pp > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.12; white-space: normal; }
   /* On-field markers (football / picket fence) next to player names. */
   .fld { display: inline-flex; flex: none; align-items: center; margin-left: 2px; line-height: 1; }
   .fld { position: relative; top: -1px; }
@@ -1345,6 +1346,7 @@
   .sc-n .nl { display: none; }
   @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.78rem; } .sc-gap b { font-size: 1.4rem !important; } }
   .rb-feed-t td.tm .ts { display: none; }
+  .rb-feed-t td.pp .neg { color: var(--bad); }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
   .rb-feed-t td.ch { font-weight: 800; } .rb-feed-t td.ch.gain { color: var(--good); } .rb-feed-t td.ch.loss { color: var(--bad); }
   .rb-feed-t tr.rb-new td { animation: rb-feed-new 2.4s ease-out; }
@@ -1407,6 +1409,7 @@
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which teams">
         <button type="button" id="rb-all" class="active">Everyone</button>
+        <button type="button" id="rb-livemode">Live</button>
         <button type="button" id="rb-me">Me</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
@@ -6201,6 +6204,14 @@
     return "No started players are in a live game right now.";
   }
 
+  // A play like "TD pass + Interception + Sacked": the bad parts show in red even when the total is a gain.
+  var RB_NEG_PLAY = /^(Interception|Pick 6|Sacked|Fumble|Missed )/;
+  function rbPlayHtml(text) {
+    if (!text) return "\u2014";
+    return String(text).split(" + ").map(function (seg) {
+      return RB_NEG_PLAY.test(seg) ? '<span class="neg">' + escapeHtml(seg) + "</span>" : escapeHtml(seg);
+    }).join(" + ");
+  }
   // Score Feed table: the last five scoring plays for the teams shown, scroll for older ones.
   function rbRenderFeed(shown) {
     var box = document.getElementById("rb-feed");
@@ -6214,7 +6225,7 @@
       var t = teams[f.rid], col = rbIsOpponent(f.rid) ? "var(--bad)" : rbColor(f.rid);
       var tm = new Date(f.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       return '<tr style="--c:' + col + '"' + (now - f.ts < 4000 ? ' class="rb-new"' : "") + '><td class="tm"><span class="tl">' + escapeHtml(tm) + '</span><span class="ts">' + escapeHtml(tm.replace(/\s*[AP]M$/i, "")) + '</span></td><td class="pl"><div class="pw"><span class="pn">' + nameSpans(f.n) + "</span><small>" + escapeHtml(f.pos || "") + '</small></div></td>' +
-        '<td class="pp ' + (f.d > 0 ? "gain" : "loss") + '" title="' + escapeHtml(f.p || "") + '"><span>' + escapeHtml(f.p || "\u2014") + "</span></td>" +
+        '<td class="pp ' + (f.d > 0 ? "gain" : "loss") + '" title="' + escapeHtml(f.p || "") + '"><span>' + rbPlayHtml(f.p) + "</span></td>" +
         '<td class="mg"><i></i>' + escapeHtml(t.name) + '</td><td class="n ch ' + (f.d > 0 ? "gain" : "loss") + '">' + (f.d > 0 ? "+" : "\u2212") + Math.abs(f.d).toFixed(2) + '</td><td class="n">' + num(f.a).toFixed(2) + "</td></tr>";
     }).join("");
     box.hidden = false;
@@ -6282,11 +6293,12 @@
     }
     empty.hidden = true;
     if (rb.mode === "me" && rb.me == null) rb.mode = "all";
-    var shown = rb.mode === "all" ? teams : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
+    var shown = rb.mode === "all" ? teams : rb.mode === "live" ? teams.filter(function (t) { return t.liveCount > 0; }) : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
     var shownSet = {};
     shown.forEach(function (t) { shownSet[t.rid] = true; });
     rb.sel = shownSet;
     document.getElementById("rb-all").classList.toggle("active", rb.mode === "all");
+    document.getElementById("rb-livemode").classList.toggle("active", rb.mode === "live");
     document.getElementById("rb-me").classList.toggle("active", rb.mode === "me");
     document.getElementById("rb-sub").hidden = rb.mode !== "me";
     // "In Play (N)": how many other cards that view would show next to yours.
@@ -6500,6 +6512,7 @@
     if (r.liveSort && ["p", "m", "g", "a", "j"].indexOf(r.liveSort.k) !== -1 && (r.liveSort.dir === 1 || r.liveSort.dir === -1)) rb.liveSort = { k: r.liveSort.k, dir: r.liveSort.dir };
     if (Array.isArray(r.sel)) { rb.sel = {}; r.sel.forEach(function (k) { rb.sel[k] = true; }); }
     if (r.mode === "me" && rb.me != null) rb.mode = "me";
+    else if (r.mode === "live") rb.mode = "live";
     else if (r.mode === "custom" && Object.keys(rb.sel).length) rb.mode = "custom";
     else rb.mode = "all";
     if (r.density === "full" || r.density === "compact" || r.density === "totals") rbSetDensity(r.density);
@@ -6559,6 +6572,10 @@
   });
   document.getElementById("rb-all").addEventListener("click", function () {
     state.rb.mode = "all";
+    renderRumblin();
+  });
+  document.getElementById("rb-livemode").addEventListener("click", function () {
+    state.rb.mode = "live";
     renderRumblin();
   });
   document.getElementById("rb-inplay").addEventListener("click", function () { state.rb.sub = "inplay"; renderRumblin(); });
