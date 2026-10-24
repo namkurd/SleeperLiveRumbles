@@ -17,4 +17,19 @@ out = build_epa.build(2026, CSV, {"G-QB": "100", "G-WR": "200", "G-K": "300", "G
 assert out["season"] == 2026
 assert out["weeks"]["1"] == {"100": [6.5, 35], "200": [3.25, 10]}, out["weeks"]["1"]
 assert out["weeks"]["2"] == {"200": [-1.0, 5]}, out["weeks"]
+
+# kickers and defenses come from play-by-play
+PBP = "season_type,week,play_type,epa,defteam,kicker_player_id\n" + "\n".join([
+    "REG,1,field_goal,1.5,SEA,G-K",        # kicker +1.5 over 1 attempt
+    "REG,1,extra_point,0.25,SEA,G-K",
+    "REG,1,pass,-0.5,SEA,",                # offense lost 0.5 -> the SEA defense gained 0.5
+    "REG,1,run,0.25,LA,",                  # LA is Sleeper's LAR
+    "REG,1,kickoff,3.0,SEA,",              # not a defensive play: skipped
+    "REG,1,pass,,SEA,",                    # no EPA: skipped
+    "POST,1,pass,9.0,SEA,",                # playoffs: skipped
+]) + "\n"
+kd = build_epa.kicker_defense(PBP, {"G-K": "300"})
+assert kd["1"]["300"] == [1.75, 2], kd
+assert kd["1"]["SEA"] == [0.5, 1], kd
+assert kd["1"]["LAR"] == [-0.25, 1], kd
 print("test_build_epa: OK")
