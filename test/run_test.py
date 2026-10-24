@@ -3134,8 +3134,8 @@ def scenario_scenarios_tab(browser):
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
     assert b[1]["chip"].startswith("H2H") and b[0]["chip"].startswith("Field"), b
-    assert b[0]["hl"] == "Their 1 needs to outscore your 2 by 10.00", b[0]
-    assert b[1]["hl"] == "Your 2 need to outscore their 1 by 10.00", b[1]
+    assert b[0]["hl"] == "Their TE needs to outscore your QB, RB by 10.00", b[0]
+    assert b[1]["hl"] == "Your QB, RB need to outscore their RB by 10.00", b[1]
     assert b[0]["gap"] == "You lead by 14.00" and b[1]["gap"] == "You trail by 6.00", b
     assert b[1]["sides"][0]["names"] == ["Passer", "Runner"], f"1pm player Onewide is gone: {b[1]['sides']}"
     assert b[0]["hlH"] < 40, "sentence stays within two lines on a phone"
@@ -3147,7 +3147,7 @@ def scenario_scenarios_tab(browser):
     setstats(b2=200); poll()
     b = blocks()
     assert b[0]["gap"] == "You lead by 18.00" and b[1]["gap"] == "You trail by 2.00", b
-    assert b[0]["hl"] == "Their 1 needs to outscore your 2 by 10.00", f"sentence frozen: {b[0]}"
+    assert b[0]["hl"] == "Their TE needs to outscore your QB, RB by 10.00", f"sentence frozen: {b[0]}"
     wp1 = wp()
     assert wp1[0] >= wp0[0] and wp1[1] > wp0[1], f"win chance rises as you outscore them: {wp0} -> {wp1}"
     assert page.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1, "no sideways scroll"
@@ -3156,8 +3156,8 @@ def scenario_scenarios_tab(browser):
     setgames("complete", "complete", "pre_game", "pre_game"); poll()
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], b
-    assert b[0]["hl"] == "Their 1 needs to outscore your 1 by 18.00", b[0]
-    assert b[1]["hl"] == "Your 1 needs 2.00 to catch up", b[1]
+    assert b[0]["hl"] == "Their TE needs to outscore your RB by 18.00", b[0]
+    assert b[1]["hl"] == "Your RB needs 2.00 to catch up", b[1]
     assert b[1]["sides"][0]["names"] == ["Runner"], b[1]
 
     # last game final -> tab disappears and the page falls back to Matchup
