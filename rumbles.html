@@ -1333,11 +1333,11 @@
   .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
   .sc-gap span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
   .sc-gap b { font-size: 1.6rem !important; font-variant-numeric: tabular-nums; }
-  .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 3px; color: var(--text-dim); }
+  .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
-  .sc-hl { font-size: 0.88rem; font-weight: 600; margin: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 0 6px 12px; }
+  .sc-hl { font-size: 0.84rem; font-weight: 600; line-height: 1.25; margin-top: 4px; }
+  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 10px 6px 10px; }
   .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
   .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
   .sc-dot.bad { background: var(--bad); } .sc-dot.ok { background: var(--good); } .sc-dot.even { background: #d98a1c; }
@@ -6161,9 +6161,9 @@
         var scale = Math.max(10, Math.abs(fz.start) * 2);
         var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
         var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
-        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span></div>' +
+        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
+          '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
-          '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div>" +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
       });
