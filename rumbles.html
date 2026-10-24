@@ -1477,7 +1477,7 @@
           <th id="th-rumbles" data-key="rumbles">Rumbles</th>
           <th id="th-thisweek" data-key="this_week">This Week</th>
           <th id="th-points" data-key="this_week_points">Pts This Week</th>
-          <th id="th-epa" class="epa-col" data-key="epa" title="Total EPA of this week's starters (QB, RB, WR, TE). Hover or tap a number for each player.">EPA</th>
+          <th id="th-epa" class="epa-col" data-key="epa" title="Total EPA of this week's starters. Hover or tap a number for each player.">EPA</th>
           <th id="th-pct" data-key="rumble_pct">Rumble %</th>
           <th id="th-pf" data-key="pf">PF</th>
           <th id="th-pa" data-key="pa">PA</th>
@@ -1547,7 +1547,7 @@
   <p class="howto-heading">Projected</p>
   <p>Where the standings would land if every player finishes at their projection.</p>
   <p>Tap a team's points to see each player's score. Names share a color with this week's opponent.</p>
-  <p>The small EPA button (bottom left on a computer, at the very bottom on a phone) adds a total EPA column next to points: the combined expected points added by a team's starters. Sort by it like any column, and hover or tap a number to see each player's EPA. Numbers appear after each game ends (updated daily), so a live week shows a faded partial total.</p>
+  <p>The small EPA button (bottom left on a computer, at the very bottom on a phone) adds a total EPA column next to points: the combined expected points added by a team's starters, kickers and defenses included. Sort by it like any column, and hover or tap a number to see each player's EPA. Numbers appear after each game ends (updated daily), so a live week shows a faded partial total.</p>
   <p class="howto-heading">Rumblin'</p>
   <p>Live cards for every team. Everyone shows all 12, Live only the managers with a player in a game, and Me your own view: Matchup, In Play (teams whose Rumble against you is still undecided), and Scenarios. You can also tap names in the strip to pick any managers to view.</p>
   <p>Scenarios opens once the Sunday 1pm games end. It shows what you need to outscore in each Rumble still in play, and resets each game window.</p>
@@ -4194,9 +4194,9 @@
 
   // ---- EPA (optional extra column) -----------------------------------------
   // Sleeper has no EPA. epa_weekly.json (built nightly by build_epa.py from nflverse's weekly
-  // player stats) holds {week: {sleeperId: [totalEpa, plays]}} for QB/RB/WR/TE, filled in the day
+  // player stats) holds {week: {sleeperId: [totalEpa, plays]}} for QB/RB/WR/TE/K/DEF, filled in the day
   // after each game. A team's number is its starters' total EPA.
-  var EPA_POS = { QB: 1, RB: 1, WR: 1, TE: 1 };
+  var EPA_POS = { QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DEF: 1 };
   state.epaOn = false; state.epa = null; state.epaAt = 0; state.epaTooltipData = {}; state.weekDetail = {};
   function epaLoad(force) {
     if (!force && state.epaAt && Date.now() - state.epaAt < 600000) return Promise.resolve();
@@ -4224,34 +4224,54 @@
   // Past weeks (week menu): each manager's starters and what each scored that week, from Sleeper's
   // matchups for that week. Feeds the "Wk N Pts" and EPA hover/tap breakdowns. Loaded on first use.
   var weekDetailLoading = {};
+  function weekDetailFromFile(week) {
+    var L = state.epa && state.epa.lineups && state.epa.lineups[String(week)];
+    if (!L) return null;
+    var names = state.epa.names || {}, slots = state.epa.slots || [], by = {};
+    Object.keys(L).forEach(function (rid) {
+      var list = (L[rid] || []).map(function (e, i) {
+        var nm = names[e[0]] || [e[0], ""];
+        return { player_id: e[0], name: nm[0], short_name: null, position: nm[1] || null, actual: round2(num(e[1])), proj: 0, played: true,
+          injury_status: null, team: null, game_status: "complete", game_start_ms: null, slot: slots[i] || null };
+      });
+      list.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
+      by[rid] = list;
+    });
+    return by;
+  }
   function loadWeekDetail(week) {
     var lid = state.history && state.history.league_id;
     if (!lid || state.weekDetail[week] || weekDetailLoading[week]) return;
     weekDetailLoading[week] = true;
-    Promise.all([
-      fetchJson(API_V1 + "/league/" + lid + "/matchups/" + week),
-      fetchJson(API_V1 + "/league/" + lid).catch(function () { return null; }),
-      ensurePlayersMeta()
-    ]).then(function (res) {
-      var slots = (res[1] && res[1].roster_positions) || [];
-      var meta = res[2] || {};
-      var by = {};
-      (res[0] || []).forEach(function (m) {
-        var pts = m.players_points || {};
-        var list = [];
-        (m.starters || []).forEach(function (pid, i) {
-          if (!pid || pid === "0") return;
-          var pm = meta[pid] || null;
-          list.push({ player_id: pid, name: pm ? playerName(pm) : pid, short_name: pm ? shortPlayerName(pm) : null, position: pm ? (pm.position || null) : null,
-            actual: round2(num(pts[pid])), proj: 0, played: true, injury_status: null, team: pm ? (pm.team || null) : null,
-            game_status: "complete", game_start_ms: null, slot: slots[i] || null });
+    epaLoad().then(function () {
+      var fromFile = weekDetailFromFile(week);
+      if (fromFile) { state.weekDetail[week] = fromFile; render(); return; }
+      // Not in the data file yet (a week that just finished): fall back to Sleeper for this one week.
+      return Promise.all([
+        fetchJson(API_V1 + "/league/" + lid + "/matchups/" + week),
+        fetchJson(API_V1 + "/league/" + lid).catch(function () { return null; }),
+        ensurePlayersMeta()
+      ]).then(function (res) {
+        var slots = (res[1] && res[1].roster_positions) || [];
+        var meta = res[2] || {};
+        var by = {};
+        (res[0] || []).forEach(function (m) {
+          var pts = m.players_points || {};
+          var list = [];
+          (m.starters || []).forEach(function (pid, i) {
+            if (!pid || pid === "0") return;
+            var pm = meta[pid] || null;
+            list.push({ player_id: pid, name: pm ? playerName(pm) : pid, short_name: pm ? shortPlayerName(pm) : null, position: pm ? (pm.position || null) : null,
+              actual: round2(num(pts[pid])), proj: 0, played: true, injury_status: null, team: pm ? (pm.team || null) : null,
+              game_status: "complete", game_start_ms: null, slot: slots[i] || null });
+          });
+          list.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
+          by[m.roster_id] = list;
         });
-        list.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
-        by[m.roster_id] = list;
+        state.weekDetail[week] = by;
+        render();
       });
-      state.weekDetail[week] = by;
-      render();
-    }, function () { state.weekDetail[week] = {}; });
+    }).catch(function () { state.weekDetail[week] = {}; });
   }
   function epaForRow(r) {
     var hist = state.shownHistoricalWeek;
