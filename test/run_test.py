@@ -3176,7 +3176,7 @@ def scenario_scenarios_tab(browser):
 
 def scenario_epa(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO: EPA/Play toggle, standings column + sort, tooltip, Rumblin' cards")
+    print("SCENARIO: EPA toggle, standings column + sort, tooltips, Rumblin' cards")
     print("=" * 70)
     console_errors, page_errors = [], []
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}, timezone_id="UTC")
@@ -3205,13 +3205,17 @@ def scenario_epa(browser):
     proj = lambda pid, st: {"player_id": pid, "stats": st, "week": 2, "season": "2026", "season_type": "regular", "category": "proj"}
     projections = [proj("B1", {"rec_yd": 100}), proj("B2", {"pass_yd": 100}), proj("B3", {"rush_yd": 300}), proj("A1", {"rec_yd": 200}), proj("A2", {"rush_yd": 200}), proj("J1", {"rec_yd": 1000})]
     # EPA arrives for every starter whose game is over (Monday's TE has none yet)
-    epa = {"season": 2026, "weeks": {"2": {"B1": [4.0, 10], "B2": [-3.0, 30], "B3": [6.0, 12], "A1": [9.0, 6], "A2": [-2.0, 10]}}}
+    epa = {"season": 2026, "weeks": {"2": {"B1": [4.0, 10], "B2": [-3.0, 30], "B3": [6.0, 12], "A1": [9.0, 6], "A2": [-4.0, 10]}}}
+    # a past week (the week menu): who started and what each scored, plus EPA for it
+    epa["weeks"]["1"] = {"B2": [3.0, 30], "B3": [-1.0, 10], "A1": [2.0, 8]}
+    m1 = [{"roster_id": 2, "matchup_id": 1, "starters": ["B2", "B3"], "players": ["B2", "B3"], "players_points": {"B2": 14.5, "B3": 8.25}, "points": 22.75},
+          {"roster_id": 1, "matchup_id": 1, "starters": ["A1"], "players": ["A1"], "players_points": {"A1": 20.0}, "points": 20.0}]
     install_routes(page, {
         "**/rumbles_history.json": load("rumbles_history.json"),
         "**/epa_weekly.json": epa,
         "**/v1/league/TESTLEAGUE1": load("league.json"),
         "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
-        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": m1,
         "**/stats/nfl/2026/1*": load("stats_week1.json"),
         "**/projections/nfl/2026/1*": load("projections_week1.json"),
         "**/projections/nfl/2026/2*": projections,
@@ -3230,24 +3234,43 @@ def scenario_epa(browser):
 
     btn.click(); page.wait_for_timeout(1200)
     assert btn.get_attribute("aria-pressed") == "true" and page.is_visible("#th-epa"), "toggle shows the EPA column"
-    assert cell(2) == {"t": "+0.13", "shown": True}, f"Ben's starters: (4-3+6)/(10+30+12): {cell(2)}"
-    assert cell(1)["t"] == "+0.44", f"Aidan: (9-2)/16: {cell(1)}"
+    assert page.inner_text("#th-epa").strip().startswith("EPA") and "/Play" not in page.inner_text("#th-epa"), "column is total EPA"
+    assert cell(2) == {"t": "+7.00", "shown": True}, f"Ben's starters total EPA: 4-3+6: {cell(2)}"
+    assert cell(1)["t"] == "+5.00", f"Aidan: 9-4: {cell(1)}"
     assert cell(3)["t"] == "\u2013", f"no EPA yet for Monday's player: {cell(3)}"
 
     def order():
         return page.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => r.getAttribute('data-rid'))")
     page.click("#th-epa"); page.wait_for_timeout(300)
-    o = order(); assert o[:2] == ["1", "2"], f"sorted high to low: {o}"
+    o = order(); assert o[:2] == ["2", "1"], f"sorted high to low: {o}"
     page.click("#th-epa"); page.wait_for_timeout(300)
-    o = order(); assert o[:2] == ["2", "1"] and "3" in o[2:], f"sorted low to high, teams without EPA stay last: {o}"
+    o = order(); assert o[:2] == ["1", "2"] and "3" in o[2:], f"sorted low to high, teams without EPA stay last: {o}"
+
+    page.hover('#standings-body tr[data-rid="2"] td.epa-col'); page.wait_for_timeout(400)
+    etip = page.inner_text("#pts-tooltip")
+    etip = etip.replace("WEEK 2 EPA", "Week 2 EPA")
+    for want in ["Week 2 EPA", "Quinn Passer", "\u22123.00", "Bo Onewide", "+4.00", "Rex Runner", "+6.00", "Total", "+7.00"]:
+        assert want in etip, f"EPA cell tooltip lists each player's EPA, missing {want!r}: {etip!r}"
+    page.hover('#standings-body tr[data-rid="3"] td.manager'); page.wait_for_timeout(300)
 
     page.hover('#standings-body tr[data-rid="2"] td.thisweek-pts'); page.wait_for_timeout(400)
     tip = page.inner_text("#pts-tooltip")
-    assert "EPA/P" in tip and "+0.40" in tip and "\u22120.10" in tip and "+0.50" in tip, f"per-player EPA in the points tooltip: {tip!r}"
+    assert "EPA" in tip and "+4.00" in tip and "\u22123.00" in tip and "+6.00" in tip, f"per-player EPA in the points tooltip: {tip!r}"
+
+    page.select_option("#week-select", "1"); page.wait_for_timeout(2000)
+    assert page.inner_text("#th-points").strip().upper().startswith("WK 1"), "past week column label"
+    assert cell(2)["t"] == "+2.00" and cell(1)["t"] == "+2.00", f"past week team EPA (3-1, 2): {cell(2)}, {cell(1)}"
+    page.hover('#standings-body tr[data-rid="2"] td.thisweek-pts'); page.wait_for_timeout(400)
+    ptip = page.inner_text("#pts-tooltip")
+    assert "Quinn Passer" in ptip and "14.50" in ptip and "Rex Runner" in ptip and "8.25" in ptip, f"past week points tooltip lists each player's score: {ptip!r}"
+    page.hover('#standings-body tr[data-rid="2"] td.epa-col'); page.wait_for_timeout(400)
+    petip = page.inner_text("#pts-tooltip")
+    assert "WEEK 1 EPA" in petip.upper() and "+3.00" in petip and "\u22121.00" in petip and "+2.00" in petip and "Quinn Passer" in petip, f"past week EPA tooltip: {petip!r}"
+    page.select_option("#week-select", ""); page.wait_for_timeout(800)
 
     page.click("#mode-rumblin"); page.wait_for_timeout(600)
     foots = page.evaluate("[...document.querySelectorAll('#rb-grid .rb-table tfoot td.rb-epa')].map(c => c.textContent)")
-    assert "+0.13" in foots and "+0.44" in foots, f"team EPA/play in the card footers: {foots}"
+    assert "+7.00" in foots and "+5.00" in foots, f"team total EPA in the card footers: {foots}"
     assert page.evaluate("[...document.querySelectorAll('#rb-grid .rb-table thead th.rb-epa')].every(h => getComputedStyle(h).display !== 'none')"), "card EPA column shown"
 
     page.reload(); page.wait_for_timeout(2500)
