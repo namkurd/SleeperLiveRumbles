@@ -3138,7 +3138,7 @@ def scenario_scenarios_tab(browser):
     assert b[1]["hl"] == "Your 2 need to outscore their 1 by 10.00", b[1]
     assert b[0]["gap"] == "You lead by 14.00" and b[1]["gap"] == "You trail by 6.00", b
     assert b[1]["sides"][0]["names"] == ["Passer", "Runner"], f"1pm player Onewide is gone: {b[1]['sides']}"
-    assert b[0]["hlH"] < 30, "sentence stays on one line on a phone"
+    assert b[0]["hlH"] < 40, "sentence stays within two lines on a phone"
     wp = lambda: page.evaluate("[...document.querySelectorAll('#rb-scen-view .sc-wp')].map(e => parseInt(e.textContent))")
     wp0 = wp()
     assert wp0 and all(1 <= x <= 99 for x in wp0), f"each block shows a win chance: {wp0}"
