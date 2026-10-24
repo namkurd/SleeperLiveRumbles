@@ -3151,6 +3151,10 @@ def scenario_scenarios_tab(browser):
     setgames("complete", "complete", "complete", "complete"); poll()
     assert page.evaluate("document.getElementById('rb-scen').offsetParent === null && document.getElementById('rb-scen-view').hidden"), "tab gone when the week is over"
     assert page.evaluate("document.getElementById('rb-matchup').classList.contains('active')"), "falls back to Matchup"
+    feed_txt = page.text_content("#rb-feed")
+    assert "No started players are in a live game right now" in feed_txt, f"empty Score Feed explains why when nobody is live: {feed_txt}"
+    wk = page.evaluate("(() => { const w = document.getElementById('week-select-wrap'), s = document.getElementById('week-select'); return {vis: getComputedStyle(w).visibility, dis: s.disabled, op: getComputedStyle(w).opacity}; })()")
+    assert wk["vis"] == "visible" and wk["dis"] and float(wk["op"]) < 0.6, f"week menu shows greyed out in Rumblin': {wk}"
     ctx.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
