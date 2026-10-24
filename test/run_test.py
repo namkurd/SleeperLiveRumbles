@@ -3019,6 +3019,7 @@ def scenario_play_column(browser):
     poll()
     f = feed()
     assert "Pick 6!" in f, f
+
     neg = page.evaluate("[...document.querySelectorAll('#rb-feed td.pp .neg')].map(e => e.textContent + ':' + getComputedStyle(e).color)")
     assert any(n.startswith("Pick 6!") for n in neg), f"negative plays are marked: {neg}"
     red = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--bad').trim()")
@@ -3049,6 +3050,13 @@ def scenario_play_column(browser):
     assert geo["th"][2] != "none" and geo["th"][5] == "none", f"Play shows and Act hides on a phone: {geo}"
     assert geo["overflowX"] <= 1, f"page must not scroll sideways: {geo}"
     assert geo["fifthInside"], geo
+
+    # a swap in the projected order: the riser says Rumblin'! +n, the one it passed says Stumblin'.. -n
+    tags = []
+    for stat, pid, val in (("rush_yd", "P3", 2000), ("rec_yd", "P1", 4000)):
+        st(pid).update({stat: val}); poll()
+        tags += page.evaluate("[...document.querySelectorAll('.rb-card .rb-swaptag')].map(e => e.textContent)")
+    assert any(re.fullmatch(r"Rumblin'! \+\d+", x) for x in tags) and any(re.fullmatch(r"Stumblin'\.\. -\d+", x) for x in tags), f"swap tags: {tags}"
     ctx.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
