@@ -1336,7 +1336,7 @@
   .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
-  .sc-hl { font-size: 0.84rem; font-weight: 600; line-height: 1.25; margin-top: 4px; }
+  .sc-hl { font-size: 0.8rem; font-weight: 600; line-height: 1.25; margin-top: 4px; text-wrap: balance; }
   .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 10px 6px 10px; }
   .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
   .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
@@ -1355,7 +1355,7 @@
   .sc-a { grid-area: a; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; color: var(--text-dim); }
   .sc-a.gain { color: var(--good); } .sc-a.loss { color: var(--bad); }
   .sc-n .nl { display: none; }
-  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.78rem; } .sc-gap b { font-size: 1.4rem !important; } }
+  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.72rem; } .sc-gap b { font-size: 1.4rem !important; } }
   .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.pp .neg { color: var(--bad); }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
@@ -6072,18 +6072,28 @@
   }
   function rbSum(list) { return list.reduce(function (s, p) { return s + num(p.actual); }, 0); }
 
-  function rbScenSentence(startGap, n, m) {
+  // "RB, WR" / "2 RB, WR": who is still to play, by position (several of one position get a count)
+  var RB_POS_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  function rbPosList(list) {
+    var c = {};
+    list.forEach(function (p) { var k = p.position || "?"; c[k] = (c[k] || 0) + 1; });
+    return Object.keys(c).sort(function (a, b) {
+      var x = RB_POS_ORDER.indexOf(a), y = RB_POS_ORDER.indexOf(b);
+      return (x < 0 ? 9 : x) - (y < 0 ? 9 : y);
+    }).map(function (k) { return (c[k] > 1 ? c[k] + " " : "") + k; }).join(", ");
+  }
+  function rbScenSentence(startGap, n, m, nTxt, mTxt) {
     var g = Math.abs(startGap).toFixed(2);
     function verb(k) { return k === 1 ? "needs" : "need"; }
     if (startGap < -0.004) {
-      if (!m) return "Your " + n + " " + verb(n) + " " + g + " to catch up";
-      return "Your " + n + " " + verb(n) + " to outscore their " + m + " by " + g;
+      if (!m) return "Your " + nTxt + " " + verb(n) + " " + g + " to catch up";
+      return "Your " + nTxt + " " + verb(n) + " to outscore their " + mTxt + " by " + g;
     }
     if (startGap > 0.004) {
-      if (!n) return "Their " + m + " " + verb(m) + " " + g + " to catch you";
-      return "Their " + m + " " + verb(m) + " to outscore your " + n + " by " + g;
+      if (!n) return "Their " + mTxt + " " + verb(m) + " " + g + " to catch you";
+      return "Their " + mTxt + " " + verb(m) + " to outscore your " + nTxt + " by " + g;
     }
-    return "Dead even: your " + n + " vs. their " + m;
+    return "Dead even: your " + (nTxt || "none") + " vs. their " + (mTxt || "none");
   }
 
   // Rough chance that you win this Rumble: the gap now, plus what each side's remaining players are
@@ -6151,7 +6161,7 @@
         var fz = state.scenFrozen.by[t.rid];
         if (!fz) {
           fz = state.scenFrozen.by[t.rid] = { start: gap - (rbSum(mine) - rbSum(theirs)), n: mineN, m: theirN };
-          fz.text = rbScenSentence(fz.start, fz.n, fz.m);
+          fz.text = rbScenSentence(fz.start, fz.n, fz.m, rbPosList(mine), rbPosList(theirs));
         }
         var h2h = t.rid === me.opp;
         var cls = gap < -0.004 ? "bad" : gap > 0.004 ? "ok" : "even";
