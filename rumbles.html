@@ -225,6 +225,19 @@
      than sharing .pts-tooltip's rules. pointer-events stays enabled (the
      Pts tooltip disables it) so the text can be selected/read at leisure
      while it's pinned open by a click. */
+  /* ---- EPA per play (optional extra column; button toggles body.epa-on) ---- */
+  .epa-col, .rb-epa { display: none; }
+  body.epa-on th.epa-col, body.epa-on td.epa-col { display: table-cell; }
+  body.epa-on th.rb-epa, body.epa-on td.rb-epa { display: table-cell; }
+  td.epa-col, td.rb-epa, td.pts-tooltip-epa { font-variant-numeric: tabular-nums; }
+  .epa-pos { color: var(--good); } .epa-neg { color: var(--bad); }
+  td.epa-na, td.epa-col.epa-na { color: var(--text-dim); }
+  .epa-part { opacity: 0.65; font-style: italic; }
+  .epa-toggle { font: inherit; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--text-dim); background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--panel-border); border-radius: 99px; padding: 4px 10px; cursor: pointer; opacity: 0.6; transition: opacity 0.15s; margin: 14px 0 18px 12px; }
+  .epa-toggle:hover, .epa-toggle:focus-visible { opacity: 1; }
+  .epa-toggle[aria-pressed="true"] { opacity: 1; color: var(--accent); border-color: var(--accent); }
+  @media (min-width: 900px) { .epa-toggle { position: fixed; left: 14px; bottom: 14px; margin: 0; z-index: 30; } }
+  #rumblin-view .rb-table th.rb-epa, #rumblin-view .rb-table td.rb-epa { width: 2.6rem; font-size: 0.7rem; padding-left: 2px; padding-right: 2px; }
   .howto-tooltip {
     position: fixed;
     z-index: 50;
@@ -1460,6 +1473,7 @@
           <th id="th-rumbles" data-key="rumbles">Rumbles</th>
           <th id="th-thisweek" data-key="this_week">This Week</th>
           <th id="th-points" data-key="this_week_points">Pts This Week</th>
+          <th id="th-epa" class="epa-col" data-key="epa" title="EPA per play for this week's starters (QB, RB, WR, TE)">EPA/Play</th>
           <th id="th-pct" data-key="rumble_pct">Rumble %</th>
           <th id="th-pf" data-key="pf">PF</th>
           <th id="th-pa" data-key="pa">PA</th>
@@ -1529,6 +1543,7 @@
   <p class="howto-heading">Projected</p>
   <p>Where the standings would land if every player finishes at their projection.</p>
   <p>Tap a team's points to see each player's score. Names share a color with this week's opponent.</p>
+  <p>The small EPA button (bottom left on a computer, at the very bottom on a phone) adds an EPA/Play column next to points: a team's starters' total EPA divided by their plays. Sort by it like any column. Numbers appear after each game ends (updated daily), so a live week shows a faded partial figure.</p>
   <p class="howto-heading">Rumblin'</p>
   <p>Live cards for every team. Everyone shows all 12, Live only the managers with a player in a game, and Me your own view: Matchup, In Play (teams whose Rumble against you is still undecided), and Scenarios. You can also tap names in the strip to pick any managers to view.</p>
   <p>Scenarios opens once the Sunday 1pm games end. It shows what you need to outscore in each Rumble still in play, and resets each game window.</p>
@@ -1536,6 +1551,8 @@
   <p>Your pick is remembered on this device. Copy link (in Me) opens straight to your view.</p>
   <p class="howto-note">Updates every 30 seconds during games.</p>
 </div>
+
+<button type="button" class="epa-toggle" id="epa-toggle" aria-pressed="false" title="Show EPA per play next to points (from nflverse; filled in after each game ends)">EPA</button>
 
 <script>
 (function () {
@@ -1636,6 +1653,7 @@
     rumbles: { type: "number", label: "Rumbles" },
     this_week: { type: "number", label: "This Week" },
     this_week_points: { type: "number", label: "Pts This Week" },
+    epa: { type: "number", label: "EPA/Play" },
     rumble_pct: { type: "number", label: "Rumble %" },
     pf: { type: "number", label: "PF" },
     pa: { type: "number", label: "PA" },
@@ -3607,6 +3625,7 @@
       var startLabel = showStartTime ? formatGameStartLabel(p.game_start_ms) : "";
       return {
         name: p.name,
+        pid: p.player_id,
         shortName: p.short_name || null,
         position: p.position || null,
         startLabel: startLabel,
@@ -3669,6 +3688,7 @@
       // of this); the last-week tooltip shows its Diff column only when
       // real pregame projections were actually available to compute it.
       showProjColumn: !isLastWeek || showDiffColumn,
+      epaWeek: (opts && opts.epaWeek) || null,
       // Time / Score columns, only while one of these players is in a game.
       showGameColumns: !isLastWeek && rows.some(function (r) { return r.live; })
     };
@@ -4168,6 +4188,82 @@
     return rows;
   }
 
+  // ---- EPA per play (optional extra column) -------------------------------
+  // Sleeper has no EPA. epa_weekly.json (built nightly by build_epa.py from nflverse's weekly
+  // player stats) holds {week: {sleeperId: [totalEpa, plays]}} for QB/RB/WR/TE, filled in the day
+  // after each game. A team's number is its starters' total EPA over their total plays.
+  var EPA_POS = { QB: 1, RB: 1, WR: 1, TE: 1 };
+  state.epaOn = false; state.epa = null; state.epaAt = 0; state.epaStarters = {};
+  var epaStartersLoading = {};
+  function epaLoad(force) {
+    if (!force && state.epaAt && Date.now() - state.epaAt < 600000) return Promise.resolve();
+    state.epaAt = Date.now();
+    return fetchJson("./epa_weekly.json").then(function (d) { state.epa = d && d.weeks ? d : null; }, function () { /* optional */ });
+  }
+  function epaEntry(pid, week) {
+    var w = state.epa && state.epa.weeks && state.epa.weeks[String(week)];
+    return (w && w[pid]) || null;
+  }
+  function epaPer(pid, week) { var c = epaEntry(pid, week); return c && c[1] > 0 ? c[0] / c[1] : null; }
+  function epaText(v) { return v == null ? "\u2013" : (v > 0.004 ? "+" : v < -0.004 ? "\u2212" : "") + Math.abs(v).toFixed(2); }
+  function epaCls(v) { return v == null ? "" : v > 0.004 ? " epa-pos" : v < -0.004 ? " epa-neg" : ""; }
+  // Starters' combined EPA/play for one week. "left" = starters whose game isn't over yet (their
+  // numbers aren't in yet), so a live week's team figure can be marked as partial.
+  function epaTeam(players, week, final) {
+    var e = 0, n = 0, left = 0;
+    (players || []).forEach(function (p) {
+      if (!EPA_POS[p.position]) return;
+      var c = epaEntry(p.player_id, week);
+      if (c) { e += c[0]; n += c[1]; } else if (!final && p.game_status !== "complete") left++;
+    });
+    return { per: n > 0 ? e / n : null, plays: n, left: left };
+  }
+  function epaLoadStarters(week) {
+    var lid = state.history && state.history.league_id;
+    if (!lid || epaStartersLoading[week]) return;
+    epaStartersLoading[week] = true;
+    fetchJson(API_V1 + "/league/" + lid + "/matchups/" + week).then(function (ms) {
+      var by = {};
+      (ms || []).forEach(function (m) { by[m.roster_id] = (m.starters || []).filter(function (x) { return x && x !== "0"; }); });
+      state.epaStarters[week] = by;
+      render();
+    }, function () { state.epaStarters[week] = {}; });
+  }
+  function epaForRow(r) {
+    var hist = state.shownHistoricalWeek;
+    if (hist != null) {
+      var st = state.epaStarters[hist];
+      if (!st) { epaLoadStarters(hist); return null; }
+      var e = 0, n = 0;
+      (st[r.roster_id] || []).forEach(function (pid) { var c = epaEntry(pid, hist); if (c) { e += c[0]; n += c[1]; } });
+      return { per: n > 0 ? e / n : null, plays: n, left: 0 };
+    }
+    var last = !!r.this_week_points_is_last_week;
+    var wk = last ? (state.lastWeek && state.lastWeek.week) : (state.live && state.live.week);
+    return wk ? epaTeam(r.this_week_player_breakdown, wk, last) : null;
+  }
+  function epaCellHtml(info) {
+    if (!info || info.per == null) return '<td class="epa-col epa-na">\u2013</td>';
+    var part = info.left > 0;
+    return '<td class="epa-col' + epaCls(info.per) + (part ? " epa-part" : "") + '" title="' + info.plays + " plays" + (part ? " so far (" + info.left + " starter" + (info.left === 1 ? "" : "s") + " still to finish)" : "") + '">' + epaText(info.per) + "</td>";
+  }
+  function epaApply(on) {
+    state.epaOn = !!on;
+    document.body.classList.toggle("epa-on", state.epaOn);
+    var b = document.getElementById("epa-toggle");
+    if (b) b.setAttribute("aria-pressed", state.epaOn ? "true" : "false");
+    if (!state.epaOn && state.sort && state.sort.key === "epa") state.userSorted = false;
+  }
+  (function () {
+    var b = document.getElementById("epa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      epaApply(!state.epaOn);
+      render();
+      if (state.epaOn) epaLoad(true).then(render);
+    });
+  })();
+
   function getSortValue(row, col, colKey) {
     if (col.type === "string") return row.manager;
     if (col.type === "record") return row[col.wKey] * 1000 - row[col.lKey];
@@ -4176,6 +4272,10 @@
 
   function compareRows(a, b, colKey, dir) {
     var col = COLUMNS[colKey];
+    if (colKey === "epa") {   // teams with no EPA yet always sort last, either direction
+      var an = a.epa == null, bn = b.epa == null;
+      if (an || bn) return an && bn ? 0 : an ? 1 : -1;
+    }
     var av = getSortValue(a, col, colKey), bv = getSortValue(b, col, colKey);
     var cmp = col.type === "string" ? String(av).localeCompare(String(bv)) : av - bv;
     return dir === "asc" ? cmp : -cmp;
@@ -4669,6 +4769,7 @@
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();
     var rows = buildCombinedStandings();
+    rows.forEach(function (r) { r.epaInfo = state.epaOn ? epaForRow(r) : null; r.epa = r.epaInfo ? r.epaInfo.per : null; });
 
     var displayRows = rows;
     if (state.sort.key && COLUMNS[state.sort.key]) {
@@ -4745,7 +4846,8 @@
         var ptsTooltip = thisWeekTooltip(state.mode, r.this_week_player_breakdown, r.this_week_actual_points, {
           isLastWeek: r.this_week_points_is_last_week,
           qbAdjustment: r.this_week_points_is_last_week ? null : r.qb_adjustment,
-          projectionsAvailable: !!(state.lastWeek && state.lastWeek.projectionsAvailable)
+          projectionsAvailable: !!(state.lastWeek && state.lastWeek.projectionsAvailable),
+          epaWeek: state.epaOn ? (r.this_week_points_is_last_week ? (state.lastWeek && state.lastWeek.week) : (state.live && state.live.week)) : null
         });
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
         if (ptsTooltip) {
@@ -4795,6 +4897,7 @@
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2), { pop: state.mode === "actual" ? "act" : "cr", cr: r.roster_id }) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
+          epaCellHtml(r.epaInfo) +
           "<td>" + r.rumble_pct.toFixed(1) + "%</td>" +
           pfpaCell(r, "pf") +
           pfpaCell(r, "pa") +
@@ -4978,6 +5081,11 @@
           projCellHtml = '<td class="pts-tooltip-proj">' + r.proj.toFixed(2) + "</td>";
         }
       }
+      var epaCellH = "";
+      if (tooltip.epaWeek) {
+        var ev = EPA_POS[r.position] ? epaPer(r.pid, tooltip.epaWeek) : null;
+        epaCellH = '<td class="pts-tooltip-epa' + epaCls(ev) + '">' + epaText(ev) + "</td>";
+      }
       var gameCellsHtml = tooltip.showGameColumns
         ? '<td class="pts-tooltip-game">' + (r.live && r.minutesLeft != null ? r.minutesLeft : "") + "</td>" +
           '<td class="pts-tooltip-game">' + (r.live && r.score ? escapeHtml(r.score) : "") + "</td>"
@@ -4990,6 +5098,7 @@
             : escapeHtml(r.name)) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         projCellHtml +
+        epaCellH +
         gameCellsHtml +
         "</tr>";
     }).join("");
@@ -5000,8 +5109,9 @@
           : "") + "</th>"
       : '<th class="pts-tooltip-name"></th>';
     var projHeaderHtml = showProjColumn ? ("<th>" + (isLastWeek ? "Diff" : "Proj") + "</th>") : "";
+    var epaHeaderHtml = tooltip.epaWeek ? '<th title="EPA per play">EPA/P</th>' : "";
     els.ptsTooltip.innerHTML =
-      "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th>' + projHeaderHtml +
+      "<table><thead><tr>" + timeHeaderHtml + actualTotalHtml + '<th>Actual</th>' + projHeaderHtml + epaHeaderHtml +
       (tooltip.showGameColumns ? '<th class="pts-tooltip-game">Time</th><th class="pts-tooltip-game">Score</th>' : "") +
       "</tr></thead><tbody>" +
       bodyHtml +
@@ -6206,12 +6316,18 @@
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
+    var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaPer(p.player_id, state.live.week) : null;
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
     return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
-      '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + "</td></tr>";
+      '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
   }
 
+  function rbEpaFoot(t) {
+    var info = state.epaOn && state.live ? epaTeam(t.players, state.live.week, false) : null;
+    if (!info || info.per == null) return '<td class="rb-epa epa-na">\u2013</td>';
+    return '<td class="rb-epa' + epaCls(info.per) + (info.left > 0 ? " epa-part" : "") + '" title="' + info.plays + ' plays' + (info.left > 0 ? " so far" : "") + '">' + epaText(info.per) + "</td>";
+  }
   var rbFlapCtx = "";
   function rbCardHtml(t) {
     rbFlapCtx = t.rid;
@@ -6238,10 +6354,10 @@
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
       (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
       '<div class="rb-tot"><div class="rb-a">' + fl("rb:" + t.rid + ":act", t.act.toFixed(2), { pop: "act", cr: t.rid }) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
-      '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th></tr></thead><tbody>' + rows +
-      (bench ? '<tr class="rb-bench-h"><td colspan="3">Bench</td></tr>' + bench : "") +
-      (ir ? '<tr class="rb-bench-h"><td colspan="3">IR</td></tr>' + ir : "") +
-      '</tbody><tfoot><tr><td class="rb-nm">Starters</td><td>' + t.act.toFixed(2) + "</td><td>" + t.proj.toFixed(2) + "</td></tr></tfoot></table>";
+      '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th><th class="rb-epa" title="EPA per play">EPA/P</th></tr></thead><tbody>' + rows +
+      (bench ? '<tr class="rb-bench-h"><td colspan="4">Bench</td></tr>' + bench : "") +
+      (ir ? '<tr class="rb-bench-h"><td colspan="4">IR</td></tr>' + ir : "") +
+      '</tbody><tfoot><tr><td class="rb-nm">Starters</td><td>' + t.act.toFixed(2) + "</td><td>" + t.proj.toFixed(2) + "</td>" + rbEpaFoot(t) + "</tr></tfoot></table>";
   }
 
   // Slide elements from where they were to where they are now.
@@ -6611,7 +6727,7 @@
     var rb = state.rb;
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({
-        v: state.view, m: state.mode, sort: state.userSorted ? state.sort : null,
+        v: state.view, m: state.mode, sort: state.userSorted ? state.sort : null, epa: state.epaOn,
         rb: { mode: rb.mode, sub: rb.sub, density: rb.density, liveSort: rb.liveSort, sel: Object.keys(rb.sel) }
       }));
     } catch (e) { /* storage blocked: fine */ }
@@ -6620,6 +6736,7 @@
     var p = null;
     try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || "null"); } catch (e) { p = null; }
     if (!p || typeof p !== "object") return;
+    if (p.epa === true) epaApply(true);
     var rb = state.rb;
     if (p.m === "actual" || p.m === "custom") state.mode = p.m;
     if (p.sort && COLUMNS[p.sort.key] && (p.sort.dir === "asc" || p.sort.dir === "desc")) { state.userSorted = true; state.sort = { key: p.sort.key, dir: p.sort.dir }; }
@@ -6785,7 +6902,7 @@
 
   loadHistory()
     .then(loadLive)
-    .then(function () { rbInit(); })
+    .then(function () { rbInit(); return state.epaOn ? epaLoad(true) : null; })
     .then(render)
     .catch(function (err) {
       console.error("[rumbles] boot failed:", err);
@@ -6796,7 +6913,7 @@
       function pollNow() {
         if (state.refreshing) return;
         state.lastPollAt = Date.now();
-        loadLive().then(function () { render({ flash: true }); });
+        loadLive().then(function () { return state.epaOn ? epaLoad() : null; }).then(function () { render({ flash: true }); });
       }
       // Don't poll Sleeper while the tab is hidden; catch up as soon as it is shown again.
       state.pollTimer = setInterval(function () {
