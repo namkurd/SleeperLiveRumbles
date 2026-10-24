@@ -3208,6 +3208,11 @@ def scenario_epa(browser):
     epa = {"season": 2026, "weeks": {"2": {"B1": [4.0, 10], "B2": [-3.0, 30], "B3": [6.0, 12], "A1": [9.0, 6], "A2": [-4.0, 10]}}}
     # a past week (the week menu): who started and what each scored, plus EPA for it
     epa["weeks"]["1"] = {"B2": [3.0, 30], "B3": [-1.0, 10], "A1": [2.0, 8]}
+    epa["slots"] = ["QB", "RB"]
+    epa["names"] = {"B2": ["Quinn Passer", "QB"], "B3": ["Rex Runner", "RB"], "A1": ["Al Early", "WR"]}
+    epa["lineups"] = {"1": {"2": [["B2", 14.5], ["B3", 8.25]], "1": [["A1", 20.0]]}}
+    api_hits = []
+    page.on("request", lambda rq: api_hits.append(rq.url) if "/matchups/1" in rq.url else None)
     m1 = [{"roster_id": 2, "matchup_id": 1, "starters": ["B2", "B3"], "players": ["B2", "B3"], "players_points": {"B2": 14.5, "B3": 8.25}, "points": 22.75},
           {"roster_id": 1, "matchup_id": 1, "starters": ["A1"], "players": ["A1"], "players_points": {"A1": 20.0}, "points": 20.0}]
     install_routes(page, {
@@ -3257,6 +3262,7 @@ def scenario_epa(browser):
     tip = page.inner_text("#pts-tooltip")
     assert "EPA" in tip and "+4.00" in tip and "\u22123.00" in tip and "+6.00" in tip, f"per-player EPA in the points tooltip: {tip!r}"
 
+    hits_before = len(api_hits)
     page.select_option("#week-select", "1"); page.wait_for_timeout(2000)
     assert page.inner_text("#th-points").strip().upper().startswith("WK 1"), "past week column label"
     assert cell(2)["t"] == "+2.00" and cell(1)["t"] == "+2.00", f"past week team EPA (3-1, 2): {cell(2)}, {cell(1)}"
@@ -3266,6 +3272,7 @@ def scenario_epa(browser):
     page.hover('#standings-body tr[data-rid="2"] td.epa-col'); page.wait_for_timeout(400)
     petip = page.inner_text("#pts-tooltip")
     assert "WEEK 1 EPA" in petip.upper() and "+3.00" in petip and "\u22121.00" in petip and "+2.00" in petip and "Quinn Passer" in petip, f"past week EPA tooltip: {petip!r}"
+    assert len(api_hits) == hits_before, f"a past week comes from epa_weekly.json, no extra Sleeper call: {api_hits[hits_before:]}"
     page.select_option("#week-select", ""); page.wait_for_timeout(800)
 
     page.click("#mode-rumblin"); page.wait_for_timeout(600)
