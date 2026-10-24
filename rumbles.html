@@ -6088,11 +6088,12 @@
 
   // Rough chance that you win this Rumble: the gap now, plus what each side's remaining players are
   // still projected to add (their projection minus what they have). Each player's spread comes from
-  // this league's first six weeks (715 starter-weeks): a player's points land about C x sqrt(projection)
+  // three seasons of Sleeper data (2023-2025, about 8,600 starter-level player-weeks, scored with this
+  // league's rules): a player's points land about C x sqrt(projection)
   // away from his projection, with C by position below. Spread scales with the points still to come,
   // so it shrinks on its own as a game runs out. Teammates were barely correlated (about 0.07), so
   // players are treated as independent. A guide, not a promise.
-  var WIN_SD_C = { QB: 2.0, RB: 2.2, WR: 2.45, TE: 2.5, K: 2.05, DEF: 2.4 };
+  var WIN_SD_C = { QB: 2.05, RB: 2.25, WR: 2.3, TE: 2.25, K: 1.85, DEF: 2.7 };
   function rbNormCdf(z) {
     var t = 1 / (1 + 0.2316419 * Math.abs(z));
     var d = 0.3989423 * Math.exp(-z * z / 2);
