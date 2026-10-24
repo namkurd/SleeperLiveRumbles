@@ -1325,6 +1325,8 @@
   .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
   .sc-gap span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
   .sc-gap b { font-size: 1.6rem !important; font-variant-numeric: tabular-nums; }
+  .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 3px; color: var(--text-dim); }
+  .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
   .sc-hl { font-size: 0.88rem; font-weight: 600; margin: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 0 6px 12px; }
@@ -6076,6 +6078,31 @@
     return "Dead even: your " + n + " vs. their " + m;
   }
 
+  // Rough chance that you win this Rumble: the gap now, plus what each side's remaining players are
+  // still projected to add (their projection minus what they have), with a spread that shrinks as
+  // players run out of game. A guide, not a promise.
+  function rbNormCdf(z) {
+    var t = 1 / (1 + 0.2316419 * Math.abs(z));
+    var d = 0.3989423 * Math.exp(-z * z / 2);
+    var p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - p : p;
+  }
+  function rbWinChance(gap, mine, theirs) {
+    var exp = 0, v = 0;
+    function add(list, sign) {
+      list.forEach(function (p) {
+        var rem = Math.max(0, num(p.proj) - num(p.actual));
+        exp += sign * rem;
+        var sd = rem > 0 ? 0.5 * rem + 0.5 : 0;
+        v += sd * sd;
+      });
+    }
+    add(mine, 1); add(theirs, -1);
+    var d = gap + exp;
+    if (v <= 0) return d > 0.004 ? 1 : d < -0.004 ? 0 : 0.5;
+    return rbNormCdf(d / Math.sqrt(v));
+  }
+
   function rbScenSideHtml(t, list, win) {
     var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
     var rows = list.map(function (p) {
@@ -6116,11 +6143,13 @@
         var h2h = t.rid === me.opp;
         var cls = gap < -0.004 ? "bad" : gap > 0.004 ? "ok" : "even";
         var label = gap < -0.004 ? "You trail by" : gap > 0.004 ? "You lead by" : "All tied up";
+        var wp = Math.round(rbWinChance(gap, mine, theirs) * 100);
+        wp = Math.max(1, Math.min(99, wp));
         var scale = Math.max(10, Math.abs(fz.start) * 2);
         var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
         var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
         blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span></div>' +
-          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + "</b></div></div>" +
+          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
           '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div>" +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
