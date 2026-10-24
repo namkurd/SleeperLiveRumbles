@@ -241,6 +241,7 @@
     opacity: 0;
     visibility: hidden;
   }
+  .howto-tooltip { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .howto-tooltip.visible { opacity: 1; visibility: visible; }
   .howto-tooltip p { margin: 0 0 10px; }
   .howto-tooltip p:last-child { margin-bottom: 0; }
@@ -4178,7 +4179,7 @@
   function renderWeekSelect() {
     var sel = els.weekSelect;
     if (!sel) return;
-    var inActual = state.mode === "actual";
+    var inActual = state.mode === "actual" && state.view !== "rumblin";
     sel.disabled = !inActual;
     els.weekSelectWrap.classList.toggle("is-disabled", !inActual);
     els.weekSelectWrap.title = inActual ? "" : "Past weeks are in the Actual tab";
@@ -5518,6 +5519,7 @@
   function positionHowToTooltip() {
     var margin = 6;
     var btnRect = els.howtoBtn.getBoundingClientRect();
+    els.howtoTooltip.style.maxHeight = "";
     var tipRect = els.howtoTooltip.getBoundingClientRect();
     // Right-align to the button by default -- the button sits near the
     // right edge of the header, so opening from its left edge would run
@@ -5526,11 +5528,13 @@
     var maxLeft = window.innerWidth - tipRect.width - margin;
     if (left > maxLeft) left = maxLeft;
     if (left < margin) left = margin;
-    var top = btnRect.bottom + margin;
-    if (top + tipRect.height > window.innerHeight - margin) {
-      top = btnRect.top - tipRect.height - margin;
-      if (top < margin) top = margin;
-    }
+    // Opens below the button, or above it when there's more room; a tall tooltip scrolls inside
+    // its space instead of covering the button.
+    var spaceBelow = window.innerHeight - btnRect.bottom - 2 * margin, spaceAbove = btnRect.top - 2 * margin;
+    var below = tipRect.height <= spaceBelow || spaceBelow >= spaceAbove;
+    var room = Math.max(120, below ? spaceBelow : spaceAbove);
+    els.howtoTooltip.style.maxHeight = room + "px";
+    var top = below ? btnRect.bottom + margin : btnRect.top - Math.min(tipRect.height, room) - margin;
     els.howtoTooltip.style.left = left + "px";
     els.howtoTooltip.style.top = top + "px";
   }
@@ -5789,8 +5793,8 @@
     els.modeRumblin.classList.toggle("active", rb);
     document.getElementById("standings-view").hidden = rb;
     document.getElementById("rumblin-view").hidden = !rb;
-    els.weekSelectWrap && (els.weekSelectWrap.style.visibility = rb ? "hidden" : "");
     render();
+    renderWeekSelect();
   }
 
   function refreshNow() {
@@ -6247,7 +6251,7 @@
     box.hidden = false;
     box.innerHTML = '<div class="rb-live-head"><span>Score Feed</span><small>' + (items.length > 5 ? "latest 5 of " + items.length + " \u00b7 scroll for more" : items.length ? items.length + (items.length === 1 ? " play" : " plays") : "") + "</small></div>" +
       (items.length ? '<div class="rb-feed-scroll"><table class="rb-live-t rb-feed-t"><thead><tr><th>Time</th><th>Player</th><th>Play</th><th>Manager</th><th class="n">Change</th><th class="n">Act</th></tr></thead><tbody>' + body + "</tbody></table></div>"
-        : '<div class="rb-live-empty">No scoring yet. New points show up here within 30 seconds of a play.</div>');
+        : '<div class="rb-live-empty">' + escapeHtml(shown.some(function (t) { return t.liveCount > 0; }) ? "No scoring yet. New points show up here within 30 seconds of a play." : rbEmptyLiveNote(shown)) + "</div>");
     if (top) { var sc = box.querySelector(".rb-feed-scroll"); if (sc) sc.scrollTop = top; }
   }
 
