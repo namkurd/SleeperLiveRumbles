@@ -14,12 +14,14 @@ page.
   by side). On a Rumblin' card, the big number is that team's projected
   Rumbles this week (9 for projected to win the H2H, plus 1 per team
   projected to be outscored); "vs. Field" underneath is the second part.
-- **EPA/Play (optional):** the small EPA button (bottom-left on desktop, bottom of the
-  page on phones) adds an EPA/Play column wherever points show: the standings table
-  (sortable), the points hover, and the Rumblin' cards. Sleeper has no EPA, so
-  `build_epa.py` (run by the same nightly workflow) writes `epa_weekly.json` from
-  nflverse's weekly player stats; a team's number is its starters' total EPA over total
-  plays (QB/RB/WR/TE only). Data appears the day after a game ends.
+- **EPA (optional):** the small EPA button (bottom-left on desktop, bottom of the
+  page on phones) adds a total-EPA column wherever points show: the standings table
+  (sortable; hover or tap a number for each player's EPA), the points hover, and the
+  Rumblin' cards. Sleeper has no EPA, so `build_epa.py` (run by the same nightly
+  workflow) writes `epa_weekly.json` from nflverse data: a team's number is its starters'
+  total EPA, including kickers and defenses (from play-by-play). The same file carries
+  past weeks' lineups and scores, so the week menu's point/EPA tooltips need no live calls.
+  Data appears the day after a game ends.
 - **Files:** `rumbles.html` (the site), `build_rumbles.py` (nightly history
   build), `build_epa.py` (nightly EPA file), `capture_live_qb_injuries.py` (in-game QB-Out logger), the
   `rumbles_history.json` / `live_qb_captures.json` data files, and `test/`.
