@@ -100,7 +100,7 @@ def get_table_rows(page):
     # what actually test those markers themselves.
     return page.eval_on_selector_all(
         "#standings-body tr",
-        """rows => rows.map(r => Array.from(r.querySelectorAll('td')).map((td, i) => {
+        """rows => rows.map(r => Array.from(r.querySelectorAll('td:not(.epa-col)')).map((td, i) => {
             var text = td.innerText.trim();
             if (i === 0) { var rn = td.querySelector('.rank-num'); return rn ? rn.innerText.trim() : text; }
             if (i === 1) return text.replace(/\\s*\\d+[WL]$/, '').replace(/\\s*QB Inj\\*$/, '');
@@ -1656,7 +1656,7 @@ def scenario_mobile_responsive_layout(browser):
     scroll_info = page.evaluate("""() => {
         var container = document.querySelector('.table-scroll');
         var hint = document.querySelector('.scroll-hint');
-        var pctHeader = document.querySelector('#standings-table thead th:nth-child(6)');
+        var pctHeader = document.querySelector('#standings-table thead #th-pct');
         return {
             hintVisible: hint ? getComputedStyle(hint).display !== 'none' : false,
             scrollWidth: container.scrollWidth,
@@ -3174,6 +3174,91 @@ def scenario_scenarios_tab(browser):
     print("\nSCENARIOS TAB SCENARIO PASSED")
 
 
+def scenario_epa(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: EPA/Play toggle, standings column + sort, tooltip, Rumblin' cards")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800}, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    def ms(iso): return int(datetime.datetime.fromisoformat(iso).replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+    players = {
+        "B1": {"first_name": "Bo", "last_name": "Onewide", "full_name": "Bo Onewide", "position": "WR", "team": "DAL"},
+        "B2": {"first_name": "Quinn", "last_name": "Passer", "full_name": "Quinn Passer", "position": "QB", "team": "MIN"},
+        "B3": {"first_name": "Rex", "last_name": "Runner", "full_name": "Rex Runner", "position": "RB", "team": "SF"},
+        "A1": {"first_name": "Al", "last_name": "Early", "full_name": "Al Early", "position": "WR", "team": "PHI"},
+        "A2": {"first_name": "Rob", "last_name": "Bearback", "full_name": "Rob Bearback", "position": "RB", "team": "CHI"},
+        "J1": {"first_name": "Tim", "last_name": "Monday", "full_name": "Tim Monday", "position": "TE", "team": "KC"},
+    }
+    matchups = load("matchups_week2.json")
+    for m in matchups:
+        m["starters"] = {1: ["A1", "A2"], 2: ["B1", "B2", "B3"], 3: ["J1"]}.get(m["roster_id"], [])
+        m["players"] = list(m["starters"])
+    def game(away, home, iso, status):
+        return {"status": status, "game_id": away + home, "week": 2, "away_team": away, "home_team": home, "start_time": ms(iso), "quarter": "F" if status == "complete" else "1"}
+    scores = [game("DAL", "PHI", "2026-09-20T17:00:00", "complete"), game("MIN", "CHI", "2026-09-20T20:25:00", "complete"),
+              game("SF", "SEA", "2026-09-21T00:20:00", "complete"), game("KC", "LV", "2026-09-22T00:15:00", "pre_game")]
+    stats = [{"player_id": "B1", "stats": {"rec_yd": 100}}, {"player_id": "B2", "stats": {"pass_yd": 100}}, {"player_id": "B3", "stats": {"rush_yd": 50}},
+             {"player_id": "A1", "stats": {"rec_yd": 200}}, {"player_id": "A2", "stats": {"rush_yd": 20}}]
+    proj = lambda pid, st: {"player_id": pid, "stats": st, "week": 2, "season": "2026", "season_type": "regular", "category": "proj"}
+    projections = [proj("B1", {"rec_yd": 100}), proj("B2", {"pass_yd": 100}), proj("B3", {"rush_yd": 300}), proj("A1", {"rec_yd": 200}), proj("A2", {"rush_yd": 200}), proj("J1", {"rec_yd": 1000})]
+    # EPA arrives for every starter whose game is over (Monday's TE has none yet)
+    epa = {"season": 2026, "weeks": {"2": {"B1": [4.0, 10], "B2": [-3.0, 30], "B3": [6.0, 12], "A1": [9.0, 6], "A2": [-2.0, 10]}}}
+    install_routes(page, {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/epa_weekly.json": epa,
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": projections,
+        "**/stats/nfl/2026/2*": stats,
+        "**/scores/nfl/regular/2026/2": scores,
+        "**/v1/players/nfl": players,
+        "**/v1/state/nfl": load("state.json"),
+    })
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    cell = lambda rid: page.evaluate("(r) => { const c = document.querySelector('#standings-body tr[data-rid=\"' + r + '\"] td.epa-col'); return c ? {t: c.textContent, shown: getComputedStyle(c).display !== 'none'} : null; }", rid)
+    btn = page.locator("#epa-toggle")
+    assert btn.is_visible() and btn.get_attribute("aria-pressed") == "false", "EPA button starts off"
+    box = btn.bounding_box()
+    assert box["x"] < 40 and box["y"] + box["height"] > 740, f"EPA button sits in the bottom-left corner on desktop: {box}"
+    assert not page.is_visible("#th-epa") and cell(2)["shown"] is False, "EPA column hidden until toggled"
+
+    btn.click(); page.wait_for_timeout(1200)
+    assert btn.get_attribute("aria-pressed") == "true" and page.is_visible("#th-epa"), "toggle shows the EPA column"
+    assert cell(2) == {"t": "+0.13", "shown": True}, f"Ben's starters: (4-3+6)/(10+30+12): {cell(2)}"
+    assert cell(1)["t"] == "+0.44", f"Aidan: (9-2)/16: {cell(1)}"
+    assert cell(3)["t"] == "\u2013", f"no EPA yet for Monday's player: {cell(3)}"
+
+    def order():
+        return page.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => r.getAttribute('data-rid'))")
+    page.click("#th-epa"); page.wait_for_timeout(300)
+    o = order(); assert o[:2] == ["1", "2"], f"sorted high to low: {o}"
+    page.click("#th-epa"); page.wait_for_timeout(300)
+    o = order(); assert o[:2] == ["2", "1"] and "3" in o[2:], f"sorted low to high, teams without EPA stay last: {o}"
+
+    page.hover('#standings-body tr[data-rid="2"] td.thisweek-pts'); page.wait_for_timeout(400)
+    tip = page.inner_text("#pts-tooltip")
+    assert "EPA/P" in tip and "+0.40" in tip and "\u22120.10" in tip and "+0.50" in tip, f"per-player EPA in the points tooltip: {tip!r}"
+
+    page.click("#mode-rumblin"); page.wait_for_timeout(600)
+    foots = page.evaluate("[...document.querySelectorAll('#rb-grid .rb-table tfoot td.rb-epa')].map(c => c.textContent)")
+    assert "+0.13" in foots and "+0.44" in foots, f"team EPA/play in the card footers: {foots}"
+    assert page.evaluate("[...document.querySelectorAll('#rb-grid .rb-table thead th.rb-epa')].every(h => getComputedStyle(h).display !== 'none')"), "card EPA column shown"
+
+    page.reload(); page.wait_for_timeout(2500)
+    assert page.get_attribute("#epa-toggle", "aria-pressed") == "true", "the choice is remembered"
+    btn.click(); page.wait_for_timeout(400)
+    assert page.get_attribute("#epa-toggle", "aria-pressed") == "false" and not page.is_visible("#th-epa"), "toggle off hides it again"
+    assert not page_errors, page_errors
+    print("EPA SCENARIO PASSED")
+    ctx.close()
+
+
 def scenario_feed_expiry(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: Score Feed rows clear 4.5 hours after their game's kickoff")
@@ -3248,6 +3333,7 @@ def main():
         scenario_ux_batch(browser)
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
+        scenario_epa(browser)
         scenario_feed_expiry(browser)
         browser.close()
 
