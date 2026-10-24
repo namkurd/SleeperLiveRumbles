@@ -1090,6 +1090,14 @@
   .rb-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
   /* Your own card: a soft glow in your color. */
   .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
+  /* Projected-order swaps: glow and tag that fade out slowly. */
+  .rb-card.rb-swap-up { z-index: 5; animation: rb-glow-up 4.2s ease-out forwards; }
+  .rb-card.rb-swap-dn { z-index: 1; animation: rb-glow-dn 4.2s ease-out forwards; }
+  @keyframes rb-glow-up { 0%, 40% { box-shadow: 0 0 0 2px var(--good), 0 0 24px color-mix(in srgb, var(--good) 60%, transparent); } 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 0%, transparent), 0 0 24px color-mix(in srgb, var(--good) 0%, transparent); } }
+  @keyframes rb-glow-dn { 0%, 40% { box-shadow: 0 0 0 2px var(--bad), 0 0 20px color-mix(in srgb, var(--bad) 50%, transparent); } 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 0%, transparent), 0 0 20px color-mix(in srgb, var(--bad) 0%, transparent); } }
+  .rb-swaptag { position: absolute; top: 0; right: 0; z-index: 6; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.02em; padding: 2px 8px; border-radius: 0 0 0 8px; color: #fff; white-space: nowrap; animation: rb-tag-fade 4.2s ease-out forwards; pointer-events: none; }
+  .rb-swap-up .rb-swaptag { background: var(--good); color: #06240f; } .rb-swap-dn .rb-swaptag { background: var(--bad); }
+  @keyframes rb-tag-fade { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
   /* Cards with nobody in a game right now fade back. */
   .rb-card { transition: opacity 0.4s; }
   .rb-card.rb-idle { opacity: 0.5; }
@@ -5875,7 +5883,7 @@
   // as the order changes. Tapping names picks teams by hand instead.
   var RB_COLORS = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#e05a5a", "#5fb8d9", "#b6c23a"];
   state.view = "standings";
-  state.rb = { me: null, asked: false, mode: "all", sub: "matchup", wantMe: false, open: {}, liveSort: { k: "a", dir: -1 }, sel: {}, density: "totals", lastTotals: {}, cardEls: {}, chipEls: {}, centerOnce: false };
+  state.rb = { me: null, asked: false, mode: "all", sub: "matchup", wantMe: false, open: {}, liveSort: { k: "a", dir: -1 }, sel: {}, density: "totals", lastTotals: {}, lastRank: {}, lastRumbles: {}, cardEls: {}, chipEls: {}, centerOnce: false };
 
   // Opponents share a color: the same matchup colors the standings use
   // for this week's pairs (state.matchupColorByRosterId). Falls back to a
@@ -6222,11 +6230,44 @@
   }
 
   // Slide elements from where they were to where they are now.
-  function rbFlip(els, before) {
+  // A swap in the projected order: the card that moved up lifts and travels forward over the grid
+  // ("Rumblin'!"), the one that dropped stays level and slides back underneath ("Stumblin'.."), each with
+  // its change in projected Rumbles. Both glow, then fade out gently.
+  var RB_SWAP_MS = 1600, RB_GLOW_MS = 4200;
+  function rbSwapFx(ups, dns, before) {
+    if (!ups.length && !dns.length) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var rb = state.rb;
+    function run(item, up) {
+      var el = rb.cardEls[item.t.rid], f = before[item.t.rid];
+      if (!el || !el.isConnected || !f || !el.animate) return;
+      var l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
+      var sc = up ? 1.1 : 0.93, lift = up ? -12 : 0, mid = 0.2;
+      el.animate([
+        { transform: "translate(" + dx + "px," + dy + "px) scale(1)", opacity: 1, offset: 0 },
+        { transform: "translate(" + dx + "px," + (dy + lift) + "px) scale(" + sc + ")", opacity: up ? 1 : 0.85, offset: mid, easing: "ease-in-out" },
+        { transform: "translate(" + dx * 0.12 + "px," + (dy * 0.12 + lift) + "px) scale(" + sc + ")", opacity: up ? 1 : 0.85, offset: 0.8, easing: "ease-in-out" },
+        { transform: "none", opacity: 1, offset: 1 }
+      ], { duration: RB_SWAP_MS, easing: "cubic-bezier(.3,.1,.2,1)" });
+      var n = Math.abs(item.d);
+      var tag = document.createElement("span");
+      tag.className = "rb-swaptag";
+      tag.textContent = up ? "Rumblin'! +" + n : "Stumblin'.. -" + n;
+      el.appendChild(tag);
+      el.classList.add(up ? "rb-swap-up" : "rb-swap-dn");
+      setTimeout(function () {
+        el.classList.remove("rb-swap-up", "rb-swap-dn");
+        if (tag.parentNode) tag.parentNode.removeChild(tag);
+      }, RB_GLOW_MS + 100);
+    }
+    ups.forEach(function (it) { run(it, true); });
+    dns.forEach(function (it) { run(it, false); });
+  }
+  function rbFlip(els, before, skip) {
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     Object.keys(els).forEach(function (k) {
       var el = els[k], f = before[k];
-      if (!el.isConnected) return;
+      if (!el.isConnected || (skip && skip[k])) return;
       if (!f) { if (el.animate) el.animate([{ opacity: 0, transform: "scale(.97)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" }); return; }
       var l = el.getBoundingClientRect();
       var dx = f.left - l.left, dy = f.top - l.top;
@@ -6463,7 +6504,18 @@
       rb.lastTotals[t.rid] = t.act;
       grid.appendChild(el);
     });
-    rbFlip(rb.cardEls, before);
+    // Who traded places in the projected order since the last refresh (only cards already on screen).
+    var swapUp = [], swapDn = [], swapSkip = {};
+    teams.forEach(function (t, i) {
+      var pr = rb.lastRank[t.rid], pm = rb.lastRumbles[t.rid];
+      if (pr == null || pm == null || !before[t.rid] || !shownSet[t.rid]) return;
+      var d = t.rumbles - pm;
+      if (i < pr && d > 0) { swapUp.push({ t: t, d: d }); swapSkip[t.rid] = true; }
+      else if (i > pr && d < 0) { swapDn.push({ t: t, d: d }); swapSkip[t.rid] = true; }
+    });
+    teams.forEach(function (t, i) { rb.lastRank[t.rid] = i; rb.lastRumbles[t.rid] = t.rumbles; });
+    rbFlip(rb.cardEls, before, swapSkip);
+    rbSwapFx(swapUp, swapDn, before);
     flapScan(grid);
 
     // Bring your card to the middle of the screen once, right after picking.
