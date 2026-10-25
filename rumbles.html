@@ -1206,7 +1206,12 @@
   .rb-compact .rb-table td { padding: 1px 3px; }
   .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
   /* Compact cards: every player is exactly one line, so cards line up. The live clock and score show in the row's hover text. */
-  .rb-compact tr.rb-live .rb-meta .rb-sc { display: none; }
+  /* Live rows: time left and score take turns in the same spot. */
+  .rb-alt2 { display: inline-grid; }
+  .rb-alt2 > span { grid-area: 1 / 1; transition: opacity 0.6s ease; white-space: nowrap; }
+  .rb-alt2.both .rb-sc { opacity: 0; }
+  #rumblin-view.rb-alt .rb-alt2.both .rb-mt { opacity: 0; }
+  #rumblin-view.rb-alt .rb-alt2.both .rb-sc { opacity: 1; }
   .rb-compact td { line-height: 1.25; }
   .rb-grid.totals { --rb-cardw: 190px; }
   /* Totals cards are narrow too: same stacked layout as phone compact
@@ -6420,10 +6425,13 @@
   function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";
-    var meta = "", metaShort = "", slotColor = null;
+    var meta = "", metaShort = "", metaHtml = null, slotColor = null;
     if (live) {
       meta = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? (p.game_minutes_left != null ? " · " : "") + p.game_score : "");
-      metaShort = (p.game_minutes_left != null ? p.game_minutes_left + "m" : "") + (p.game_score ? '<span class="rb-sc">' + (p.game_minutes_left != null ? " " : "") + escapeHtml(p.game_score) + "</span>" : "");
+      // Time left and score share one spot and fade back and forth (see the rb-alt timer).
+      var hasT = p.game_minutes_left != null, hasS = !!p.game_score;
+      metaHtml = '<span class="rb-alt2' + (hasT && hasS ? " both" : "") + '">' + (hasT ? '<span class="rb-mt">' + p.game_minutes_left + "m</span>" : "") + (hasS ? '<span class="rb-sc">' + escapeHtml(p.game_score) + "</span>" : "") + "</span>";
+      metaShort = metaHtml;
     } else if (status === "complete") {
       meta = "Final"; metaShort = "F";
     } else if (status === "pre_game") {
@@ -6451,7 +6459,7 @@
     var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaTot(p.player_id, state.live.week) : null;
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
     return '<tr class="' + cls + '"' + (live && meta ? ' title="' + escapeHtml(meta) + '"' : "") + '><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
-      (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
+      (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + (metaHtml || escapeHtml(meta)) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + (koHtml || fl(flapKey, shown, bench ? null : { pop: "act" })) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
   }
 
@@ -6817,6 +6825,11 @@
     });
   }
   window.addEventListener("resize", rbFitCards);
+  // Every 3 seconds the live rows fade between time left and score.
+  setInterval(function () {
+    var v = document.getElementById("rumblin-view");
+    if (v && !document.hidden) v.classList.toggle("rb-alt");
+  }, 3000);
 
   function openWhoPicker() {
     state.rb.asked = true;
