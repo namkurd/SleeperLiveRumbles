@@ -2739,6 +2739,10 @@ def scenario_rumblin_qol(browser):
     page.evaluate("window.scrollTo(0, 600)"); page.wait_for_timeout(200)
     top = page.evaluate("document.querySelector('.rb-controls').getBoundingClientRect().top")
     assert abs(top) < 2, f"controls should stick to the top on phones, top={top}"
+    ys = page.evaluate("[document.querySelector('#rb-density').getBoundingClientRect().top, document.querySelector('#rb-refresh').parentElement.getBoundingClientRect().top]")
+    assert abs(ys[0] - ys[1]) < 3, f"the refresh button must share the first row (no extra height): {ys}"
+    n0 = polls["n"]; page.click("#rb-refresh"); page.wait_for_timeout(600)
+    assert polls["n"] > n0, "the sticky refresh button should refresh"
     page.set_viewport_size({"width": 1280, "height": 800})
     page.evaluate("window.scrollTo(0, 0)")
 
@@ -3030,7 +3034,7 @@ def scenario_play_column(browser):
     live_cards = page.evaluate("document.querySelectorAll('#rb-grid .rb-card').length")
     page.click("#rb-all"); page.wait_for_timeout(400)
     all_cards = page.evaluate("document.querySelectorAll('#rb-grid .rb-card').length")
-    assert page.evaluate("[...document.querySelectorAll('.rb-controls .rb-view-group:nth-of-type(2) button')].map(b => b.textContent).join()") == "Everyone,Live,Me", "button order"
+    assert page.evaluate("[...document.querySelectorAll('.rb-controls .rb-view-group:nth-of-type(2) button')].map(b => b.textContent).join()") == "Everyone,Live,Me,\u21bb", "button order"
     assert 0 < live_cards < all_cards and live_cards == 2, f"Live shows only managers with live players: {live_cards} of {all_cards}"
     page.click("#rb-livemode"); page.wait_for_timeout(300)
     assert page.evaluate("document.getElementById('rb-livemode').classList.contains('active')")
