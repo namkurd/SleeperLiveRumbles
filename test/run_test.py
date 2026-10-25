@@ -2837,8 +2837,13 @@ def scenario_ux_batch(browser):
     page.route("**/v1/players/nfl", lambda route: route.fulfill(status=200, content_type="application/json", body='{"error":"rate limited"}'))
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
     cardtxt = page.evaluate("document.querySelector('#rumblin-view').innerText")
-    assert any(n in cardtxt for n in ("Starter One", "Murray", "St. Brown")), "player names missing after a bad players reply: " + cardtxt[:300]
+    assert any(n in cardtxt for n in ("Starter One", "Murray", "St. Brown", "ARSB")), "player names missing after a bad players reply: " + cardtxt[:300]
     assert page.evaluate("localStorage.getItem('rumbles.players.v1')") == good, "bad reply must not overwrite the saved copy"
+    # every card has the same header height, and every starter row is one line of the same height
+    hh = page.evaluate("[...new Set([...document.querySelectorAll('#rumblin-view .rb-card .rb-head')].map(h => Math.round(h.getBoundingClientRect().height)))]")
+    assert len(hh) == 1, f"card headers should all be the same height: {hh}"
+    rh = page.evaluate("[...new Set([...document.querySelectorAll('#rumblin-view .rb-card tbody tr:not(.rb-bench-h)')].map(r => Math.round(r.getBoundingClientRect().height)))]")
+    assert len(rh) == 1, f"every player row should be the same height, live or not: {rh}"
     page.unroute("**/v1/players/nfl")
     install_routes(page, {"**/v1/players/nfl": load("players.json")})
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
