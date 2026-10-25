@@ -1098,6 +1098,11 @@
      green so they read as separate controls from the orange size toggle. */
   .rb-view-group button.active { background: var(--good); color: var(--bg); }
   .rb-view-group button[hidden] { display: none; }
+  /* Refresh sits at the end of the Everyone/Live/Me pill so it rides along with the sticky bar. */
+  .rb-view-group .rb-refresh { padding: 6px 9px; font-size: 1rem; line-height: 1; }
+  .rb-view-group .rb-refresh[disabled] { opacity: 0.5; cursor: default; }
+  .rb-view-group .rb-refresh.spin { animation: rb-spin 0.9s linear infinite; }
+  @keyframes rb-spin { to { transform: rotate(360deg); } }
   .rb-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--rb-cardw, 270px), 1fr)); align-items: start; }
   .rb-card {
     --c: var(--accent-2);
@@ -1181,9 +1186,9 @@
   .rb-compact .rb-table { font-size: 0.7rem; }
   .rb-compact .rb-table td { padding: 1px 3px; }
   .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
-  /* Live rows in compact cards: clock and score sit on a small second line so names never get cut. */
-  .rb-compact tr.rb-live .rb-nmwrap { flex-wrap: wrap; row-gap: 0; }
-  .rb-compact tr.rb-live .rb-meta { flex-basis: 100%; margin-left: 0; font-size: 0.56rem; line-height: 1.05; }
+  /* Compact cards: every player is exactly one line, so cards line up. The live clock and score show in the row's hover text. */
+  .rb-compact tr.rb-live .rb-meta { display: none; }
+  .rb-compact td { line-height: 1.25; }
   .rb-grid.totals { --rb-cardw: 190px; }
   /* Totals cards are narrow too: same stacked layout as phone compact
      (Rumbles and season under the name) so names aren't cut off. */
@@ -1198,6 +1203,9 @@
     /* Keep the toggles on screen while scrolling through the cards. */
     .rb-controls { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 8px 0 6px; margin: 0 0 8px; box-shadow: 0 1px 0 var(--panel-border); }
     .rb-grid { gap: 8px; }
+    /* Make room for the refresh button on the first row without growing the bar. */
+    #rb-density button, #rb-all, #rb-livemode, #rb-me { padding-left: 6px; padding-right: 6px; }
+    .rb-controls { gap: 6px; }
     .rb-grid.compact { --rb-cardw: 150px; }
     .rb-grid.compact .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
     .rb-grid.compact .rb-tot .rb-a { font-size: 0.95rem; }
@@ -1439,6 +1447,7 @@
         <button type="button" id="rb-all" class="active">Everyone</button>
         <button type="button" id="rb-livemode">Live</button>
         <button type="button" id="rb-me">Me</button>
+        <button type="button" id="rb-refresh" class="rb-refresh" aria-label="Refresh now" title="Refresh now">&#8635;</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
         <button type="button" id="rb-inplay">In Play</button>
@@ -6011,12 +6020,14 @@
     state.lastPollAt = Date.now();
     els.refreshBtn.disabled = true;
     els.refreshBtn.textContent = "Refreshing…";
+    var rbr = document.getElementById("rb-refresh"); if (rbr) { rbr.disabled = true; rbr.classList.add("spin"); }
     loadLive()
       .then(function () { render({ flash: true }); })
       .finally(function () {
         state.refreshing = false;
         els.refreshBtn.disabled = false;
         els.refreshBtn.textContent = "Refresh now";
+        var rbr = document.getElementById("rb-refresh"); if (rbr) { rbr.disabled = false; rbr.classList.remove("spin"); }
       });
   }
 
@@ -6065,6 +6076,7 @@
   els.modeActual.addEventListener("click", function () { setMode("actual"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
+  document.getElementById("rb-refresh").addEventListener("click", refreshNow);
   els.weekSelect.addEventListener("change", function () {
     var v = els.weekSelect.value;
     state.viewWeek = v === "" ? null : parseInt(v, 10);
@@ -6406,7 +6418,7 @@
     var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
     var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaTot(p.player_id, state.live.week) : null;
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
-    return '<tr class="' + cls + '"><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
+    return '<tr class="' + cls + '"' + (live && meta ? ' title="' + escapeHtml(meta) + '"' : "") + '><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
       '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
   }
@@ -6772,7 +6784,6 @@
         // Picking yourself from the Me button goes straight to the Me view.
         if (state.rb.wantMe) rbEnterMe();
         state.rb.wantMe = false;
-        state.rb.centerOnce = true;
         document.getElementById("rb-who").hidden = true;
         renderRumblin();
       });
@@ -6888,7 +6899,6 @@
   document.getElementById("rb-me").addEventListener("click", function () {
     if (state.rb.me == null) { state.rb.wantMe = true; openWhoPicker(); return; }
     rbEnterMe();
-    state.rb.centerOnce = true;
     renderRumblin();
   });
   document.getElementById("rb-all").addEventListener("click", function () {
