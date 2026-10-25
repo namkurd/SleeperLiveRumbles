@@ -2868,6 +2868,13 @@ def scenario_ux_batch(browser):
     nm = page.evaluate("[...document.querySelectorAll('#rumblin-view .rb-n')].filter(e => e.offsetParent).slice(0, 3).map(e => [...e.children].filter(c => getComputedStyle(c).display !== 'none').map(c => c.className).join())")
     assert all(x == "nf" for x in nm), f"compact cards show first initial + last name: {nm}"
     page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
+    # live rows alternate between time left and score every 3 seconds
+    both = page.evaluate("document.querySelectorAll('#rumblin-view tr.rb-live .rb-alt2.both').length")
+    if both:
+        c0 = page.evaluate("document.getElementById('rumblin-view').classList.contains('rb-alt')")
+        page.wait_for_timeout(3300)
+        c1 = page.evaluate("document.getElementById('rumblin-view').classList.contains('rb-alt')")
+        assert c0 != c1, "time left / score should swap every 3 seconds"
     page.unroute("**/v1/players/nfl")
     install_routes(page, {"**/v1/players/nfl": load("players.json")})
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
