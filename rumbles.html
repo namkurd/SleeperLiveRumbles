@@ -1163,7 +1163,13 @@
   .rb-table tr.rb-off td.rb-act { opacity: 1; }
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
-  .rb-n .nl { display: none; }
+  .rb-n .nl, .rb-n .nk { display: none; }
+  /* A nickname replaces the name only when the name would be cut off (see rbFitCards). */
+  .rb-n.nick .nf, .rb-n.nick .nl { display: none !important; }
+  .rb-n.nick .nk { display: inline !important; }
+  .rb-ko .ko-s { display: none; }
+  .rb-ks .rb-ko .ko-l { display: none; }
+  .rb-ks .rb-ko .ko-s { display: inline; }
   .rb-compact .rb-n .nf { display: none; } .rb-compact .rb-n .nl { display: inline; }
   .rb-compact .rb-meta .rb-ml { display: none; }
   .rb-compact .rb-meta .rb-ms { display: inline; }
@@ -6201,7 +6207,7 @@
     if (typeof ms !== "number" || isNaN(ms)) return "";
     var d = new Date(ms);
     var h = d.getHours(), h12 = h % 12 || 12;
-    return TOOLTIP_DAY_NAMES[d.getDay()].slice(0, 2) + h12 + (h >= 12 ? "p" : "a");
+    return TOOLTIP_DAY_NAMES[d.getDay()] + h12 + (h >= 12 ? "p" : "a");
   }
 
   // A medical-style cross for the QB-injury backup slot.
@@ -6220,18 +6226,16 @@
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
   // Widely used nicknames for names that get cut off.
-  var RB_NICK = { "amon-ra st brown": "ARSB", "jaxson smith-njigba": "JSN", "jaxon smith-njigba": "JSN", "marvin harrison": "MHJ", "christian mccaffrey": "CMC", "brian thomas": "BTJ", "kenneth walker": "K. Walker" };
+  var RB_NICK = { "amon-ra st brown": "ARSB", "jaxson smith-njigba": "JSN", "jaxon smith-njigba": "JSN", "marvin harrison": "MHJ", "christian mccaffrey": "CMC", "brian thomas": "BTJ" };
   function rbNick(name) {
     var k = String(name || "").toLowerCase().replace(/\./g, "").replace(/\s+(jr|sr|ii|iii|iv)$/, "").trim();
     return RB_NICK[k] || null;
   }
   function nameSpans(n, full) {
     var nk = full ? rbNick(full) : null;
-    if (nk) n = nk;
     n = String(n == null ? "" : n);
-    if (nk) return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n) + "</span>";
     n = String(n == null ? "" : n);
-    return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n.replace(/^[A-Z]\.\s+/, "")) + "</span>";
+    return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n.replace(/^[A-Z]\.\s+/, "")) + "</span>" + (nk ? '<span class="nk">' + escapeHtml(nk) + "</span>" : "");
   }
   function fieldIcon(f) { return f && FIELD_ICON[f] ? FIELD_ICON[f] : ""; }
 
@@ -6435,8 +6439,9 @@
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
     // Not started yet: the kickoff time (or Bye) takes the Act column and the name keeps its room.
-    var koText = status === "pre_game" ? metaShort : (status !== "in_progress" && status !== "complete" ? "Bye" : "");
-    var koHtml = koText ? '<span class="rb-ko"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + ' title="' + escapeHtml(meta) + '">' + escapeHtml(koText) + "</span>" : null;
+    var koText = status === "pre_game" ? meta : (status !== "in_progress" && status !== "complete" ? "Bye" : "");
+    var koShort = status === "pre_game" ? rbShortStart(p.game_start_ms) : koText;
+    var koHtml = koText ? '<span class="rb-ko"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + ' title="' + escapeHtml(meta) + '"><span class="ko-l">' + escapeHtml(meta || koText) + '</span><span class="ko-s">' + escapeHtml(koShort) + "</span></span>" : null;
     if (koHtml) meta = "";
     var shown = koHtml || num(p.actual).toFixed(2);
     var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaTot(p.player_id, state.live.week) : null;
@@ -6771,6 +6776,7 @@
     rbFlip(rb.cardEls, before, swapSkip);
     rbSwapFx(swapUp, swapDn, before);
     flapScan(grid);
+    rbFitCards();
 
     // Bring your card to the middle of the screen once, right after picking.
     if (rb.centerOnce && rb.cardEls[rb.me]) {
@@ -6787,6 +6793,23 @@
     document.documentElement.style.setProperty("--rb-stick", h + "px");
   }
   window.addEventListener("resize", rbStickOffset);
+  // Names show as first initial + last name. Only a name that would be cut off swaps to its nickname,
+  // and if names are still cut off the kickoff labels shrink from "Sun 4pm" to "Sun4p".
+  function rbFitCards() {
+    document.querySelectorAll("#rb-grid table.rb-table").forEach(function (tb) {
+      var names = [].slice.call(tb.querySelectorAll(".rb-n"));
+      var cut = function (n) { return n.scrollWidth > n.clientWidth + 1; };
+      var pass = function () {
+        names.forEach(function (n) { n.classList.remove("nick"); });
+        names.forEach(function (n) { if (n.querySelector(".nk") && cut(n)) n.classList.add("nick"); });
+        return names.some(cut);
+      };
+      var card = tb.closest(".rb-card") || tb;
+      card.classList.remove("rb-ks");
+      if (pass() && tb.querySelector(".ko-s")) { card.classList.add("rb-ks"); pass(); }
+    });
+  }
+  window.addEventListener("resize", rbFitCards);
 
   function openWhoPicker() {
     state.rb.asked = true;
