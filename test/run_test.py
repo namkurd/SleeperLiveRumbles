@@ -2844,6 +2844,24 @@ def scenario_ux_batch(browser):
     assert len(hh) == 1, f"card headers should all be the same height: {hh}"
     rh = page.evaluate("[...new Set([...document.querySelectorAll('#rumblin-view .rb-card tbody tr:not(.rb-bench-h)')].map(r => Math.round(r.getBoundingClientRect().height)))]")
     assert len(rh) == 1, f"every player row should be the same height, live or not: {rh}"
+    kos = page.evaluate("[...document.querySelectorAll('#rumblin-view .rb-ko .ko-l')].filter(e => e.offsetParent).map(e => e.textContent)")
+    assert kos and all(__import__('re').match(r"^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d+(am|pm)$|^Bye$", k) for k in kos), f"kickoff should read like 'Sun 4pm' when it fits: {kos[:5]}"
+    nicks = page.evaluate("document.querySelectorAll('#rumblin-view .rb-n.nick').length")
+    assert nicks == 0, "nicknames are only for names that are cut off"
+    # a name that would be cut off swaps to its nickname; one that fits does not
+    sw = page.evaluate("""(() => {
+      const n = document.querySelector('#rumblin-view .rb-card .rb-n');
+      const nf = n.querySelector('.nf'), keep = nf.textContent;
+      const nk = document.createElement('span'); nk.className = 'nk'; nk.textContent = 'ARSB'; n.appendChild(nk);
+      window.dispatchEvent(new Event('resize'));
+      const fits = n.classList.contains('nick');
+      nf.textContent = 'Wolfeschlegelsteinhausenbergerdorff Extra Long Name Here';
+      window.dispatchEvent(new Event('resize'));
+      const cutSwapped = n.classList.contains('nick');
+      nf.textContent = keep; nk.remove(); window.dispatchEvent(new Event('resize'));
+      return [fits, cutSwapped];
+    })()""")
+    assert sw == [False, True], f"nickname only when cut off: {sw}"
     page.unroute("**/v1/players/nfl")
     install_routes(page, {"**/v1/players/nfl": load("players.json")})
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
