@@ -1142,9 +1142,11 @@
   .rb-you.rb-opp { background: var(--bad); color: var(--bg); }
   .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
   /* Always reserve the chip row so every card's header is the same height. */
-  .rb-chips { display: flex; align-items: center; gap: 4px; height: 1.55em; margin-top: 2px; white-space: nowrap; overflow: hidden; font-size: 0.8rem; }
+  .rb-chips { display: flex; align-items: center; gap: 3px; height: 1.55em; margin-top: 2px; white-space: nowrap; overflow: visible; font-size: 0.8rem; }
   .rb-chips .rb-you { margin: 0; }
-  .rb-chips .rb-livecount { margin-top: 0; }
+  .rb-chips .rb-livecount { margin-top: 0; flex-shrink: 0; }
+  .rb-chips .rb-you { flex-shrink: 0; }
+  .rb-compact .rb-chips .rb-you, .rb-compact .rb-chips .rb-livecount { font-size: 0.52rem; padding: 0 3px; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
   .rb-tot { text-align: right; }
   .rb-tot .rb-a { font-size: 1.12rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1167,10 +1169,12 @@
   /* A nickname replaces the name only when the name would be cut off (see rbFitCards). */
   .rb-n.nick .nf, .rb-n.nick .nl { display: none !important; }
   .rb-n.nick .nk { display: inline !important; }
+  /* Still too long: drop the first initial. */
+  .rb-n.ln .nf { display: none !important; }
+  .rb-n.ln .nl { display: inline !important; }
   .rb-ko .ko-s { display: none; }
   .rb-ks .rb-ko .ko-l { display: none; }
   .rb-ks .rb-ko .ko-s { display: inline; }
-  .rb-compact .rb-n .nf { display: none; } .rb-compact .rb-n .nl { display: inline; }
   .rb-compact .rb-meta .rb-ml { display: none; }
   .rb-compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
@@ -6800,8 +6804,11 @@
       var names = [].slice.call(tb.querySelectorAll(".rb-n"));
       var cut = function (n) { return n.scrollWidth > n.clientWidth + 1; };
       var pass = function () {
-        names.forEach(function (n) { n.classList.remove("nick"); });
-        names.forEach(function (n) { if (n.querySelector(".nk") && cut(n)) n.classList.add("nick"); });
+        names.forEach(function (n) { n.classList.remove("nick", "ln"); });
+        names.forEach(function (n) {
+          if (!cut(n)) return;
+          if (n.querySelector(".nk")) n.classList.add("nick"); else n.classList.add("ln");
+        });
         return names.some(cut);
       };
       var card = tb.closest(".rb-card") || tb;
