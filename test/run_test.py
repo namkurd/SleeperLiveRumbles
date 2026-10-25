@@ -2869,6 +2869,11 @@ def scenario_ux_batch(browser):
     assert all(x == "nf" for x in nm), f"compact cards show first initial + last name: {nm}"
     page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
     assert page.evaluate("[...document.querySelectorAll('.nk')].every(e => getComputedStyle(e).display === 'none' || e.closest('.rb-n.nick'))"), "a nickname must never show next to the full name"
+    # phone compact cards: no hidden-column dead space, so the starters footer is as wide as the rows
+    page.set_viewport_size({"width": 390, "height": 800}); page.click("#rb-density button[data-d=compact]"); page.wait_for_timeout(300)
+    cols = page.evaluate("""(() => { const t = document.querySelector('#rumblin-view .rb-card table.rb-table'); const vis = r => [...r.children].filter(c => getComputedStyle(c).display !== 'none').length; return [vis(t.querySelector('tbody tr:not(.rb-bench-h)')), vis(t.querySelector('tfoot tr'))]; })()""")
+    assert cols[0] == cols[1], f"compact phone card: footer has a column the rows don't (dead space): {cols}"
+    page.set_viewport_size({"width": 1280, "height": 800}); page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
     # live rows alternate between time left and score every 3 seconds
     both = page.evaluate("document.querySelectorAll('#rumblin-view tr.rb-live .rb-alt2.both').length")
     if both:
