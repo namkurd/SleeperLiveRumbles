@@ -1141,6 +1141,10 @@
   .rb-card.opp { --c: var(--bad) !important; border-color: color-mix(in srgb, var(--bad) 70%, transparent); box-shadow: 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 35%, transparent); }
   .rb-you.rb-opp { background: var(--bad); color: var(--bg); }
   .rb-you { display: inline-block; margin: 2px 4px 0 0; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; color: var(--bg); background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 1.4; vertical-align: middle; }
+  /* Always reserve the chip row so every card's header is the same height. */
+  .rb-chips { display: flex; align-items: center; gap: 4px; height: 1.55em; margin-top: 2px; white-space: nowrap; overflow: hidden; font-size: 0.8rem; }
+  .rb-chips .rb-you { margin: 0; }
+  .rb-chips .rb-livecount { margin-top: 0; }
   .rb-livecount { display: inline-block; margin-top: 2px; font-size: 0.56rem; font-weight: 700; color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 3px; line-height: 1.3; vertical-align: middle; }
   .rb-tot { text-align: right; }
   .rb-tot .rb-a { font-size: 1.12rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1154,6 +1158,9 @@
   .rb-nmwrap { display: flex; align-items: baseline; min-width: 0; }
   .rb-nmwrap .pos-badge { flex-shrink: 0; align-self: center; }
   .rb-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Kickoff time (or Bye) for a player who hasn't started sits in the Act column. */
+  .rb-table td.rb-act .rb-ko { font-size: 0.62rem; font-weight: 600; opacity: 0.9; }
+  .rb-table tr.rb-off td.rb-act { opacity: 1; }
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
   .rb-n .nl { display: none; }
@@ -1177,6 +1184,8 @@
   .rb-table tr.rb-outrow .rb-meta { color: var(--text-dim) !important; opacity: 0.6; text-decoration: line-through; }
   .rb-table tr.rb-outrow td.rb-act { color: var(--text); }
   .rb-table td.rb-proj { color: var(--text-dim); }
+  /* One fixed row height for every starter, so cards line up whether or not a player is live. */
+  #rumblin-view .rb-table tbody tr:not(.rb-bench-h) td { height: 1.95em; }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
   #rumblin-view .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
   .rb-table tfoot td { border-top: 1px solid var(--panel-border) !important; font-weight: 700; padding: 5px 4px 7px; }
@@ -1187,7 +1196,7 @@
   .rb-compact .rb-table td { padding: 1px 3px; }
   .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
   /* Compact cards: every player is exactly one line, so cards line up. The live clock and score show in the row's hover text. */
-  .rb-compact tr.rb-live .rb-meta { display: none; }
+  .rb-compact tr.rb-live .rb-meta .rb-sc { display: none; }
   .rb-compact td { line-height: 1.25; }
   .rb-grid.totals { --rb-cardw: 190px; }
   /* Totals cards are narrow too: same stacked layout as phone compact
@@ -6210,7 +6219,17 @@
     def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 20 12" aria-hidden="true"><rect x="0" y="3.1" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><rect x="0" y="7.3" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><g fill="#fff" stroke="#587493" stroke-width=".95" stroke-linejoin="round"><path d="M.9 3.4L2.7.6l1.8 2.8v8H.9z"/><path d="M5.9 3.4L7.7.6l1.8 2.8v8H5.9z"/><path d="M10.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/><path d="M15.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/></g></svg></span>'
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
-  function nameSpans(n) {
+  // Widely used nicknames for names that get cut off.
+  var RB_NICK = { "amon-ra st brown": "ARSB", "jaxson smith-njigba": "JSN", "jaxon smith-njigba": "JSN", "marvin harrison": "MHJ", "christian mccaffrey": "CMC", "brian thomas": "BTJ", "kenneth walker": "K. Walker" };
+  function rbNick(name) {
+    var k = String(name || "").toLowerCase().replace(/\./g, "").replace(/\s+(jr|sr|ii|iii|iv)$/, "").trim();
+    return RB_NICK[k] || null;
+  }
+  function nameSpans(n, full) {
+    var nk = full ? rbNick(full) : null;
+    if (nk) n = nk;
+    n = String(n == null ? "" : n);
+    if (nk) return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n) + "</span>";
     n = String(n == null ? "" : n);
     return '<span class="nf">' + escapeHtml(n) + '</span><span class="nl">' + escapeHtml(n.replace(/^[A-Z]\.\s+/, "")) + "</span>";
   }
@@ -6345,7 +6364,7 @@
       else meta = formatGameStartLabel(p.game_start_ms);
       var a = num(p.actual), pre = st === "pre_game";
       var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
-      return '<div class="sc-p">' + badge + '<span class="sc-nw"><span class="sc-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (st === "in_progress" ? fieldIcon(p.field) : "") + "</span>" +
+      return '<div class="sc-p">' + badge + '<span class="sc-nw"><span class="sc-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + (st === "in_progress" ? fieldIcon(p.field) : "") + "</span>" +
         '<span class="sc-g">' + escapeHtml(meta || "") + '</span><span class="sc-a ' + (pre ? "" : a > 0 ? "gain" : a < 0 ? "loss" : "") + '">' + (pre ? "–" : a.toFixed(2)) + "</span></div>";
     }).join("");
     return '<div class="sc-side" style="--c:' + col + '"><div class="sc-sh"><b>' + escapeHtml(t.name) + "</b><span>" + list.length + " left</span></div>" +
@@ -6415,12 +6434,16 @@
     var cls = (out ? "rb-outrow" : live ? "rb-live" : "rb-off") + (status === "complete" ? " rb-final" : "") + (bench ? " rb-bench" : "") + (out ? " rb-out" : "") +
       (p.replacement ? " rb-repl" + (p.replacement === "confirmed" ? " rb-repl-ok" : "") : "");
     var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
-    var shown = status === "pre_game" ? "–" : num(p.actual).toFixed(2);
+    // Not started yet: the kickoff time (or Bye) takes the Act column and the name keeps its room.
+    var koText = status === "pre_game" ? metaShort : (status !== "in_progress" && status !== "complete" ? "Bye" : "");
+    var koHtml = koText ? '<span class="rb-ko"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + ' title="' + escapeHtml(meta) + '">' + escapeHtml(koText) + "</span>" : null;
+    if (koHtml) meta = "";
+    var shown = koHtml || num(p.actual).toFixed(2);
     var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaTot(p.player_id, state.live.week) : null;
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
-    return '<tr class="' + cls + '"' + (live && meta ? ' title="' + escapeHtml(meta) + '"' : "") + '><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
+    return '<tr class="' + cls + '"' + (live && meta ? ' title="' + escapeHtml(meta) + '"' : "") + '><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
       (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + escapeHtml(meta) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
-      '<td class="rb-act">' + fl(flapKey, shown, bench ? null : { pop: "act" }) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
+      '<td class="rb-act">' + (koHtml || fl(flapKey, shown, bench ? null : { pop: "act" })) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
   }
 
   function rbEpaFoot(t) {
@@ -6450,9 +6473,9 @@
     return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + fl("rb:" + t.rid + ":rum", t.rumbles) + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
       '<span class="rb-season" title="Season: ' + t.seasonRumbles + ' Rumbles, ' + t.seasonW + '-' + t.seasonL + ' head-to-head"><b>' + fl("rb:" + t.rid + ":season", t.seasonRumbles) + "</b> season <small>H2H " + t.seasonW + "-" + t.seasonL + "</small></span>" +
       '<span class="rb-rum-m"><b>' + fl("rb:" + t.rid + ":rumm", t.rumbles) + "</b> &middot; vs. Field " + t.vsField + "</span>" +
-      (me ? '<span class="rb-you">YOU</span>' : "") +
+      '<div class="rb-chips">' + (me ? '<span class="rb-you">YOU</span>' : "") +
       (isOpp ? '<span class="rb-you rb-opp">OPP</span>' : "") +
-      (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div>" +
+      (t.liveCount ? '<span class="rb-livecount">LIVE ×' + t.liveCount + "</span>" : "") + "</div></div>" +
       '<div class="rb-tot"><div class="rb-a">' + fl("rb:" + t.rid + ":act", t.act.toFixed(2), { pop: "act", cr: t.rid }) + '</div><div class="rb-p">proj ' + t.proj.toFixed(2) + "</div></div></div>" +
       '<table class="rb-table"><thead><tr><th></th><th>Act</th><th>Proj</th><th class="rb-epa" title="Expected points added">EPA</th></tr></thead><tbody>' + rows +
       (bench ? '<tr class="rb-bench-h"><td colspan="4">Bench</td></tr>' + bench : "") +
