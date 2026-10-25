@@ -2862,6 +2862,12 @@ def scenario_ux_batch(browser):
       return [fits, cutSwapped];
     })()""")
     assert sw == [False, True], f"nickname only when cut off: {sw}"
+    page.click("#rb-density button[data-d=compact]"); page.wait_for_timeout(300)
+    clip = page.evaluate("""[...document.querySelectorAll('#rumblin-view .rb-card .rb-chips > span')].filter(e => { const c = e.closest('.rb-card').getBoundingClientRect(), r = e.getBoundingClientRect(); return r.right > c.right - 3; }).length""")
+    assert clip == 0, "header pills (YOU / OPP / LIVE) must not be cut off by the card edge"
+    nm = page.evaluate("[...document.querySelectorAll('#rumblin-view .rb-n')].filter(e => e.offsetParent).slice(0, 3).map(e => [...e.children].filter(c => getComputedStyle(c).display !== 'none').map(c => c.className).join())")
+    assert all(x == "nf" for x in nm), f"compact cards show first initial + last name: {nm}"
+    page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
     page.unroute("**/v1/players/nfl")
     install_routes(page, {"**/v1/players/nfl": load("players.json")})
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
