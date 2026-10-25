@@ -2868,6 +2868,7 @@ def scenario_ux_batch(browser):
     nm = page.evaluate("[...document.querySelectorAll('#rumblin-view .rb-n')].filter(e => e.offsetParent).slice(0, 3).map(e => [...e.children].filter(c => getComputedStyle(c).display !== 'none').map(c => c.className).join())")
     assert all(x == "nf" for x in nm), f"compact cards show first initial + last name: {nm}"
     page.click("#rb-density button[data-d=full]"); page.wait_for_timeout(300)
+    assert page.evaluate("[...document.querySelectorAll('.nk')].every(e => getComputedStyle(e).display === 'none' || e.closest('.rb-n.nick'))"), "a nickname must never show next to the full name"
     # live rows alternate between time left and score every 3 seconds
     both = page.evaluate("document.querySelectorAll('#rumblin-view tr.rb-live .rb-alt2.both').length")
     if both:
