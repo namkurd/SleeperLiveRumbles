@@ -29,6 +29,7 @@ import gzip
 import io
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -43,25 +44,29 @@ PBP_URL = "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_
 PLAYER_IDS_URL = "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv"
 SLEEPER_API = "https://api.sleeper.app/v1"
 SLEEPER_STATE = "https://api.sleeper.app/v1/state/nfl"
+SLEEPER_PLAYERS = "https://api.sleeper.app/v1/players/nfl"
 SLEEPER_PROJ = "https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular"
+THREE_AND_OUT_PLAYS = 4   # nflverse counts the punt in a drive's plays: three downs plus the punt
 TEAM_FIX = {"LA": "LAR"}          # nflverse -> Sleeper team abbreviations
 REAL_SECONDS_PER_GAME_SECOND = 3.2   # only used past the last drive anchor of a game
 APPROX_BELOW = 0.9
 
 # Used only when the league's scoring_settings cannot be fetched and none is cached.
+# The league's own scoring_settings (DTF Club, 2026), kept as the fallback for when Sleeper cannot be reached.
 DEFAULT_SCORING = {
-    "pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "pass_2pt": 2, "pass_sack": -0.25,
-    "rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
-    "rec": 1, "rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2,
-    "fum": -0.25, "fum_lost": -2, "xpm": 1,
-    "bonus_fd_qb": 0.2, "bonus_fd_rb": 0.5, "bonus_fd_wr": 0.5, "bonus_fd_te": 0.5,
-    "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3, "fgm_40_49": 3, "fgm_50p": 3, "fgm_yds_over_30": 0.1, "fgmiss": -1,
-    "sack": 1, "int": 2, "fum_rec": 2, "safe": 2, "def_td": 6, "blk_kick": 2, "def_st_td": 6, "tkl_loss": 0.35, "qb_hit": 0.2,
-    # D/ST (README, "A defense's own Actual number"): a flat bonus for the bracket it lands in, plus a small per-unit term.
-    "pts_allow_0": 4.62, "pts_allow_1_6": 4.62, "pts_allow_7_13": 4.62, "pts_allow_14_20": 4.62, "pts_allow_21_27": 4.62,
-    "pts_allow_28_34": 4.62, "pts_allow_35p": 4.62, "pts_allow": -0.23,
-    "yds_allow_0_100": 5.75, "yds_allow_100_199": 5.75, "yds_allow_200_299": 5.75, "yds_allow_300_349": 5.75, "yds_allow_350_399": 5.75,
-    "yds_allow_400_449": 5.75, "yds_allow_450_499": 5.75, "yds_allow_500_549": 5.75, "yds_allow_550p": 5.75, "yds_allow": -0.02,
+    "blk_kick": 2.0, "blk_kick_ret_yd": 0.01, "bonus_fd_qb": 0.2, "bonus_fd_rb": 0.5, "bonus_fd_te": 0.5,
+    "bonus_fd_wr": 0.5, "def_2pt": 4.0, "def_3_and_out": 0.5, "def_4_and_stop": 1.0, "def_st_ff": 1.0,
+    "def_st_fum_rec": 1.0, "def_st_td": 6.0, "def_td": 6.0, "ff": 0.5, "fg_ret_yd": 0.01, "fgm": 3.0,
+    "fgm_yds_over_30": 0.1, "fgmiss": -1.0, "fum": -0.5, "fum_lost": -1.5, "fum_rec": 1.5, "fum_rec_td": 6.0,
+    "fum_ret_yd": 0.04, "int": 2.0, "int_ret_yd": 0.04, "kr_yd": 0.04, "pass_2pt": 2.0, "pass_int": -2.0,
+    "pass_int_td": -2.0, "pass_sack": -0.25, "pass_td": 4.0, "pass_yd": 0.04, "pr_yd": 0.04, "pts_allow": -0.23,
+    "pts_allow_0": 4.62, "pts_allow_14_20": 4.62, "pts_allow_1_6": 4.62, "pts_allow_21_27": 4.62,
+    "pts_allow_28_34": 4.62, "pts_allow_35p": 4.62, "pts_allow_7_13": 4.62, "rec_0_4": 1.0, "rec_10_19": 1.0,
+    "rec_20_29": 1.0, "rec_2pt": 2.0, "rec_30_39": 1.0, "rec_40p": 1.0, "rec_5_9": 1.0, "rec_td": 6.0, "rec_yd": 0.1,
+    "rush_2pt": 2.0, "rush_td": 6.0, "rush_yd": 0.1, "sack": 1.0, "safe": 2.0, "st_ff": 1.0, "st_fum_rec": 1.0,
+    "st_td": 6.0, "tkl_loss": 0.2, "xpm": 1.0, "xpmiss": -0.33, "yds_allow": -0.02, "yds_allow_0_100": 5.75,
+    "yds_allow_100_199": 5.75, "yds_allow_200_299": 5.75, "yds_allow_300_349": 5.75, "yds_allow_350_399": 5.75,
+    "yds_allow_400_449": 5.75, "yds_allow_450_499": 5.75, "yds_allow_500_549": 5.75, "yds_allow_550p": 5.75,
 }
 
 
@@ -101,6 +106,19 @@ def pts_allowed_points(scoring: dict, allowed: int) -> float:
     key = ("pts_allow_0" if allowed <= 0 else "pts_allow_1_6" if allowed <= 6 else "pts_allow_7_13" if allowed <= 13 else "pts_allow_14_20" if allowed <= 20
            else "pts_allow_21_27" if allowed <= 27 else "pts_allow_28_34" if allowed <= 34 else "pts_allow_35p")
     return sc(scoring, key) + allowed * sc(scoring, "pts_allow")
+
+
+REC_BUCKETS = (("rec_0_4", 0, 4), ("rec_5_9", 5, 9), ("rec_10_19", 10, 19), ("rec_20_29", 20, 29), ("rec_30_39", 30, 39), ("rec_40p", 40, 10 ** 6))
+
+
+def rec_points(scoring: dict, yds: float) -> float:
+    """A catch is worth `rec`, plus the value of the yardage bucket it falls in (this league scores them that way, 1 each)."""
+    pts = sc(scoring, "rec")
+    for key, lo, hi in REC_BUCKETS:
+        if lo <= max(0.0, yds) <= hi:
+            pts += sc(scoring, key)
+            break
+    return pts
 
 
 def fd_points(scoring: dict, pos: str, generic: str) -> float:
@@ -183,7 +201,7 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
                 "pass_fd" if row.get("first_down_pass") == "1" else "")
             if complete:
                 ry = num(row, "receiving_yards")
-                add(row.get("receiver_player_id"), sc(scoring, "rec") + sc(scoring, "rec_tgt") + ry * sc(scoring, "rec_yd") + (sc(scoring, "rec_td") if ptd else 0),
+                add(row.get("receiver_player_id"), rec_points(scoring, ry) + sc(scoring, "rec_tgt") + ry * sc(scoring, "rec_yd") + ((sc(scoring, "rec_td") + (sc(scoring, "rec_td_40p") if ry >= 40 else 0)) if ptd else 0),
                     f"{int(ry)} yd TD catch" if ptd else f"{int(ry)} yd catch",
                     "rec_fd" if row.get("first_down_pass") == "1" else "", bonus="bonus_rec_")
             else:
@@ -219,7 +237,12 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
     elif ptype == "punt":
         if row.get("punt_blocked") == "1":
             add_def(deft, sc(scoring, "blk_kick"), "blocked punt")
+        # a drive that ends in a punt after three plays without a first down
+        if row.get("fixed_drive_result") == "Punt" and num(row, "drive_play_count") <= THREE_AND_OUT_PLAYS and num(row, "drive_first_downs") == 0:
+            add_def(deft, sc(scoring, "def_3_and_out"), "3-and-out")
 
+    if row.get("fourth_down_failed") == "1" and ptype in ("pass", "run"):
+        add_def(deft, sc(scoring, "def_4_and_stop"), "4th-down stop")
     if ptype in ("pass", "run"):
         if row.get("tackled_for_loss") == "1":
             add_def(deft, sc(scoring, "tkl_loss"), "tackle for loss")
@@ -238,9 +261,19 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
                 add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), "fumble return TD")
     if row.get("safety") == "1":
         add_def(deft, sc(scoring, "safe"), "safety")
+    if ptype in ("kickoff", "punt") and row.get("fumble") == "1":
+        # a fumble on a kick: the unit that forced it, and the unit that recovered it
+        if row.get("forced_fumble_player_1_team"):
+            add_def(team_of(row["forced_fumble_player_1_team"]), sc(scoring, "def_st_ff"), "forced fumble")
+        rec_t, fum_t = team_of(row.get("fumble_recovery_1_team") or ""), team_of(row.get("fumbled_1_team") or "")
+        if rec_t and rec_t != fum_t:
+            add_def(rec_t, sc(scoring, "def_st_fum_rec"), "fumble recovery")
+    if ptype in ("kickoff", "punt"):
+        rs = row.get("punt_returner_player_id") if ptype == "punt" else row.get("kickoff_returner_player_id")
+        add(rs, num(row, "return_yards") * sc(scoring, "pr_yd" if ptype == "punt" else "kr_yd"), "")
     if ptype in ("kickoff", "punt") and td and row.get("return_touchdown") == "1":
         rt = row.get("punt_returner_player_id") or row.get("kickoff_returner_player_id")
-        add(rt, sc(scoring, "def_st_td"), "return TD", team=td_team)
+        add(rt, sc(scoring, "st_td"), "return TD", team=td_team)
         add_def(td_team, sc(scoring, "def_st_td"), "return TD")
     return out
 
@@ -337,6 +370,7 @@ def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[s
     partial=True is for a week still in progress: only the games already in the play-by-play are built, and only the
     players in those games are reconciled (everyone else has simply not scored yet, as far as the plays know)."""
     want = {pid: float(p) for starters in lineup.values() for pid, p in starters}
+    g2s = match_by_name(g2s, rows, set(want))
     by_game: dict[str, list[dict]] = {}
     for r in rows:
         if int(float(r["week"])) == week and (r.get("season_type") or "REG") == "REG":
@@ -533,12 +567,45 @@ def fetch_projections(season: int, week: int, scoring: dict) -> dict[str, float]
 
 
 def id_crosswalk() -> dict[str, str]:
+    """gsis id -> Sleeper id: the community table first, then Sleeper's own gsis_id (it has the newest players)."""
     out: dict[str, str] = {}
     text = requests.get(PLAYER_IDS_URL, timeout=120).text
     for row in csv.DictReader(io.StringIO(text)):
         g, s = row.get("gsis_id"), row.get("sleeper_id")
         if g and s and g != "NA" and s != "NA":
             out[g] = s
+    try:
+        PLAYERS.update(requests.get(SLEEPER_PLAYERS, timeout=120).json())
+        for pid, p in PLAYERS.items():
+            if p.get("gsis_id") and p["gsis_id"] not in out:
+                out[p["gsis_id"]] = pid
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] Sleeper's own player ids unavailable ({e})", file=sys.stderr)
+    return out
+
+
+PLAYERS: dict = {}   # Sleeper's player list, filled in by id_crosswalk (used to match the few players no id table knows)
+
+
+def match_by_name(g2s: dict[str, str], rows: list[dict], want: set[str]) -> dict[str, str]:
+    """Players in a lineup that no id table maps (a brand-new kicker, say): match nflverse's "T.Smack" on a team to
+    Sleeper's "Trey Smack" of that team. Only an unambiguous match counts."""
+    missing = [sid for sid in want if sid.isdigit() and sid not in g2s.values() and PLAYERS.get(sid)]
+    if not missing:
+        return g2s
+    seen: dict[tuple[str, str], set[str]] = {}
+    for r in rows:
+        for role in ("passer", "rusher", "receiver", "kicker", "punter"):
+            gid, nm = r.get(f"{role}_player_id"), r.get(f"{role}_player_name")
+            if gid and nm and r.get("posteam"):
+                seen.setdefault((nm, team_of(r["posteam"])), set()).add(gid)
+    out = dict(g2s)
+    for sid in missing:
+        p = PLAYERS[sid]
+        first, last = (p.get("first_name") or " ")[:1], re.sub(r"\s+(Jr\.?|Sr\.?|II|III|IV)$", "", p.get("last_name") or "", flags=re.I)
+        hits = seen.get((f"{first}.{last}", team_of(p.get("team") or "")), set())
+        if len(hits) == 1:
+            out[next(iter(hits))] = sid
     return out
 
 

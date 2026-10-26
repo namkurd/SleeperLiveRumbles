@@ -6960,8 +6960,9 @@
     return big;
   }
 
-  // One notch per scoring play. Points credited within WP_PLAY seconds are the same play (a TD pass and its catch).
-  var WP_PLAY = 5;
+  // One notch per scoring play that matters: worth more than WP_NOTCH_PTS points to someone, or moving the win probability by
+  // WP_NOTCH_SWING or more. Points credited within WP_PLAY seconds are the same play (a TD pass and its catch).
+  var WP_PLAY = 5, WP_NOTCH_PTS = 2, WP_NOTCH_SWING = 0.03;
   function wpNotches(model) {
     var list = [], out = [];
     Object.keys(model.evs).forEach(function (sid) {
@@ -6978,8 +6979,9 @@
       n.ev.sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); });
       n.x = model.x(n.t);
       n.side = n.ev[0].side;
+      n.swing = model.at(n.t1).p - model.at(n.t - 1).p;
     });
-    return out;
+    return out.filter(function (n) { return Math.abs(n.ev[0].pts) > WP_NOTCH_PTS || Math.abs(n.swing) >= WP_NOTCH_SWING; });
   }
   // The week's kickoff windows (Thu night, Sun 9am, Sun 1pm, ...): games that start within 90 minutes of each other.
   function wpWindows(doc) {
@@ -7437,7 +7439,7 @@
       // Numbered badges that would sit on top of each other are nudged apart: the nearest clear spot above or below.
       var clear = function (y) { return y >= mt + r && y <= mt + ph - r && !placed.some(function (q) { return Math.hypot(q[0] - cx, q[1] - y) < 2 * r + 1; }); };
       if (!clear(cy)) {
-        for (var k = 1; k <= 40; k++) {
+        for (var k = 1; k <= 3; k++) {   // a badge stays within a few badge-heights of its play; past that it just overlaps
           var up = y0 - k * (r + 1), dn = y0 + k * (r + 1);
           if (clear(up)) { cy = up; break; }
           if (clear(dn)) { cy = dn; break; }

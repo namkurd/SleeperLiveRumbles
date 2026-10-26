@@ -29,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("WP_DATA_DIR", os.path.join(HERE, "wp_live"))
 LIVE_INTERVAL_SECONDS = int(os.environ.get("WP_INTERVAL", "60"))
 COMMIT_EVERY_SECONDS = 600
-SEED_VERSION = 2   # bump when the way earlier games are rebuilt changes: a recording seeded by an older one starts over
+SEED_VERSION = 3   # bump when the way earlier games are rebuilt changes: a recording seeded by an older one starts over
 MAX_RUN_MINUTES = 330
 CLOCK_EVERY_SECONDS = 45
 PROJ_URL = "https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular"

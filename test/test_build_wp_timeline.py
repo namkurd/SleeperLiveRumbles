@@ -32,10 +32,10 @@ c = comps(play(play_type="pass", interception="1", passer_player_id="G-QB"))
 assert c == {("1", -2.0): "interception", ("SEA", 2.0): "interception"}, c
 c = comps(play(play_type="pass", sack="1", passer_player_id="G-QB"))
 assert c == {("SEA", 1.0): "sack", ("1", -0.25): "sacked"}, c
-# fumble lost on a run: rusher yards and -2 (and -0.25 for the fumble); the defense recovers
+# fumble lost on a run: rusher yards, -1.5 for losing it and -0.5 for fumbling; the defense recovers
 c = comps(play(play_type="run", rushing_yards="5", rusher_player_id="G-RB", fumble="1", fumble_lost="1", fumbled_1_player_id="G-RB",
                fumble_recovery_1_team="SEA"))
-assert c[("3", round(0.5 - 2 - 0.25, 2))] == "fumble lost" and c[("SEA", 2.0)] == "fumble recovery", c
+assert c[("3", round(0.5 - 1.5 - 0.5, 2))] == "fumble lost" and c[("SEA", 1.5)] == "fumble recovery", c   # the league: -1.5 lost, -0.5 any fumble, +1.5 recovery
 # kicker: 45 yd field goal = 3 + 15 * 0.1; a miss is -1; no_play scores nothing
 c = comps(play(play_type="field_goal", field_goal_result="made", kick_distance="45", kicker_player_id="G-K"))
 assert c == {("4", 4.5): "45 yd field goal"}, c
@@ -45,6 +45,20 @@ assert comps(play(play_type="no_play", passer_player_id="G-QB")) == {}
 # two-point conversions
 c = comps(play(play_type="pass", two_point_attempt="1", two_point_conv_result="success", passer_player_id="G-QB", receiver_player_id="G-WR", passing_yards="2"))
 assert c == {("1", 2.0): "2-pt pass", ("2", 2.0): "2-pt catch"}, c
+
+# this league scores catches by yardage bucket (rec is 0), and the D/ST for 3-and-outs, 4th-down stops and kick fumbles
+r = dict(play(play_type="pass", complete_pass="1", passing_yards="3", receiving_yards="3", passer_player_id="G-QB", receiver_player_id="G-WR"))
+assert {(sid, round(p, 2)) for sid, p, label, team in B.play_components(r, S, G2S, POS) if sid == "2"} == {("2", 1.3)}, "a 3-yard catch: 1.0 (the 0-4 bucket) + 0.3 yards"
+r = dict(play(play_type="pass", complete_pass="1", passing_yards="45", receiving_yards="45", passer_player_id="G-QB", receiver_player_id="G-WR"))
+assert {(sid, round(p, 2)) for sid, p, label, team in B.play_components(r, S, G2S, POS) if sid == "2"} == {("2", 5.5)}, "a 45-yard catch: bucket 1.0 + yards 4.5"
+r = play(play_type="punt", fixed_drive_result="Punt", drive_play_count="4", drive_first_downs="0", posteam="LA", defteam="SEA")
+assert {(sid, p) for sid, p, label, team in B.play_components(r, S, G2S, POS)} == {("SEA", 0.5)}, "a 3-and-out is worth 0.5 to the defense"
+r = play(play_type="punt", fixed_drive_result="Punt", drive_play_count="6", drive_first_downs="1")
+assert B.play_components(r, S, G2S, POS) == [], "not a 3-and-out"
+r = play(play_type="run", fourth_down_failed="1", rusher_player_id="G-RB", rushing_yards="1")
+assert ("SEA", 1.0) in {(sid, p) for sid, p, label, team in B.play_components(r, S, G2S, POS)}, "a 4th-down stop is worth 1.0"
+r = play(play_type="kickoff", fumble="1", forced_fumble_player_1_team="LA", fumbled_1_team="SEA", fumble_recovery_1_team="LA")
+assert {(sid, p) for sid, p, label, team in B.play_components(r, S, G2S, POS)} == {("LAR", 2.0)}, "kick fumble: forced (1.0) and recovered (1.0) by the same special-teams unit"
 
 # a league that scores receptions as a position bonus, field goals per kick and per yard, and D/ST per point and per yard
 L = {"pass_yd": 0.04, "rec": 0, "bonus_rec_te": 1, "bonus_rec_wr": 0.5, "rec_yd": 0.1, "fgm": 3, "fgm_yds_over_30": 0.1, "fgmiss": -1,
