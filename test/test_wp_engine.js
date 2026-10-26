@@ -29,8 +29,8 @@ const source = [
 ].join("\n");
 const sb = {};
 vm.createContext(sb);
-vm.runInContext(source + "\nthis.E = { wpRem, wpClockLabel, wpBuild, wpMarks, wpPlaysNear, wpDone };", sb);
-const { wpRem, wpClockLabel, wpBuild, wpMarks, wpPlaysNear, wpDone } = sb.E;
+vm.runInContext(source + "\nthis.E = { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDone };", sb);
+const { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDone } = sb.E;
 
 let failures = 0;
 function check(name, ok, detail) { if (ok) console.log("  ok  " + name); else { failures++; console.log("  FAIL " + name + (detail ? " -- " + detail : "")); } }
@@ -96,9 +96,18 @@ check("finds the big plays, ranked", marks.length >= 1 && marks[0].rank === 1 &&
 check("the 75-yard TD is the biggest", marks[0].label === "75 yd TD pass" && marks[0].who === "Quinn" && marks[0].side === 1, JSON.stringify(marks[0]));
 check("plays within 150s of each other are one swing", !marks.some((x) => x.t0 === 1000 && x.n === 1), JSON.stringify(marks.filter((x) => x.t0 === 1000)));
 check("at most five", wpMarks(doc, m, names, { min: 0, max: 5 }).length <= 5);
-const near = wpPlaysNear(m, names, 1000, 60, 4);
-check("plays near a moment, biggest first", near.length === 2 && near[0].who === "Rex" && near[0].side === -1 && near[1].who === "Quinn", JSON.stringify(near));
-check("nothing near an empty moment", wpPlaysNear(m, names, 4000, 60, 4).length === 0);
+const notches = wpNotches(m);
+check("one notch per scoring play (a TD pass and its catch are one)", notches.length === 4 && notches.every((n, i) => !i || n.t >= notches[i - 1].t), JSON.stringify(notches.map((n) => [n.t, n.ev.length])));
+check("a notch lists its plays, biggest first, and whose they were", notches[0].t === 1000 && notches[0].ev.length === 2 && notches[0].ev[0].sid === "a2" && notches[0].side === -1, JSON.stringify(notches[0]));
+check("end-of-game corrections are not notches", wpNotches(wpBuild(Object.assign({}, doc, { ev: doc.ev.concat([[11000, "a1", 1.5, "scoring adjustment"]]) }), mine, theirs, {})).length === 4);
+check("a notch has its place on the axis", notches.every((n) => n.x >= 0 && n.x <= 1) && notches[0].x < notches[3].x);
+const on = wpScrub(m, notches, notches[2].x + 0.002, 300, 6), off = wpScrub(m, notches, 0.5 * (notches[1].x + notches[2].x), 300, 6);
+check("scrubbing near a notch snaps to its play", on.notch && on.notch.t === notches[2].t && on.t === notches[2].t, JSON.stringify(on.notch && on.notch.t));
+check("anywhere else is just a moment (no plays)", off.notch === null && off.t > notches[1].t && off.t < notches[2].t, JSON.stringify(off));
+check("the end of the line is the furthest you can scrub", wpScrub(m, notches, 1, 300, 6).t <= m.end);
+const wins = wpWindows(doc);
+check("kickoff windows: one per cluster of games", wins.length === 2 && wins[0].t === 0 && wins[1].t === 3 * DAY, JSON.stringify(wins));
+check("games kicking off within 90 minutes share a window", wpWindows({ g: { a: { ko: 0 }, b: { ko: 4000 }, c: { ko: 13000 } } }).length === 2);
 
 if (failures) { console.log("\n" + failures + " FAILED"); process.exit(1); }
 console.log("\nALL win-probability engine UNIT TESTS PASSED");

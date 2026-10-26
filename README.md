@@ -1822,12 +1822,11 @@ Each block in **Scenarios** (its own tab, also under Rumblin' > Me) has a small 
 row: your chance to win that Rumble across the whole week, from the first kickoff (or your first player's game) to
 the last whistle, with your color filling above 50% and theirs below. Idle stretches between game days are squeezed
 so Thursday, Sunday and Monday sit side by side; dashed ticks mark the squeezed gaps. The percentage beside the chart
-is the same number as the block's "% to win" (they come from one model), and a finished Rumble reads Won / Lost.
+is the same number as the block's "% to win" (they come from one model). A Rumble reads Won / Lost only once every game of the week is final on the scoreboard; a recording that has not listed a later game yet gets it added from the schedule, so a week with games left never reads as finished.
 
 **Tap a chart to expand it.** The expanded view shows the same chart larger, with the biggest swings numbered on it
 and ranked below, the 10 most impactful plays (the play, who made it, when it happened and where the game clock stood, the points, and the win
-probability before and after). Plays within two and a half minutes of each other count as one swing; badges that would overlap on the chart are nudged apart. On a computer, hover; on a phone, touch or drag across
-the chart, to see the scoring plays at that moment, the running score and the clock. **Share link** sends a link (`?wp=WEEK.ME.OPPONENT`) that opens this same chart for whoever gets it, signed in or not, so they can hover or drag through the week themselves (it opens the phone's share sheet, or copies the link). **Image** makes one picture of the
+probability before and after). Plays within two and a half minutes of each other count as one swing; badges that would overlap on the chart are nudged apart. Every scoring play is a **notch** along the bottom of the chart (in the color of whose play it was), placed at its time: the real clock time from the play-by-play, or the minute the recorder saw it. Hover (or touch and drag) anywhere on the chart for the time, the score and the win probability at that moment; stop on a notch to see the play (who, what, points, game clock). The small chart in each block works the same way: scrub it, and tap the corner icon (or click, with a mouse) to expand it. The kickoff windows of the week (Thu 8pm, Sun 9am, Sun 1pm, Sun 4pm, Sun 8pm, Mon 8pm, whichever exist) are named along the bottom. The ranked plays sit beneath the chart. **Share link** sends a link (`?wp=WEEK.ME.OPPONENT`) that opens this same chart for whoever gets it, signed in or not, so they can hover or drag through the week themselves (it opens the phone's share sheet, or copies the link). **Image** makes one picture of the
 chart plus the ranked plays and their timing, to save or share.
 
 **The model** is the one behind "% to win": the gap now, plus what each player is still expected to add, with a spread

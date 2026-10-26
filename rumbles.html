@@ -1502,16 +1502,26 @@
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
   .sc-hl { font-size: 0.72rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
   /* Win-probability chart in Scenarios */
-  .sc-wpm { position: relative; height: 46px; margin: 6px 0 4px; padding-right: 44px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
+  .sc-wpm { position: relative; height: 62px; margin: 6px 0 4px; padding-right: 44px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
   .sc-wpm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .wpm-plot { position: absolute; left: 0; right: 44px; top: 0; bottom: 0; }
+  .wpm-plot { position: absolute; left: 0; right: 44px; top: 0; bottom: 16px; touch-action: pan-y; }
+  .sc-wpm { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .wpm-notch { stroke-width: 1.6; vector-effect: non-scaling-stroke; opacity: 0.95; }
+  .wpm-cur { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; background: var(--text-dim); pointer-events: none; }
+  .wpm-cur[hidden] { display: none; }
+  .wpm-axis { position: absolute; left: 0; right: 44px; bottom: 1px; height: 13px; pointer-events: none; }
+  .wpm-axis span { position: absolute; transform: translateX(-35%); font-size: 0.56rem; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .wpm-axis span:first-child { transform: none; }
+  .wpm-exp { position: absolute; right: 12px; bottom: 15px; width: 22px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.8rem; line-height: 1; cursor: pointer; }
+  #wp-tipm { position: fixed; z-index: 70; max-width: min(92vw, 340px); white-space: normal; }
+  #wp-tipm .tt-d div { margin-top: 1px; }
   .sc-wpm svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
   .sc-wpm.empty { cursor: default; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; color: var(--text-dim); }
   .wpm-area { fill-opacity: 0.4; } .wpm-mid { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
   .wpm-div { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; opacity: 0.45; }
   .wpm-line { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
   .wpm-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; margin: -4px 0 0 -4px; box-shadow: 0 0 0 2px var(--panel); }
-  .wpm-pct { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 44px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .wpm-pct { position: absolute; right: 0; top: 19px; transform: translateY(-50%); width: 44px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .wpm-ap { position: absolute; left: 6px; top: 2px; font-size: 0.56rem; color: var(--text-dim); }
   .sc-blk.sc-done { padding-bottom: 8px; }
   .wp-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(5,7,12,0.66); display: flex; align-items: center; justify-content: center; padding: 12px; }
@@ -1523,10 +1533,12 @@
   .wp-btns { display: flex; gap: 6px; flex-shrink: 0; }
   .wp-btns button { min-width: 34px; padding: 6px 11px; }
   @media (max-width: 700px) { .wp-btns button { padding: 5px 9px; font-size: 0.72rem; } .wp-title small { display: block; margin: 1px 0 0; } }
-  .wp-body { display: flex; gap: 14px; align-items: flex-start; }
-  .wp-chartwrap { position: relative; flex: 1 1 auto; min-width: 0; touch-action: pan-y; }
+  .wp-body { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+  .wp-chartwrap { position: relative; flex: 0 0 auto; width: 100%; min-width: 0; touch-action: pan-y; }
   .wp-chartwrap svg { display: block; max-width: 100%; }
-  .wp-side { flex: 0 0 300px; min-width: 0; }
+  .wp-side { width: 100%; min-width: 0; }
+  /* The plays sit beneath the chart; on a wide card they run in two columns so ten still fit without a long scroll. */
+  @media (min-width: 701px) { .wp-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; } .wp-list li:nth-child(2) { border-top: 0; } }
   .wp-listh { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
   .wp-listh[hidden] { display: none; }
   .wp-list { list-style: none; margin: 0; padding: 0; }
@@ -1542,10 +1554,11 @@
   .wp-hint { font-size: 0.64rem; color: var(--text-dim); margin: 8px 0 0; }
   #wp-tipx { z-index: 6; }
   #wp-tipx .tt-d div { margin-top: 1px; }
-  @media (max-width: 700px) { .wp-body { flex-direction: column; gap: 8px; } .wp-side { flex-basis: auto; width: 100%; } .wp-card { padding: 10px 10px 12px; } }
+  @media (max-width: 700px) { .wp-body { gap: 8px; } .wp-card { padding: 10px 10px 12px; } }
   @media (max-height: 500px) and (orientation: landscape) {
     .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 8px 10px; overflow: hidden; }
-    .wp-body { flex-direction: row; gap: 10px; } .wp-side { flex: 0 0 38%; max-height: calc(100vh - 76px); overflow: auto; } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
+    /* Too short to stack: the chart and the plays share the width instead, so nothing scrolls. */
+    .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-chartwrap { flex: 1 1 auto; width: auto; } .wp-side { flex: 0 0 38%; width: auto; max-height: calc(100vh - 76px); overflow: auto; } .wp-list { display: block; } .wp-list li:nth-child(2) { border-top: 1px solid var(--panel-border); } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
   }
   @media (prefers-reduced-motion: no-preference) { .wpm-dot { transition: left 0.4s, top 0.4s; } }
 
@@ -1783,7 +1796,7 @@
     </div>
     <div class="wp-body">
       <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div></div>
-      <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><ol class="wp-list" id="wp-list"></ol><p class="wp-hint">Hover or drag across the chart to see the scoring plays at that moment.</p></div>
+      <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><ol class="wp-list" id="wp-list"></ol><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
 </div>
@@ -6462,9 +6475,17 @@
   // Win probability: tap a mini chart to open it; the sheet's hover, close and share; the Scenarios week picker.
   (function () {
     var view = document.getElementById("rb-scen-view"), chart = document.getElementById("wp-chartwrap"), rs = null;
+    view.addEventListener("pointerdown", function (e) { wpPtr = e.pointerType || "mouse"; wpMiniMove(e); });
+    view.addEventListener("pointermove", wpMiniMove);
+    view.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") wpMiniOff(); });
+    document.addEventListener("pointerdown", function (e) { if (!(e.target.closest && (e.target.closest(".sc-wpm") || e.target.closest("#wp-tipm")))) wpMiniOff(); });
     view.addEventListener("click", function (e) {
       var el = e.target.closest && e.target.closest("[data-wp]");
-      if (el && !el.classList.contains("empty")) wpOpen(el.getAttribute("data-wp"));
+      if (!el || el.classList.contains("empty")) return;
+      // With a finger a tap scrubs; the corner icon expands. With a mouse a click expands.
+      if (wpPtr === "touch" && !(e.target.closest && e.target.closest(".wpm-exp"))) return;
+      wpMiniOff();
+      wpOpen(el.getAttribute("data-wp"));
     });
     view.addEventListener("keydown", function (e) {
       var el = e.target.closest && e.target.closest("[data-wp]");
@@ -6932,16 +6953,39 @@
     return big;
   }
 
-  // Scoring plays near a moment (for the hover tooltip), biggest first.
-  function wpPlaysNear(model, names, t, win, max) {
-    var out = [];
+  // One notch per scoring play. Points credited within WP_PLAY seconds are the same play (a TD pass and its catch).
+  var WP_PLAY = 5;
+  function wpNotches(model) {
+    var list = [], out = [];
     Object.keys(model.evs).forEach(function (sid) {
       model.evs[sid].forEach(function (e) {
-        if (Math.abs(e[0] - t) <= win && e[0] <= model.end) out.push({ t: e[0], sid: sid, who: names[sid] || "", label: e[3] === "scoring adjustment" ? "stat correction" : e[3], pts: e[2], side: model.sides[sid] });
+        if (e[0] <= model.end && e[3] !== "scoring adjustment" && Math.abs(e[2]) >= 0.005) list.push({ t: e[0], sid: sid, pts: e[2], label: e[3], side: model.sides[sid] });
       });
     });
-    out.sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); });
-    return out.slice(0, max || 4);
+    list.sort(function (a, b) { return a.t - b.t; });
+    list.forEach(function (e) {
+      var n = out[out.length - 1];
+      if (n && e.t - n.t1 <= WP_PLAY) { n.t1 = e.t; n.ev.push(e); } else out.push({ t: e.t, t1: e.t, ev: [e] });
+    });
+    out.forEach(function (n) {
+      n.ev.sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); });
+      n.x = model.x(n.t);
+      n.side = n.ev[0].side;
+    });
+    return out;
+  }
+  // The week's kickoff windows (Thu night, Sun 9am, Sun 1pm, ...): games that start within 90 minutes of each other.
+  function wpWindows(doc) {
+    var ks = Object.keys(doc.g || {}).map(function (k) { return doc.g[k].ko; }).sort(function (a, b) { return a - b; }), out = [];
+    ks.forEach(function (ko) { var w = out[out.length - 1]; if (w && ko - w.last <= 5400) w.last = ko; else out.push({ t: ko, last: ko }); });
+    return out;
+  }
+  // The one nearest a spot on the chart (fx 0..1 across a plot pw pixels wide): its notch when you are on one, else just that moment.
+  function wpScrub(model, notches, fx, pw, hitPx) {
+    var best = null, bd = 1e9;
+    notches.forEach(function (n) { var d = Math.abs(n.x - fx) * pw; if (d < bd) { bd = d; best = n; } });
+    if (best && bd <= hitPx) return { t: Math.min(model.end, best.t), notch: best };
+    return { t: Math.min(model.end, model.tOf(fx)), notch: null };
   }
   // WP-ENGINE-END
 
@@ -7071,6 +7115,7 @@
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div>") + "</section>");
       });
+    wpMiniOff();
     box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">' + (finished ? "Pick a manager above to see that Rumble." : "No Rumbles are still in play against you right now.") + "</div>";
     flapScan(box);
   }
@@ -7171,6 +7216,14 @@
     players.forEach(function (p) {
       if (!d.tm[p.sid] && p.team) d.tm[p.sid] = p.team;
       if (p.pos === "DEF" && !d.tm[p.sid]) d.tm[p.sid] = p.sid;
+      // A game the recording does not list (not started when it began, or missed): add it from the scoreboard.
+      var s0 = sched[d.tm[p.sid]];
+      if (s0 && !d.tg[d.tm[p.sid]] && typeof s0.startTimeMs === "number") {
+        var gk = [d.tm[p.sid], s0.opp || "?"].sort().join("@");
+        if (!d.g[gk]) d.g[gk] = { ko: Math.round((s0.startTimeMs - doc.t0) / 1000), end: null, clk: [] };
+        d.tg[d.tm[p.sid]] = gk;
+        if (s0.opp) d.tg[s0.opp] = gk;
+      }
       var diff = round2(p.act - (rec[p.sid] || 0));
       if (Math.abs(diff) >= 0.005) d.ev.push([now, p.sid, diff, "latest"]);
       var s = sched[d.tm[p.sid]], g = d.g[d.tg[d.tm[p.sid]]];
@@ -7180,7 +7233,8 @@
         if (!last) g.clk.push([g.ko, 1000]);
         if (!last || last[1] !== pm) g.clk.push([Math.max(now, last ? last[0] : 0), pm]);
       } else if (s.status === "complete" && g.end == null) {
-        g.end = now; g.clk.push([now, 0]);
+        var endAt = Math.min(now, Math.max(g.ko, g.clk.length ? g.clk[g.clk.length - 1][0] : g.ko) + (g.clk.length ? 1800 : WP_GAME_LEN));
+        g.end = endAt; g.clk.push([endAt, 0]);
       }
     });
     return { doc: d, now: now };
@@ -7193,7 +7247,12 @@
     var doc0 = wpGet(win.week, live);
     if (!doc0) return null;
     var mine = wpPlayers(me), theirs = wpPlayers(t), doc = doc0, now = null;
-    if (!win.past && !wpDone(doc0)) { var a = wpAugment(doc0, win.week, mine.concat(theirs)); doc = a.doc; now = a.now; }
+    // A timeline that knows few of these players (another league's file, a recording that missed them) says nothing about this Rumble.
+    var known = mine.concat(theirs).filter(function (p) { return doc0.pre && doc0.pre[p.sid] != null; }).length;
+    if (known < (mine.length + theirs.length) / 2) return null;
+    // The week in progress: fold in what the page itself can see (points, clocks, and any game the recording has not listed yet).
+    // Whether the week is over comes from the scoreboard (win.final), never from the recording's own list of games.
+    if (!win.past) { var a = wpAugment(doc0, win.week, mine.concat(theirs)); doc = a.doc; now = a.now; }
     var last = Object.keys(doc.g).map(function (k) { var c = doc.g[k].clk; return c.length ? c[c.length - 1].join(".") : ""; }).join(",");
     var sig = [win.week, doc.ev.length, doc.src, round2(me.act), round2(t.act), last, now == null ? "" : Math.floor(now / 30)].join("|");
     var hit = wpModels[key];
@@ -7204,7 +7263,8 @@
     mine.concat(theirs).forEach(function (p) { names[p.sid] = p.name; });
     var marks = wpMarks(doc, model, names, { min: 0.02, max: 10 });
     var pm = { key: key, win: win, doc: doc, model: model, marks: marks, names: names, me: me, t: t, col: col, mine: mine, theirs: theirs,
-      done: wpDone(doc) && now == null || !!win.past, now: now, pEnd: model.P[model.P.length - 1], approx: !!doc.approx };
+      done: !!win.past || !!win.final, now: now, pEnd: model.P[model.P.length - 1], approx: !!doc.approx,
+      notches: wpNotches(model), windows: wpWindows(doc) };
     wpModels[key] = { sig: sig, pm: pm };
     wpPairs[key] = pm;
     return pm;
@@ -7220,6 +7280,28 @@
       return short ? o.weekday + " " + o.hour + (o.minute === "00" ? "" : ":" + o.minute) + ap.charAt(0) : o.weekday + " " + o.hour + ":" + o.minute + " " + ap.toUpperCase();
     } catch (e) { return ""; }
   }
+  // A kickoff window's name: day and hour, "Sun 1pm" (a 4:25 kickoff is "Sun 4pm", a 9:30am one "Sun 9am").
+  function wpWinLabel(ms) {
+    try {
+      wpEtFmt = wpEtFmt || new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true });
+      var o = {};
+      wpEtFmt.formatToParts(new Date(ms)).forEach(function (x) { o[x.type] = x.value; });
+      return o.weekday + " " + o.hour + (o.dayPeriod || "").toLowerCase();
+    } catch (e) { return ""; }
+  }
+  // The kickoff windows to name along the bottom of a chart: those inside what is shown, not closer than minGap (of the width).
+  function wpWindowLabels(pm, minGap) {
+    var m = pm.model, endT = m.blocks[m.blocks.length - 1].b, out = [], lastX = -9;
+    (pm.windows || []).forEach(function (w) {
+      var x;
+      if (w.t < m.start - 7200 || w.t > endT) return;
+      x = m.x(Math.max(w.t, m.start));
+      if (x - lastX < minGap) return;
+      lastX = x;
+      out.push({ x: x, text: wpWinLabel(pm.doc.t0 + w.t * 1000) });
+    });
+    return out;
+  }
   function wpPct(p) { return Math.max(1, Math.min(99, Math.round(p * 100))); }
 
   // The small chart that sits in a Scenarios block. Tap it to open the full view.
@@ -7228,7 +7310,7 @@
     var pm = wpPair(win, me, t, col);
     if (!pm) {
       var st = wpStatus(win.week);
-      var msg = st === "loading" ? "" : win.past || win.final ? "Win probability isn’t available for this week" : "Win probability starts recording at kickoff";
+      var msg = st === "loading" ? "" : st === "ok" || win.past || win.final ? "Win probability isn’t available for this matchup" : "Win probability starts recording at kickoff";
       return { pm: null, html: '<div class="sc-wpm empty" data-wp="' + key + '">' + (msg ? "<span>" + msg + "</span>" : "") + "</div>" };
     }
     var m = pm.model, W = 200, H = 40, k = ++wpUid;
@@ -7241,12 +7323,18 @@
       divs += '<line x1="' + dx + '" x2="' + dx + '" y1="0" y2="' + H + '" class="wpm-div"/>';
     }
     var p = pm.pEnd, endX = m.x(m.end) * 100;
+    var notch = pm.notches.map(function (n) {
+      var nx = (n.x * W).toFixed(1);
+      return '<line class="wpm-notch" x1="' + nx + '" x2="' + nx + '" y1="' + (H - 7) + '" y2="' + H + '" style="stroke:' + (n.side > 0 ? col.mine : col.theirs) + '"/>';
+    }).join("");
+    var axis = wpWindowLabels(pm, 0.13).map(function (l) { return '<span style="left:' + (l.x * 100).toFixed(1) + '%">' + escapeHtml(l.text) + "</span>"; }).join("");
     var svg = '<div class="wpm-plot"><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="wpa' + k + '"><rect x="0" y="0" width="' + W + '" height="' + H / 2 + '"/></clipPath><clipPath id="wpb' + k + '"><rect x="0" y="' + H / 2 + '" width="' + W + '" height="' + H / 2 + '"/></clipPath></defs>' +
       divs + '<path d="' + area + '" clip-path="url(#wpa' + k + ')" style="fill:' + col.mine + '" class="wpm-area"/><path d="' + area + '" clip-path="url(#wpb' + k + ')" style="fill:' + col.theirs + '" class="wpm-area"/>' +
-      '<line x1="0" x2="' + W + '" y1="' + H / 2 + '" y2="' + H / 2 + '" class="wpm-mid"/><polyline points="' + pts.join(" ") + '" class="wpm-line"/></svg>';
-    return { pm: pm, html: '<div class="sc-wpm" data-wp="' + key + '" role="button" tabindex="0" aria-label="Win probability chart, ' + wpPct(p) + ' percent. Tap to expand">' + svg +
-      '<i class="wpm-dot" style="left:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;background:" + (p >= 0.5 ? col.mine : col.theirs) + '"></i></div>' +
+      '<line x1="0" x2="' + W + '" y1="' + H / 2 + '" y2="' + H / 2 + '" class="wpm-mid"/><polyline points="' + pts.join(" ") + '" class="wpm-line"/>' + notch + "</svg>";
+    return { pm: pm, html: '<div class="sc-wpm" data-wp="' + key + '" role="button" tabindex="0" aria-label="Win probability chart, ' + wpPct(p) + ' percent. Drag across it to see the week; Enter expands it">' + svg +
+      '<i class="wpm-dot" style="left:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;background:" + (p >= 0.5 ? col.mine : col.theirs) + '"></i><i class="wpm-cur" hidden></i></div>' +
       '<em class="wpm-pct" style="color:' + (p >= 0.5 ? col.mine : col.theirs) + '">' + (pm.done ? (p > 0.5 ? "Won" : p < 0.5 ? "Lost" : "Tied") : wpPct(p) + "%") + "</em>" +
+      '<div class="wpm-axis" aria-hidden="true">' + axis + '</div><button type="button" class="wpm-exp" aria-label="Expand the chart" title="Expand">\u2922</button>' +
       (pm.approx ? '<small class="wpm-ap" title="This week’s play-by-play only partly reconciles to the final scores">approx.</small>' : "") + "</div>" };
   }
 
@@ -7267,18 +7355,16 @@
       o += '<line x1="' + ml + '" x2="' + (ml + pw) + '" y1="' + y + '" y2="' + y + '" stroke="' + C.grid + '" stroke-width="1"' + (g === 50 ? ' stroke-dasharray="4 3"' : "") + "/>" +
         '<text x="' + (ml - 5) + '" y="' + (y + 3.5) + '" text-anchor="end" font-size="' + fs + '" fill="' + C.dim + '">' + g + (share || g === 50 ? "%" : "") + "</text>";
     });
-    // idle stretches (days) and where each block of games begins
-    var lastLab = -99;
+    // idle stretches between game days, and the week's kickoff windows named along the bottom
     m.blocks.forEach(function (b, i) {
-      var xa = X(b.a);
       if (i > 0) {
-        var xb = X(m.blocks[i - 1].b), xm = (xa + xb) / 2;
+        var xm = (X(b.a) + X(m.blocks[i - 1].b)) / 2;
         o += '<line x1="' + xm + '" x2="' + xm + '" y1="' + mt + '" y2="' + (mt + ph) + '" stroke="' + C.grid + '" stroke-dasharray="2 3"/>';
       }
-      if (xa - lastLab >= (share ? 70 : 52)) {
-        lastLab = xa;
-        o += '<text x="' + Math.min(xa, ml + pw - 20) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + wpEt(doc.t0 * 1 + b.a * 1000, true) + "</text>";
-      }
+    });
+    wpWindowLabels(pm, (share ? 64 : 46) / pw).forEach(function (l, i) {
+      var lx = ml + l.x * pw;
+      o += '<line x1="' + lx + '" x2="' + lx + '" y1="' + (mt + ph) + '" y2="' + (mt + ph + 4) + '" stroke="' + C.dim + '"/><text x="' + Math.max(ml, Math.min(lx, ml + pw - 18)) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 && lx < ml + 20 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + escapeHtml(l.text) + "</text>";
     });
     var pts = m.T.map(function (t, i) { return X(t).toFixed(1) + "," + Y(m.P[i]).toFixed(1); });
     var area = "M" + X(m.T[0]).toFixed(1) + "," + Y(0.5) + "L" + pts.join("L") + "L" + X(m.T[m.T.length - 1]).toFixed(1) + "," + Y(0.5) + "Z";
@@ -7288,6 +7374,11 @@
       var xn = X(m.end);
       o += '<line x1="' + xn + '" x2="' + xn + '" y1="' + mt + '" y2="' + (mt + ph) + '" stroke="' + C.dim + '" stroke-dasharray="1 3"/><text x="' + Math.min(xn, ml + pw - 12) + '" y="' + (mt - 3) + '" text-anchor="middle" font-size="' + fs + '" fill="' + C.dim + '">Now</text>';
     }
+    // a notch on the baseline for every scoring play, in the colour of whose it was
+    pm.notches.forEach(function (n, i) {
+      var nx = (ml + n.x * pw).toFixed(1);
+      o += '<line class="wp-notch" data-i="' + i + '" x1="' + nx + '" x2="' + nx + '" y1="' + (mt + ph - (share ? 10 : 8)) + '" y2="' + (mt + ph) + '" stroke="' + (n.side > 0 ? C.mine : C.theirs) + '" stroke-width="' + (share ? 2 : 1.6) + '"/>';
+    });
     // numbered markers on the biggest swings
     var placed = [];
     pm.marks.forEach(function (mk) {
@@ -7357,27 +7448,29 @@
     }
     wpOpenKey = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
 
-  // Hover / touch on the expanded chart: the nearest moment, with the scoring plays around it.
+  // What a moment says: when, the win probability and the score. A notch adds the scoring play(s) that happened there.
+  function wpTipHtml(pm, t, notch) {
+    var a = pm.model.at(t), h = "<b>" + wpEt(pm.doc.t0 + t * 1000) + "</b> <span>" + wpPct(a.p) + "% to win</span><div>" + escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "</div>";
+    if (notch) {
+      h += '<div class="tt-d">' + notch.ev.slice(0, 4).map(function (p) {
+        var clock = wpClockLabel(wpRem(pm.doc, p.sid, p.t));
+        return '<div><b style="color:' + wpResolve(p.side > 0 ? pm.col.mine : pm.col.theirs) + '">' + escapeHtml(pm.names[p.sid] || "") + "</b> " + escapeHtml(p.label === "latest" ? "scored (exact time unknown)" : p.label) + " <span>" + (p.pts > 0 ? "+" : "") + p.pts.toFixed(1) + (clock && clock !== "Final" && clock !== "Pregame" ? " \u00b7 " + clock : "") + "</span></div>";
+      }).join("") + "</div>";
+    }
+    return h;
+  }
+
+  // Hover / touch on the expanded chart.
   function wpHover(e) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg"), tip = document.getElementById("wp-tipx");
     if (!pm || !svg || !wpGeom) return;
     var r = svg.getBoundingClientRect(), g = wpGeom, m = pm.model;
     var px = e.clientX - r.left;
     if (px < g.ml - 6 || px > g.ml + g.pw + 6) { wpHoverOff(); return; }
-    var fx = Math.max(0, Math.min(1, (px - g.ml) / g.pw)), t = Math.min(m.end, m.tOf(fx));
-    var a = m.at(t);
-    var win = Math.max(90, 10 * m.L / g.pw), plays = wpPlaysNear(m, pm.names, t, win, 4);
-    var cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph, ns = "http://www.w3.org/2000/svg";
-    var hov = svg.querySelector(".wp-hov");
-    hov.innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
-    var ms = pm.doc.t0 + t * 1000, h = "<b>" + wpEt(ms) + "</b> <span>" + wpPct(a.p) + "% to win</span><div>" + escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> – <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "</div>";
-    if (plays.length) {
-      h += '<div class="tt-d">' + plays.map(function (p) {
-        var clock = wpClockLabel(wpRem(pm.doc, p.sid, p.t));
-        return '<div><b style="color:' + (p.side > 0 ? pm.col.mine : pm.col.theirs) + '">' + escapeHtml(p.who) + "</b> " + escapeHtml(p.label) + " <span>" + (p.pts > 0 ? "+" : "") + p.pts.toFixed(1) + (clock && clock !== "Final" && clock !== "Pregame" ? " · " + clock : "") + "</span></div>";
-      }).join("") + "</div>";
-    } else h += '<div class="tt-d"><span>No scoring at this moment</span></div>';
-    tip.innerHTML = h;
+    var sc = wpScrub(m, pm.notches, Math.max(0, Math.min(1, (px - g.ml) / g.pw)), g.pw, 7), t = sc.t, a = m.at(t);
+    var cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph;
+    svg.querySelector(".wp-hov").innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
+    tip.innerHTML = wpTipHtml(pm, t, sc.notch);
     tip.hidden = false;
     var wr = document.getElementById("wp-chartwrap").getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
     var left = Math.max(4, Math.min(wr.width - tw - 4, (r.left - wr.left) + cx - tw / 2)), top = (r.top - wr.top) + cy - th - 12;
@@ -7390,9 +7483,35 @@
     document.getElementById("wp-tipx").hidden = true;
   }
 
+  // The same scrub on the small chart in a block: hover, or touch and drag. Tap the corner icon (or click, with a mouse) to expand.
+  var wpPtr = "mouse";
+  function wpMiniOff() {
+    var tip = document.getElementById("wp-tipm");
+    if (tip) tip.hidden = true;
+    [].forEach.call(document.querySelectorAll(".wpm-cur"), function (c) { c.hidden = true; });
+  }
+  function wpMiniMove(e) {
+    var host = e.target.closest && e.target.closest(".sc-wpm");
+    if (!host || host.classList.contains("empty")) { if (!(e.target.closest && e.target.closest("#wp-tipm"))) wpMiniOff(); return; }
+    var pm = wpPairs[host.getAttribute("data-wp")], plotEl = host.querySelector(".wpm-plot");
+    if (!pm || !plotEl) return;
+    var plot = plotEl.getBoundingClientRect();
+    if (e.clientX < plot.left - 4 || e.clientX > plot.right + 4) { wpMiniOff(); return; }
+    var m = pm.model, sc = wpScrub(m, pm.notches, Math.max(0, Math.min(1, (e.clientX - plot.left) / plot.width)), plot.width, 6), a = m.at(sc.t);
+    var cur = host.querySelector(".wpm-cur");
+    cur.hidden = false; cur.style.left = (m.x(sc.t) * 100).toFixed(2) + "%";
+    var tip = document.getElementById("wp-tipm");
+    if (!tip) { tip = document.createElement("div"); tip.id = "wp-tipm"; tip.className = "trend-tip"; document.body.appendChild(tip); }
+    tip.innerHTML = wpTipHtml(pm, sc.t, sc.notch);
+    tip.hidden = false;
+    var tw = tip.offsetWidth, th = tip.offsetHeight, cx = plot.left + m.x(sc.t) * plot.width;
+    var top = plot.top - th - 8; if (top < 4) top = plot.bottom + 8;
+    tip.style.left = Math.max(4, Math.min(window.innerWidth - tw - 4, cx - tw / 2)) + "px"; tip.style.top = top + "px";
+  }
+
   // ---- sharing: the same chart plus the biggest plays and when they happened, as one image ----
   function wpShareSvg(pm) {
-    var W = 1080, s = wpSummary(pm), c = wpChartSvg(pm, W, 430, true), rows = pm.marks.slice(0, 5);
+    var W = 1080, s = wpSummary(pm), c = wpChartSvg(pm, W, 430, true), rows = pm.marks.slice(0, 10);
     var bg = wpResolve("var(--panel)"), fg = wpResolve("var(--text)"), dim = wpResolve("var(--text-dim)"), top = 92, Ht = top + 430 + 24 + (rows.length ? 40 + rows.length * 54 : 0) + 46;
     var strip = function (h) { return h.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"); };
     var x = function (t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };

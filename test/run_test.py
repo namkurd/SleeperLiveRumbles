@@ -3441,23 +3441,16 @@ def scenario_win_probability(browser):
                [4000, "A1", 4.0, "40 yd catch"], [4300, "A1", 4.0, "40 yd catch"], [5000, "A1", 4.0, "40 yd catch"], [6500, "A1", 4.0, "40 yd catch"], [8200, "A1", 4.0, "40 yd catch"],
                [13000, "B2", 1.0, "30 yd pass"], [14000, "B2", 1.0, "30 yd pass"], [15000, "B2", 2.0, "30 yd pass"]],
         "pre": {"B1": 10, "B2": 4, "B3": 30, "A1": 20, "A2": 20, "J1": 100}, "preSrc": "sleeper"}
-    page.clock.set_fixed_time("2026-09-20T21:30:00Z")
-    install_routes(page, {
-        "**/rumbles_history.json": load("rumbles_history.json"),
-        "**/v1/league/TESTLEAGUE1": load("league.json"),
-        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
-        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
-        "**/stats/nfl/2026/1*": load("stats_week1.json"),
-        "**/projections/nfl/2026/1*": load("projections_week1.json"),
-        "**/projections/nfl/2026/2*": projections,
-        "**/stats/nfl/2026/2*": stats,
-        "**/scores/nfl/regular/2026/2": scores,
-        "**/v1/players/nfl": players,
-        "**/v1/state/nfl": load("state.json"),
-        "**/wp_timeline/index.json": {"weeks": [1]},
-        "**/wp_live/week_2.json*": live_doc,
-    })
-    page.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(live_doc)))
+    def routes(pg, doc=live_doc, score_list=scores):
+        pg.clock.set_fixed_time("2026-09-20T21:30:00Z")
+        install_routes(pg, {
+            "**/rumbles_history.json": load("rumbles_history.json"), "**/v1/league/TESTLEAGUE1": load("league.json"),
+            "**/v1/league/TESTLEAGUE1/matchups/2": matchups, "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+            "**/stats/nfl/2026/1*": load("stats_week1.json"), "**/projections/nfl/2026/1*": load("projections_week1.json"),
+            "**/projections/nfl/2026/2*": projections, "**/stats/nfl/2026/2*": stats, "**/scores/nfl/regular/2026/2": score_list,
+            "**/v1/players/nfl": players, "**/v1/state/nfl": load("state.json"), "**/wp_timeline/index.json": {"weeks": [1]}, "**/wp_live/week_2.json*": doc})
+        pg.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(doc)))
+    routes(page)
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
     page.click("#rb-me"); page.wait_for_timeout(300)
     page.click("#rb-scen"); page.wait_for_timeout(2500)
@@ -3468,9 +3461,33 @@ def scenario_win_probability(browser):
     assert [m["who"] for m in minis] == ["Jake", "Aidan"] and all(m["has"] for m in minis), f"each block has its win-probability chart: {minis}"
     for m in minis:
         assert m["pct"] == m["head"].replace(" to win", ""), f"the chart and the % to win agree: {m['pct']} vs {m['head']}"
-        assert 30 <= m["box"]["height"] <= 60 and m["box"]["top"] >= m["hl"]["bottom"] - 1 and m["box"]["bottom"] <= m["scores"]["top"] + 1, f"the chart sits between the sentence and the score row: {m}"
+        assert 40 <= m["box"]["height"] <= 70 and m["box"]["top"] >= m["hl"]["bottom"] - 1 and m["box"]["bottom"] <= m["scores"]["top"] + 1, f"the chart sits between the sentence and the score row: {m}"
         assert m["box"]["width"] > 200, m
     if os.environ.get("SCENSHOT"): page.locator("#rb-scen-view .sc-blk").nth(1).screenshot(path="/tmp/sf/wp_block.png")
+
+    # the small chart: the week's kickoff windows along the bottom, a notch for every scoring play
+    mini = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, axis: [...b.querySelectorAll('.wpm-axis span')].map(x => x.textContent), notches: b.querySelectorAll('.wpm-notch').length}))""")
+    aid = [m for m in mini if m["who"] == "Aidan"][0]; jake = [m for m in mini if m["who"] == "Jake"][0]
+    assert aid["axis"][:3] == ["Sun 1pm", "Sun 4pm", "Sun 8pm"], f"kickoff windows named along the bottom: {aid}"
+    assert "Mon 8pm" in jake["axis"], f"...Monday night too when a player is in it: {jake}"
+    assert aid["notches"] == 12, f"a notch for every scoring play: {aid}"
+    blk = "#rb-scen-view .sc-blk:nth-of-type(2)"
+    nx = page.evaluate("[...document.querySelectorAll('%s .wpm-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })" % blk)
+    mb = page.locator(blk + " .wpm-plot").bounding_box()
+    tipm = "(() => { const t = document.getElementById('wp-tipm'); return t && !t.hidden ? t.textContent : null; })()"
+    page.mouse.move(nx[4][0], nx[4][1]); page.wait_for_timeout(150)
+    tn = page.evaluate(tipm)
+    assert tn and "yd catch" in tn and "Early" in tn and "% to win" in tn and "Ben" in tn, f"hovering a notch on the small chart names the play with the time, score and win probability: {tn}"
+    gapx = None
+    for fx in [i / 50 for i in range(1, 50)]:
+        x = mb["x"] + mb["width"] * fx
+        if all(abs(x - n[0]) > 12 for n in nx): gapx = x; break
+    page.mouse.move(gapx, mb["y"] + mb["height"] / 2); page.wait_for_timeout(150)
+    tg = page.evaluate(tipm)
+    assert tg and "% to win" in tg and "Ben" in tg and "Sun" in tg and "yd catch" not in tg and "yd pass" not in tg, f"away from a notch it is only the time, score and win probability: {tg}"
+    assert page.evaluate("!document.querySelector('%s .wpm-cur').hidden" % blk), "a cursor follows the pointer along the small chart"
+    page.mouse.move(5, 5); page.wait_for_timeout(150)
+    assert page.evaluate(tipm) is None, "the tip goes away when the pointer leaves"
 
     # open the expanded view
     page.click("#rb-scen-view .sc-blk:nth-of-type(2) .sc-wpm"); page.wait_for_timeout(500)
@@ -3481,6 +3498,10 @@ def scenario_win_probability(browser):
     if os.environ.get("SCENSHOT"): page.locator("#wp-sheet .wp-card").screenshot(path="/tmp/sf/wp_sheet.png")
     assert "to win" in sh["sub"] and "H2H" in sh["sub"], sh
     assert sh["marks"] == 10 and len(sh["items"]) == 10 and any("Early" in x and "40 yd catch" in x for x in sh["items"]), f"the ten biggest swings are labeled with the play and who made it: {sh}"
+    lay = page.evaluate("""() => ({chartBottom: document.querySelector('#wp-chart svg').getBoundingClientRect().bottom, listTop: document.getElementById('wp-list').getBoundingClientRect().top,
+      axis: [...document.querySelectorAll('#wp-chart svg text')].map(t => t.textContent).filter(t => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \\d/.test(t)), notches: document.querySelectorAll('#wp-chart .wp-notch').length})""")
+    assert lay["listTop"] >= lay["chartBottom"] - 1, f"the plays are beneath the chart: {lay}"
+    assert lay["axis"][:3] == ["Sun 1pm", "Sun 4pm", "Sun 8pm"] and lay["notches"] == 12, f"kickoff windows along the bottom and a notch per scoring play: {lay}"
     ranks = page.evaluate("[...document.querySelectorAll('#wp-chart .wp-mk text')].map(t => t.textContent).join()")
     assert ranks == "1,2,3,4,5,6,7,8,9,10", f"numbered 1 to 10 on the chart: {ranks}"
     gaps = page.evaluate("""() => { const c = [...document.querySelectorAll('#wp-chart .wp-mk circle')].map(e => [+e.getAttribute('cx'), +e.getAttribute('cy')]); let worst = 99;
@@ -3490,18 +3511,29 @@ def scenario_win_probability(browser):
     assert any("Sun" in x for x in sh["items"]), f"each swing says when it happened: {sh['items']}"
     assert sh["over"] <= 1, "no sideways scroll"
 
-    # hovering over a moment shows the scoring plays at that time
+    # hovering shows the score, time and win probability anywhere; the plays only on a notch
+    tipx = "(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()"
     box = page.locator("#wp-chart svg.wp-svg").bounding_box()
+    notches = page.evaluate("[...document.querySelectorAll('#wp-chart .wp-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })")
     seen = []
-    for i in range(0, 101, 2):
-        page.mouse.move(box["x"] + 34 + (box["width"] - 44) * i / 100, box["y"] + box["height"] / 2)
-        tip = page.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
+    for nxy in notches:
+        page.mouse.move(nxy[0], nxy[1])
+        tip = page.evaluate(tipx)
         if tip: seen.append(tip)
-    assert seen and all("% to win" in t for t in seen), f"hover shows the moment's win probability: {seen[:2]}"
-    assert any("40 yd catch" in t and "Early" in t for t in seen), "hovering over a scoring moment names the play"
-    assert any("25 yd catch" in t for t in seen), "...and the other plays too"
+    assert len(seen) == 12 and all("% to win" in t and "Ben" in t for t in seen), f"every notch has a tip: {len(seen)}"
+    assert any("40 yd catch" in t and "Early" in t for t in seen), "a notch names the play and who made it"
+    assert any("25 yd catch" in t for t in seen) and any("30 yd pass" in t for t in seen), "...for each side's plays"
     assert any("Sun" in t for t in seen) and any(re.search(r"Q\d \d+:\d\d", t) for t in seen), "...with when it happened, on the clock too"
-    assert any("No scoring" in t for t in seen), "...and says so when nothing scored"
+    plain = []
+    for i in range(0, 101, 3):
+        x = box["x"] + 34 + (box["width"] - 44) * i / 100
+        if all(abs(x - n[0]) > 12 for n in notches):
+            page.mouse.move(x, box["y"] + box["height"] / 2)
+            tip = page.evaluate(tipx)
+            if tip: plain.append(tip)
+    assert len(plain) > 10 and all("% to win" in t and "Sun" in t and "Ben" in t for t in plain), "anywhere else: time, score and win probability"
+    assert not any("yd catch" in t or "yd pass" in t for t in plain), "...and no plays unless you are on a notch"
+    seen = notches = None
 
     # share a link: it opens this chart for whoever gets it, and they can scrub through the week themselves
     assert page.evaluate("document.getElementById('wp-share').textContent") == "Share link"
@@ -3513,23 +3545,15 @@ def scenario_win_probability(browser):
     friend = ctx.new_page()
     friend.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     friend.on("pageerror", lambda exc: page_errors.append(str(exc)))
-    friend.clock.set_fixed_time("2026-09-20T21:30:00Z")
-    install_routes(friend, {
-        "**/rumbles_history.json": load("rumbles_history.json"), "**/v1/league/TESTLEAGUE1": load("league.json"),
-        "**/v1/league/TESTLEAGUE1/matchups/2": matchups, "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
-        "**/stats/nfl/2026/1*": load("stats_week1.json"), "**/projections/nfl/2026/1*": load("projections_week1.json"),
-        "**/projections/nfl/2026/2*": projections, "**/stats/nfl/2026/2*": stats, "**/scores/nfl/regular/2026/2": scores,
-        "**/v1/players/nfl": players, "**/v1/state/nfl": load("state.json"), "**/wp_timeline/index.json": {"weeks": [1]}, "**/wp_live/week_2.json*": live_doc})
-    friend.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(live_doc)))
+    routes(friend)
     friend.add_init_script("try { localStorage.clear(); } catch (e) {}")
     friend.goto(link); friend.wait_for_timeout(3000)
     fr = friend.evaluate("""() => ({vis: !document.getElementById('wp-sheet').hidden, title: document.getElementById('wp-title').textContent, marks: document.querySelectorAll('#wp-chart .wp-mk').length,
       who: !document.getElementById('rb-who').hidden})""")
     assert fr["vis"] and "Ben vs. Aidan" in fr["title"] and fr["marks"] == 10 and not fr["who"], f"the link opens the chart with nobody signed in: {fr}"
-    fbox = friend.locator("#wp-chart svg.wp-svg").bounding_box()
     got = []
-    for i in range(0, 101, 4):
-        friend.mouse.move(fbox["x"] + 34 + (fbox["width"] - 44) * i / 100, fbox["y"] + fbox["height"] / 2)
+    for nxy in friend.evaluate("[...document.querySelectorAll('#wp-chart .wp-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })"):
+        friend.mouse.move(nxy[0], nxy[1])
         tp = friend.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
         if tp: got.append(tp)
     assert any("40 yd catch" in t for t in got), "the person who opens the link can scrub through the timeline"
@@ -3581,6 +3605,41 @@ def scenario_win_probability(browser):
     page.select_option("#week-select", ""); page.wait_for_timeout(600)
     back = [x["who"] for x in page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent}))""")]
     assert back[:2] == ["Jake", "Aidan"] and len(back) < 11, f"back on this week's blocks: {back}"
+    # with a finger: a tap scrubs the small chart (and shows the plays on a notch); the corner icon expands it
+    tctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
+    tp = tctx.new_page()
+    tp.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    tp.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    routes(tp)
+    tp.goto(PAGE_URL + "?tab=rumblin&me=Ben"); tp.wait_for_timeout(2500)
+    tp.tap("#rb-me"); tp.wait_for_timeout(300); tp.tap("#rb-scen"); tp.wait_for_timeout(2500)
+    nxy = tp.evaluate("[...document.querySelectorAll('#rb-scen-view .sc-blk:nth-of-type(2) .wpm-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })")
+    tp.touchscreen.tap(nxy[4][0], nxy[4][1]); tp.wait_for_timeout(300)
+    tt = tp.evaluate("(() => { const t = document.getElementById('wp-tipm'); return t && !t.hidden ? t.textContent : null; })()")
+    assert tt and "Early" in tt and "40 yd catch" in tt, f"a tap on a notch shows the play: {tt}"
+    assert tp.evaluate("document.getElementById('wp-sheet').hidden"), "a tap scrubs; it does not open the big chart"
+    tp.tap("#rb-scen-view .sc-blk:nth-of-type(2) .wpm-exp"); tp.wait_for_timeout(600)
+    assert tp.evaluate("!document.getElementById('wp-sheet').hidden && document.getElementById('wp-title').textContent.includes('Aidan')"), "the corner icon opens it"
+    tctx.close()
+
+    # a recording that has not listed the later games yet must not make the week look finished (it once read "Won" with a game to play)
+    short = json.loads(json.dumps(live_doc))
+    for k in ("SF@SEA", "KC@LV"): del short["g"][k]
+    for tm in ("SF", "SEA", "KC", "LV"): short["tg"].pop(tm, None)
+    short["tm"].pop("B3", None); short["tm"].pop("J1", None)
+    short["g"]["MIN@CHI"]["end"] = 23000; short["g"]["MIN@CHI"]["clk"] += [[23000, 0]]
+    part = [game("DAL", "PHI", "2026-09-20T17:00:00", "complete"), game("MIN", "CHI", "2026-09-20T20:25:00", "complete"), game("SF", "SEA", "2026-09-21T00:20:00", "pre_game"), game("KC", "LV", "2026-09-22T00:15:00", "pre_game")]
+    gap = ctx.new_page()
+    gap.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    gap.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    routes(gap, short, part)
+    gap.goto(PAGE_URL + "?tab=rumblin&me=Ben"); gap.wait_for_timeout(2500)
+    gap.click("#rb-me"); gap.wait_for_timeout(300); gap.click("#rb-scen"); gap.wait_for_timeout(2500)
+    g2 = gap.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].filter(b => ['Aidan', 'Jake'].includes(b.querySelector('.sc-bh b').textContent)).map(b => ({who: b.querySelector('.sc-bh b').textContent,
+      pct: b.querySelector('.wpm-pct').textContent, head: b.querySelector('.sc-wp').textContent, axis: [...b.querySelectorAll('.wpm-axis span')].map(x => x.textContent)}))""")
+    assert len(g2) == 2 and all(re.match(r"\d+%$", x["pct"]) and x["pct"] == x["head"].replace(" to win", "") for x in g2), f"games still to play: a percentage, never Won / Lost: {g2}"
+    assert "Sun 8pm" in [x for m in g2 for x in m["axis"]], f"the missing game is added from the schedule: {g2}"
+    gap.close()
     ctx.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
