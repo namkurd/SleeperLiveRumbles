@@ -42,6 +42,21 @@ R.apply_poll(doc, {"games": [game("complete", 0)], "points": {"A": 11.5}, "team"
 assert doc["ev"][-1] == [9000, "A", 2.0, "20 yd catch"] and doc["g"]["DAL@PHI"]["end"] == 9000 and doc["g"]["DAL@PHI"]["clk"][-1] == [9000, 0]
 assert round(sum(e[2] for e in doc["ev"]), 2) == 11.5, "the recording adds up to the player's real total"
 
+# a recording that starts mid-week is filled in from the play-by-play, re-based on its own clock
+doc = R.empty_doc(2026, 2)
+doc["t0"] = t0
+tl = {"t0": t0 + 5000, "g": {"DAL@PHI": {"ko": 0, "end": 11000, "clk": [[0, 1000], [11000, 0]]}}, "tg": {"DAL": "DAL@PHI", "PHI": "DAL@PHI"},
+      "tm": {"A": "DAL"}, "ev": [[100, "A", 6.0, "TD"], [900, "A", 2.5, "catch"]], "pre": {"A": 11.0}}
+R.merge_timeline(doc, tl)
+assert doc["g"]["DAL@PHI"] == {"ko": 5, "end": 11005, "clk": [[5, 1000], [11005, 0]]}, doc["g"]
+assert doc["ev"] == [[105, "A", 6.0, "TD"], [905, "A", 2.5, "catch"]] and doc["pre"] == {"A": 11.0} and doc["tm"] == {"A": "DAL"}
+assert doc["_s"]["last"] == {"A": 8.5} and doc["_s"]["seeded"]
+# the next poll then records only what is new, never the points already scored
+R.apply_poll(doc, {"games": [game("complete", 0)], "points": {"A": 8.5}, "team": {}, "stats": {}}, t0 + 20_000_000)
+assert len(doc["ev"]) == 2, doc["ev"]
+R.apply_poll(doc, {"games": [game("complete", 0)], "points": {"A": 9.5}, "team": {}, "stats": {"A": {"rec_yd": 10}}}, t0 + 20_001_000)
+assert doc["ev"][-1][1:3] == ["A", 1.0], doc["ev"]
+
 # pacing
 assert R.seconds_until_next([game("in_progress", 500)], t0) == R.LIVE_INTERVAL_SECONDS
 assert R.seconds_until_next([game("pre_game", 1000, t0 + 3600_000)], t0) == 15 * 60

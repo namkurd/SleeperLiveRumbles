@@ -339,8 +339,11 @@ def points_allowed(rows: list[dict]) -> dict[str, int]:
 
 def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[str, str], scoring: dict,
                prior_points: dict[str, list[float]], proj: dict[str, float] | None, season: int,
-               pos_of: dict[str, str]) -> dict | None:
-    """One week's timeline. `lineup` is {roster_id: [[sleeper_id, points], ...]} (final, from Sleeper)."""
+               pos_of: dict[str, str], partial: bool = False) -> dict | None:
+    """One week's timeline. `lineup` is {roster_id: [[sleeper_id, points], ...]} (final, from Sleeper).
+
+    partial=True is for a week still in progress: only the games already in the play-by-play are built, and only the
+    players in those games are reconciled (everyone else has simply not scored yet, as far as the plays know)."""
     want = {pid: float(p) for starters in lineup.values() for pid, p in starters}
     by_game: dict[str, list[dict]] = {}
     for r in rows:
@@ -408,6 +411,8 @@ def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[s
     for sid, final in want.items():
         tm = teams.get(sid)
         gkey = team_game.get(tm) if tm else None
+        if partial and not gkey:
+            continue
         diff = round(final - totals.get(sid, 0.0), 2)
         if pos_of.get(sid) != "DEF":
             scored += abs(final)
@@ -527,6 +532,14 @@ def id_crosswalk() -> dict[str, str]:
     return out
 
 
+def load_pbp_rows(season: int) -> list[dict] | None:
+    """Every play of the season so far, or None when nflverse has none yet."""
+    resp = requests.get(PBP_URL.format(season=season), timeout=300)
+    if resp.status_code != 200:
+        return None
+    return list(csv.DictReader(io.StringIO(gzip.decompress(resp.content).decode("utf-8"))))
+
+
 def main() -> None:
     epa = json.load(open(EPA_PATH))
     season = int(epa["season"])
@@ -535,11 +548,10 @@ def main() -> None:
     if not lineups:
         print("[info] no completed-week lineups yet; nothing to build")
         return
-    resp = requests.get(PBP_URL.format(season=season), timeout=300)
-    if resp.status_code != 200:
-        print(f"[warn] no play-by-play yet (HTTP {resp.status_code}); leaving wp_timeline as is")
+    rows = load_pbp_rows(season)
+    if rows is None:
+        print("[warn] no play-by-play yet; leaving wp_timeline as is")
         return
-    rows = list(csv.DictReader(io.StringIO(gzip.decompress(resp.content).decode("utf-8"))))
     played = {int(float(r["week"])) for r in rows if (r.get("season_type") or "REG") == "REG"}
     scoring = load_scoring()
     g2s = id_crosswalk()

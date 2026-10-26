@@ -78,4 +78,15 @@ assert any(e[1] == "2" and e[2] == 0.5 for e in adj), adj
 g = tl["g"]["LAR@SEA"]
 assert g["clk"][0] == [g["ko"], 1000] and g["clk"][-1][1] == 0 and g["end"] >= g["clk"][-1][0], g
 assert 0.5 < tl["q"] <= 1 and tl["pre"]["1"] > 0 and tl["preSrc"] == "avg"
+
+# a week still in progress: players whose game is not in the plays yet are left alone (no end-of-week adjustment)
+lineup2 = {"1": [["1", 5.2], ["2", 10.5], ["9", 7.0]], "2": [["SEA", 12.0]]}      # "9" plays in a game that has not been published
+pos2 = dict(POS, **{"9": "WR"})
+part = B.build_week(1, rows, lineup2, G2S, S, {}, None, 2026, pos2, partial=True)
+tot2 = {}
+for sec, sid, pts, label in part["ev"]:
+    tot2[sid] = round(tot2.get(sid, 0) + pts, 2)
+assert "9" not in tot2 and tot2.get("1") == 5.2 and tot2.get("SEA") == 12.0, tot2
+full = B.build_week(1, rows, lineup2, G2S, S, {}, None, 2026, pos2)
+assert round(sum(e[2] for e in full["ev"] if e[1] == "9"), 2) == 7.0, "a full build still settles him when the week ends"
 print("test_build_wp_timeline: OK")

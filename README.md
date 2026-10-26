@@ -1818,18 +1818,17 @@ displayed -- it was just a different scoring system. What's now called
 
 ### Scenarios: win-probability chart, decided Rumbles, past weeks
 
-Each block in **Scenarios** (Rumblin' > Me) has a small win-probability chart between the sentence and the score
+Each block in **Scenarios** (its own tab, also under Rumblin' > Me) has a small win-probability chart between the sentence and the score
 row: your chance to win that Rumble across the whole week, from the first kickoff (or your first player's game) to
 the last whistle, with your color filling above 50% and theirs below. Idle stretches between game days are squeezed
 so Thursday, Sunday and Monday sit side by side; dashed ticks mark the squeezed gaps. The percentage beside the chart
 is the same number as the block's "% to win" (they come from one model), and a finished Rumble reads Won / Lost.
 
 **Tap a chart to expand it.** The expanded view shows the same chart larger, with the biggest swings numbered on it
-and ranked below (the play, who made it, when it happened and where the game clock stood, the points, and the win
-probability before and after). Plays within two and a half minutes of each other count as one swing, and a swing needs
-about 10 points of win probability to be labeled (at most five). On a computer, hover; on a phone, touch or drag across
-the chart, to see the scoring plays at that moment, the running score and the clock. **Share** makes one picture of the
-chart plus the ranked plays and their timing (it opens the phone's share sheet, or downloads a PNG).
+and ranked below, the 10 most impactful plays (the play, who made it, when it happened and where the game clock stood, the points, and the win
+probability before and after). Plays within two and a half minutes of each other count as one swing; badges that would overlap on the chart are nudged apart. On a computer, hover; on a phone, touch or drag across
+the chart, to see the scoring plays at that moment, the running score and the clock. **Share link** sends a link (`?wp=WEEK.ME.OPPONENT`) that opens this same chart for whoever gets it, signed in or not, so they can hover or drag through the week themselves (it opens the phone's share sheet, or copies the link). **Image** makes one picture of the
+chart plus the ranked plays and their timing, to save or share.
 
 **The model** is the one behind "% to win": the gap now, plus what each player is still expected to add, with a spread
 of C x sqrt(points to come) per position. "Still to come" follows the game clock (pregame projection, pace-dampened as in
@@ -1840,7 +1839,7 @@ real final score.
 Rumble that can no longer change shows as a collapsed "Decided" block (Final / Clinched / Out of reach) with its chart.
 Once every game of the week is final the whole week stays on screen as finished Rumbles.
 
-**Past weeks.** The picker above the blocks switches Scenarios to any completed week (every other manager, your
+**Past weeks.** The week picker in the header (the same one the Actual tab uses) switches Scenarios to any completed week (every other manager, your
 opponent first). The current week still opens only after the Sunday 1pm games end.
 
 Where the chart's data comes from:
@@ -1848,7 +1847,7 @@ Where the chart's data comes from:
 | Week | Source | How |
 |---|---|---|
 | Completed | `wp_timeline/week_N.json` | `build_wp_timeline.py`, run by `update.yml` after `build_epa.py`. Turns every nflverse play (pass/rush/receive yards, TDs, first downs, INTs, fumbles, FGs, 2-pointers, sacks, D/ST plays and the points / yards-allowed tiers) into the league's fantasy points using the league's real `scoring_settings` (fetched from Sleeper and cached in `wp_timeline/scoring.json`), puts each on a real clock (nflverse stamps every drive with its real start time), then reconciles to Sleeper's final per-player points: the difference becomes a "scoring adjustment" at the end of that player's game. `q` in the file is the share of the week's points the plays explained on their own (97-99% on weeks 1-6 of 2026); below 90% the page says "approx." and the next run retries. `wp_timeline/index.json` lists which weeks exist so the page only asks for real files. |
-| In progress | `wp_live/week_N.json` on the `wp-data` branch | `record_wp_live.py`, run by `wp_record.yml`. Looks once a minute while any game is live (sleeps until just before the next kickoff, hands off to a successor near GitHub's 6-hour limit), labels each starter's points change from his stat line, keeps every game clock, and pushes to the `wp-data` branch every ten minutes (not main: no Pages deploys, no races with nightly commits). The page reads it from raw.githubusercontent.com and folds in what it can see itself (points and clocks from its own 30-second poll) so the newest minutes are never missing. A skipped run leaves a gap; nothing is interpolated. After the week, the play-by-play file replaces it. |
+| In progress | `wp_live/week_N.json` on the `wp-data` branch | `record_wp_live.py`, run by `wp_record.yml`. If it starts mid-week it first fills in the games already played from the nflverse play-by-play (the same builder, scored with the league's rules and set to Sleeper's points), so the chart covers the whole week. Then it looks once a minute while any game is live (sleeps until just before the next kickoff, hands off to a successor near GitHub's 6-hour limit), labels each starter's points change from his stat line, keeps every game clock, and pushes to the `wp-data` branch every ten minutes (not main: no Pages deploys, no races with nightly commits). The page reads it from raw.githubusercontent.com and folds in what it can see itself (points and clocks from its own 30-second poll) so the newest minutes are never missing. A skipped run leaves a gap; nothing is interpolated. After the week, the play-by-play file replaces it. |
 
 Both files share one format (seconds after the week's first kickoff: `ev` scoring events, `g` game clocks, `tg`/`tm` team
 lookups, `pre` pregame projections), so the page has a single code path. Pregame projections come from Sleeper

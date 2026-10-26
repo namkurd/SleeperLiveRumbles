@@ -102,6 +102,57 @@ def label_from_stats(prev: dict, cur: dict) -> str:
     return "points change"
 
 
+def merge_timeline(doc: dict, tl: dict) -> None:
+    """Fold a play-by-play timeline (build_wp_timeline.build_week) into a recording, re-based on the recording's own t0.
+    Used to fill in the games that were played before the recorder started; what has been seen since stays as it is."""
+    shift = int(round((tl["t0"] - doc["t0"]) / 1000))
+    for k, g in tl["g"].items():
+        doc["g"][k] = {"ko": g["ko"] + shift, "end": g["end"] + shift, "clk": [[t + shift, r] for t, r in g["clk"]]}
+    doc["tg"].update(tl["tg"])
+    doc["tm"].update(tl["tm"])
+    doc["ev"] = sorted(([e[0] + shift, e[1], e[2], e[3]] for e in tl["ev"]), key=lambda e: e[0]) + doc["ev"]
+    for sid, p in tl["pre"].items():
+        doc["pre"].setdefault(sid, p)
+    last = doc["_s"]["last"]
+    for e in tl["ev"]:
+        last[e[1]] = round(last.get(e[1], 0.0) + e[2], 2)
+    doc["_s"]["seeded"] = True
+
+
+def seed_from_plays(doc: dict, snap: dict, ctx: dict) -> bool:
+    """A recording that starts mid-week has missed the games already played. nflverse's play-by-play has them (it
+    publishes a game the day after), so rebuild those from the real plays, scored with the league's rules and set to
+    Sleeper's points, then carry on live from there. Never fatal: without it the chart simply starts later."""
+    try:
+        import build_wp_timeline as B
+        if doc["_s"].get("seeded") or not any(g["status"] != "pre_game" for g in snap["games"]):
+            return False
+        starts = [g["start_ms"] for g in snap["games"] if g.get("start_ms")]
+        if doc["t0"] is None:
+            if not starts:
+                return False
+            doc["t0"] = min(starts)
+        rows = B.load_pbp_rows(int(ctx["season"]))
+        if not rows:
+            return False
+        players = ctx["players"]
+        pos_of = {sid: ("DEF" if not sid.isdigit() else (players.get(sid) or {}).get("position") or "") for sid in snap["points"]}
+        lineup = {"all": [[sid, pts] for sid, pts in snap["points"].items()]}
+        proj = B.fetch_projections(int(ctx["season"]), ctx["week"], ctx["scoring"])
+        tl = B.build_week(ctx["week"], rows, lineup, B.id_crosswalk(), ctx["scoring"], {}, proj, int(ctx["season"]), pos_of, partial=True)
+        if not tl:
+            doc["_s"]["seeded"] = True
+            return False
+        merge_timeline(doc, tl)
+        for sid, st in (snap.get("stats") or {}).items():
+            doc["_s"]["st"][sid] = scoring_stats(st)
+        print(f"[record] filled in {len(tl['g'])} game(s) already played from the play-by-play ({len(tl['ev'])} events)")
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't fill in earlier games from the play-by-play ({e})", file=sys.stderr)
+        return False
+
+
 def empty_doc(season, week: int) -> dict:
     return {"v": 1, "season": int(season), "week": week, "src": "live", "t0": None, "q": 1, "approx": False,
             "g": {}, "tg": {}, "tm": {}, "ev": [], "pre": {}, "preSrc": "sleeper", "_s": {"last": {}, "st": {}}}
@@ -309,7 +360,14 @@ def main() -> None:
         snap = fetch_snapshot(ctx)
         wait = None
         if snap:
-            if apply_poll(doc, snap, now_ms):
+            # First look at a week that is already under way: fill in what was played before we started,
+            # so the points already scored are not lumped into one "change" at this moment.
+            changed = seed_from_plays(doc, snap, ctx)
+            if changed:
+                save_doc(doc)
+                commit_data()
+                last_commit = time.monotonic()
+            if apply_poll(doc, snap, now_ms) or changed:
                 save_doc(doc)
             wait = seconds_until_next(snap["games"], now_ms)
         else:

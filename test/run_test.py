@@ -3304,7 +3304,7 @@ def scenario_scenarios_tab(browser):
     # ...but a finished week can still be opened: this week says when it opens, and the picker offers the past week
     assert page.evaluate("!document.getElementById('rb-scen').disabled"), "past weeks keep the tab clickable"
     page.click("#rb-scen"); page.wait_for_timeout(400)
-    assert page.evaluate("(() => { const v = document.getElementById('rb-scen-view'); return !v.hidden && /open once the Sunday 1pm games are final/.test(v.textContent) && [...document.querySelectorAll('#scen-week option')].map(o => o.textContent).join() === 'Week 2,Week 1'; })()"), "this week's message and the week picker"
+    assert page.evaluate("(() => { const v = document.getElementById('rb-scen-view'); return !v.hidden && /open once the Sunday 1pm games are final/.test(v.textContent) && [...document.querySelectorAll('#week-select option')].map(o => o.textContent).join() === 'Current,Week 1'; })()"), "this week's message and the week picker"
     page.click("#rb-matchup"); page.wait_for_timeout(200)
 
     # the 1pm games end -> the tab opens, 4:25 window is current
@@ -3437,7 +3437,9 @@ def scenario_win_probability(browser):
               "SF@SEA": {"ko": 26400, "end": None, "clk": []}, "KC@LV": {"ko": 112500, "end": None, "clk": []}},
         "tg": {"DAL": "DAL@PHI", "PHI": "DAL@PHI", "MIN": "MIN@CHI", "CHI": "MIN@CHI", "SF": "SF@SEA", "SEA": "SF@SEA", "KC": "KC@LV", "LV": "KC@LV"},
         "tm": {"B1": "DAL", "B2": "MIN", "B3": "SF", "A1": "PHI", "A2": "CHI", "J1": "KC"},
-        "ev": [[3000, "B1", 10.0, "100 yd catch"], [5000, "A1", 20.0, "200 yd TD catch"], [14000, "B2", 4.0, "100 yd pass"]],
+        "ev": [[1500, "B1", 2.0, "25 yd catch"], [2800, "B1", 2.0, "25 yd catch"], [3600, "B1", 3.0, "25 yd catch"], [3900, "B1", 3.0, "25 yd catch"],
+               [4000, "A1", 4.0, "40 yd catch"], [4300, "A1", 4.0, "40 yd catch"], [5000, "A1", 4.0, "40 yd catch"], [6500, "A1", 4.0, "40 yd catch"], [8200, "A1", 4.0, "40 yd catch"],
+               [13000, "B2", 1.0, "30 yd pass"], [14000, "B2", 1.0, "30 yd pass"], [15000, "B2", 2.0, "30 yd pass"]],
         "pre": {"B1": 10, "B2": 4, "B3": 30, "A1": 20, "A2": 20, "J1": 100}, "preSrc": "sleeper"}
     page.clock.set_fixed_time("2026-09-20T21:30:00Z")
     install_routes(page, {
@@ -3476,11 +3478,17 @@ def scenario_win_probability(browser):
       svg: !!document.querySelector('#wp-chart svg.wp-svg'), marks: document.querySelectorAll('#wp-chart .wp-mk').length, items: [...document.querySelectorAll('#wp-list li')].map(l => l.textContent),
       over: document.documentElement.scrollWidth - window.innerWidth})""")
     assert sh["vis"] and "Ben vs. Aidan" in sh["title"] and "Week 2" in sh["title"] and sh["svg"], sh
+    if os.environ.get("SCENSHOT"): page.locator("#wp-sheet .wp-card").screenshot(path="/tmp/sf/wp_sheet.png")
     assert "to win" in sh["sub"] and "H2H" in sh["sub"], sh
-    assert sh["marks"] >= 1 and len(sh["items"]) == sh["marks"] and any("Early" in x and "200 yd TD catch" in x for x in sh["items"]), f"the biggest swings are labeled with the play and who made it: {sh}"
+    assert sh["marks"] == 10 and len(sh["items"]) == 10 and any("Early" in x and "40 yd catch" in x for x in sh["items"]), f"the ten biggest swings are labeled with the play and who made it: {sh}"
+    ranks = page.evaluate("[...document.querySelectorAll('#wp-chart .wp-mk text')].map(t => t.textContent).join()")
+    assert ranks == "1,2,3,4,5,6,7,8,9,10", f"numbered 1 to 10 on the chart: {ranks}"
+    gaps = page.evaluate("""() => { const c = [...document.querySelectorAll('#wp-chart .wp-mk circle')].map(e => [+e.getAttribute('cx'), +e.getAttribute('cy')]); let worst = 99;
+      for (let i = 0; i < c.length; i++) for (let j = i + 1; j < c.length; j++) worst = Math.min(worst, Math.hypot(c[i][0] - c[j][0], c[i][1] - c[j][1])); return worst; }""")
+    assert gaps >= 12, f"numbered badges do not sit on top of each other: {gaps}"
+    assert page.evaluate("document.getElementById('wp-listh').textContent") == "10 biggest swings"
     assert any("Sun" in x for x in sh["items"]), f"each swing says when it happened: {sh['items']}"
     assert sh["over"] <= 1, "no sideways scroll"
-    if os.environ.get("SCENSHOT"): page.locator("#wp-sheet .wp-card").screenshot(path="/tmp/sf/wp_sheet.png")
 
     # hovering over a moment shows the scoring plays at that time
     box = page.locator("#wp-chart svg.wp-svg").bounding_box()
@@ -3490,14 +3498,47 @@ def scenario_win_probability(browser):
         tip = page.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
         if tip: seen.append(tip)
     assert seen and all("% to win" in t for t in seen), f"hover shows the moment's win probability: {seen[:2]}"
-    assert any("200 yd TD catch" in t and "Early" in t for t in seen), "hovering over a scoring moment names the play"
-    assert any("100 yd catch" in t for t in seen), "...and the other plays too"
+    assert any("40 yd catch" in t and "Early" in t for t in seen), "hovering over a scoring moment names the play"
+    assert any("25 yd catch" in t for t in seen), "...and the other plays too"
     assert any("Sun" in t for t in seen) and any(re.search(r"Q\d \d+:\d\d", t) for t in seen), "...with when it happened, on the clock too"
     assert any("No scoring" in t for t in seen), "...and says so when nothing scored"
 
-    # share: one image with the chart and the biggest plays
+    # share a link: it opens this chart for whoever gets it, and they can scrub through the week themselves
+    assert page.evaluate("document.getElementById('wp-share').textContent") == "Share link"
+    page.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true})")
+    page.click("#wp-share"); page.wait_for_timeout(400)
+    link = page.evaluate("window.__wpLink")
+    assert re.search(r"rumbles\.html\?wp=2\.\d+\.\d+$", link or ""), f"the shared link names the week and the two managers: {link}"
+    assert page.evaluate("document.getElementById('wp-share').textContent") == "Link copied", "the button says so when it copied the link"
+    friend = ctx.new_page()
+    friend.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    friend.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    friend.clock.set_fixed_time("2026-09-20T21:30:00Z")
+    install_routes(friend, {
+        "**/rumbles_history.json": load("rumbles_history.json"), "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups, "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"), "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": projections, "**/stats/nfl/2026/2*": stats, "**/scores/nfl/regular/2026/2": scores,
+        "**/v1/players/nfl": players, "**/v1/state/nfl": load("state.json"), "**/wp_timeline/index.json": {"weeks": [1]}, "**/wp_live/week_2.json*": live_doc})
+    friend.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(live_doc)))
+    friend.add_init_script("try { localStorage.clear(); } catch (e) {}")
+    friend.goto(link); friend.wait_for_timeout(3000)
+    fr = friend.evaluate("""() => ({vis: !document.getElementById('wp-sheet').hidden, title: document.getElementById('wp-title').textContent, marks: document.querySelectorAll('#wp-chart .wp-mk').length,
+      who: !document.getElementById('rb-who').hidden})""")
+    assert fr["vis"] and "Ben vs. Aidan" in fr["title"] and fr["marks"] == 10 and not fr["who"], f"the link opens the chart with nobody signed in: {fr}"
+    fbox = friend.locator("#wp-chart svg.wp-svg").bounding_box()
+    got = []
+    for i in range(0, 101, 4):
+        friend.mouse.move(fbox["x"] + 34 + (fbox["width"] - 44) * i / 100, fbox["y"] + fbox["height"] / 2)
+        tp = friend.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
+        if tp: got.append(tp)
+    assert any("40 yd catch" in t for t in got), "the person who opens the link can scrub through the timeline"
+    friend.keyboard.press("Escape"); friend.wait_for_timeout(300)
+    assert friend.evaluate("document.getElementById('wp-sheet').hidden && !location.search.includes('wp=')"), "closing returns to the page and clears the link"
+    friend.close()
+    # ...and a picture of it
     with page.expect_download() as dl:
-        page.click("#wp-share")
+        page.click("#wp-image")
     assert dl.value.suggested_filename.endswith(".png") and "week-2" in dl.value.suggested_filename, dl.value.suggested_filename
     assert page.evaluate("window.__wpShared && window.__wpShared.size") > 3000, "the shared image is a real picture"
     # escape closes
@@ -3515,9 +3556,9 @@ def scenario_win_probability(browser):
     page.set_viewport_size({"width": 390, "height": 844}); page.wait_for_timeout(300)
 
     # past weeks: the picker, a collapsed result per manager, real play-by-play chart
-    opts = page.evaluate("[...document.querySelectorAll('#scen-week option')].map(o => o.textContent)")
-    assert opts[:2] == ["Week 2", "Week 1"], f"this week and the past weeks: {opts}"
-    page.select_option("#scen-week", "1"); page.wait_for_timeout(2500)
+    opts = page.evaluate("[...document.querySelectorAll('#week-select option')].map(o => o.textContent)")
+    assert opts == ["Current", "Week 1"] and page.evaluate("!document.getElementById('week-select').disabled"), f"the header week picker offers this week and the past weeks: {opts}"
+    page.select_option("#week-select", "1"); page.wait_for_timeout(2500)
     past = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, hl: b.querySelector('.sc-hl').textContent, h2h: b.querySelector('.sc-chip').textContent,
       cols: b.querySelectorAll('.sc-cols').length, chart: !!b.querySelector('.sc-wpm svg'), pct: (b.querySelector('.wpm-pct') || {}).textContent}))""")
     if os.environ.get("SCENSHOT"):
@@ -3537,13 +3578,65 @@ def scenario_win_probability(browser):
     assert best, "somewhere in a real week a play moved the win probability by 10 points or more"
     assert all(re.search(r"(Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d", x) for x in best["items"]) and len(best["items"]) == best["mk"], f"each swing is named and timed: {best['items']}"
     # back to this week
-    page.select_option("#scen-week", ""); page.wait_for_timeout(600)
+    page.select_option("#week-select", ""); page.wait_for_timeout(600)
     back = [x["who"] for x in page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent}))""")]
     assert back[:2] == ["Jake", "Aidan"] and len(back) < 11, f"back on this week's blocks: {back}"
     ctx.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
     print("\nWIN PROBABILITY SCENARIO PASSED")
+
+
+def scenario_header_tabs(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Header: week picker and four tabs on one line; Scenarios as its own tab")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    for w in (360, 390, 430):
+        page = new_page(browser, console_errors, page_errors)
+        page.set_viewport_size({"width": w, "height": 800})
+        install_routes(page, _gameday_base())
+        page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2200)
+        r = page.evaluate("""() => { const s = document.getElementById('week-select').getBoundingClientRect(), t = document.querySelector('header .toggle-group').getBoundingClientRect();
+          return {sw: document.documentElement.scrollWidth, vw: innerWidth, sameLine: Math.abs(s.top - t.top) < 6 && Math.abs(s.bottom - t.bottom) < 10, tabs: [...document.querySelectorAll('header .toggle-group button')].map(b => b.textContent + (b.scrollWidth > b.clientWidth + 1 ? '!' : '')),
+          selW: s.width}; }""")
+        assert r["sameLine"] and r["sw"] <= r["vw"] + 1 and r["tabs"] == ["Actual", "Projected", "Rumblin'", "Scenarios"] and r["selW"] < 100, f"picker and tabs share a line at {w}px: {r}"
+        page.close()
+    page = new_page(browser, console_errors, page_errors)
+    page.set_viewport_size({"width": 390, "height": 800})
+    install_routes(page, _gameday_base())
+    page.goto(PAGE_URL + "?me=Ben"); page.wait_for_timeout(2200)
+    page.click("#mode-actual"); page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('standings-view').hidden === false"), "standings view"
+    page.click("#mode-scen"); page.wait_for_timeout(1500)
+    st = page.evaluate("""() => ({rb: !document.getElementById('rumblin-view').hidden, scen: document.getElementById('mode-scen').classList.contains('active'), rumb: document.getElementById('mode-rumblin').classList.contains('active'),
+      view: !document.getElementById('rb-scen-view').hidden, opts: [...document.querySelectorAll('#week-select option')].map(o => o.textContent), dis: document.getElementById('week-select').disabled,
+      sub: document.getElementById('rb-scen').classList.contains('active')})""")
+    assert st["rb"] and st["scen"] and not st["rumb"] and st["view"] and st["sub"], f"the Scenarios tab opens Scenarios: {st}"
+    assert "Week 1" in st["opts"] and not st["dis"], f"the header picker chooses the week: {st}"
+    page.click("#mode-rumblin"); page.wait_for_timeout(500)
+    st = page.evaluate("({scen: document.getElementById('mode-scen').classList.contains('active'), rumb: document.getElementById('mode-rumblin').classList.contains('active'), view: document.getElementById('rb-scen-view').hidden, dis: document.getElementById('week-select').disabled})")
+    assert st["rumb"] and not st["scen"] and st["view"] and st["dis"], f"Rumblin' goes back to the cards, picker greyed: {st}"
+    page.click("#rb-scen"); page.wait_for_timeout(500)
+    assert page.evaluate("document.getElementById('mode-scen').classList.contains('active') && !document.getElementById('mode-rumblin').classList.contains('active')"), "Scenarios reached from inside Rumblin' lights the tab too"
+    page.click("#mode-actual"); page.wait_for_timeout(500)
+    opts = page.evaluate("[...document.querySelectorAll('#week-select option')].map(o => o.textContent)")
+    assert page.evaluate("document.getElementById('rumblin-view').hidden") and opts[0] == "Current" and "Week 1" in opts, f"the picker is the standings one again: {opts}"
+    page.close()
+    # no manager picked yet: the tab asks who you are, then goes to Scenarios
+    page = new_page(browser, console_errors, page_errors)
+    page.set_viewport_size({"width": 390, "height": 800})
+    install_routes(page, _gameday_base())
+    page.add_init_script("try { localStorage.removeItem('rumbles.me'); localStorage.removeItem('rumbles.prefs'); } catch (e) {}")
+    page.goto(PAGE_URL); page.wait_for_timeout(2000)
+    page.click("#mode-scen"); page.wait_for_timeout(500)
+    assert page.evaluate("!document.getElementById('rb-who').hidden"), "asks who you are"
+    page.locator("#rb-who .rb-who-list button", has_text="Ben").first.click(); page.wait_for_timeout(1500)
+    assert page.evaluate("document.getElementById('mode-scen').classList.contains('active') && !document.getElementById('rb-scen-view').hidden"), "then opens Scenarios"
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nHEADER TABS SCENARIO PASSED")
 
 
 def scenario_trends(browser):
@@ -3823,6 +3916,7 @@ def main():
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
         scenario_win_probability(browser)
+        scenario_header_tabs(browser)
         scenario_gameday_helpers(browser)
         scenario_future_weeks(browser)
         scenario_name_overflow_audit(browser)
