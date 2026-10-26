@@ -1138,6 +1138,14 @@
   .rb-chip.scen-off { opacity: 0.35; cursor: default; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
+  .rb-away { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--panel-border)); background: color-mix(in srgb, var(--accent-2) 9%, var(--panel)); border-radius: 10px; font-size: 0.8rem; line-height: 1.35; }
+  .rb-away[hidden], .rb-next[hidden] { display: none; }
+  .rb-away .aw-b { flex: 1; min-width: 0; }
+  .rb-away b.gain { color: var(--good); } .rb-away b.loss { color: var(--bad); }
+  .rb-away small { color: var(--text-dim); }
+  .rb-away button { flex-shrink: 0; border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .rb-next { margin: 0 0 8px; padding: 7px 10px; border: 1px dashed var(--panel-border); border-radius: 10px; color: var(--text-dim); font-size: 0.8rem; }
+  .rb-next b { color: var(--text); }
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
   .rb-note[hidden], .rb-view-group[hidden] { display: none; }
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
@@ -1521,6 +1529,8 @@
 
   <!-- Rumblin': side-by-side live matchup cards for any managers. -->
   <div id="rumblin-view" hidden>
+    <div class="rb-away" id="rb-away" hidden></div>
+    <div class="rb-next" id="rb-next" hidden></div>
     <div class="rb-strip" id="rb-strip" aria-label="Managers by projected score"></div>
     <div class="rb-controls">
       <div class="toggle-group" role="group" aria-label="Card size" id="rb-density">
@@ -6773,6 +6783,7 @@
     var shown = rb.mode === "all" ? teams : rb.mode === "live" ? teams.filter(function (t) { return t.liveCount > 0; }) : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
     var shownSet = {};
     shown.forEach(function (t) { shownSet[t.rid] = true; });
+    rbRenderNext(teams, shown);
     rb.sel = shownSet;
     document.getElementById("rb-all").classList.toggle("active", rb.mode === "all");
     document.getElementById("rb-livemode").classList.toggle("active", rb.mode === "live");
@@ -7249,7 +7260,119 @@
     prefsRestore();
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
     if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
+    else rbAutoLand();
     state.prefsReady = true;
+  }
+
+  // ---- Gameday helpers: "since you last looked", the next-kickoff line, and where the page opens ----
+  var SEEN_KEY = "rumbles.seen", AWAY_MIN_MS = 45000, AWAY_SHOW_MS = 4 * 60 * 1000;
+  function seenSnap() {
+    var teams = rbTeams();
+    if (!teams.length || !state.live) return null;
+    var acts = {}, pl = {};
+    teams.forEach(function (t) {
+      acts[t.rid] = t.act; pl[t.rid] = {};
+      t.players.forEach(function (p) { pl[t.rid][p.player_id + (p.replacement ? ":r" : "")] = [num(p.actual), p.short_name || p.name]; });
+    });
+    return { ts: Date.now(), week: state.live.week, acts: acts, pl: pl };
+  }
+  function seenSave() {
+    var s = seenSnap();
+    if (!s) return;
+    state.seenMem = s;
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch (e) { /* storage blocked: fine */ }
+  }
+  function seenLoad() {
+    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "null"); } catch (e) { return null; }
+  }
+  function awayAgo(ms) {
+    var m = Math.round(ms / 60000);
+    return m < 1 ? "moments" : m < 60 ? m + " min" : Math.round(m / 6) / 10 + " hr";
+  }
+  function signed(n) { return (n > 0 ? "+" : "−") + Math.abs(n).toFixed(2); }
+  // Points that moved while the page was in the background, for you first, then the biggest movers.
+  function showAway() {
+    var box = document.getElementById("rb-away"), from = state.awayFrom;
+    if (!box) return;
+    if (!from || !state.live || from.week !== state.live.week) { box.hidden = true; return; }
+    var now = Date.now();
+    if (now - from.ts < AWAY_MIN_MS) { return; }
+    if (!state.awayShownAt) state.awayShownAt = now;
+    if (now - state.awayShownAt > AWAY_SHOW_MS) { state.awayFrom = null; state.awayShownAt = 0; box.hidden = true; return; }
+    var teams = rbTeams(), rows = [];
+    teams.forEach(function (t) {
+      var d = Math.round((t.act - (from.acts[t.rid] != null ? from.acts[t.rid] : t.act)) * 100) / 100;
+      if (Math.abs(d) < 0.005) return;
+      var who = [], old = from.pl[t.rid] || {};
+      t.players.forEach(function (p) {
+        var k = p.player_id + (p.replacement ? ":r" : ""), pd = Math.round((num(p.actual) - (old[k] ? old[k][0] : num(p.actual))) * 100) / 100;
+        if (Math.abs(pd) >= 0.005) who.push({ n: p.short_name || p.name, d: pd });
+      });
+      who.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
+      rows.push({ rid: t.rid, name: t.name, d: d, who: who.slice(0, 3), me: t.rid === state.rb.me });
+    });
+    if (!rows.length) { box.hidden = true; return; }
+    rows.sort(function (a, b) { return (b.me ? 1 : 0) - (a.me ? 1 : 0) || Math.abs(b.d) - Math.abs(a.d); });
+    var parts = rows.slice(0, 4).map(function (r) {
+      var det = r.who.length ? ' <small>(' + r.who.map(function (w) { return escapeHtml(w.n) + " " + signed(w.d); }).join(", ") + ")</small>" : "";
+      return '<span class="aw-t"><b class="' + (r.d > 0 ? "gain" : "loss") + '">' + escapeHtml(r.me ? "You" : r.name) + " " + signed(r.d) + "</b>" + det + "</span>";
+    });
+    box.innerHTML = '<div class="aw-b"><small>Since you last looked (' + awayAgo(now - from.ts) + ')</small><br>' + parts.join(" · ") +
+      (rows.length > 4 ? ' <small>+' + (rows.length - 4) + " more</small>" : "") + '</div><button type="button" aria-label="Dismiss" title="Dismiss">&times;</button>';
+    box.hidden = false;
+    box.querySelector("button").onclick = function () { state.awayFrom = null; state.awayShownAt = 0; box.hidden = true; };
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { seenSave(); state.awayFrom = null; state.awayShownAt = 0; }
+    else if (state.seenMem) state.awayFrom = state.seenMem;
+  });
+  window.addEventListener("pagehide", seenSave);
+
+  // "Next kickoff: Sun 4:25pm (in 2h 14m) · 3 of your starters" whenever nobody on screen is live.
+  function rbCountdown(ms) {
+    var m = Math.round((ms - Date.now()) / 60000);
+    if (m <= 0) return "any moment";
+    if (m < 60) return "in " + m + "m";
+    if (m < 48 * 60) return "in " + Math.floor(m / 60) + "h " + (m % 60) + "m";
+    return "in " + Math.floor(m / 1440) + "d " + Math.floor((m % 1440) / 60) + "h";
+  }
+  function rbRenderNext(teams, shown) {
+    var box = document.getElementById("rb-next");
+    if (!box) return;
+    var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
+    var scope = me && state.rb.mode === "me" ? [me] : shown;
+    var live = false, next = null, count = 0, anyFinal = false;
+    scope.forEach(function (t) {
+      t.players.forEach(function (p) {
+        if (p.game_status === "in_progress" && !rbRuledOut(p)) live = true;
+        if (p.game_status === "complete") anyFinal = true;
+      });
+    });
+    if (!live) scope.forEach(function (t) {
+      t.players.forEach(function (p) {
+        if (p.game_status !== "pre_game" || typeof p.game_start_ms !== "number") return;
+        if (next == null || p.game_start_ms < next) { next = p.game_start_ms; count = 0; }
+        if (p.game_start_ms === next) count++;
+      });
+    });
+    var txt = "";
+    if (live || !scope.length) txt = "";
+    else if (next != null) txt = "Next kickoff: <b>" + escapeHtml(formatGameStartLabel(next)) + "</b> (" + rbCountdown(next) + ") · " + count + " " + (me && scope.length === 1 ? "of your " : "") + "starter" + (count === 1 ? "" : "s");
+    else if (anyFinal) txt = (me && scope.length === 1 ? "All of your games are final." : "Every game for these teams is final.");
+    box.innerHTML = txt;
+    box.hidden = !txt;
+  }
+  // Where the page opens: on a game day, a known manager lands in Rumblin' (their own view the first time).
+  function rbAutoLand() {
+    var params = null;
+    try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
+    if (params && (params.get("tab") || params.get("me"))) return;
+    var live = state.live;
+    if (state.rb.me == null || !live || !live.isLive || !live.hasKickedOff || live.weekFinal) return;
+    var hadPrefs = false;
+    try { hadPrefs = !!localStorage.getItem(PREFS_KEY); } catch (e) { /* storage blocked: fine */ }
+    setView("rumblin");
+    if (!hadPrefs) rbEnterMe();
   }
   function rbCopyText(text) {
     function fallback() {
@@ -7392,6 +7515,7 @@
     .then(loadLive)
     .then(function () { rbInit(); return state.epaOn ? epaLoad(true) : null; })
     .then(render)
+    .then(function () { state.awayFrom = seenLoad(); showAway(); })
     .catch(function (err) {
       console.error("[rumbles] boot failed:", err);
       render();
@@ -7401,7 +7525,7 @@
       function pollNow() {
         if (state.refreshing) return;
         state.lastPollAt = Date.now();
-        loadLive().then(function () { return state.epaOn ? epaLoad() : null; }).then(function () { render({ flash: true }); });
+        loadLive().then(function () { return state.epaOn ? epaLoad() : null; }).then(function () { render({ flash: true }); showAway(); });
       }
       // Don't poll Sleeper while the tab is hidden; catch up as soon as it is shown again.
       state.pollTimer = setInterval(function () {
