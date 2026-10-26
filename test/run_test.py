@@ -3220,6 +3220,56 @@ def scenario_scenarios_tab(browser):
     print("\nSCENARIOS TAB SCENARIO PASSED")
 
 
+def scenario_trends(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Season trends chart (collapsed by default, three views)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    hist = load("rumbles_history.json")
+    wk1 = hist["weekly"]["1"]
+    # a second, earlier week so there is something to compare (rendering only needs the weekly log)
+    hist["weekly"]["0"] = {rid: dict(e, rumbles=max(0, 20 - e["rumbles"]), points=e["points"] * 0.9) for rid, e in wk1.items()}
+    routes = {
+        "**/rumbles_history.json": hist,
+        "**/v1/state/nfl": load("state.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+    }
+    install_routes(page, routes)
+    page.goto(PAGE_URL, wait_until="load"); page.wait_for_timeout(1200)
+    assert page.is_visible("#trend-panel > summary"), "trends header should show under the standings"
+    assert not page.evaluate("document.getElementById('trend-panel').open"), "trends must be collapsed by default"
+    assert page.evaluate("document.getElementById('standings-view').compareDocumentPosition(document.getElementById('trend-panel')) & Node.DOCUMENT_POSITION_CONTAINED_BY"), "trends live inside the standings view"
+    page.click("#trend-panel > summary"); page.wait_for_timeout(300)
+    n = len(hist["standings"])
+    assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-line').length") == n, "rank race: one line per team"
+    shot = lambda n: page.locator("#trend-panel").screenshot(path="/tmp/sf/trend_" + n + ".png") if os.environ.get("TRENDSHOT") else None
+    shot("rank")
+    page.click("#trend-body g[data-rid] .tr-name >> nth=0"); page.wait_for_timeout(200)
+    assert page.evaluate("[...document.querySelectorAll('#trend-body polyline.tr-line')].filter(p => p.getAttribute('opacity') === '1').length") == 1, "tapping a team highlights just that line"
+    page.click("#trend-panel .trend-tabs button[data-v=heat]"); page.wait_for_timeout(200)
+    shot("heat")
+    assert page.evaluate("document.querySelectorAll('#trend-body table.tr-heat tbody tr').length") == n, "heatmap: one row per team"
+    assert page.evaluate("document.querySelectorAll('#trend-body table.tr-heat tbody tr:first-child td[style]').length") == 2, "heatmap: one colored cell per week"
+    page.click("#trend-panel .trend-tabs button[data-v=form]"); page.wait_for_timeout(200)
+    shot("form")
+    assert page.evaluate("document.querySelectorAll('#trend-body .tr-card').length") == n, "form: one card per team"
+    assert page.evaluate("document.querySelectorAll('#trend-body .tr-chip').length") == n, "form: a hot/cold/steady chip per team"
+    page.set_viewport_size({"width": 390, "height": 800}); page.wait_for_timeout(200)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "trends must not cause sideways scrolling on a phone"
+    assert not console_errors and not page_errors, (console_errors, page_errors)
+    print("TRENDS SCENARIO PASSED")
+    page.context.close()
+
+
 def scenario_epa(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: EPA toggle, standings column + sort, tooltips, Rumblin' cards")
@@ -3410,6 +3460,7 @@ def main():
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
         scenario_epa(browser)
+        scenario_trends(browser)
         scenario_feed_expiry(browser)
         browser.close()
 
