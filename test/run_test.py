@@ -3183,6 +3183,9 @@ def scenario_future_weeks(browser):
     assert "Wk 3" in page.text_content("#th-thisweek"), "headers name the projected week"
     rum1 = page.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => parseInt(r.querySelector('.rumbles').textContent))")
     assert sum(rum1) > sum(rum0), f"two more projected weeks add Rumbles: {sum(rum0)} -> {sum(rum1)}"
+    page.hover("#standings-body tr:first-child .thisweek-pts"); page.wait_for_timeout(400)
+    tip = page.evaluate("document.getElementById('pts-tooltip').textContent")
+    assert tip and "Proj" in tip, f"hovering a future week's points shows the player breakdown: {tip!r}"
     page.click("#trend-panel > summary"); page.wait_for_timeout(400)
     labels = page.evaluate("[...document.querySelectorAll('#trend-body svg.tr-svg text')].map(t => t.textContent).filter(x => /^W\\d/.test(x))")
     assert "W3*" in labels and "W2*" in labels, f"trend marks projected weeks: {labels}"
