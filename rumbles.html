@@ -837,6 +837,15 @@
   .tr-heat th { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; padding: 2px 0; position: static; background: none; box-shadow: none; text-align: center; }
   .tr-heat td { text-align: center; padding: 5px 0; border-radius: 5px; color: #fff; font-weight: 700; background-image: none; }
   .tr-heat td.tr-m { text-align: left; background: none; color: var(--text); font-weight: 600; padding: 5px 6px 5px 2px; white-space: nowrap; }
+  /* The base `table` min-width (760px) and sticky-column rules must not leak in: the heatmap fits its panel. */
+  .tr-heat { min-width: 0; table-layout: fixed; }
+  .tr-heat thead th, .tr-heat thead th:first-child, .tr-heat thead th:nth-child(2) { position: static; background: none; box-shadow: none; text-align: center; padding: 2px 0; letter-spacing: 0; text-transform: none; }
+  .tr-heat thead th:first-child { width: 5.2rem; }
+  .tr-heat thead th:last-child { width: 2.6rem; }
+  .tr-heat td.tr-m { overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 640px) { .tr-heat { font-size: 0.68rem; border-spacing: 1px; } .tr-heat thead th:first-child { width: 4.4rem; } .tr-heat thead th:last-child { width: 2.2rem; } .tr-heat td { padding: 5px 0; } .tr-heat td.tr-m { padding-right: 3px; } }
+  /* Landscape phones: the whole rank chart fits on screen. */
+  @media (max-height: 500px) and (orientation: landscape) { .tr-svg { max-height: calc(100vh - 56px); } .tr-key span:last-child { display: none; } .trend-body { padding-bottom: 6px; } }
   .tr-heat td.tr-t { background: none; color: var(--text-dim); font-weight: 600; }
   .tr-heat td.tr-proj { opacity: 0.8; outline: 1px dashed rgba(232,234,240,0.55); outline-offset: -2px; }
   .tr-heat td.tr-hot { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -7266,7 +7275,7 @@
   }
   function trendKeyHtml(D) {
     if (D.teams.length <= PLAYOFF_SPOTS) return "";
-    return '<div class="tr-key"><span><i></i>Playoff zone: top ' + PLAYOFF_SPOTS + ' (the gold line is where ' + PLAYOFF_SPOTS + 'th place sits each week)</span><span>Hover or tap near a week to compare teams</span></div>';
+    return '<div class="tr-key"><span><i></i>Playoff zone: top ' + PLAYOFF_SPOTS + ' (the gold line is where ' + PLAYOFF_SPOTS + 'th place sits each week)</span><span>Hover or tap near a week to compare teams' + (D.proj ? " &middot; dashed = projected" : "") + '</span></div>';
   }
   function trendMoveNote(D) {
     var nw = D.weeks.length, from = Math.max(0, nw - 4);
@@ -7318,7 +7327,7 @@
     var v = state.trend.view;
     state.trend.D = D;
     var oldTip = document.getElementById("trend-tip"); if (oldTip) oldTip.hidden = true;
-    body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendKeyHtml(D) + trendRankSvg(D) + trendMoveNote(D);
+    body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendKeyHtml(D) + trendRankSvg(D);
     [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) { b.classList.toggle("active", b.getAttribute("data-v") === v); });
   }
   document.getElementById("trend-panel").addEventListener("toggle", renderTrends);
