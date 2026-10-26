@@ -203,6 +203,8 @@
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
+    /* Fixed width so the picker is the same size in Actual and Projected (whose option labels are longer). */
+    width: 10.5rem; max-width: 100%; text-overflow: ellipsis;
   }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -607,6 +609,11 @@
     .status-pill .pill-full { display: none; }
     .status-pill .pill-short { display: inline; }
     .status-row { gap: 8px; flex-wrap: nowrap; }
+    #status-actions { display: flex; gap: 6px; margin-left: auto; }
+    #status-actions .refresh-btn { font-size: 0; padding: 0; width: 32px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+    #status-actions #refresh-btn::after { content: "\21BB"; font-size: 1rem; }
+    #status-actions #howto-btn::after { content: "?"; font-size: 0.9rem; }
+    #status-actions .howto-btn { text-decoration: none; }
     .status-pill { font-size: 0.74rem; padding: 4px 9px 4px 7px; white-space: nowrap; }
     .qb-scroll-hint { display: block; }
     /* Rumble %, PF, PA, H2H and Vs. Field stay reachable by scrolling right
@@ -808,7 +815,11 @@
   .tr-svg .tr-dot { transition: opacity 0.2s; }
   :root { --gold: #f2c230; }
   @media (prefers-color-scheme: light) { :root { --gold: #c28f00; } }
-  #standings-body tr.po-cut td { border-bottom: 2px solid var(--gold) !important; }
+  /* Inset shadow, not a border: collapsed borders vanish under the sticky # / Manager cells on phones. */
+  #standings-body tr.po-cut td { border-bottom: 0 !important; box-shadow: inset 0 -2px 0 var(--gold); }
+  #standings-body tr.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
+  #standings-table tr.me-row.po-cut td.rank { box-shadow: inset 3px 0 0 var(--accent-2), inset 0 -2px 0 var(--gold); }
+  #standings-table tr.me-row.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   .po-note[hidden] { display: none; }
   .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
@@ -1540,6 +1551,7 @@
   <div class="status-row" style="margin-bottom:12px;">
     <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text" class="pill-full">Checking status…</span><span id="status-text-short" class="pill-short">Checking…</span></span>
     <span class="status-pill"><span id="updated-pill" class="pill-full">Last updated —</span><span id="updated-pill-short" class="pill-short">Updated —</span><span id="updated-next" class="pill-full upd-next"></span><span id="updated-next-short" class="pill-short upd-next"></span></span>
+    <span id="status-actions"></span>
   </div>
 
   <div class="error-banner" id="error-banner"></div>
@@ -6335,6 +6347,16 @@
   els.modeActual.addEventListener("click", function () { setMode("actual"); });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
+  // Phones: Refresh / How to Use ride on the status line (right side) instead of the header controls.
+  (function () {
+    var mq = window.matchMedia("(max-width: 640px)"), slot = document.getElementById("status-actions"), ctl = document.querySelector("header .controls");
+    function place() {
+      var tgt = mq.matches ? slot : ctl;
+      if (els.refreshBtn.parentNode !== tgt) { tgt.appendChild(els.refreshBtn); tgt.appendChild(els.howtoBtn); }
+    }
+    place();
+    if (mq.addEventListener) mq.addEventListener("change", place); else mq.addListener(place);
+  })();
   document.getElementById("rb-refresh").addEventListener("click", refreshNow);
   // R refreshes (unless typing in a field or using a modifier key).
   document.addEventListener("keydown", function (e) {
