@@ -859,6 +859,8 @@
   .tr-chip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 999px; text-transform: uppercase; }
   .tr-chip.hot { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--accent); }
   .tr-chip.cold { background: color-mix(in srgb, var(--accent-2) 28%, transparent); color: var(--accent-2); }
+  .tr-chip.hot2 { background: var(--accent); color: #1a1108; }
+  .tr-chip.cold2 { background: var(--accent-2); color: #0b1220; }
   .tr-chip.flat { color: var(--text-dim); border: 1px solid var(--panel-border); }
   .tr-card svg { width: 100%; height: 44px; display: block; margin-top: 4px; }
   .tr-card .tr-s { color: var(--text-dim); font-size: 0.68rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -7314,10 +7316,10 @@
       t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect data-tt="' + t.rid + "," + i + '" x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"' + (D.proj && i >= nw - D.projN ? ' fill-opacity="0.55" stroke="#e8eaf0" stroke-width="0.8" stroke-dasharray="2 1.5" vector-effect="non-scaling-stroke"' : "") + '><title>W' + D.weeks[i] + ": " + r + " Rumbles" + (D.proj && i >= nw - D.projN ? " (projected)" : "") + "</title></rect>"; });
       var ay = 42 - c.season / 20 * 40;
       o += '<line x1="0" x2="100" y1="' + ay.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="#9aa1b0" stroke-width="0.8" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/></svg>';
-      var chip = c.d >= 3 ? '<span class="tr-chip hot">Hot</span>' : c.d <= -3 ? '<span class="tr-chip cold">Cold</span>' : '<span class="tr-chip flat">Steady</span>';
+      var chip = c.d >= 6 ? '<span class="tr-chip hot2">On fire</span>' : c.d >= 2.5 ? '<span class="tr-chip hot">Heating up</span>' : c.d > -2.5 ? '<span class="tr-chip flat">Steady</span>' : c.d > -6 ? '<span class="tr-chip cold">Cooling</span>' : '<span class="tr-chip cold2">Ice cold</span>';
       return '<div class="tr-card"><div class="tr-h"><b style="color:' + trendColor(t.rid) + '">' + escapeHtml(t.name) + "</b>" + chip + "</div>" + o +
         '<div class="tr-s">last ' + Math.min(3, nw) + ": " + c.last.toFixed(1) + " &middot; season " + c.season.toFixed(1) + "</div></div>";
-    }).join("") + '</div><p class="trend-note">Bars are each week\'s Rumbles (tall and green is a big week). The dashed line is that team\'s season average. Hot or cold compares the last 3 weeks to the season average; sorted hottest first.' + (D.proj ? " The dashed bar is the live week as projected right now." : "") + "</p>";
+    }).join("") + '</div><p class="trend-note">Bars are each week\'s Rumbles (tall and green is a big week). The dashed line is that team\'s season average. Form compares the last 3 weeks to the season average (on fire, heating up, steady, cooling, ice cold); sorted hottest first.' + (D.proj ? " The dashed bar is the live week as projected right now." : "") + "</p>";
   }
   function renderTrends() {
     var panel = document.getElementById("trend-panel"), body = document.getElementById("trend-body");
