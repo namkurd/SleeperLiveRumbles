@@ -4622,9 +4622,9 @@
     var sig = (inActual ? "a:" : "p:") + weeks.join(",") + "|" + fut.join(",");
     if (sel.getAttribute("data-weeks") !== sig) {
       sel.innerHTML = '<option value="">Current</option>' + weeks.map(function (w) {
-        return '<option value="' + w + '">After Week ' + w + "</option>";
+        return '<option value="' + w + '">Week ' + w + "</option>";
       }).join("") + fut.map(function (w) {
-        return '<option value="f' + w + '">Projected after Week ' + w + "</option>";
+        return '<option value="f' + w + '">Week ' + w + "</option>";
       }).join("");
       sel.setAttribute("data-weeks", sig);
     }
