@@ -46,6 +46,25 @@ assert comps(play(play_type="no_play", passer_player_id="G-QB")) == {}
 c = comps(play(play_type="pass", two_point_attempt="1", two_point_conv_result="success", passer_player_id="G-QB", receiver_player_id="G-WR", passing_yards="2"))
 assert c == {("1", 2.0): "2-pt pass", ("2", 2.0): "2-pt catch"}, c
 
+# a league that scores receptions as a position bonus, field goals per kick and per yard, and D/ST per point and per yard
+L = {"pass_yd": 0.04, "rec": 0, "bonus_rec_te": 1, "bonus_rec_wr": 0.5, "rec_yd": 0.1, "fgm": 3, "fgm_yds_over_30": 0.1, "fgmiss": -1,
+     "pts_allow_21_27": 4.62, "pts_allow": -0.23, "yds_allow_400_449": 5.75, "yds_allow": -0.02, "sack": 1}
+P2 = dict(POS, **{"5": "TE"}); G2 = dict(G2S, **{"G-TE": "5"})
+r = dict(play(play_type="pass", complete_pass="1", passing_yards="10", receiving_yards="10", passer_player_id="G-QB", receiver_player_id="G-TE"))
+got = {(sid, round(p, 2)) for sid, p, label, team in B.play_components(r, L, G2, P2)}
+assert ("5", 2.0) in got and ("1", 0.4) in got, f"a TE catch is worth the position bonus even though rec is 0: {got}"
+r = play(play_type="field_goal", field_goal_result="made", kick_distance="45", kicker_player_id="G-K")
+assert {(sid, round(p, 2)) for sid, p, label, team in B.play_components(r, L, G2, P2)} == {("4", 4.5)}, "a flat per-kick value plus the yards past 30"
+assert round(B.pts_allowed_points(L, 24) + B.yds_allowed_points(L, 420), 2) == round(4.62 - 0.23 * 24 + 5.75 - 0.02 * 420, 2), "D/ST: bracket value plus per point and per yard"
+# the best-explaining scoring wins: a league whose keys we misread loses to the fitted default
+rows1 = [play(drive="1", play_id="1", game_seconds_remaining="3600", play_type="kickoff", week="1", home_team="SEA", away_team="LA", total_home_score="0", total_away_score="7", season_type="REG", game_id="g1"),
+         play(drive="1", play_id="2", game_seconds_remaining="3000", play_type="pass", complete_pass="1", passing_yards="30", receiving_yards="30", pass_touchdown="1", touchdown="1",
+              td_team="LA", passer_player_id="G-QB", receiver_player_id="G-WR", week="1", home_team="SEA", away_team="LA", total_home_score="0", total_away_score="7", season_type="REG", game_id="g1")]
+pick = B.build_best(1, rows1, {"1": [["1", 5.2], ["2", 10.0]]}, G2S, [("league", {"pass_yd": 1.0}), ("default", dict(B.DEFAULT_SCORING))], {}, None, 2026, POS)
+assert pick["scoring"] == "default", pick["scoring"]
+pick = B.build_best(1, rows1, {"1": [["1", 5.2], ["2", 10.0]]}, G2S, [("league", dict(B.DEFAULT_SCORING)), ("default", dict(B.DEFAULT_SCORING))], {}, None, 2026, POS)
+assert pick["scoring"] == "league", "the league's own settings win a tie"
+
 # the real clock: drives carry the real start time, so a play lands between its drive's anchors
 rows = [play(drive="1", game_seconds_remaining="3600", drive_real_start_time="2026-09-13T17:00:00.000Z"),
         play(drive="2", game_seconds_remaining="3000", drive_real_start_time="2026-09-13T17:20:00.000Z"),

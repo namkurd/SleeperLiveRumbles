@@ -50,20 +50,18 @@ APPROX_BELOW = 0.9
 
 # Used only when the league's scoring_settings cannot be fetched and none is cached.
 DEFAULT_SCORING = {
-    "pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "pass_2pt": 2,
+    "pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "pass_2pt": 2, "pass_sack": -0.25,
     "rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
     "rec": 1, "rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2,
-    "fum_lost": -2, "xpm": 1, "xpmiss": 0,
+    "fum": -0.25, "fum_lost": -2, "xpm": 1,
     "bonus_fd_qb": 0.2, "bonus_fd_rb": 0.5, "bonus_fd_wr": 0.5, "bonus_fd_te": 0.5,
-    "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3, "fgm_40_49": 3, "fgm_50p": 3, "fgm_yds_over_30": 0.1,
-    "fgmiss": -1,
-    "sack": 1, "int": 2, "fum_rec": 2, "safe": 2, "def_td": 6, "blk_kick": 2, "def_st_td": 6,
-    "pts_allow_0": 10, "pts_allow_1_6": 7, "pts_allow_7_13": 4, "pts_allow_14_20": 1,
-    "pts_allow_21_27": 0, "pts_allow_28_34": -1, "pts_allow_35p": -4,
-    "pass_sack": -0.25, "fum": -0.25, "tkl_loss": 0.35, "qb_hit": 0.2,
-    "yds_allow_0_100": 5, "yds_allow_100_199": 3, "yds_allow_200_299": 2, "yds_allow_300_349": 0,
-    "yds_allow_350_399": -3, "yds_allow_400_449": -3, "yds_allow_450_499": -4, "yds_allow_500_549": -5,
-    "yds_allow_550p": -6,
+    "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3, "fgm_40_49": 3, "fgm_50p": 3, "fgm_yds_over_30": 0.1, "fgmiss": -1,
+    "sack": 1, "int": 2, "fum_rec": 2, "safe": 2, "def_td": 6, "blk_kick": 2, "def_st_td": 6, "tkl_loss": 0.35, "qb_hit": 0.2,
+    # D/ST (README, "A defense's own Actual number"): a flat bonus for the bracket it lands in, plus a small per-unit term.
+    "pts_allow_0": 4.62, "pts_allow_1_6": 4.62, "pts_allow_7_13": 4.62, "pts_allow_14_20": 4.62, "pts_allow_21_27": 4.62,
+    "pts_allow_28_34": 4.62, "pts_allow_35p": 4.62, "pts_allow": -0.23,
+    "yds_allow_0_100": 5.75, "yds_allow_100_199": 5.75, "yds_allow_200_299": 5.75, "yds_allow_300_349": 5.75, "yds_allow_350_399": 5.75,
+    "yds_allow_400_449": 5.75, "yds_allow_450_499": 5.75, "yds_allow_500_549": 5.75, "yds_allow_550p": 5.75, "yds_allow": -0.02,
 }
 
 
@@ -74,7 +72,9 @@ def num(row: dict, key: str) -> float:
         return 0.0
 
 
-def sc(scoring: dict, key: str, default: float = 0.0) -> float:
+def sc(scoring: dict, key: str) -> float:
+    """What the league scores for one stat key (0 when it does not score it)."""
+    default = 0.0
     v = scoring.get(key)
     if v is None and key == "fgm_60p":
         v = scoring.get("fgm_60_plus")
@@ -90,37 +90,17 @@ def team_of(abbr: str) -> str:
 
 
 def fg_points(scoring: dict, dist: float) -> float:
-    if dist < 20:
-        base = sc(scoring, "fgm_0_19", 3)
-    elif dist < 30:
-        base = sc(scoring, "fgm_20_29", 3)
-    elif dist < 40:
-        base = sc(scoring, "fgm_30_39", 3)
-    elif dist < 50:
-        base = sc(scoring, "fgm_40_49", 4)
-    elif "fgm_50p" in scoring:
-        base = sc(scoring, "fgm_50p")
-    elif dist < 60:
-        base = sc(scoring, "fgm_50_59", 5)
-    else:
-        base = sc(scoring, "fgm_60p", 5)
-    return base + max(0.0, dist - 30) * sc(scoring, "fgm_yds_over_30") if dist > 30 else base
+    """Sleeper adds every key that applies: a flat per-FG value, the distance bucket, per yard, per yard past 30."""
+    bucket = ("fgm_0_19" if dist < 20 else "fgm_20_29" if dist < 30 else "fgm_30_39" if dist < 40 else "fgm_40_49" if dist < 50
+              else "fgm_50p" if "fgm_50p" in scoring or "fgm_50_plus" in scoring else "fgm_50_59" if dist < 60 else "fgm_60p")
+    return (sc(scoring, "fgm") + sc(scoring, bucket) + dist * sc(scoring, "fgm_yds") + max(0.0, dist - 30) * sc(scoring, "fgm_yds_over_30"))
 
 
 def pts_allowed_points(scoring: dict, allowed: int) -> float:
-    if allowed <= 0:
-        return sc(scoring, "pts_allow_0")
-    if allowed <= 6:
-        return sc(scoring, "pts_allow_1_6")
-    if allowed <= 13:
-        return sc(scoring, "pts_allow_7_13")
-    if allowed <= 20:
-        return sc(scoring, "pts_allow_14_20")
-    if allowed <= 27:
-        return sc(scoring, "pts_allow_21_27")
-    if allowed <= 34:
-        return sc(scoring, "pts_allow_28_34")
-    return sc(scoring, "pts_allow_35p")
+    """The bracket's value plus the per-point term."""
+    key = ("pts_allow_0" if allowed <= 0 else "pts_allow_1_6" if allowed <= 6 else "pts_allow_7_13" if allowed <= 13 else "pts_allow_14_20" if allowed <= 20
+           else "pts_allow_21_27" if allowed <= 27 else "pts_allow_28_34" if allowed <= 34 else "pts_allow_35p")
+    return sc(scoring, key) + allowed * sc(scoring, "pts_allow")
 
 
 def fd_points(scoring: dict, pos: str, generic: str) -> float:
@@ -128,6 +108,11 @@ def fd_points(scoring: dict, pos: str, generic: str) -> float:
 
 
 def yds_allowed_points(scoring: dict, yds: float) -> float:
+    """The bracket's value plus the per-yard term."""
+    return _yds_bracket(scoring, yds) + yds * sc(scoring, "yds_allow")
+
+
+def _yds_bracket(scoring: dict, yds: float) -> float:
     for hi, key in ((100, "yds_allow_0_100"), (200, "yds_allow_100_199"), (300, "yds_allow_200_299"), (350, "yds_allow_300_349"),
                     (400, "yds_allow_350_399"), (450, "yds_allow_400_449"), (500, "yds_allow_450_499"), (550, "yds_allow_500_549")):
         if yds < hi:
@@ -157,11 +142,13 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         return out
     pos, deft = team_of(row.get("posteam") or ""), team_of(row.get("defteam") or "")
 
-    def add(gsis: str, pts: float, label: str, fd: str = "", team: str = "") -> None:
+    def add(gsis: str, pts: float, label: str, fd: str = "", team: str = "", bonus: str = "") -> None:
         sid = g2s.get(gsis or "")
         if sid:
             if fd and row.get("touchdown") != "1":
                 pts += fd_points(scoring, pos_of.get(sid, ""), fd)
+            if bonus:   # a position-keyed per-play bonus, e.g. bonus_rec_te
+                pts += sc(scoring, bonus + pos_of.get(sid, "").lower())
             if pts:
                 out.append((sid, pts, label, team or pos))
 
@@ -177,37 +164,40 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
     if two_pt:
         if row.get("two_point_conv_result") == "success":
             if ptype == "pass":
-                add(row.get("passer_player_id"), sc(scoring, "pass_2pt", 2), "2-pt pass")
-                add(row.get("receiver_player_id"), sc(scoring, "rec_2pt", 2), "2-pt catch")
+                add(row.get("passer_player_id"), sc(scoring, "pass_2pt"), "2-pt pass")
+                add(row.get("receiver_player_id"), sc(scoring, "rec_2pt"), "2-pt catch")
             elif ptype == "run":
-                add(row.get("rusher_player_id"), sc(scoring, "rush_2pt", 2), "2-pt run")
+                add(row.get("rusher_player_id"), sc(scoring, "rush_2pt"), "2-pt run")
         return out
 
     if ptype == "pass":
         if row.get("sack") == "1":
-            add_def(deft, sc(scoring, "sack", 1), "sack")
+            add_def(deft, sc(scoring, "sack"), "sack")
             add(row.get("passer_player_id"), sc(scoring, "pass_sack"), "sacked")
         else:
             complete = row.get("complete_pass") == "1"
             py = num(row, "passing_yards") if complete else 0.0
             ptd = row.get("pass_touchdown") == "1"
-            add(row.get("passer_player_id"), py * sc(scoring, "pass_yd") + (sc(scoring, "pass_td") if ptd else 0),
+            add(row.get("passer_player_id"), py * sc(scoring, "pass_yd") + (sc(scoring, "pass_td") if ptd else 0) + sc(scoring, "pass_att") + (sc(scoring, "pass_cmp") if complete else 0),
                 (f"{int(py)} yd TD pass" if ptd else f"{int(py)} yd pass") if complete else "",
                 "pass_fd" if row.get("first_down_pass") == "1" else "")
             if complete:
                 ry = num(row, "receiving_yards")
-                add(row.get("receiver_player_id"), sc(scoring, "rec") + ry * sc(scoring, "rec_yd") + (sc(scoring, "rec_td") if ptd else 0),
+                add(row.get("receiver_player_id"), sc(scoring, "rec") + sc(scoring, "rec_tgt") + ry * sc(scoring, "rec_yd") + (sc(scoring, "rec_td") if ptd else 0),
                     f"{int(ry)} yd TD catch" if ptd else f"{int(ry)} yd catch",
-                    "rec_fd" if row.get("first_down_pass") == "1" else "")
+                    "rec_fd" if row.get("first_down_pass") == "1" else "", bonus="bonus_rec_")
+            else:
+                add(row.get("receiver_player_id"), sc(scoring, "rec_tgt"), "")
             if row.get("interception") == "1":
-                add(row.get("passer_player_id"), sc(scoring, "pass_int", -2), "interception")
-                add_def(deft, sc(scoring, "int", 2), "interception")
+                add(row.get("passer_player_id"), sc(scoring, "pass_int"), "interception")
+                add_def(deft, sc(scoring, "int") + num(row, "return_yards") * sc(scoring, "int_ret_yd"), "interception")
                 if td and td_team == deft:
-                    add_def(deft, sc(scoring, "def_td", 6), "interception return TD")
+                    add_def(deft, sc(scoring, "def_td"), "interception return TD")
+                    add(row.get("passer_player_id"), sc(scoring, "pass_int_td"), "pick-six")
     elif ptype == "run":
         ry = num(row, "rushing_yards")
         rtd = row.get("rush_touchdown") == "1"
-        add(row.get("rusher_player_id"), ry * sc(scoring, "rush_yd") + (sc(scoring, "rush_td") if rtd else 0),
+        add(row.get("rusher_player_id"), ry * sc(scoring, "rush_yd") + (sc(scoring, "rush_td") if rtd else 0) + sc(scoring, "rush_att"),
             f"{int(ry)} yd TD run" if rtd else f"{int(ry)} yd run",
             "rush_fd" if row.get("first_down_rush") == "1" else "")
     elif ptype == "field_goal":
@@ -218,17 +208,17 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         else:
             add(row.get("kicker_player_id"), sc(scoring, "fgmiss"), f"missed {int(dist)} yd field goal")
             if res == "blocked":
-                add_def(deft, sc(scoring, "blk_kick", 2), "blocked kick")
+                add_def(deft, sc(scoring, "blk_kick"), "blocked kick")
     elif ptype == "extra_point":
         if row.get("extra_point_result") == "good":
-            add(row.get("kicker_player_id"), sc(scoring, "xpm", 1), "extra point")
+            add(row.get("kicker_player_id"), sc(scoring, "xpm"), "extra point")
         else:
             add(row.get("kicker_player_id"), sc(scoring, "xpmiss"), "missed extra point")
             if row.get("extra_point_result") == "blocked":
-                add_def(deft, sc(scoring, "blk_kick", 2), "blocked kick")
+                add_def(deft, sc(scoring, "blk_kick"), "blocked kick")
     elif ptype == "punt":
         if row.get("punt_blocked") == "1":
-            add_def(deft, sc(scoring, "blk_kick", 2), "blocked punt")
+            add_def(deft, sc(scoring, "blk_kick"), "blocked punt")
 
     if ptype in ("pass", "run"):
         if row.get("tackled_for_loss") == "1":
@@ -237,19 +227,21 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
             add_def(deft, sc(scoring, "qb_hit"), "QB hit")
         if row.get("fumble") == "1":
             add(row.get("fumbled_1_player_id"), sc(scoring, "fum"), "fumble")
+            if team_of(row.get("forced_fumble_player_1_team") or "") == deft:
+                add_def(deft, sc(scoring, "ff"), "forced fumble")
     # Fumbles and safeties can happen on any scrimmage play; returns on kicks.
     if ptype in ("pass", "run") and row.get("fumble_lost") == "1":
-        add(row.get("fumbled_1_player_id"), sc(scoring, "fum_lost", -2), "fumble lost")
+        add(row.get("fumbled_1_player_id"), sc(scoring, "fum_lost"), "fumble lost")
         if team_of(row.get("fumble_recovery_1_team") or "") == deft:
-            add_def(deft, sc(scoring, "fum_rec", 2), "fumble recovery")
+            add_def(deft, sc(scoring, "fum_rec"), "fumble recovery")
             if td and td_team == deft:
-                add_def(deft, sc(scoring, "def_td", 6), "fumble return TD")
+                add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), "fumble return TD")
     if row.get("safety") == "1":
-        add_def(deft, sc(scoring, "safe", 2), "safety")
+        add_def(deft, sc(scoring, "safe"), "safety")
     if ptype in ("kickoff", "punt") and td and row.get("return_touchdown") == "1":
         rt = row.get("punt_returner_player_id") or row.get("kickoff_returner_player_id")
-        add(rt, sc(scoring, "def_st_td", 6), "return TD", team=td_team)
-        add_def(td_team, sc(scoring, "def_st_td", 6), "return TD")
+        add(rt, sc(scoring, "def_st_td"), "return TD", team=td_team)
+        add_def(td_team, sc(scoring, "def_st_td"), "return TD")
     return out
 
 
@@ -414,9 +406,8 @@ def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[s
         if partial and not gkey:
             continue
         diff = round(final - totals.get(sid, 0.0), 2)
-        if pos_of.get(sid) != "DEF":
-            scored += abs(final)
-            explained += max(0.0, abs(final) - abs(diff))
+        scored += abs(final)
+        explained += max(0.0, abs(final) - abs(diff))
         if abs(diff) >= 0.01:
             # A player whose game is not in the play-by-play yet settles when the last known game ends.
             order += 1
@@ -481,16 +472,18 @@ def write_index() -> None:
         json.dump({"weeks": weeks}, fh, separators=(",", ":"))
 
 
-def already_good(path: str) -> bool:
-    """A finished timeline is kept; one flagged approximate is retried, since nflverse fills in a day late."""
+def already_good(path: str, have_league: bool = False) -> bool:
+    """A finished timeline is kept; one flagged approximate is retried, since nflverse fills in a day late, and one
+    built with the fitted default is rebuilt once the league's own settings can be fetched."""
     try:
-        return not json.load(open(path)).get("approx", True)
+        d = json.load(open(path))
+        return not d.get("approx", True) and not (have_league and d.get("scoring", "default") == "default" and d.get("q", 1) < 0.995)
     except Exception:  # noqa: BLE001
         return False
 
 
-def load_scoring() -> dict:
-    """The league's scoring_settings (cached after the first fetch; a built-in default as the last resort)."""
+def load_scoring() -> dict | None:
+    """The league's scoring_settings (cached after the first fetch), or None when neither is available."""
     try:
         lid = json.load(open(HISTORY_PATH))["league_id"]
         s = requests.get(f"{SLEEPER_API}/league/{lid}", timeout=30).json().get("scoring_settings")
@@ -503,8 +496,25 @@ def load_scoring() -> dict:
     try:
         return json.load(open(SCORING_CACHE))
     except Exception:  # noqa: BLE001
-        print("[warn] using the built-in default scoring", file=sys.stderr)
-        return dict(DEFAULT_SCORING)
+        return None
+
+
+def scoring_candidates(league: dict | None) -> list[tuple[str, dict]]:
+    """The league's own rules first, then the built-in ones fitted to its real points."""
+    return ([("league", league)] if league else []) + [("default", dict(DEFAULT_SCORING))]
+
+
+def build_best(week: int, rows: list[dict], lineup: dict, g2s: dict, candidates: list[tuple[str, dict]], prior: dict,
+               proj: dict | None, season: int, pos_of: dict, partial: bool = False) -> dict | None:
+    """Build with each candidate scoring and keep the one that explains Sleeper's real points best. The league's own
+    settings win ties; the fitted default is the safety net if a key means something other than what we assume."""
+    best = None
+    for name, scoring in candidates:
+        tl = build_week(week, rows, lineup, g2s, scoring, prior, proj, season, pos_of, partial=partial)
+        if tl and (best is None or tl["q"] > best["q"] + 0.002):
+            tl["scoring"] = name
+            best = tl
+    return best
 
 
 def fetch_projections(season: int, week: int, scoring: dict) -> dict[str, float] | None:
@@ -553,7 +563,8 @@ def main() -> None:
         print("[warn] no play-by-play yet; leaving wp_timeline as is")
         return
     played = {int(float(r["week"])) for r in rows if (r.get("season_type") or "REG") == "REG"}
-    scoring = load_scoring()
+    candidates = scoring_candidates(load_scoring())
+    scoring = candidates[0][1]
     g2s = id_crosswalk()
     pos_of = {sid: v[1] for sid, v in names.items()}
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -571,8 +582,8 @@ def main() -> None:
                     prior.setdefault(pid, []).append(p)
         path = os.path.join(OUT_DIR, f"week_{wk}.json")
         lineup = lineups[str(wk)]
-        if wk in played and not already_good(path):
-            tl = build_week(wk, rows, lineup, g2s, scoring, prior, fetch_projections(season, wk, scoring), season, pos_of)
+        if wk in played and not already_good(path, candidates[0][0] == "league"):
+            tl = build_best(wk, rows, lineup, g2s, candidates, prior, fetch_projections(season, wk, scoring), season, pos_of)
             if tl and tl["q"] >= 0.5:
                 with open(path, "w") as fh:
                     json.dump(tl, fh, separators=(",", ":"))

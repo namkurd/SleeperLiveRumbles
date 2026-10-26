@@ -46,11 +46,11 @@ assert round(sum(e[2] for e in doc["ev"]), 2) == 11.5, "the recording adds up to
 doc = R.empty_doc(2026, 2)
 doc["t0"] = t0
 tl = {"t0": t0 + 5000, "g": {"DAL@PHI": {"ko": 0, "end": 11000, "clk": [[0, 1000], [11000, 0]]}}, "tg": {"DAL": "DAL@PHI", "PHI": "DAL@PHI"},
-      "tm": {"A": "DAL"}, "ev": [[100, "A", 6.0, "TD"], [900, "A", 2.5, "catch"]], "pre": {"A": 11.0}}
+      "tm": {"A": "DAL"}, "ev": [[100, "A", 6.0, "TD"], [900, "A", 2.5, "catch"]], "pre": {"A": 11.0}, "q": 0.98, "approx": False, "scoring": "league"}
 R.merge_timeline(doc, tl)
 assert doc["g"]["DAL@PHI"] == {"ko": 5, "end": 11005, "clk": [[5, 1000], [11005, 0]]}, doc["g"]
 assert doc["ev"] == [[105, "A", 6.0, "TD"], [905, "A", 2.5, "catch"]] and doc["pre"] == {"A": 11.0} and doc["tm"] == {"A": "DAL"}
-assert doc["_s"]["last"] == {"A": 8.5} and doc["_s"]["seeded"]
+assert doc["_s"]["last"] == {"A": 8.5} and doc["_s"]["seeded"] == R.SEED_VERSION
 # the next poll then records only what is new, never the points already scored
 R.apply_poll(doc, {"games": [game("complete", 0)], "points": {"A": 8.5}, "team": {}, "stats": {}}, t0 + 20_000_000)
 assert len(doc["ev"]) == 2, doc["ev"]

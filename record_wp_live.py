@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("WP_DATA_DIR", os.path.join(HERE, "wp_live"))
 LIVE_INTERVAL_SECONDS = int(os.environ.get("WP_INTERVAL", "60"))
 COMMIT_EVERY_SECONDS = 600
+SEED_VERSION = 2   # bump when the way earlier games are rebuilt changes: a recording seeded by an older one starts over
 MAX_RUN_MINUTES = 330
 CLOCK_EVERY_SECONDS = 45
 PROJ_URL = "https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular"
@@ -116,7 +117,8 @@ def merge_timeline(doc: dict, tl: dict) -> None:
     last = doc["_s"]["last"]
     for e in tl["ev"]:
         last[e[1]] = round(last.get(e[1], 0.0) + e[2], 2)
-    doc["_s"]["seeded"] = True
+    doc["_s"]["seeded"] = SEED_VERSION
+    doc["q"], doc["approx"], doc["scoring"] = tl["q"], tl["approx"], tl.get("scoring")
 
 
 def seed_from_plays(doc: dict, snap: dict, ctx: dict) -> bool:
@@ -125,7 +127,7 @@ def seed_from_plays(doc: dict, snap: dict, ctx: dict) -> bool:
     Sleeper's points, then carry on live from there. Never fatal: without it the chart simply starts later."""
     try:
         import build_wp_timeline as B
-        if doc["_s"].get("seeded") or not any(g["status"] != "pre_game" for g in snap["games"]):
+        if doc["_s"].get("seeded") == SEED_VERSION or not any(g["status"] != "pre_game" for g in snap["games"]):
             return False
         starts = [g["start_ms"] for g in snap["games"] if g.get("start_ms")]
         if doc["t0"] is None:
@@ -139,9 +141,9 @@ def seed_from_plays(doc: dict, snap: dict, ctx: dict) -> bool:
         pos_of = {sid: ("DEF" if not sid.isdigit() else (players.get(sid) or {}).get("position") or "") for sid in snap["points"]}
         lineup = {"all": [[sid, pts] for sid, pts in snap["points"].items()]}
         proj = B.fetch_projections(int(ctx["season"]), ctx["week"], ctx["scoring"])
-        tl = B.build_week(ctx["week"], rows, lineup, B.id_crosswalk(), ctx["scoring"], {}, proj, int(ctx["season"]), pos_of, partial=True)
+        tl = B.build_best(ctx["week"], rows, lineup, B.id_crosswalk(), B.scoring_candidates(ctx["scoring"]), {}, proj, int(ctx["season"]), pos_of, partial=True)
         if not tl:
-            doc["_s"]["seeded"] = True
+            doc["_s"]["seeded"] = SEED_VERSION
             return False
         merge_timeline(doc, tl)
         for sid, st in (snap.get("stats") or {}).items():
@@ -288,6 +290,8 @@ def load_doc(season, week: int) -> dict:
     try:
         d = json.load(open(path_for(week)))
         if d.get("season") == int(season) and d.get("src") == "live":
+            if d.get("_s", {}).get("seeded") not in (None, SEED_VERSION):
+                return empty_doc(season, week)   # seeded by an older version: rebuild it
             return d
     except Exception:  # noqa: BLE001
         pass
