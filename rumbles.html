@@ -781,6 +781,45 @@
     margin-bottom: 12px;
   }
   .error-banner.show { display: block; }
+  /* ---- Season trends (collapsed by default, under the standings) ---- */
+  .trend-panel { margin: 12px 0 0; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; }
+  .trend-panel > summary { cursor: pointer; padding: 11px 14px; font-weight: 700; list-style: none; display: flex; align-items: baseline; gap: 8px; }
+  .trend-panel > summary::-webkit-details-marker { display: none; }
+  .trend-panel > summary::before { content: "\25B8"; color: var(--text-dim); transition: transform 0.15s; }
+  .trend-panel[open] > summary::before { transform: rotate(90deg); }
+  .trend-panel > summary small { color: var(--text-dim); font-weight: 500; font-size: 0.74rem; }
+  .trend-tabs { display: flex; gap: 6px; padding: 0 14px 8px; flex-wrap: wrap; }
+  .trend-tabs button { border: 1px solid var(--panel-border); background: transparent; color: var(--text-dim); font: inherit; font-size: 0.78rem; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
+  .trend-tabs button.active { background: var(--accent); color: #1a1108; border-color: var(--accent); }
+  .trend-body { padding: 0 12px 14px; }
+  .trend-note { color: var(--text-dim); font-size: 0.76rem; margin: 8px 2px 0; line-height: 1.4; }
+  .trend-note b { color: var(--text); }
+  .trend-note .up { color: var(--good); } .trend-note .dn { color: var(--bad); }
+  .tr-svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+  .tr-svg text { font-family: inherit; fill: var(--text-dim); font-size: 11px; }
+  .tr-svg .tr-name { fill: var(--text); font-weight: 600; cursor: pointer; }
+  .tr-svg .tr-line { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; transition: opacity 0.2s; }
+  .tr-svg .tr-dot { transition: opacity 0.2s; }
+  .tr-svg .tr-grid { stroke: var(--panel-border); stroke-width: 1; }
+  .tr-heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-variant-numeric: tabular-nums; font-size: 0.74rem; }
+  .tr-heat th { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; padding: 2px 0; position: static; background: none; box-shadow: none; text-align: center; }
+  .tr-heat td { text-align: center; padding: 5px 0; border-radius: 5px; color: #fff; font-weight: 700; background-image: none; }
+  .tr-heat td.tr-m { text-align: left; background: none; color: var(--text); font-weight: 600; padding: 5px 6px 5px 2px; white-space: nowrap; }
+  .tr-heat td.tr-t { background: none; color: var(--text-dim); font-weight: 600; }
+  .tr-heat td.tr-hot { box-shadow: inset 0 0 0 2px var(--accent); }
+  .tr-legend { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; color: var(--text-dim); margin: 8px 2px 0; }
+  .tr-legend i { flex: 0 0 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, hsl(0 55% 30%), hsl(60 55% 30%), hsl(130 55% 30%)); }
+  .tr-legend .hotkey { display: inline-block; width: 12px; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--accent); margin-left: 8px; }
+  .tr-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .tr-card { border: 1px solid var(--panel-border); border-radius: 10px; padding: 7px 9px 6px; background: color-mix(in srgb, var(--bg) 40%, var(--panel)); }
+  .tr-card .tr-h { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .tr-card .tr-h b { font-size: 0.82rem; }
+  .tr-chip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 999px; text-transform: uppercase; }
+  .tr-chip.hot { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--accent); }
+  .tr-chip.cold { background: color-mix(in srgb, var(--accent-2) 28%, transparent); color: var(--accent-2); }
+  .tr-chip.flat { color: var(--text-dim); border: 1px solid var(--panel-border); }
+  .tr-card svg { width: 100%; height: 44px; display: block; margin-top: 4px; }
+  .tr-card .tr-s { color: var(--text-dim); font-size: 0.68rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .section-title {
     font-size: 1rem;
     margin: 22px 0 4px;
@@ -1525,6 +1564,16 @@
     </table>
     </div>
   </div>
+
+  <details class="trend-panel" id="trend-panel">
+    <summary>Season trends <small>who's rising, falling and hot</small></summary>
+    <div class="trend-tabs" role="group" aria-label="Trend view">
+      <button type="button" data-v="rank" class="active">Rank race</button>
+      <button type="button" data-v="heat">Weekly heatmap</button>
+      <button type="button" data-v="form">Form</button>
+    </div>
+    <div id="trend-body" class="trend-body"></div>
+  </details>
 
   <footer>
     <span>9 Rumbles for the H2H win, +1 per team outscored that week (up to 20/week).</span>
@@ -4873,6 +4922,7 @@
 
   function render(opts) {
     prefsSave();
+    renderTrends();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();
     var rows = buildCombinedStandings();
@@ -6826,6 +6876,116 @@
     });
   }
   window.addEventListener("resize", rbFitCards);
+  // ---- Season trends ------------------------------------------------------
+  // Three ways to read the season week by week, built only from rumbles_history.json's weekly log:
+  // a rank race (line per team), a weekly Rumbles heatmap, and a "form" card per team.
+  state.trend = { view: "rank", sel: null };
+  // One steady color per team (12 distinct ones) so no two lines look alike.
+  function trendColor(rid) { return RB_COLORS[(Number(rid) - 1 + RB_COLORS.length) % RB_COLORS.length]; }
+  function trendData() {
+    var h = state.history;
+    if (!h || !h.weekly) return null;
+    var weeks = Object.keys(h.weekly).map(Number).filter(function (w) { return !isNaN(w); }).sort(function (a, b) { return a - b; });
+    var names = {};
+    (h.standings || []).forEach(function (r) { names[r.roster_id] = r.manager; });
+    var rids = Object.keys(names).map(Number);
+    var T = {};
+    rids.forEach(function (rid) { T[rid] = { rid: rid, name: names[rid], rum: [], pts: [], cumR: [], cumP: [], rank: [] }; });
+    weeks.forEach(function (w, i) {
+      rids.forEach(function (rid) {
+        var e = (h.weekly[String(w)] || {})[String(rid)] || {};
+        var t = T[rid];
+        t.rum.push(num(e.rumbles)); t.pts.push(num(e.points));
+        t.cumR.push((i ? t.cumR[i - 1] : 0) + num(e.rumbles));
+        t.cumP.push((i ? t.cumP[i - 1] : 0) + num(e.points));
+      });
+      rids.slice().sort(function (a, b) { return T[b].cumR[i] - T[a].cumR[i] || T[b].cumP[i] - T[a].cumP[i]; })
+        .forEach(function (rid, k) { T[rid].rank.push(k + 1); });
+    });
+    var list = rids.map(function (r) { return T[r]; }).sort(function (a, b) { return a.rank[weeks.length - 1] - b.rank[weeks.length - 1]; });
+    return { weeks: weeks, teams: list };
+  }
+  function trendHeat(r) { var t = Math.max(0, Math.min(1, r / 20)); return "hsl(" + Math.round(t * 130) + " 55% " + Math.round(24 + 6 * (1 - Math.abs(t - 0.5) * 2)) + "%)"; }
+  function trendRankSvg(D) {
+    var n = D.teams.length, W = 640, padL = 26, padR = 96, padT = 26, rowH = 26, H = padT + (n - 1) * rowH + 22;
+    var nw = D.weeks.length, step = nw > 1 ? (W - padL - padR) / (nw - 1) : 0;
+    var X = function (i) { return padL + i * step; }, Y = function (rk) { return padT + (rk - 1) * rowH; };
+    var sel = state.trend.sel;
+    var o = '<svg class="tr-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rank by cumulative Rumbles after each week">';
+    D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + "</text>"; });
+    for (var k = 1; k <= n; k++) o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(k) + '" y2="' + Y(k) + '"/><text x="' + (padL - 8) + '" y="' + (Y(k) + 4) + '" text-anchor="end">' + k + "</text>";
+    D.teams.forEach(function (t) {
+      var col = trendColor(t.rid), op = sel == null ? 0.9 : (sel === t.rid ? 1 : 0.14);
+      var pts = t.rank.map(function (rk, i) { return X(i).toFixed(1) + "," + Y(rk); }).join(" ");
+      o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + pts + '" stroke="' + col + '" opacity="' + op + '"' + (sel === t.rid ? ' stroke-width="4"' : "") + "/>";
+      t.rank.forEach(function (rk, i) { o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(rk) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + col + '" opacity="' + op + '"><title>' + escapeHtml(t.name) + " after W" + D.weeks[i] + ": #" + rk + ", " + t.cumR[i] + " Rumbles</title></circle>"; });
+      o += '<text class="tr-name" x="' + (W - padR + 10) + '" y="' + (Y(t.rank[nw - 1]) + 4) + '" opacity="' + (sel == null || sel === t.rid ? 1 : 0.35) + '">' + escapeHtml(t.name) + "</text></g>";
+    });
+    return o + "</svg>";
+  }
+  function trendMoveNote(D) {
+    var nw = D.weeks.length, from = Math.max(0, nw - 4);
+    var mv = D.teams.map(function (t) { return { t: t, d: t.rank[from] - t.rank[nw - 1] }; });
+    var up = mv.slice().sort(function (a, b) { return b.d - a.d; })[0], dn = mv.slice().sort(function (a, b) { return a.d - b.d; })[0];
+    var span = "since W" + D.weeks[from];
+    var bits = [];
+    if (up && up.d > 0) bits.push('<span class="up">&#9650; <b>' + escapeHtml(up.t.name) + "</b> up " + up.d + "</span>");
+    if (dn && dn.d < 0) bits.push('<span class="dn">&#9660; <b>' + escapeHtml(dn.t.name) + "</b> down " + (-dn.d) + "</span>");
+    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Ranked by total Rumbles after each week. Tap a line or name to follow one team.</p>";
+  }
+  function trendHeatHtml(D) {
+    var o = '<table class="tr-heat"><thead><tr><th></th>';
+    D.weeks.forEach(function (w) { o += "<th>W" + w + "</th>"; });
+    o += "<th>Total</th></tr></thead><tbody>";
+    D.teams.forEach(function (t) {
+      o += '<tr><td class="tr-m">' + escapeHtml(t.name) + "</td>";
+      t.rum.forEach(function (r, i) {
+        var hot = r >= 15 && ((i > 0 && t.rum[i - 1] >= 15) || (i < t.rum.length - 1 && t.rum[i + 1] >= 15));
+        o += '<td class="' + (hot ? "tr-hot" : "") + '" style="background:' + trendHeat(r) + '" title="' + escapeHtml(t.name) + " W" + D.weeks[i] + ": " + r + " Rumbles, " + t.pts[i].toFixed(1) + ' pts">' + r + "</td>";
+      });
+      o += '<td class="tr-t">' + t.cumR[t.cumR.length - 1] + "</td></tr>";
+    });
+    return o + '</tbody></table><div class="tr-legend">0<i></i>20 Rumbles in a week<span class="hotkey"></span>2+ big weeks (15+) in a row</div><p class="trend-note">Rows are in current standing order. Green weeks are big ones, red weeks are bad ones.</p>';
+  }
+  function trendFormHtml(D) {
+    var nw = D.weeks.length;
+    var cards = D.teams.map(function (t) {
+      var season = t.cumR[nw - 1] / nw, k = Math.min(3, nw), last = 0;
+      for (var i = nw - k; i < nw; i++) last += t.rum[i];
+      last /= k;
+      return { t: t, season: season, last: last, d: last - season };
+    }).sort(function (a, b) { return b.d - a.d; });
+    return '<div class="tr-form">' + cards.map(function (c) {
+      var t = c.t, bw = 100 / nw, o = '<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">';
+      t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"><title>W' + D.weeks[i] + ": " + r + " Rumbles</title></rect>"; });
+      var ay = 42 - c.season / 20 * 40;
+      o += '<line x1="0" x2="100" y1="' + ay.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="#9aa1b0" stroke-width="0.8" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/></svg>';
+      var chip = c.d >= 3 ? '<span class="tr-chip hot">Hot</span>' : c.d <= -3 ? '<span class="tr-chip cold">Cold</span>' : '<span class="tr-chip flat">Steady</span>';
+      return '<div class="tr-card"><div class="tr-h"><b style="color:' + trendColor(t.rid) + '">' + escapeHtml(t.name) + "</b>" + chip + "</div>" + o +
+        '<div class="tr-s">last ' + Math.min(3, nw) + ": " + c.last.toFixed(1) + " &middot; season " + c.season.toFixed(1) + "</div></div>";
+    }).join("") + '</div><p class="trend-note">Bars are each week\'s Rumbles (tall and green is a big week). The dashed line is that team\'s season average. Hot or cold compares the last 3 weeks to the season average; sorted hottest first.</p>';
+  }
+  function renderTrends() {
+    var panel = document.getElementById("trend-panel"), body = document.getElementById("trend-body");
+    if (!panel || !panel.open || !body) return;
+    var D = trendData();
+    if (!D || D.weeks.length < 2 || !D.teams.length) { body.innerHTML = '<p class="trend-note">Trends show up once two weeks are in the books.</p>'; return; }
+    var v = state.trend.view;
+    body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendRankSvg(D) + trendMoveNote(D);
+    [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) { b.classList.toggle("active", b.getAttribute("data-v") === v); });
+  }
+  document.getElementById("trend-panel").addEventListener("toggle", renderTrends);
+  [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) {
+    b.addEventListener("click", function () { state.trend.view = b.getAttribute("data-v"); renderTrends(); });
+  });
+  document.getElementById("trend-body").addEventListener("click", function (e) {
+    var g = e.target.closest && e.target.closest("g[data-rid]");
+    if (!g) { if (state.trend.sel != null) { state.trend.sel = null; renderTrends(); } return; }
+    var rid = Number(g.getAttribute("data-rid"));
+    state.trend.sel = state.trend.sel === rid ? null : rid;
+    renderTrends();
+  });
+
   // Every 3 seconds the live rows fade between time left and score.
   setInterval(function () {
     var v = document.getElementById("rumblin-view");
