@@ -3175,7 +3175,7 @@ def scenario_scenarios_tab(browser):
     setgames("complete", "in_progress", "pre_game", "pre_game"); poll()
     assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && !b.disabled && b.textContent === 'Scenarios'; })()"), "Scenarios opens once the 1pm games are final"
     page.click("#rb-scen"); page.wait_for_timeout(400)
-    assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent === null && document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "other sections hidden in Scenarios"
+    assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent !== null && document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "other sections hidden in Scenarios"
     assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
@@ -3188,6 +3188,15 @@ def scenario_scenarios_tab(browser):
     wp = lambda: page.evaluate("[...document.querySelectorAll('#rb-scen-view .sc-wp')].map(e => parseInt(e.textContent))")
     wp0 = wp()
     assert wp0 and all(1 <= x <= 99 for x in wp0), f"each block shows a win chance: {wp0}"
+
+    # the manager list stays on the Scenarios tab: pick which opponents to follow
+    chip = lambda nm: page.locator("#rb-strip .rb-chip", has_text=nm).first
+    assert page.evaluate("document.querySelectorAll('#rb-strip .rb-chip').length") >= 3, "manager list shows in Scenarios"
+    chip("Jake").click(); page.wait_for_timeout(300)
+    assert "Jake" not in [x["who"] for x in blocks_all()] and "Aidan" in [x["who"] for x in blocks_all()], "unpicking Jake hides his scenario"
+    assert page.evaluate("document.getElementById('rb-scen-view').offsetParent !== null"), "still in Scenarios"
+    chip("Jake").click(); page.wait_for_timeout(300)
+    assert [x["who"] for x in blocks()] == ["Jake", "Aidan"], "picking Jake again brings it back"
 
     # points move: the gap moves, the sentence does not
     setstats(b2=200); poll()
@@ -3263,6 +3272,20 @@ def scenario_trends(browser):
     shot("form")
     assert page.evaluate("document.querySelectorAll('#trend-body .tr-card').length") == n, "form: one card per team"
     assert page.evaluate("document.querySelectorAll('#trend-body .tr-chip').length") == n, "form: a hot/cold/steady chip per team"
+    # Actual: finished weeks only. Projected: the live week joins as a projected (starred) week.
+    page.click("#trend-panel .trend-tabs button[data-v=heat]"); page.wait_for_timeout(200)
+    heads = lambda: page.evaluate("[...document.querySelectorAll('#trend-body table.tr-heat thead th')].map(t => t.textContent)")
+    assert not any("*" in h for h in heads()), f"Actual mode has no projected week: {heads()}"
+    page.click("#mode-custom"); page.wait_for_timeout(500)
+    hh = heads()
+    assert "W2*" in hh, f"Projected mode should add the live week as a starred column: {hh}"
+    assert page.evaluate("document.querySelectorAll('#trend-body table.tr-heat td.tr-proj').length") == n, "projected cells are marked"
+    shot("heat_proj")
+    page.click("#trend-panel .trend-tabs button[data-v=rank]"); page.wait_for_timeout(200)
+    shot("rank_proj")
+    assert page.evaluate("document.querySelectorAll('#trend-body polyline[stroke-dasharray]').length") == n, "rank race: a dashed projected step per team"
+    page.click("#mode-actual"); page.wait_for_timeout(500)
+    assert page.evaluate("document.querySelectorAll('#trend-body polyline[stroke-dasharray]').length") == 0, "back on Actual the projected step disappears"
     page.set_viewport_size({"width": 390, "height": 800}); page.wait_for_timeout(200)
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "trends must not cause sideways scrolling on a phone"
     assert not console_errors and not page_errors, (console_errors, page_errors)
