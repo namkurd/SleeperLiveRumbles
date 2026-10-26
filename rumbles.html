@@ -3472,7 +3472,7 @@
             reserveByRoster[r.roster_id] = set;
           });
           state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
-          state.futureMeta = { leagueId: leagueId, season: season, seasonType: seasonType, scoring: league.scoring_settings || {}, lastRegWeek: (Number((league.settings || {}).playoff_week_start) || 15) - 1 };
+          state.futureMeta = { leagueId: leagueId, season: season, seasonType: seasonType, scoring: league.scoring_settings || {}, rosterPositions: league.roster_positions || [], lastRegWeek: (Number((league.settings || {}).playoff_week_start) || 15) - 1 };
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
           // Computed from the same SCORES_BASE feed regardless of whether
@@ -4036,7 +4036,9 @@
           scores[m.roster_id] = round2(tot);
           (pairs[m.matchup_id] = pairs[m.matchup_id] || []).push(m.roster_id);
         });
-        f.weeks[w] = { at: Date.now(), by: computeRumblesForWeek(scores, pairs) };
+        var bd = {};
+        ms.forEach(function (m) { bd[m.roster_id] = buildPlayerBreakdown(m, {}, projMap, meta.scoring, state.playersMeta || {}, {}, meta.rosterPositions || []); });
+        f.weeks[w] = { at: Date.now(), by: computeRumblesForWeek(scores, pairs), bd: bd };
       });
     })).then(function () { f.loading = false; }, function (err) { f.loading = false; f.err = err && err.message ? err.message : "couldn't load"; });
   }
@@ -4044,7 +4046,7 @@
   function applyFutureFold(rows, weeksList, weeksAlready) {
     var weeksCompleted = ((state.history && state.history.weeks_completed) || []).length;
     rows.forEach(function (r) {
-      var last = null;
+      var last = null, keepBd = r.this_week_player_breakdown, keepAct = r.this_week_actual_points, keepQb = r.qb_adjustment;
       weeksList.forEach(function (w) {
         var i = w.by[r.roster_id];
         if (!i) return;
@@ -4063,7 +4065,9 @@
       }
       r.this_week_live = false; r.this_week_points_live = false; r.this_week_points_idle = false;
       r.this_week_points_playing = null; r.this_week_points_left = null;
-      r.this_week_player_breakdown = null; r.this_week_actual_points = null; r.qb_adjustment = null;
+      var lastWk = weeksList.length ? weeksList[weeksList.length - 1].week : null;
+      var atCur = state.live && (lastWk === null || lastWk === Number(state.live.week));
+      r.this_week_player_breakdown = atCur ? keepBd : null; r.this_week_actual_points = atCur ? keepAct : null; r.qb_adjustment = atCur ? keepQb : null;
       r.this_week_points_is_last_week = false; r.h2h_streak = null;
     });
   }
@@ -5171,11 +5175,11 @@
         // handlers to look up pre-built tooltip data from
         // state.thisWeekTooltipData with.
         var pastWk = state.shownHistoricalWeek;
-        var ptsTooltip = thisWeekTooltip(state.mode, pastWk != null ? ((state.weekDetail[pastWk] || {})[r.roster_id] || null) : r.this_week_player_breakdown, r.this_week_actual_points, {
+        var ptsTooltip = thisWeekTooltip(state.mode, pastWk != null ? ((state.weekDetail[pastWk] || {})[r.roster_id] || null) : fShown != null && state.future.weeks[fShown] ? ((state.future.weeks[fShown].bd || {})[r.roster_id] || null) : r.this_week_player_breakdown, r.this_week_actual_points, {
           isLastWeek: r.this_week_points_is_last_week || pastWk != null,
           qbAdjustment: (r.this_week_points_is_last_week || pastWk != null) ? null : r.qb_adjustment,
           projectionsAvailable: pastWk != null ? false : !!(state.lastWeek && state.lastWeek.projectionsAvailable),
-          epaWeek: state.epaOn ? (pastWk != null ? pastWk : r.this_week_points_is_last_week ? (state.lastWeek && state.lastWeek.week) : (state.live && state.live.week)) : null
+          epaWeek: state.epaOn && fShown == null ? (pastWk != null ? pastWk : r.this_week_points_is_last_week ? (state.lastWeek && state.lastWeek.week) : (state.live && state.live.week)) : null
         });
         var ptsCellAttrs = ' data-roster-id="' + r.roster_id + '"';
         if (ptsTooltip) {
