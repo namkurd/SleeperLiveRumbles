@@ -6488,7 +6488,7 @@
 
   // Projected totals big in the middle, actual points smaller on the outside edges.
   function rbScenScores(me, t, col) {
-    var mc = rbColor(me.rid), k = "sc:" + t.rid + ":";
+    var mc = rbColor(me.rid), k = "sc:" + me.rid + ":" + t.rid + ":";
     var cell = function (cls, who, lab, num2, c, al, key, opt) {
       return '<div class="sc-sc ' + cls + '" style="text-align:' + al + '"><small style="color:' + c + '">' + escapeHtml(who) + " " + lab + "</small><b>" + fl(key, num2.toFixed(2), opt) + "</b></div>";
     };
@@ -6500,7 +6500,8 @@
     var box = document.getElementById("rb-scen-view");
     var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
     if (!me) { box.innerHTML = ""; return; }
-    if (!state.scenFrozen || state.scenFrozen.key !== win.key) state.scenFrozen = { key: win.key, by: {} };
+    var fzKey = win.key + "|" + me.rid;
+    if (!state.scenFrozen || state.scenFrozen.key !== fzKey) state.scenFrozen = { key: fzKey, by: {} };
     var mine = rbScenPlayers(me, win);
     var blocks = [];
     var followed = state.rb.scenSel || null;
@@ -6528,7 +6529,7 @@
         var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
         blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
           '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div></div>" +
-          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
+          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
           rbScenScores(me, t, col) +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
@@ -6844,6 +6845,8 @@
     }
     if (scenOn) {
       rb.lastTeams = teams;
+      // A different "me" starts a fresh set of followed opponents.
+      if (meTeam && rb.scenMe !== meTeam.rid) { rb.scenMe = meTeam.rid; rb.scenSel = null; }
       var scenAvail = rbScenAvail(teams, meTeam);
       var scenSelNow = rb.scenSel || rbScenDefaultSel(teams);
       var onSet = {};
