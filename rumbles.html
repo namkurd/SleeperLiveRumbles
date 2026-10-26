@@ -1434,6 +1434,11 @@
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
   .sc-hl { font-size: 0.8rem; font-weight: 600; line-height: 1.25; margin-top: 4px; text-wrap: balance; }
+  .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 6px 16px; margin: 10px 4px 2px; }
+  .sc-sc small { display: block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-sc b { font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sc-sc.proj b { font-size: 1.9rem; font-weight: 800; }
+  .sc-sc.act b { font-size: 1rem; font-weight: 700; color: var(--text-dim); }
   .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 10px 6px 10px; }
   .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
   .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
@@ -1452,7 +1457,7 @@
   .sc-a { grid-area: a; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; color: var(--text-dim); }
   .sc-a.gain { color: var(--good); } .sc-a.loss { color: var(--bad); }
   .sc-n .nl { display: none; }
-  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.72rem; } .sc-gap b { font-size: 1.4rem !important; } }
+  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.72rem; } .sc-gap b { font-size: 1.4rem !important; } .sc-scores { gap: 4px 10px; } .sc-sc.proj b { font-size: 1.5rem; } .sc-sc.act b { font-size: 0.85rem; } .sc-sc small { font-size: 0.54rem; } }
   .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.pp .neg { color: var(--bad); }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
@@ -6441,7 +6446,7 @@
         '<span class="sc-g">' + escapeHtml(meta || "") + '</span><span class="sc-a ' + (pre ? "" : a > 0 ? "gain" : a < 0 ? "loss" : "") + '">' + (pre ? "–" : a.toFixed(2)) + "</span></div>";
     }).join("");
     return '<div class="sc-side" style="--c:' + col + '"><div class="sc-sh"><b>' + escapeHtml(t.name) + "</b><span>" + list.length + " left</span></div>" +
-      '<div class="sc-pj">act <b>' + t.act.toFixed(2) + "</b> &middot; proj <b>" + t.proj.toFixed(2) + "</b></div>" + rows + "</div>";
+      rows + "</div>";
   }
 
   // Which opponents a Scenarios block can exist for (a Rumble still in play against you).
@@ -6454,6 +6459,16 @@
   function rbScenDefaultSel(teams) {
     var me = (teams || []).filter(function (t) { return t.rid === state.rb.me; })[0];
     return rbScenAvail(teams || [], me);
+  }
+
+  // Projected totals big in the middle, actual points smaller on the outside edges.
+  function rbScenScores(me, t, col) {
+    var mc = rbColor(me.rid);
+    var cell = function (cls, who, lab, val, c, al) {
+      return '<div class="sc-sc ' + cls + '" style="text-align:' + al + '"><small style="color:' + c + '">' + escapeHtml(who) + " " + lab + "</small><b>" + val.toFixed(2) + "</b></div>";
+    };
+    return '<div class="sc-scores">' + cell("act", me.name, "act", me.act, mc, "left") + cell("proj", me.name, "proj", me.proj, mc, "right") +
+      cell("proj", t.name, "proj", t.proj, col, "left") + cell("act", t.name, "act", t.act, col, "right") + "</div>";
   }
 
   function rbRenderScenarios(teams, win) {
@@ -6489,6 +6504,7 @@
         blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
           '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
+          rbScenScores(me, t, col) +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
       });
