@@ -1212,6 +1212,9 @@
   .rb-table tr.rb-off td.rb-act { opacity: 1; }
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
+  /* Time/score/Final sits right beside the actual points, in a fixed spot, so names get the whole name column. */
+  #rumblin-view .rb-table td.rb-act { text-align: right; }
+  td.rb-act .rb-meta { display: inline-block; min-width: 2.4em; text-align: right; margin: 0 6px 0 0; vertical-align: baseline; }
   .rb-n .nl, .rb-n .nk { display: none; }
   .nk { display: none; }
   /* A nickname replaces the name only when the name would be cut off (see rbFitCards). */
@@ -1252,7 +1255,7 @@
   .rb-compact .rb-bench, .rb-compact .rb-bench-h, .rb-compact thead { display: none; }
   .rb-compact .rb-table { font-size: 0.7rem; }
   .rb-compact .rb-table td { padding: 1px 3px; }
-  .rb-compact .rb-meta { font-size: 0.58rem; margin-left: 3px; }
+  .rb-compact .rb-meta { font-size: 0.58rem; }
   /* Compact cards: every player is exactly one line, so cards line up. The live clock and score show in the row's hover text. */
   /* Live rows: time left and score take turns in the same spot. */
   .rb-alt2 { display: inline-grid; }
@@ -1292,7 +1295,6 @@
     #rumblin-view .rb-compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
     .rb-compact .rb-table .pos-badge { display: none; }
     .rb-compact .rb-table td.rb-proj, .rb-compact .rb-table tfoot td:nth-child(3) { display: none; }
-    .rb-compact .rb-meta { margin-left: 4px; }
     .rb-grid.totals { --rb-cardw: 150px; }
     .rb-grid.totals .rb-head { padding: 7px 7px 5px 10px; gap: 5px; }
     .rb-grid.totals .rb-tot .rb-a { font-size: 0.95rem; }
@@ -1324,6 +1326,8 @@
   .sfp, .sfc { position: absolute; right: -8px; top: -0.6em; display: flex; gap: 6px; font-size: 0.74em; font-weight: 800; line-height: 1; letter-spacing: 0.2px; white-space: nowrap; pointer-events: none; z-index: 9; opacity: 0; transform-origin: 100% 100%; text-shadow: 0 0 3px var(--panel), 0 1px 2px var(--panel); }
   .sfp.gain, .sfc b.gain { color: var(--good); } .sfp.loss, .sfc b.loss { color: var(--bad); } .sfc b.more { color: var(--text-dim); }
   .rb-tot .sfp, .rb-tot .sfc { font-size: 0.6em; }
+  .sc-sc b .sfp, .sc-sc b .sfc, .sc-gap b .sfp, .sc-gap b .sfc { font-size: 0.42em; }
+  .sc-sc.act b .sfp, .sc-sc.act b .sfc { font-size: 0.7em; }
   .rb-card { overflow: visible; } .rb-card::before { border-radius: 10px 0 0 10px; }
   .rb-live-wrap { overflow: visible; } .rb-live-t td.ac { overflow: visible; }
   @media (prefers-reduced-motion: reduce) { .sfp, .sfc { display: none; } }
@@ -1499,7 +1503,7 @@
         <button type="button" id="mode-custom">Projected</button>
         <button type="button" id="mode-rumblin">Rumblin'</button>
       </div>
-      <button type="button" class="refresh-btn" id="refresh-btn">Refresh now</button>
+      <button type="button" class="refresh-btn" id="refresh-btn" title="Press R to refresh">Refresh (R)</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
     </div>
   </header>
@@ -1524,7 +1528,7 @@
         <button type="button" id="rb-all" class="active">Everyone</button>
         <button type="button" id="rb-livemode">Live</button>
         <button type="button" id="rb-me">Me</button>
-        <button type="button" id="rb-refresh" class="rb-refresh" aria-label="Refresh now" title="Refresh now">&#8635;</button>
+        <button type="button" id="rb-refresh" class="rb-refresh" aria-label="Refresh (R)" title="Refresh (R)">&#8635;</button>
       </div>
       <div class="toggle-group rb-view-group" role="group" aria-label="Which of my teams" id="rb-sub" hidden>
         <button type="button" id="rb-inplay">In Play</button>
@@ -4701,10 +4705,10 @@
         var acc = isDef ? (state.defAcc[k] || (state.defAcc[k] = { yds: 0, pts: 0, d: 0, polls: 0 })) : null;
         if (acc) { acc.yds += info.noise.yds; acc.pts += info.noise.pts; acc.d = Math.round((acc.d + info.noise.d) * 100) / 100; }
         if (Math.abs(d) >= 0.005) {
-          list.push({ n: name, d: d });
           // A defense's drift in yards / points allowed is held back for the drive summary below.
           var shownD = isDef ? Math.round((d - info.noise.d) * 100) / 100 : d;
           var text = info.text || (snapPrev && Math.abs(shownD) >= 0.05 ? "Stat update" : "");
+          list.push({ n: name, d: d, p: isDef ? "" : text });
           if (Math.abs(shownD) >= 0.005 && (!isDef || text)) {
             feedNew.push({ ts: now, rid: Number(rid), pid: p.player_id, n: name, pos: pos, d: shownD, a: a, p: text });
           }
@@ -4900,7 +4904,16 @@
           var sorted = credit.slice().sort(function (x, y) { return Math.abs(y.d) - Math.abs(x.d); });
           cr.innerHTML = sorted.slice(0, 3).map(function (c) { return '<b class="' + (c.d > 0 ? "gain" : "loss") + '">' + escapeHtml(c.n) + "</b>"; }).join("") +
             (sorted.length > 3 ? '<b class="more">+' + (sorted.length - 3) + "</b>" : "");
-          el.appendChild(cr); flapPlayLabel(cr, FLAP_POP_HOLD + Math.max(animate ? T : 0, FLAP_POP_FADE));
+          var crDelay = FLAP_POP_HOLD + Math.max(animate ? T : 0, FLAP_POP_FADE);
+          el.appendChild(cr); flapPlayLabel(cr, crDelay);
+          // Third beat: the scoring play itself (e.g. "2 runs 17yd, FD"), same look and fade.
+          var plays = sorted.filter(function (c) { return c.p; }).slice(0, 3);
+          if (plays.length) {
+            var pl = document.createElement("span");
+            pl.className = "sfc sfplay"; pl.setAttribute("aria-hidden", "true");
+            pl.innerHTML = plays.map(function (c) { return '<b class="' + (c.d > 0 ? "gain" : "loss") + '">' + escapeHtml(c.p) + "</b>"; }).join("");
+            el.appendChild(pl); flapPlayLabel(pl, crDelay + FLAP_POP_HOLD + FLAP_POP_FADE);
+          }
         }
       }
     }
@@ -6115,7 +6128,7 @@
       .finally(function () {
         state.refreshing = false;
         els.refreshBtn.disabled = false;
-        els.refreshBtn.textContent = "Refresh now";
+        els.refreshBtn.textContent = "Refresh (R)";
         var rbr = document.getElementById("rb-refresh"); if (rbr) { rbr.disabled = false; rbr.classList.remove("spin"); }
       });
   }
@@ -6166,6 +6179,14 @@
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
   document.getElementById("rb-refresh").addEventListener("click", refreshNow);
+  // R refreshes (unless typing in a field or using a modifier key).
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "r" && e.key !== "R") return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
+    refreshNow();
+  });
   els.weekSelect.addEventListener("change", function () {
     var v = els.weekSelect.value;
     state.viewWeek = v === "" ? null : parseInt(v, 10);
@@ -6463,12 +6484,12 @@
 
   // Projected totals big in the middle, actual points smaller on the outside edges.
   function rbScenScores(me, t, col) {
-    var mc = rbColor(me.rid);
-    var cell = function (cls, who, lab, val, c, al) {
-      return '<div class="sc-sc ' + cls + '" style="text-align:' + al + '"><small style="color:' + c + '">' + escapeHtml(who) + " " + lab + "</small><b>" + val.toFixed(2) + "</b></div>";
+    var mc = rbColor(me.rid), k = "sc:" + t.rid + ":";
+    var cell = function (cls, who, lab, num2, c, al, key, opt) {
+      return '<div class="sc-sc ' + cls + '" style="text-align:' + al + '"><small style="color:' + c + '">' + escapeHtml(who) + " " + lab + "</small><b>" + fl(key, num2.toFixed(2), opt) + "</b></div>";
     };
-    return '<div class="sc-scores">' + cell("act", me.name, "act", me.act, mc, "left") + cell("proj", me.name, "proj", me.proj, mc, "right") +
-      cell("proj", t.name, "proj", t.proj, col, "left") + cell("act", t.name, "act", t.act, col, "right") + "</div>";
+    return '<div class="sc-scores">' + cell("act", me.name, "act", me.act, mc, "left", k + "ma", { pop: "act", cr: me.rid }) + cell("proj", me.name, "proj", me.proj, mc, "right", k + "mp", { pop: "cr", cr: me.rid }) +
+      cell("proj", t.name, "proj", t.proj, col, "left", k + "tp", { pop: "cr", cr: t.rid }) + cell("act", t.name, "act", t.act, col, "right", k + "ta", { pop: "act", cr: t.rid }) + "</div>";
   }
 
   function rbRenderScenarios(teams, win) {
@@ -6503,12 +6524,13 @@
         var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
         blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
           '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div></div>" +
-          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + (gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
+          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
           rbScenScores(me, t, col) +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
       });
     box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">No Rumbles are still in play against you right now.</div>';
+    flapScan(box);
   }
 
   function rbPlayerRow(p, bench, struck) {
@@ -6548,8 +6570,8 @@
     var rbEpa = state.epaOn && EPA_POS[p.position] && state.live ? epaTot(p.player_id, state.live.week) : null;
     var flapKey = "rb:" + rbFlapCtx + ":p:" + p.player_id + (p.replacement ? ":r" : "") + (bench ? ":b" : "");
     return '<tr class="' + cls + '"' + (live && meta ? ' title="' + escapeHtml(meta) + '"' : "") + '><td class="rb-nm"><div class="rb-nmwrap">' + badge + '<span class="rb-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + (live ? fieldIcon(p.field) : "") +
-      (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + (metaHtml || escapeHtml(meta)) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + "</div></td>" +
-      '<td class="rb-act">' + (koHtml || fl(flapKey, shown, bench ? null : { pop: "act" })) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
+      "</div></td>" +
+      '<td class="rb-act">' + (meta ? '<span class="rb-meta"' + (slotColor ? ' style="color:' + slotColor + '"' : "") + '><span class="rb-ml">' + (metaHtml || escapeHtml(meta)) + '</span><span class="rb-ms">' + (status === "in_progress" ? metaShort : escapeHtml(metaShort)) + "</span></span>" : "") + (koHtml || fl(flapKey, shown, bench ? null : { pop: "act" })) + '</td><td class="rb-proj">' + num(p.proj).toFixed(2) + '</td><td class="rb-epa' + epaCls(rbEpa) + '">' + epaText(rbEpa) + "</td></tr>";
   }
 
   function rbEpaFoot(t) {
@@ -6824,9 +6846,11 @@
       Object.keys(scenSelNow).forEach(function (k) { if (scenAvail[k]) onSet[k] = true; });
       if (meTeam) onSet[meTeam.rid] = true;
       buildStrip(onSet, true, scenAvail);
-      document.getElementById("rb-feed").hidden = true;
-      document.getElementById("rb-live").hidden = true;
       rbRenderScenarios(teams, scenWin);
+      // Live Players and the Score Feed sit below, for you and the opponents being followed.
+      var scenShown = teams.filter(function (t) { return onSet[t.rid]; });
+      rbRenderFeed(scenShown);
+      rbRenderLive(scenShown);
       rbStickOffset();
       prefsSave();
       return;
