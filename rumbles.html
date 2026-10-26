@@ -806,6 +806,14 @@
   .tr-svg .tr-name { fill: var(--text); font-weight: 600; cursor: pointer; }
   .tr-svg .tr-line { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; transition: opacity 0.2s; }
   .tr-svg .tr-dot { transition: opacity 0.2s; }
+  :root { --gold: #f2c230; }
+  @media (prefers-color-scheme: light) { :root { --gold: #c28f00; } }
+  #standings-body tr.po-cut td { border-bottom: 2px solid var(--gold) !important; }
+  .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .po-note[hidden] { display: none; }
+  .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
+  .tr-svg .tr-po { fill: none; stroke: var(--gold); stroke-width: 3; stroke-dasharray: 7 6; opacity: 0.95; pointer-events: none; }
+  .tr-svg .tr-po-l { fill: var(--gold); font-size: 10px; font-weight: 700; }
   .tr-svg .tr-grid { stroke: var(--panel-border); stroke-width: 1; }
   .tr-heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-variant-numeric: tabular-nums; font-size: 0.74rem; }
   .tr-heat th { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; padding: 2px 0; position: static; background: none; box-shadow: none; text-align: center; }
@@ -1594,6 +1602,7 @@
       </tbody>
     </table>
     </div>
+    <div class="po-note" id="po-note" hidden><i></i> Gold line: the top 6 make the playoffs</div>
   </div>
 
   <details class="trend-panel" id="trend-panel">
@@ -4960,6 +4969,7 @@
     state.flashPrev = { viewKey: viewKey, values: values };
   }
 
+  var PLAYOFF_SPOTS = 6;
   function render(opts) {
     prefsSave();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
@@ -5016,6 +5026,11 @@
       els.body.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + escapeHtml(emptyMsg) + "</div></td></tr>";
     } else {
       var flapNs = "st:" + state.mode + "|" + (histWeek == null ? "cur" : histWeek) + ":";
+      // Gold line under 6th place (the playoff cut), only while the table reads in rank order.
+      var poCutRid = null;
+      if (displayRows.length > PLAYOFF_SPOTS && displayRows.every(function (r, i) { return !i || displayRows[i - 1].rank <= r.rank; })) poCutRid = displayRows[PLAYOFF_SPOTS - 1].roster_id;
+      var poNote = document.getElementById("po-note");
+      if (poNote) poNote.hidden = poCutRid == null;
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
@@ -5097,7 +5112,8 @@
           thisWeekCellAttrs = ' style="color:' + r.matchup_color + '"';
           ptsCellAttrs += ' style="color:' + r.matchup_color + '"';
         }
-        return '<tr data-rid="' + r.roster_id + '"' + (state.rb && Number(r.roster_id) === state.rb.me ? ' class="me-row"' : "") + ">" +
+        var rowCls = (state.rb && Number(r.roster_id) === state.rb.me ? "me-row" : "") + (r.roster_id === poCutRid ? " po-cut" : "");
+        return '<tr data-rid="' + r.roster_id + '"' + (rowCls.trim() ? ' class="' + rowCls.trim() + '"' : "") + ">" +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
           '<td class="manager">' + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
@@ -7035,6 +7051,16 @@
     for (var g = 0; g <= top; g += gridStep) {
       var gy = padT + g / top * plotH;
       o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '"/><text x="' + (padL - 8) + '" y="' + (gy + 4) + '" text-anchor="end">' + (g === 0 ? "Lead" : "−" + g) + "</text>";
+    }
+    // Ghost line: wherever 6th place sits each week (Rumbles behind the leader), the playoff cut.
+    if (n > PLAYOFF_SPOTS) {
+      var cutY = function (i) {
+        var vals = D.teams.map(function (t) { return t.cumR[i]; }).sort(function (a, b) { return b - a; });
+        return padT + (lead[i] - vals[PLAYOFF_SPOTS - 1]) / top * plotH;
+      };
+      var cp = []; for (var ci = 0; ci < nw; ci++) cp.push(X(ci).toFixed(1) + "," + cutY(ci).toFixed(1));
+      o += '<polyline class="tr-po" points="' + cp.join(" ") + '"><title>6th place: the playoff cut</title></polyline>' +
+        '<text class="tr-po-l" x="' + (X(0) + 4).toFixed(1) + '" y="' + (cutY(0) - 6).toFixed(1) + '">Playoff line (6th)</text>';
     }
     // End labels: nudged apart so names never overlap.
     var lab = D.teams.map(function (t) { return { t: t, y: Y(t, nw - 1) }; }).sort(function (p, q) { return p.y - q.y; });
