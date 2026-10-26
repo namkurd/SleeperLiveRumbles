@@ -3222,6 +3222,17 @@ def scenario_scenarios_tab(browser):
     assert b[1]["hl"] == "Your RB needs 2.00 to catch up", b[1]
     assert b[1]["sides"][0]["names"] == ["Runner"], b[1]
 
+    # switching "me" re-bases every block on the new manager (no stale gap, sentence or selection)
+    page.click("#rb-change"); page.wait_for_timeout(300)
+    page.locator("#rb-who .rb-who-list button", has_text="Jake").first.click(); page.wait_for_timeout(600)
+    if not page.evaluate("document.getElementById('rb-scen-view').offsetParent !== null"):
+        page.click("#rb-scen"); page.wait_for_timeout(400)
+    nb = blocks_all()
+    assert "Jake" not in [x["who"] for x in nb], f"new me is not his own opponent: {nb}"
+    ben = [x for x in nb if x["who"] == "Ben"]
+    assert ben and ben[0]["gap"] == "You trail by 18.00", f"gap is from the new manager's side: {nb}"
+    assert page.evaluate("document.querySelectorAll('#rb-scen-view .sc-sc').length") >= 4, "scores row shows"
+
     # last game final -> tab disappears and the page falls back to Matchup
     setgames("complete", "complete", "complete", "complete"); poll()
     assert page.evaluate("document.getElementById('rb-scen').offsetParent === null && document.getElementById('rb-scen-view').hidden"), "tab gone when the week is over"
