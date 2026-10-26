@@ -3111,6 +3111,90 @@ def scenario_play_column(browser):
     print("\nPLAY COLUMN SCENARIO PASSED")
 
 
+def _gameday_base():
+    return {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": load("matchups_week2.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/stats/nfl/2026/2*": load("stats_week2.json"),
+        "**/projections/nfl/2026/2*": load("projections_week2.json"),
+        "**/v1/players/nfl": load("players.json"),
+        "**/scores/nfl/regular/2026/2": load("scores_week2.json"),
+        "**/v1/state/nfl": load("state.json"),
+    }
+
+
+def scenario_gameday_helpers(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Gameday helpers (landing, since-you-last-looked, next kickoff)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    install_routes(page, _gameday_base())
+    # Known manager, a live week, no saved view: opens straight into Rumblin' on their own view.
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(1500)
+    page.evaluate("localStorage.removeItem('rumbles.prefs')")
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    assert page.evaluate("!document.getElementById('rumblin-view').hidden"), "game day + known manager lands in Rumblin'"
+    assert page.evaluate("document.getElementById('rb-me').classList.contains('active')"), "...on their own view"
+    # Points moved while away -> banner with the change, dismissible.
+    page.add_init_script("localStorage.setItem('rumbles.seen', JSON.stringify({ts: Date.now() - 300000, week: 2, acts: Object.fromEntries([1,2,3,4,5,6,7,8,9,10,11,12].map(r => [r, 0])), pl: {}}))")
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
+    aw = page.evaluate("(() => { const b = document.getElementById('rb-away'); return {vis: !b.hidden, txt: b.textContent}; })()")
+    assert aw["vis"] and "Since you last looked" in aw["txt"] and "You +" in aw["txt"], f"away banner: {aw}"
+    page.click("#rb-away button"); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('rb-away').hidden"), "banner dismisses"
+    page.close()
+
+    # Nobody live: the next kickoff and a countdown replace the dead space.
+    page = new_page(browser, console_errors, page_errors)
+    base = _gameday_base()
+    base["**/scores/nfl/regular/2026/2"] = load("scores_week2_pregame.json")
+    install_routes(page, base)
+    page.goto(PAGE_URL + "?tab=rumblin&me=Aidan"); page.wait_for_timeout(2500)
+    nx = page.evaluate("(() => { const b = document.getElementById('rb-next'); return {vis: !b.hidden, txt: b.textContent}; })()")
+    assert nx["vis"] and "Next kickoff" in nx["txt"] and "starter" in nx["txt"], f"next kickoff line: {nx}"
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("GAMEDAY HELPERS SCENARIO PASSED")
+
+
+def scenario_name_overflow_audit(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: No player name is cut off at phone widths (compact and full)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    longs = ["Amon-Ra St. Brown", "Marvin Harrison Jr.", "Jaxon Smith-Njigba", "Christian McCaffrey", "Patrick Mahomes", "Equanimeous St. Brown",
+             "Kenneth Walker III", "Brian Thomas Jr.", "Tyreek Hill", "Justin Jefferson", "Josh Allen", "Chigoziem Okonkwo", "Demarcus Robinson-Jones"]
+    players = load("players.json")
+    for m in load("matchups_week2.json"):
+        for pid in m["starters"]:
+            players.setdefault(pid, {"position": "WR", "team": "DET", "injury_status": None})
+    for i, pid in enumerate(sorted(players)):
+        players[pid]["full_name"] = longs[i % len(longs)]
+    cut = """() => [...document.querySelectorAll('#rb-grid .rb-n')].filter(n => n.offsetParent !== null && n.scrollWidth > n.clientWidth + 1).map(n => n.textContent.trim() + ' @' + Math.round(n.clientWidth))"""
+    for w in (320, 360, 390, 430):
+        page = new_page(browser, console_errors, page_errors)
+        page.set_viewport_size({"width": w, "height": 900})
+        base = _gameday_base(); base["**/v1/players/nfl"] = players
+        install_routes(page, base)
+        page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+        for dens in ("compact", "full"):
+            page.click(f"#rb-density button[data-d={dens}]"); page.wait_for_timeout(500)
+            page.evaluate("window.dispatchEvent(new Event('resize'))"); page.wait_for_timeout(300)
+            bad = page.evaluate(cut)
+            assert not bad, f"names cut off at {w}px ({dens}): {bad}"
+        page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("NAME OVERFLOW AUDIT PASSED")
+
+
+
 def scenario_scenarios_tab(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: Scenarios tab (windows, frozen sentence, ordering, resets)")
@@ -3510,6 +3594,8 @@ def main():
         scenario_ux_batch(browser)
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
+        scenario_gameday_helpers(browser)
+        scenario_name_overflow_audit(browser)
         scenario_epa(browser)
         scenario_trends(browser)
         scenario_feed_expiry(browser)
