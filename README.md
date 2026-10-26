@@ -1816,6 +1816,45 @@ match what Sleeper's own site shows, no matter how precisely it was
 displayed -- it was just a different scoring system. What's now called
 "Projected" is the one that actually reproduces Sleeper's own number.)
 
+### Scenarios: win-probability chart, decided Rumbles, past weeks
+
+Each block in **Scenarios** (Rumblin' > Me) has a small win-probability chart between the sentence and the score
+row: your chance to win that Rumble across the whole week, from the first kickoff (or your first player's game) to
+the last whistle, with your color filling above 50% and theirs below. Idle stretches between game days are squeezed
+so Thursday, Sunday and Monday sit side by side; dashed ticks mark the squeezed gaps. The percentage beside the chart
+is the same number as the block's "% to win" (they come from one model), and a finished Rumble reads Won / Lost.
+
+**Tap a chart to expand it.** The expanded view shows the same chart larger, with the biggest swings numbered on it
+and ranked below (the play, who made it, when it happened and where the game clock stood, the points, and the win
+probability before and after). Plays within two and a half minutes of each other count as one swing, and a swing needs
+about 10 points of win probability to be labeled (at most five). On a computer, hover; on a phone, touch or drag across
+the chart, to see the scoring plays at that moment, the running score and the clock. **Share** makes one picture of the
+chart plus the ranked plays and their timing (it opens the phone's share sheet, or downloads a PNG).
+
+**The model** is the one behind "% to win": the gap now, plus what each player is still expected to add, with a spread
+of C x sqrt(points to come) per position. "Still to come" follows the game clock (pregame projection, pace-dampened as in
+`blendedProjection`), and a defense stops projecting once its game starts. A week's chart always ends exactly on the
+real final score.
+
+**Decided Rumbles.** Any manager can be followed, not just the ones still in play: tap a dimmed chip in the strip. A
+Rumble that can no longer change shows as a collapsed "Decided" block (Final / Clinched / Out of reach) with its chart.
+Once every game of the week is final the whole week stays on screen as finished Rumbles.
+
+**Past weeks.** The picker above the blocks switches Scenarios to any completed week (every other manager, your
+opponent first). The current week still opens only after the Sunday 1pm games end.
+
+Where the chart's data comes from:
+
+| Week | Source | How |
+|---|---|---|
+| Completed | `wp_timeline/week_N.json` | `build_wp_timeline.py`, run by `update.yml` after `build_epa.py`. Turns every nflverse play (pass/rush/receive yards, TDs, first downs, INTs, fumbles, FGs, 2-pointers, sacks, D/ST plays and the points / yards-allowed tiers) into the league's fantasy points using the league's real `scoring_settings` (fetched from Sleeper and cached in `wp_timeline/scoring.json`), puts each on a real clock (nflverse stamps every drive with its real start time), then reconciles to Sleeper's final per-player points: the difference becomes a "scoring adjustment" at the end of that player's game. `q` in the file is the share of the week's points the plays explained on their own (97-99% on weeks 1-6 of 2026); below 90% the page says "approx." and the next run retries. `wp_timeline/index.json` lists which weeks exist so the page only asks for real files. |
+| In progress | `wp_live/week_N.json` on the `wp-data` branch | `record_wp_live.py`, run by `wp_record.yml`. Looks once a minute while any game is live (sleeps until just before the next kickoff, hands off to a successor near GitHub's 6-hour limit), labels each starter's points change from his stat line, keeps every game clock, and pushes to the `wp-data` branch every ten minutes (not main: no Pages deploys, no races with nightly commits). The page reads it from raw.githubusercontent.com and folds in what it can see itself (points and clocks from its own 30-second poll) so the newest minutes are never missing. A skipped run leaves a gap; nothing is interpolated. After the week, the play-by-play file replaces it. |
+
+Both files share one format (seconds after the week's first kickoff: `ev` scoring events, `g` game clocks, `tg`/`tm` team
+lookups, `pre` pregame projections), so the page has a single code path. Pregame projections come from Sleeper
+(recorded before kickoff for the live week); if a past week's are gone, a player's average over his other weeks stands
+in (`preSrc: "avg"`).
+
 ### "How to Use" button
 
 A button next to "Refresh now" that shows a short explainer of what the
@@ -1836,6 +1875,8 @@ per-team data, just a standing explainer.
 | `capture_live_qb_injuries.py` | Polls for genuinely-LIVE QB-injury-backup corroborations (see "Durable live-capture log" above) and appends any new ones to `live_qb_captures.json`. Reuses `build_rumbles.py`'s own helpers. |
 | `live_qb_captures.json` | Generated/appended-to by `capture_live_qb_injuries.py` -- don't hand-edit it. Starts as `{"captures": []}`; both `rumbles.html` and `build_rumbles.py` treat a missing/empty file as "no durable captures yet" and fall back to their own same-day check. |
 | `.github/workflows/live_qb_capture.yml` | Runs `capture_live_qb_injuries.py` every ~15 minutes, but only during actual NFL game windows (Thu/Sat/Sun/Mon, DST-padded), and commits `live_qb_captures.json` when it changes. |
+| `build_wp_timeline.py` / `wp_timeline/` | Play-by-play win-probability timelines for completed weeks (see "Scenarios: win-probability chart"). Generated nightly by `update.yml`; don't hand-edit. |
+| `record_wp_live.py` / `.github/workflows/wp_record.yml` | Records the week in progress, once a minute during games, to `wp_live/week_N.json` on the `wp-data` branch. |
 | `requirements.txt` | Python dependency for `build_rumbles.py`/`capture_live_qb_injuries.py` (just `requests`). |
 | `test/` | Mocked tests for `rumbles.html`, `build_rumbles.py`, and `capture_live_qb_injuries.py` (see below) -- optional, not needed to run the site itself. |
 

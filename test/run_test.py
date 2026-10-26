@@ -70,12 +70,12 @@ def install_routes(page, routes):
     # to "no one on IR" unless a scenario supplies its own.
     routes = dict(routes)
     routes.setdefault("**/v1/league/TESTLEAGUE1/rosters", [])
-    # Registered first = lowest priority: a Sleeper call a scenario did not mock gets an empty
-    # answer instead of reaching the real API, so the suite behaves the same offline.
+    # Registered first = lowest priority: a Sleeper call (or the live win-probability recording) a scenario
+    # did not mock gets an empty answer instead of reaching the real service, so the suite behaves the same offline.
     # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
     if not getattr(page, "_sleeper_fallback", False):
         page._sleeper_fallback = True
-        page.route(lambda url: "sleeper.app" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+        page.route(lambda url: "sleeper.app" in url or "raw.githubusercontent.com" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
         def handler(route, request=None, payload=payload):
             route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
@@ -3299,7 +3299,13 @@ def scenario_scenarios_tab(browser):
 
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
     page.click("#rb-me"); page.wait_for_timeout(300)
-    assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && b.disabled && /after 1pm games end/.test(b.textContent) && getComputedStyle(b).opacity < 0.6; })()"), "Scenarios shows faded with its opening time while the 1pm games are still on"
+    page.wait_for_timeout(1000)
+    assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && /after 1pm games end/.test(b.textContent) && getComputedStyle(b).opacity < 0.6; })()"), "Scenarios shows faded with its opening time while the 1pm games are still on"
+    # ...but a finished week can still be opened: this week says when it opens, and the picker offers the past week
+    assert page.evaluate("!document.getElementById('rb-scen').disabled"), "past weeks keep the tab clickable"
+    page.click("#rb-scen"); page.wait_for_timeout(400)
+    assert page.evaluate("(() => { const v = document.getElementById('rb-scen-view'); return !v.hidden && /open once the Sunday 1pm games are final/.test(v.textContent) && [...document.querySelectorAll('#scen-week option')].map(o => o.textContent).join() === 'Week 2,Week 1'; })()"), "this week's message and the week picker"
+    page.click("#rb-matchup"); page.wait_for_timeout(200)
 
     # the 1pm games end -> the tab opens, 4:25 window is current
     setgames("complete", "in_progress", "pre_game", "pre_game"); poll()
@@ -3375,10 +3381,16 @@ def scenario_scenarios_tab(browser):
     assert ben and ben[0]["gap"] == "You trail by 18.00", f"gap is from the new manager's side: {nb}"
     assert page.evaluate("document.querySelectorAll('#rb-scen-view .sc-sc').length") >= 4, "scores row shows"
 
-    # last game final -> tab disappears and the page falls back to Matchup
+    # last game final -> the tab stays: the week becomes a set of finished Rumbles (collapsed, with their chart), like any past week
     setgames("complete", "complete", "complete", "complete"); poll()
-    assert page.evaluate("document.getElementById('rb-scen').offsetParent === null && document.getElementById('rb-scen-view').hidden"), "tab gone when the week is over"
-    assert page.evaluate("document.getElementById('rb-matchup').classList.contains('active')"), "falls back to Matchup"
+    assert page.evaluate("document.getElementById('rb-scen').offsetParent !== null && !document.getElementById('rb-scen-view').hidden"), "Scenarios stays open when the week is over"
+    fin = blocks_all()
+    assert fin and all(x["hl"].startswith("Final") for x in fin), f"every Rumble reads as a final result: {fin}"
+    assert page.evaluate("document.querySelectorAll('#rb-scen-view .sc-blk .sc-cols, #rb-scen-view .sc-blk .sc-scores').length") == 0, "finished Rumbles are collapsed"
+    assert page.evaluate("document.querySelectorAll('#rb-scen-view .sc-blk .sc-wpm').length") == len(fin), "each finished Rumble keeps its chart slot"
+    assert page.evaluate("document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "no live feed under finished results"
+    page.click("#rb-matchup"); page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('rb-matchup').classList.contains('active') && document.getElementById('rb-scen-view').hidden"), "Matchup still reachable"
     feed_txt = page.text_content("#rb-feed")
     assert "No started players are in a live game right now" in feed_txt, f"empty Score Feed explains why when nobody is live: {feed_txt}"
     wk = page.evaluate("(() => { const w = document.getElementById('week-select-wrap'), s = document.getElementById('week-select'); return {vis: getComputedStyle(w).visibility, dis: s.disabled, op: getComputedStyle(w).opacity}; })()")
@@ -3387,6 +3399,151 @@ def scenario_scenarios_tab(browser):
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
     print("\nSCENARIOS TAB SCENARIO PASSED")
+
+
+def scenario_win_probability(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Win-probability chart (mini chart, expanded view, hover, share, past weeks)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=False, timezone_id="UTC", accept_downloads=True)
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    def ms(iso): return int(datetime.datetime.fromisoformat(iso).replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+    players = {
+        "B1": {"first_name": "Bo", "last_name": "Onewide", "full_name": "Bo Onewide", "position": "WR", "team": "DAL"},
+        "B2": {"first_name": "Quinn", "last_name": "Passer", "full_name": "Quinn Passer", "position": "QB", "team": "MIN"},
+        "B3": {"first_name": "Rex", "last_name": "Runner", "full_name": "Rex Runner", "position": "RB", "team": "SF"},
+        "A1": {"first_name": "Al", "last_name": "Early", "full_name": "Al Early", "position": "WR", "team": "PHI"},
+        "A2": {"first_name": "Rob", "last_name": "Bearback", "full_name": "Rob Bearback", "position": "RB", "team": "CHI"},
+        "J1": {"first_name": "Tim", "last_name": "Monday", "full_name": "Tim Monday", "position": "TE", "team": "KC"},
+    }
+    matchups = load("matchups_week2.json")
+    for m in matchups:
+        m["starters"] = {1: ["A1", "A2"], 2: ["B1", "B2", "B3"], 3: ["J1"]}.get(m["roster_id"], [])
+        m["players"] = list(m["starters"])
+    def game(away, home, iso, status):
+        return {"status": status, "game_id": away + home, "week": 2, "away_team": away, "home_team": home, "start_time": ms(iso), "quarter": "F" if status == "complete" else "3" if status == "in_progress" else "1"}
+    scores = [game("DAL", "PHI", "2026-09-20T17:00:00", "complete"), game("MIN", "CHI", "2026-09-20T20:25:00", "in_progress"), game("SF", "SEA", "2026-09-21T00:20:00", "pre_game"), game("KC", "LV", "2026-09-22T00:15:00", "pre_game")]
+    stats = [{"player_id": "B1", "stats": {"rec_yd": 100}}, {"player_id": "B2", "stats": {"pass_yd": 100}}, {"player_id": "A1", "stats": {"rec_yd": 200}}]
+    proj = lambda pid, st: {"player_id": pid, "stats": st, "week": 2, "season": "2026", "season_type": "regular", "category": "proj"}
+    projections = [proj("B1", {"rec_yd": 100}), proj("B2", {"pass_yd": 100}), proj("B3", {"rush_yd": 300}), proj("A1", {"rec_yd": 200}), proj("A2", {"rush_yd": 200}), proj("J1", {"rec_yd": 1000})]
+    t0 = ms("2026-09-20T17:00:00")
+    # the recorder's file for the week in progress (seconds after the first kickoff)
+    live_doc = {"v": 1, "season": 2026, "week": 2, "src": "live", "t0": t0, "q": 1, "approx": False,
+        "g": {"DAL@PHI": {"ko": 0, "end": 11000, "clk": [[0, 1000], [2500, 800], [5500, 500], [8500, 250], [11000, 0]]},
+              "MIN@CHI": {"ko": 12300, "end": None, "clk": [[12300, 1000], [14000, 800], [16000, 700]]},
+              "SF@SEA": {"ko": 26400, "end": None, "clk": []}, "KC@LV": {"ko": 112500, "end": None, "clk": []}},
+        "tg": {"DAL": "DAL@PHI", "PHI": "DAL@PHI", "MIN": "MIN@CHI", "CHI": "MIN@CHI", "SF": "SF@SEA", "SEA": "SF@SEA", "KC": "KC@LV", "LV": "KC@LV"},
+        "tm": {"B1": "DAL", "B2": "MIN", "B3": "SF", "A1": "PHI", "A2": "CHI", "J1": "KC"},
+        "ev": [[3000, "B1", 10.0, "100 yd catch"], [5000, "A1", 20.0, "200 yd TD catch"], [14000, "B2", 4.0, "100 yd pass"]],
+        "pre": {"B1": 10, "B2": 4, "B3": 30, "A1": 20, "A2": 20, "J1": 100}, "preSrc": "sleeper"}
+    page.clock.set_fixed_time("2026-09-20T21:30:00Z")
+    install_routes(page, {
+        "**/rumbles_history.json": load("rumbles_history.json"),
+        "**/v1/league/TESTLEAGUE1": load("league.json"),
+        "**/v1/league/TESTLEAGUE1/matchups/2": matchups,
+        "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
+        "**/stats/nfl/2026/1*": load("stats_week1.json"),
+        "**/projections/nfl/2026/1*": load("projections_week1.json"),
+        "**/projections/nfl/2026/2*": projections,
+        "**/stats/nfl/2026/2*": stats,
+        "**/scores/nfl/regular/2026/2": scores,
+        "**/v1/players/nfl": players,
+        "**/v1/state/nfl": load("state.json"),
+        "**/wp_timeline/index.json": {"weeks": [1]},
+        "**/wp_live/week_2.json*": live_doc,
+    })
+    page.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(live_doc)))
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    page.click("#rb-me"); page.wait_for_timeout(300)
+    page.click("#rb-scen"); page.wait_for_timeout(2500)
+    minis = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, has: !!b.querySelector('.sc-wpm svg polyline'),
+      pct: (b.querySelector('.wpm-pct') || {}).textContent, head: b.querySelector('.sc-wp').textContent, box: b.querySelector('.sc-wpm').getBoundingClientRect().toJSON(),
+      scores: b.querySelector('.sc-scores').getBoundingClientRect().toJSON(), hl: b.querySelector('.sc-hl').getBoundingClientRect().toJSON()}))""")
+    minis = [m for m in minis if m["who"] in ("Jake", "Aidan")]
+    assert [m["who"] for m in minis] == ["Jake", "Aidan"] and all(m["has"] for m in minis), f"each block has its win-probability chart: {minis}"
+    for m in minis:
+        assert m["pct"] == m["head"].replace(" to win", ""), f"the chart and the % to win agree: {m['pct']} vs {m['head']}"
+        assert 30 <= m["box"]["height"] <= 60 and m["box"]["top"] >= m["hl"]["bottom"] - 1 and m["box"]["bottom"] <= m["scores"]["top"] + 1, f"the chart sits between the sentence and the score row: {m}"
+        assert m["box"]["width"] > 200, m
+    if os.environ.get("SCENSHOT"): page.locator("#rb-scen-view .sc-blk").nth(1).screenshot(path="/tmp/sf/wp_block.png")
+
+    # open the expanded view
+    page.click("#rb-scen-view .sc-blk:nth-of-type(2) .sc-wpm"); page.wait_for_timeout(500)
+    sh = page.evaluate("""() => ({vis: !document.getElementById('wp-sheet').hidden, title: document.getElementById('wp-title').textContent, sub: document.getElementById('wp-sub').textContent,
+      svg: !!document.querySelector('#wp-chart svg.wp-svg'), marks: document.querySelectorAll('#wp-chart .wp-mk').length, items: [...document.querySelectorAll('#wp-list li')].map(l => l.textContent),
+      over: document.documentElement.scrollWidth - window.innerWidth})""")
+    assert sh["vis"] and "Ben vs. Aidan" in sh["title"] and "Week 2" in sh["title"] and sh["svg"], sh
+    assert "to win" in sh["sub"] and "H2H" in sh["sub"], sh
+    assert sh["marks"] >= 1 and len(sh["items"]) == sh["marks"] and any("Early" in x and "200 yd TD catch" in x for x in sh["items"]), f"the biggest swings are labeled with the play and who made it: {sh}"
+    assert any("Sun" in x for x in sh["items"]), f"each swing says when it happened: {sh['items']}"
+    assert sh["over"] <= 1, "no sideways scroll"
+    if os.environ.get("SCENSHOT"): page.locator("#wp-sheet .wp-card").screenshot(path="/tmp/sf/wp_sheet.png")
+
+    # hovering over a moment shows the scoring plays at that time
+    box = page.locator("#wp-chart svg.wp-svg").bounding_box()
+    seen = []
+    for i in range(0, 101, 2):
+        page.mouse.move(box["x"] + 34 + (box["width"] - 44) * i / 100, box["y"] + box["height"] / 2)
+        tip = page.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
+        if tip: seen.append(tip)
+    assert seen and all("% to win" in t for t in seen), f"hover shows the moment's win probability: {seen[:2]}"
+    assert any("200 yd TD catch" in t and "Early" in t for t in seen), "hovering over a scoring moment names the play"
+    assert any("100 yd catch" in t for t in seen), "...and the other plays too"
+    assert any("Sun" in t for t in seen) and any(re.search(r"Q\d \d+:\d\d", t) for t in seen), "...with when it happened, on the clock too"
+    assert any("No scoring" in t for t in seen), "...and says so when nothing scored"
+
+    # share: one image with the chart and the biggest plays
+    with page.expect_download() as dl:
+        page.click("#wp-share")
+    assert dl.value.suggested_filename.endswith(".png") and "week-2" in dl.value.suggested_filename, dl.value.suggested_filename
+    assert page.evaluate("window.__wpShared && window.__wpShared.size") > 3000, "the shared image is a real picture"
+    # escape closes
+    page.keyboard.press("Escape"); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('wp-sheet').hidden"), "Escape closes it"
+
+    # a landscape phone: it all fits without scrolling
+    page.set_viewport_size({"width": 844, "height": 390}); page.wait_for_timeout(300)
+    page.click("#rb-scen-view .sc-blk:nth-of-type(2) .sc-wpm"); page.wait_for_timeout(600)
+    fit = page.evaluate("""() => { const c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect(); const svg = document.querySelector('#wp-chart svg').getBoundingClientRect();
+      return {cardBottom: c.bottom, cardTop: c.top, vh: window.innerHeight, svgBottom: svg.bottom, svgRight: svg.right, vw: window.innerWidth, scrolls: document.querySelector('#wp-sheet .wp-card').scrollHeight > document.querySelector('#wp-sheet .wp-card').clientHeight + 1}; }""")
+    assert fit["cardBottom"] <= fit["vh"] + 1 and fit["cardTop"] >= -1 and fit["svgBottom"] <= fit["vh"] and fit["svgRight"] <= fit["vw"] and not fit["scrolls"], f"landscape fits: {fit}"
+    if os.environ.get("SCENSHOT"): page.screenshot(path="/tmp/sf/wp_land.png")
+    page.keyboard.press("Escape")
+    page.set_viewport_size({"width": 390, "height": 844}); page.wait_for_timeout(300)
+
+    # past weeks: the picker, a collapsed result per manager, real play-by-play chart
+    opts = page.evaluate("[...document.querySelectorAll('#scen-week option')].map(o => o.textContent)")
+    assert opts[:2] == ["Week 2", "Week 1"], f"this week and the past weeks: {opts}"
+    page.select_option("#scen-week", "1"); page.wait_for_timeout(2500)
+    past = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, hl: b.querySelector('.sc-hl').textContent, h2h: b.querySelector('.sc-chip').textContent,
+      cols: b.querySelectorAll('.sc-cols').length, chart: !!b.querySelector('.sc-wpm svg'), pct: (b.querySelector('.wpm-pct') || {}).textContent}))""")
+    if os.environ.get("SCENSHOT"):
+        page.evaluate("window.scrollTo(0, document.getElementById('rb-scen-view').getBoundingClientRect().top + window.scrollY - 110)"); page.wait_for_timeout(300)
+        page.screenshot(path="/tmp/sf/wp_past.png")
+    assert len(past) == 11, f"every other manager has a finished Rumble: {len(past)}"
+    assert past[0]["h2h"].startswith("H2H") and all(p["hl"].startswith("Final") and p["cols"] == 0 for p in past), f"collapsed results, opponent first: {past[:2]}"
+    assert sum(1 for p in past if p["chart"]) >= 1 and all(p["pct"] in ("Won", "Lost", "Tied") for p in past if p["chart"]), f"past charts end on the real result: {[p['pct'] for p in past]}"
+    assert page.evaluate("document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "no live feed under a past week"
+    best = None
+    for i in range(len(past)):
+        page.click(f"#rb-scen-view .sc-blk:nth-of-type({i + 1}) .sc-wpm"); page.wait_for_timeout(250)
+        sh = page.evaluate("({title: document.getElementById('wp-title').textContent, items: [...document.querySelectorAll('#wp-list li')].map(l => l.textContent), mk: document.querySelectorAll('#wp-chart .wp-mk').length, svg: !!document.querySelector('#wp-chart svg')})")
+        assert "Week 1" in sh["title"] and sh["svg"], f"a past week opens: {sh}"
+        page.keyboard.press("Escape")
+        if sh["mk"] >= 2 and best is None: best = sh
+    assert best, "somewhere in a real week a play moved the win probability by 10 points or more"
+    assert all(re.search(r"(Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d", x) for x in best["items"]) and len(best["items"]) == best["mk"], f"each swing is named and timed: {best['items']}"
+    # back to this week
+    page.select_option("#scen-week", ""); page.wait_for_timeout(600)
+    back = [x["who"] for x in page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent}))""")]
+    assert back[:2] == ["Jake", "Aidan"] and len(back) < 11, f"back on this week's blocks: {back}"
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nWIN PROBABILITY SCENARIO PASSED")
 
 
 def scenario_trends(browser):
@@ -3665,6 +3822,7 @@ def main():
         scenario_ux_batch(browser)
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
+        scenario_win_probability(browser)
         scenario_gameday_helpers(browser)
         scenario_future_weeks(browser)
         scenario_name_overflow_audit(browser)

@@ -469,6 +469,13 @@ def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[s
     }
 
 
+def write_index() -> None:
+    """Which weeks have a timeline, so the page asks only for files that exist."""
+    weeks = sorted(int(f[5:-5]) for f in os.listdir(OUT_DIR) if f.startswith("week_") and f.endswith(".json"))
+    with open(os.path.join(OUT_DIR, "index.json"), "w") as fh:
+        json.dump({"weeks": weeks}, fh, separators=(",", ":"))
+
+
 def already_good(path: str) -> bool:
     """A finished timeline is kept; one flagged approximate is retried, since nflverse fills in a day late."""
     try:
@@ -560,6 +567,7 @@ def main() -> None:
                 print(f"[info] week {wk}: {len(tl['ev'])} events, q={tl['q']}, {os.path.getsize(path) // 1024} KB")
             elif tl:
                 print(f"[warn] week {wk}: only {tl['q']:.0%} of the points explained so far (play-by-play incomplete?); will retry")
+    write_index()
 
 
 if __name__ == "__main__":

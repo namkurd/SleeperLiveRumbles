@@ -1472,10 +1472,12 @@
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
-  .rb-scen { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr)); gap: 10px; align-items: start; }
+  .rb-scen { margin-top: 12px; }
+  #scen-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr)); gap: 10px; align-items: start; }
   .rb-scen[hidden] { display: none; }
-  .rb-scen > .rb-live-empty { grid-column: 1 / -1; }
+  #scen-blocks > .rb-live-empty { grid-column: 1 / -1; }
   #rb-scen[disabled] { opacity: 0.45; cursor: default; }
+  #rb-scen.wait { opacity: 0.45; }
   #rb-scen small { display: block; font-size: 0.6rem; font-weight: 500; line-height: 1.1; }
   .sc-blk { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 9px 11px 10px; margin-bottom: 0; }
   .sc-bh { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
@@ -1489,7 +1491,56 @@
   .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
-  .sc-hl { font-size: 0.78rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
+  .sc-hl { font-size: 0.72rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
+  /* Win-probability chart in Scenarios */
+  .scen-bar { margin: 0 0 8px; display: flex; justify-content: flex-end; }
+  .scen-bar[hidden] { display: none; }
+  .sc-wpm { position: relative; height: 46px; margin: 6px 0 4px; padding-right: 44px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
+  .sc-wpm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .wpm-plot { position: absolute; left: 0; right: 44px; top: 0; bottom: 0; }
+  .sc-wpm svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+  .sc-wpm.empty { cursor: default; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; color: var(--text-dim); }
+  .wpm-area { fill-opacity: 0.4; } .wpm-mid { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
+  .wpm-div { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; opacity: 0.45; }
+  .wpm-line { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .wpm-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; margin: -4px 0 0 -4px; box-shadow: 0 0 0 2px var(--panel); }
+  .wpm-pct { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 44px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .wpm-ap { position: absolute; left: 6px; top: 2px; font-size: 0.56rem; color: var(--text-dim); }
+  .sc-blk.sc-done { padding-bottom: 8px; }
+  .wp-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(5,7,12,0.66); display: flex; align-items: center; justify-content: center; padding: 12px; }
+  .wp-sheet[hidden] { display: none; }
+  .wp-card { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 14px; width: min(860px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 12px 14px 14px; box-shadow: 0 16px 48px rgba(0,0,0,0.55); }
+  .wp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+  .wp-title { font-size: 1.05rem; font-weight: 800; } .wp-title small { font-weight: 600; color: var(--text-dim); font-size: 0.74rem; margin-left: 4px; }
+  .wp-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .wp-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .wp-btns button { min-width: 34px; }
+  .wp-body { display: flex; gap: 14px; align-items: flex-start; }
+  .wp-chartwrap { position: relative; flex: 1 1 auto; min-width: 0; touch-action: pan-y; }
+  .wp-chartwrap svg { display: block; max-width: 100%; }
+  .wp-side { flex: 0 0 300px; min-width: 0; }
+  .wp-listh { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
+  .wp-listh[hidden] { display: none; }
+  .wp-list { list-style: none; margin: 0; padding: 0; }
+  .wp-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--panel-border); }
+  .wp-list li:first-child { border-top: 0; }
+  .wp-list .wp-none { color: var(--text-dim); font-size: 0.76rem; }
+  .wp-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 0.7rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
+  .wp-list > li > div { flex: 1 1 auto; min-width: 0; }
+  .wp-ph { font-size: 0.8rem; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+  .wp-pm { font-size: 0.66rem; color: var(--text-dim); line-height: 1.2; }
+  .wp-pd { flex: 0 0 auto; font-size: 0.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .wp-pd.up { color: var(--good); } .wp-pd.dn { color: var(--bad); }
+  .wp-hint { font-size: 0.64rem; color: var(--text-dim); margin: 8px 0 0; }
+  #wp-tipx { z-index: 6; }
+  #wp-tipx .tt-d div { margin-top: 1px; }
+  @media (max-width: 700px) { .wp-body { flex-direction: column; gap: 8px; } .wp-side { flex-basis: auto; width: 100%; } .wp-card { padding: 10px 10px 12px; } }
+  @media (max-height: 500px) and (orientation: landscape) {
+    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 8px 10px; overflow: hidden; }
+    .wp-body { flex-direction: row; gap: 10px; } .wp-side { flex: 0 0 38%; max-height: calc(100vh - 76px); overflow: auto; } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
+  }
+  @media (prefers-reduced-motion: no-preference) { .wpm-dot { transition: left 0.4s, top 0.4s; } }
+
   .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 4px 14px; margin: 4px 4px 0; }
   .sc-sc small { display: block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sc-sc b { font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -1513,7 +1564,7 @@
   .sc-a { grid-area: a; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; color: var(--text-dim); }
   .sc-a.gain { color: var(--good); } .sc-a.loss { color: var(--bad); }
   .sc-n .nl { display: none; }
-  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.72rem; } .sc-gap b { font-size: 1.4rem !important; } .sc-scores { gap: 4px 10px; } .sc-sc.proj b { font-size: 1.5rem; } .sc-sc.act b { font-size: 0.85rem; } .sc-sc small { font-size: 0.54rem; } }
+  @media (max-width: 560px) { .sc-n .nf { display: none; } .sc-n .nl { display: inline; } .sc-blk { padding: 10px 8px; } .sc-hl { font-size: 0.68rem; } .sc-gap b { font-size: 1.4rem !important; } .sc-scores { gap: 4px 10px; } .sc-sc.proj b { font-size: 1.5rem; } .sc-sc.act b { font-size: 0.85rem; } .sc-sc small { font-size: 0.54rem; } }
   .rb-feed-t td.tm .ts { display: none; }
   .rb-feed-t td.pp .neg { color: var(--bad); }
   .rb-feed-t td.tm { text-align: left; color: var(--text-dim); font-size: 0.76rem; }
@@ -1595,7 +1646,7 @@
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid totals" id="rb-grid"></div>
-    <div class="rb-scen" id="rb-scen-view" hidden></div>
+    <div class="rb-scen" id="rb-scen-view" hidden><div class="scen-bar" id="scen-bar"></div><div id="scen-blocks"></div></div>
     <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
@@ -1715,6 +1766,18 @@
 
 <button type="button" class="epa-toggle" id="epa-toggle" aria-pressed="false" title="Show EPA next to points (from nflverse; filled in after each game ends)">EPA</button>
 
+<div class="wp-sheet" id="wp-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="wp-title">
+  <div class="wp-card">
+    <div class="wp-head">
+      <div class="wp-ttl"><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div></div>
+      <div class="wp-btns"><button type="button" id="wp-share" class="refresh-btn">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
+    </div>
+    <div class="wp-body">
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div></div>
+      <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><ol class="wp-list" id="wp-list"></ol><p class="wp-hint">Hover or drag across the chart to see the scoring plays at that moment.</p></div>
+    </div>
+  </div>
+</div>
 <script>
 (function () {
   "use strict";
@@ -6370,6 +6433,29 @@
     if (mq.addEventListener) mq.addEventListener("change", place); else mq.addListener(place);
   })();
   document.getElementById("rb-refresh").addEventListener("click", refreshNow);
+  // Win probability: tap a mini chart to open it; the sheet's hover, close and share; the Scenarios week picker.
+  (function () {
+    var view = document.getElementById("rb-scen-view"), chart = document.getElementById("wp-chartwrap"), rs = null;
+    view.addEventListener("click", function (e) {
+      var el = e.target.closest && e.target.closest("[data-wp]");
+      if (el && !el.classList.contains("empty")) wpOpen(el.getAttribute("data-wp"));
+    });
+    view.addEventListener("keydown", function (e) {
+      var el = e.target.closest && e.target.closest("[data-wp]");
+      if (el && !el.classList.contains("empty") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); wpOpen(el.getAttribute("data-wp")); }
+    });
+    document.getElementById("scen-bar").addEventListener("change", function (e) {
+      if (e.target.id === "scen-week") { state.rb.scenWeek = e.target.value === "" ? null : Number(e.target.value); renderRumblin(); }
+    });
+    document.getElementById("wp-close").addEventListener("click", wpClose);
+    document.getElementById("wp-share").addEventListener("click", wpShare);
+    document.getElementById("wp-sheet").addEventListener("click", function (e) { if (e.target.id === "wp-sheet") wpClose(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && wpOpenKey) wpClose(); });
+    chart.addEventListener("pointermove", wpHover);
+    chart.addEventListener("pointerdown", wpHover);
+    chart.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") wpHoverOff(); });
+    window.addEventListener("resize", function () { if (wpOpenKey) { clearTimeout(rs); rs = setTimeout(wpSheetRender, 120); } });
+  })();
   // R refreshes (unless typing in a field or using a modifier key).
   document.addEventListener("keydown", function (e) {
     if (e.key !== "r" && e.key !== "R") return;
@@ -6464,7 +6550,9 @@
   }
 
   // Whether roster `rid` is the picked manager's opponent this week.
+  var rbOppOverride = null;   // set while a past week is showing: that week's opponent, not this week's
   function rbIsOpponent(rid) {
+    if (rbOppOverride != null) return Number(rbOppOverride) === Number(rid);
     var me = state.rb.me;
     var b = me != null && state.live && state.live.byRoster ? state.live.byRoster[me] : null;
     return !!(b && b.actual && b.actual.opponentRosterId != null && Number(b.actual.opponentRosterId) === Number(rid));
@@ -6542,7 +6630,7 @@
     } catch (e) { return null; }
   }
   // null when the tab should be hidden; else {key, clusters, cur}.
-  function rbScenWindow() {
+  function rbScenWindow(allowFinal) {
     var sched = state.live && state.live.sched;
     if (!sched) return null;
     var seen = {}, games = [];
@@ -6568,11 +6656,12 @@
       var et = rbEtParts(c.start);
       if (et && et.day === "Sun" && et.mins >= 750 && et.mins <= 810) anchor = i;
     });
-    if (anchor < 0 || !clusters[anchor].done) return { wait: true };
+    if (anchor < 0 || !clusters[anchor].done) return allowFinal ? null : { wait: true };
     for (var i = anchor + 1; i < clusters.length; i++) {
-      if (!clusters[i].done) return { key: clusters[i].start, clusters: clusters, cur: i };
+      if (!clusters[i].done) return allowFinal ? null : { key: clusters[i].start, clusters: clusters, cur: i };
     }
-    return null;
+    // Every game is final: the week is a set of results (only asked for with allowFinal).
+    return allowFinal && clusters.length && clusters.every(function (c) { return c.done; }) ? { key: "final", clusters: clusters, cur: clusters.length, final: true } : null;
   }
   function rbScenCluster(win, ms) {
     if (typeof ms !== "number") return -1;
@@ -6646,6 +6735,187 @@
     return rbNormCdf(d / Math.sqrt(v));
   }
 
+  // ---------------------------------------------------------------------------
+  // Win-probability chart for Scenarios.
+  // WP-ENGINE-START  (pure functions: no DOM, no page state; unit-tested by test/test_wp_engine.js)
+  //
+  // A "doc" is a week's timeline (wp_timeline/week_N.json from nflverse play-by-play, or wp_live/week_N.json from
+  // the recorder): fantasy-point events in seconds after doc.t0, each game's clock, and pregame projections.
+  // The probability at any moment uses the model behind the "% to win" number (rbWinChance): the gap now, plus what
+  // each player is still expected to add, spread by sqrt(points to come). "Still to come" follows the game clock.
+  // ---------------------------------------------------------------------------
+  var WP_SQUEEZE_OVER = 40 * 60;   // an idle stretch longer than this is squeezed on the time axis ...
+  var WP_SQUEEZE_TO = 12 * 60;     // ... down to this much
+  var WP_GRID = 60;                // seconds between sampled points while a game is on
+  var WP_GAME_LEN = 11500;         // a game that has not ended yet is assumed to run about this long
+  var WP_CLUSTER = 150;            // plays closer than this (seconds) count as one swing
+
+  function wpDone(doc) {
+    var ks = Object.keys(doc.g || {});
+    return ks.length > 0 && ks.every(function (k) { return doc.g[k].end != null; });
+  }
+  function wpWeekEnd(doc) {
+    var m = 0;
+    Object.keys(doc.g || {}).forEach(function (k) { if (doc.g[k].end != null && doc.g[k].end > m) m = doc.g[k].end; });
+    return m;
+  }
+  // Share of the game left (0..1) for a player at second t.
+  function wpRem(doc, sid, t) {
+    var g = doc.g[doc.tg[doc.tm[sid]]];
+    if (!g) return wpDone(doc) && t >= wpWeekEnd(doc) ? 0 : 1;
+    if (g.end != null && t >= g.end) return 0;
+    var c = g.clk;
+    if (!c || !c.length || t < c[0][0]) return 1;
+    var lo = 0, hi = c.length - 1;
+    while (lo < hi) { var m = (lo + hi + 1) >> 1; if (c[m][0] <= t) lo = m; else hi = m - 1; }
+    return c[lo][1] / 1000;
+  }
+  // "Q3 4:12" from the share of the game left.
+  function wpClockLabel(rem) {
+    if (rem <= 0) return "Final";
+    if (rem >= 1) return "Pregame";
+    var el = (1 - rem) * 60, q = Math.min(4, Math.floor(el / 15) + 1), left = Math.max(0, 15 - (el - (q - 1) * 15));
+    var mm = Math.floor(left), ss = Math.floor((left - mm) * 60);
+    return "Q" + q + " " + mm + ":" + (ss < 10 ? "0" : "") + ss;
+  }
+
+  // mine / theirs: [{sid, pos}]. opts.now (seconds) bounds a week still in progress.
+  function wpBuild(doc, mine, theirs, opts) {
+    opts = opts || {};
+    var sides = {}, evs = {}, i;
+    mine.forEach(function (p) { sides[p.sid] = 1; });
+    theirs.forEach(function (p) { sides[p.sid] = -1; });
+    (doc.ev || []).forEach(function (e) {
+      if (!sides[e[1]]) return;
+      (evs[e[1]] = evs[e[1]] || []).push(e);
+    });
+    var cum = {};
+    Object.keys(evs).forEach(function (sid) {
+      evs[sid].sort(function (a, b) { return a[0] - b[0]; });
+      var run = 0;
+      cum[sid] = evs[sid].map(function (e) { run += e[2]; return run; });
+    });
+    function cumAt(sid, t) {
+      var a = evs[sid];
+      if (!a) return 0;
+      var lo = 0, hi = a.length;
+      while (lo < hi) { var m = (lo + hi) >> 1; if (a[m][0] <= t) lo = m + 1; else hi = m; }
+      return lo ? cum[sid][lo - 1] : 0;
+    }
+    var all = mine.concat(theirs);
+
+    function at(t) {
+      var my = 0, th = 0, em = 0, et = 0, v = 0;
+      all.forEach(function (p) {
+        var s = sides[p.sid], act = cumAt(p.sid, t), rf = wpRem(doc, p.sid, t);
+        if (p.pos === "DEF" && rf < 1) rf = 0;
+        var pre = Math.max(0, num(doc.pre && doc.pre[p.sid]));
+        var rem = rf > 0 ? Math.max(0, blendedProjection(act, pre, rf) - act) : 0;
+        var sd = (WIN_SD_C[p.pos] || 2.3) * Math.sqrt(rem);
+        v += sd * sd;
+        if (s > 0) { my += act; em += rem; } else { th += act; et += rem; }
+      });
+      var gap = my - th, d = gap + em - et;
+      var pr = v <= 0 ? (d > 0.004 ? 1 : d < -0.004 ? 0 : 0.5) : rbNormCdf(d / Math.sqrt(v));
+      return { p: pr, my: my, th: th, gap: gap };
+    }
+
+    // The time axis: every game these players are in, joined into blocks; long idle stretches are squeezed.
+    var iv = [];
+    all.forEach(function (p) {
+      var g = doc.g[doc.tg[doc.tm[p.sid]]];
+      if (g) iv.push([g.ko, g.end != null ? g.end : g.ko + WP_GAME_LEN]);
+    });
+    (doc.ev || []).forEach(function (e) { if (sides[e[1]]) iv.push([e[0], e[0]]); });
+    if (!iv.length) return null;
+    iv.sort(function (a, b) { return a[0] - b[0]; });
+    var blocks = [];
+    iv.forEach(function (x) {
+      var b = blocks[blocks.length - 1];
+      if (b && x[0] - b.b <= WP_SQUEEZE_OVER) b.b = Math.max(b.b, x[1]);
+      else blocks.push({ a: x[0], b: x[1] });
+    });
+    var off = 0;
+    blocks.forEach(function (b, k) {
+      b.off = off;
+      off += (b.b - b.a) + (k < blocks.length - 1 ? WP_SQUEEZE_TO : 0);
+    });
+    var L = Math.max(1, off);
+    function comp(t) {
+      for (var k = 0; k < blocks.length; k++) {
+        var b = blocks[k];
+        if (t <= b.b) return k === 0 || t >= b.a ? b.off + Math.max(0, t - b.a) : blocks[k - 1].off + (blocks[k - 1].b - blocks[k - 1].a) + WP_SQUEEZE_TO * (t - blocks[k - 1].b) / (b.a - blocks[k - 1].b);
+      }
+      return L;
+    }
+    function x(t) { return Math.max(0, Math.min(1, comp(t) / L)); }
+    function tOf(fx) {
+      var c = Math.max(0, Math.min(1, fx)) * L;
+      for (var k = 0; k < blocks.length; k++) {
+        var b = blocks[k], len = b.b - b.a;
+        if (c <= b.off + len) return b.a + Math.max(0, c - b.off);
+        if (k < blocks.length - 1 && c < blocks[k + 1].off) return b.b;
+      }
+      return blocks[blocks.length - 1].b;
+    }
+
+    // Sampled points: a steady grid while games are on, and both sides of every scoring play so a play reads as a step.
+    var end = opts.now != null ? Math.min(opts.now, blocks[blocks.length - 1].b) : blocks[blocks.length - 1].b;
+    var ts = {};
+    blocks.forEach(function (b) {
+      for (var t = b.a; t <= Math.min(b.b, end); t += WP_GRID) ts[t] = 1;
+      if (b.a <= end) ts[b.a] = 1;
+      if (b.b <= end) ts[b.b] = 1;
+    });
+    (doc.ev || []).forEach(function (e) { if (sides[e[1]] && e[0] <= end) { ts[e[0]] = 1; ts[e[0] - 1] = 1; } });
+    ts[end] = 1;
+    var T = Object.keys(ts).map(Number).sort(function (a, b) { return a - b; });
+    var P = [], MY = [], TH = [];
+    T.forEach(function (t) { var r = at(t); P.push(r.p); MY.push(r.my); TH.push(r.th); });
+    return { at: at, T: T, P: P, MY: MY, TH: TH, x: x, tOf: tOf, blocks: blocks, L: L, end: end, start: blocks[0].a, sides: sides, evs: evs };
+  }
+
+  // The biggest swings, by plays that landed within WP_CLUSTER seconds of each other. names: {sid: "Pickens"}.
+  function wpMarks(doc, model, names, opts) {
+    opts = opts || {};
+    var list = [];
+    Object.keys(model.evs).forEach(function (sid) {
+      model.evs[sid].forEach(function (e) { if (e[0] <= model.end && Math.abs(e[2]) >= 0.005) list.push({ t: e[0], sid: sid, pts: e[2], label: e[3], side: model.sides[sid] }); });
+    });
+    list.sort(function (a, b) { return a.t - b.t; });
+    var clusters = [];
+    list.forEach(function (e) {
+      var c = clusters[clusters.length - 1];
+      if (c && e.t - c.t1 <= WP_CLUSTER) { c.t1 = e.t; c.ev.push(e); } else clusters.push({ t0: e.t, t1: e.t, ev: [e] });
+    });
+    var out = clusters.map(function (c) {
+      var top = c.ev.slice().sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); })[0];
+      var p0 = model.at(c.t0 - 1).p, p1 = model.at(c.t1).p, a = model.at(c.t1);
+      var label = top.label === "scoring adjustment" ? "stat correction" : top.label;
+      return { t: c.t1, t0: c.t0, p0: p0, p1: p1, d: p1 - p0, sid: top.sid, who: names[top.sid] || "", label: label, pts: top.pts, side: top.side, n: c.ev.length, my: a.my, th: a.th };
+    });
+    var min = opts.min != null ? opts.min : 0.10, max = opts.max || 5;
+    var big = out.filter(function (m) { return Math.abs(m.d) >= min; }).sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); }).slice(0, max);
+    if (big.length < 3 && min > 0.04) {
+      big = out.filter(function (m) { return Math.abs(m.d) >= 0.04; }).sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); }).slice(0, max);
+    }
+    big.forEach(function (m, i) { m.rank = i + 1; });
+    return big;
+  }
+
+  // Scoring plays near a moment (for the hover tooltip), biggest first.
+  function wpPlaysNear(model, names, t, win, max) {
+    var out = [];
+    Object.keys(model.evs).forEach(function (sid) {
+      model.evs[sid].forEach(function (e) {
+        if (Math.abs(e[0] - t) <= win && e[0] <= model.end) out.push({ t: e[0], sid: sid, who: names[sid] || "", label: e[3] === "scoring adjustment" ? "stat correction" : e[3], pts: e[2], side: model.sides[sid] });
+      });
+    });
+    out.sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); });
+    return out.slice(0, max || 4);
+  }
+  // WP-ENGINE-END
+
   function rbScenSideHtml(t, list, win) {
     var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
     var rows = list.map(function (p) {
@@ -6685,17 +6955,63 @@
       cell("proj", t.name, "proj", t.proj, col, "left", k + "tp", { pop: "crq", cr: t.rid }) + cell("act", t.name, "act", t.act, col, "right", k + "ta", { pop: "act", cr: t.rid }) + "</div>";
   }
 
+  // Completed weeks the Scenarios tab can show: those with lineups on file (epa_weekly.json), newest first.
+  function rbScenPastWeeks(exceptWeek) {
+    var L = state.epa && state.epa.lineups, done = (state.history && state.history.weeks_completed) || [];
+    if (!state.epa && !state.epaScenBusy) {
+      // The lineups come from epa_weekly.json, which otherwise loads only with the EPA toggle.
+      state.epaScenBusy = true;
+      epaLoad().then(function () { state.epaScenBusy = false; if (state.epa) renderRumblin(); });
+    }
+    if (!L) return [];
+    return done.filter(function (w) { return L[String(w)] && state.history.weekly && state.history.weekly[String(w)] && (exceptWeek == null || w !== exceptWeek); })
+      .map(Number).sort(function (a, b) { return b - a; });
+  }
+  // A finished week as the same team shape the live view uses: final points, the starters, and who each team played.
+  function rbPastTeams(week) {
+    var wd = weekDetailFromFile(week), hw = state.history && state.history.weekly && state.history.weekly[String(week)];
+    if (!wd || !hw) return [];
+    var names = {};
+    ((state.history && state.history.standings) || []).forEach(function (st) { names[st.roster_id] = st.manager; });
+    return rbWithRumbles(Object.keys(wd).map(function (rid) {
+      var h = hw[rid] || {}, pts = h.points != null ? num(h.points) : round2(wd[rid].reduce(function (a, p) { return a + p.actual; }, 0));
+      return { rid: Number(rid), name: names[rid] || ("Roster " + rid), act: pts, proj: pts, players: wd[rid], bench: [], ir: [], adj: null,
+        opp: h.opponent_roster_id != null ? Number(h.opponent_roster_id) : null, seasonRumbles: 0, seasonW: 0, seasonL: 0, liveCount: 0 };
+    }));
+  }
+  // The week picker above the blocks. Rebuilt only when its choices change, so it never closes under your finger.
+  function rbScenBar(curWeek, past, picked) {
+    var bar = document.getElementById("scen-bar"), sig = (curWeek != null ? curWeek : "-") + "|" + past.join(",");
+    if (bar.getAttribute("data-sig") !== sig) {
+      bar.innerHTML = '<label class="week-select-wrap scen-pick"><span class="visually-hidden">Week</span><select id="scen-week" class="week-select" aria-label="Which week\u2019s Scenarios">' +
+        (curWeek != null ? '<option value="">Week ' + curWeek + "</option>" : "") + past.map(function (w) { return '<option value="' + w + '">Week ' + w + "</option>"; }).join("") + "</select></label>";
+      bar.setAttribute("data-sig", sig);
+    }
+    var sel = document.getElementById("scen-week");
+    if (sel && sel.value !== (picked == null ? "" : String(picked))) sel.value = picked == null ? "" : String(picked);
+    bar.hidden = (curWeek != null ? 1 : 0) + past.length < 2;
+  }
+
   function rbRenderScenarios(teams, win) {
-    var box = document.getElementById("rb-scen-view");
+    var box = document.getElementById("scen-blocks");
     var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
     if (!me) { box.innerHTML = ""; return; }
+    // A finished week (a past one, or this one once every game is final): every Rumble is a result, all of them can be shown.
+    var finished = !!(win.past || win.final);
     var fzKey = win.key + "|" + me.rid;
     if (!state.scenFrozen || state.scenFrozen.key !== fzKey) state.scenFrozen = { key: fzKey, by: {} };
     var mine = rbScenPlayers(me, win);
     var blocks = [];
     var followed = state.rb.scenSel || null;
+    if (finished) {
+      followed = state.rb.scenSelDone || null;
+      if (!followed) { followed = {}; teams.forEach(function (t) { if (t !== me) followed[t.rid] = true; }); }
+    }
     teams.filter(function (t) { return t !== me && (followed ? followed[t.rid] : rbInPlay(me, t)); })
-      .sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); })
+      .sort(function (a, b) {
+        if (finished) return (b.rid === me.opp) - (a.rid === me.opp) || b.act - a.act || a.name.localeCompare(b.name);
+        return b.proj - a.proj || a.name.localeCompare(b.name);
+      })
       .forEach(function (t) {
         var theirs = rbScenPlayers(t, win);
         var gap = me.act - t.act;
@@ -6703,12 +7019,13 @@
         // Decided: nobody left on one side to change it (or on either side), or the Rumble is out of play.
         var over = !mineN && !theirN;
         var lockedUp = gap > 0.004 && !theirN, lockedOut = gap < -0.004 && !mineN;
-        var decided = over || lockedUp || lockedOut || !rbInPlay(me, t);
+        var settled = over || lockedUp || lockedOut;
+        var decided = settled || !rbInPlay(me, t);
         // Left to the default (in play) view, a Rumble that is settled just drops out; one you chose to follow stays as a Decided block.
-        if (!followed && (over || lockedUp || lockedOut)) return;
+        if (!followed && settled) return;
         var fz = state.scenFrozen.by[t.rid], text;
-        if (over || lockedUp || lockedOut) {
-          text = over ? (gap > 0.004 ? "Final: you won this Rumble" : gap < -0.004 ? "Final: you lost this Rumble" : "Final: a tie")
+        if (settled) {
+          text = over ? (gap > 0.004 ? "Final: you won, " : gap < -0.004 ? "Final: you lost, " : "Final: a tie, ") + me.act.toFixed(2) + " to " + t.act.toFixed(2)
             : lockedUp ? "Clinched: nobody left to catch you" : "Out of reach: you have nobody left to catch up";
         } else {
           if (!fz) {
@@ -6720,22 +7037,355 @@
         var h2h = t.rid === me.opp;
         var cls = gap < -0.004 ? "bad" : gap > 0.004 ? "ok" : "even";
         var label = over ? (gap < -0.004 ? "You lost by" : gap > 0.004 ? "You won by" : "Tied") : gap < -0.004 ? "You trail by" : gap > 0.004 ? "You lead by" : "All tied up";
+        var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
+        var mini = wpMiniHtml(win, me, t, { mine: rbColor(me.rid), theirs: col });
         var wp = Math.round(rbWinChance(gap, mine, theirs) * 100);
+        // The chart and the number come from the same model, so they agree.
+        if (!over && mini.pm && !mini.pm.done) wp = wpPct(mini.pm.pEnd);
         wp = Math.max(1, Math.min(99, wp));
         var wpTxt = over ? (gap > 0.004 ? "Won" : gap < -0.004 ? "Lost" : "Tied") : lockedUp ? "Clinched" : lockedOut ? "Out of reach" : wp + "% to win";
         if (over) wp = gap > 0.004 ? 100 : gap < -0.004 ? 0 : 50;
         var scale = Math.max(10, Math.abs(fz ? fz.start : gap) * 2);
         var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
-        var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
-        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' + (decided ? '<span class="sc-chip dec">Decided</span>' : "") +
+        blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + '"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' + (decided ? '<span class="sc-chip dec">Decided</span>' : "") +
           '<div class="sc-hl" title="' + escapeHtml(text) + '">' + escapeHtml(text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wpTxt + "</em></div></div>" +
-          rbScenScores(me, t, col) +
+          mini.html +
+          (settled ? "" : rbScenScores(me, t, col) +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
-          '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
+          '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div>") + "</section>");
       });
-    box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">No Rumbles are still in play against you right now.</div>';
+    box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">' + (finished ? "Pick a manager above to see that Rumble." : "No Rumbles are still in play against you right now.") + "</div>";
     flapScan(box);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Win-probability chart: loading, the mini chart in each Scenarios block, the expanded sheet, sharing.
+  // ---------------------------------------------------------------------------
+  var WP_LIVE_RAW = "https://raw.githubusercontent.com/namkurd/SleeperLiveRumbles/wp-data/wp_live/week_";
+  var wpDocs = {};         // week -> { doc, at, busy, final, missing }
+  var wpIdx = null;        // wp_timeline/index.json: which weeks have a play-by-play timeline
+  var wpIdxBusy = false;
+  var wpModels = {};       // pair key -> { sig, pm }
+  var wpPairs = {};        // pair key -> pm (what the expanded sheet opens)
+  var wpOpenKey = null;
+  var wpUid = 0;
+
+  function wpValidDoc(d) { return !!(d && typeof d === "object" && d.g && d.ev && d.tg && d.tm && typeof d.t0 === "number"); }
+  function wpDirty() { if (!document.getElementById("rumblin-view").hidden) renderRumblin(); }
+  function wpLoadIdx() {
+    if (wpIdx || wpIdxBusy) return;
+    wpIdxBusy = true;
+    fetchJson("./wp_timeline/index.json").then(function (d) { wpIdx = d && d.weeks ? d : { weeks: [] }; }, function () { wpIdx = { weeks: [] }; })
+      .then(function () { wpIdxBusy = false; wpDirty(); });
+  }
+  // The week's timeline (null while loading or when none exists). A finished week comes from the nightly play-by-play
+  // build; the week in progress comes from the recorder (refreshed every minute).
+  function wpDocChanged(a, b) {
+    if (!a || a.ev.length !== b.ev.length || a.src !== b.src) return true;
+    var sig = function (d) { return Object.keys(d.g).map(function (k) { var c = d.g[k].clk; return k + (c.length ? c[c.length - 1].join(".") : "") + (d.g[k].end == null ? "" : "e"); }).join(","); };
+    return sig(a) !== sig(b);
+  }
+  function wpGet(week, live) {
+    var e = wpDocs[week] || (wpDocs[week] = { doc: null, at: 0, busy: false, final: false, missing: false });
+    if (!wpIdx) { wpLoadIdx(); return e.doc; }
+    var now = Date.now(), has = wpIdx.weeks.indexOf(Number(week)) >= 0;
+    var due = has ? !e.final : (!e.at || now - e.at > (e.missing ? 300000 : live ? 60000 : 600000));
+    if (due && !e.busy) {
+      e.busy = true;
+      var url = has ? "./wp_timeline/week_" + week + ".json" : WP_LIVE_RAW + week + ".json?t=" + Math.floor(now / 60000);
+      fetchJson(url).then(function (d) {
+        e.busy = false; e.at = Date.now();
+        if (!wpValidDoc(d)) { e.missing = true; return; }
+        var changed = wpDocChanged(e.doc, d);
+        e.doc = d; e.final = has; e.missing = false;
+        if (changed) wpDirty();
+      }, function () { e.busy = false; e.at = Date.now(); e.missing = true; });
+    }
+    return e.doc;
+  }
+  function wpStatus(week) {
+    var e = wpDocs[week];
+    return e && e.doc ? "ok" : e && e.missing ? "none" : "loading";
+  }
+
+  // "Tyreek Hill" -> "T. Hill", a D/ST -> "Texans".
+  function wpShortName(p) {
+    var nm = String(p.name || "").replace(/\s+(Jr\.?|Sr\.?|II|III|IV)$/i, "");
+    if (p.position === "DEF") return nm.split(" ").pop();
+    var i = nm.indexOf(" ");
+    return i > 0 && p.short_name == null ? nm.charAt(0) + ". " + nm.slice(i + 1) : (p.short_name || nm);
+  }
+  function wpSheetKeep() { if (wpOpenKey) { if (wpPairs[wpOpenKey]) wpSheetRender(); else wpClose(); } }
+  function wpPlayers(team) {
+    return (team.players || []).filter(function (p) { return !p.replacement; }).map(function (p) {
+      return { sid: String(p.player_id), pos: p.position, name: wpShortName(p), full: p.name, act: num(p.actual), team: p.team || null };
+    });
+  }
+  // The recording lags by up to a minute (and the page reads Sleeper every 30 seconds), so fold what the page can see
+  // right now into a copy: any points the recording has not caught yet, and each live game's clock.
+  function wpAugment(doc, week, players) {
+    var now = Math.round((Date.now() - doc.t0) / 1000), d = { v: doc.v, src: doc.src, t0: doc.t0, g: {}, tg: Object.assign({}, doc.tg), tm: Object.assign({}, doc.tm), ev: doc.ev.slice(), pre: doc.pre, q: doc.q, approx: doc.approx };
+    Object.keys(doc.g).forEach(function (k) { var g = doc.g[k]; d.g[k] = { ko: g.ko, end: g.end, clk: g.clk.slice() }; });
+    var sched = state.live && state.live.sched || {}, rec = {};
+    doc.ev.forEach(function (e) { rec[e[1]] = (rec[e[1]] || 0) + e[2]; });
+    players.forEach(function (p) {
+      if (!d.tm[p.sid] && p.team) d.tm[p.sid] = p.team;
+      if (p.pos === "DEF" && !d.tm[p.sid]) d.tm[p.sid] = p.sid;
+      var diff = round2(p.act - (rec[p.sid] || 0));
+      if (Math.abs(diff) >= 0.005) d.ev.push([now, p.sid, diff, "latest"]);
+      var s = sched[d.tm[p.sid]], g = d.g[d.tg[d.tm[p.sid]]];
+      if (!s || !g) return;
+      if (s.status === "in_progress") {
+        var pm = Math.round(num(s.remainingFraction) * 1000), last = g.clk[g.clk.length - 1];
+        if (!last) g.clk.push([g.ko, 1000]);
+        if (!last || last[1] !== pm) g.clk.push([Math.max(now, last ? last[0] : 0), pm]);
+      } else if (s.status === "complete" && g.end == null) {
+        g.end = now; g.clk.push([now, 0]);
+      }
+    });
+    return { doc: d, now: now };
+  }
+
+  function wpPair(win, me, t, col) {
+    if (win.week == null) return null;
+    var key = win.key + ":" + me.rid + ":" + t.rid;
+    var live = !win.past && !win.final;
+    var doc0 = wpGet(win.week, live);
+    if (!doc0) return null;
+    var mine = wpPlayers(me), theirs = wpPlayers(t), doc = doc0, now = null;
+    if (!win.past && !wpDone(doc0)) { var a = wpAugment(doc0, win.week, mine.concat(theirs)); doc = a.doc; now = a.now; }
+    var last = Object.keys(doc.g).map(function (k) { var c = doc.g[k].clk; return c.length ? c[c.length - 1].join(".") : ""; }).join(",");
+    var sig = [win.week, doc.ev.length, doc.src, round2(me.act), round2(t.act), last, now == null ? "" : Math.floor(now / 30)].join("|");
+    var hit = wpModels[key];
+    if (hit && hit.sig === sig) { hit.pm.col = col; hit.pm.me = me; hit.pm.t = t; wpPairs[key] = hit.pm; return hit.pm; }
+    var model = wpBuild(doc, mine, theirs, { now: now });
+    if (!model) return null;
+    var names = {};
+    mine.concat(theirs).forEach(function (p) { names[p.sid] = p.name; });
+    var marks = wpMarks(doc, model, names, {});
+    var pm = { key: key, win: win, doc: doc, model: model, marks: marks, names: names, me: me, t: t, col: col, mine: mine, theirs: theirs,
+      done: wpDone(doc) && now == null || !!win.past, now: now, pEnd: model.P[model.P.length - 1], approx: !!doc.approx };
+    wpModels[key] = { sig: sig, pm: pm };
+    wpPairs[key] = pm;
+    return pm;
+  }
+
+  var wpEtFmt = null;
+  function wpEt(ms, short) {
+    try {
+      wpEtFmt = wpEtFmt || new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true });
+      var o = {};
+      wpEtFmt.formatToParts(new Date(ms)).forEach(function (x) { o[x.type] = x.value; });
+      var ap = (o.dayPeriod || "").toLowerCase();
+      return short ? o.weekday + " " + o.hour + (o.minute === "00" ? "" : ":" + o.minute) + ap.charAt(0) : o.weekday + " " + o.hour + ":" + o.minute + " " + ap.toUpperCase();
+    } catch (e) { return ""; }
+  }
+  function wpPct(p) { return Math.max(1, Math.min(99, Math.round(p * 100))); }
+
+  // The small chart that sits in a Scenarios block. Tap it to open the full view.
+  function wpMiniHtml(win, me, t, col) {
+    var key = win.key + ":" + me.rid + ":" + t.rid;
+    var pm = wpPair(win, me, t, col);
+    if (!pm) {
+      var st = wpStatus(win.week);
+      var msg = st === "loading" ? "" : win.past || win.final ? "Win probability isn’t available for this week" : "Win probability starts recording at kickoff";
+      return { pm: null, html: '<div class="sc-wpm empty" data-wp="' + key + '">' + (msg ? "<span>" + msg + "</span>" : "") + "</div>" };
+    }
+    var m = pm.model, W = 200, H = 40, k = ++wpUid;
+    var pts = m.T.map(function (tt, i) { return (m.x(tt) * W).toFixed(1) + "," + ((1 - m.P[i]) * H).toFixed(1); });
+    var first = pts[0].split(",")[0], lastX = pts[pts.length - 1].split(",")[0];
+    var area = "M" + first + "," + H / 2 + "L" + pts.join("L") + "L" + lastX + "," + H / 2 + "Z";
+    var divs = "";
+    for (var i = 1; i < m.blocks.length; i++) {
+      var dx = ((m.x(m.blocks[i - 1].b) + m.x(m.blocks[i].a)) / 2 * W).toFixed(1);
+      divs += '<line x1="' + dx + '" x2="' + dx + '" y1="0" y2="' + H + '" class="wpm-div"/>';
+    }
+    var p = pm.pEnd, endX = m.x(m.end) * 100;
+    var svg = '<div class="wpm-plot"><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="wpa' + k + '"><rect x="0" y="0" width="' + W + '" height="' + H / 2 + '"/></clipPath><clipPath id="wpb' + k + '"><rect x="0" y="' + H / 2 + '" width="' + W + '" height="' + H / 2 + '"/></clipPath></defs>' +
+      divs + '<path d="' + area + '" clip-path="url(#wpa' + k + ')" style="fill:' + col.mine + '" class="wpm-area"/><path d="' + area + '" clip-path="url(#wpb' + k + ')" style="fill:' + col.theirs + '" class="wpm-area"/>' +
+      '<line x1="0" x2="' + W + '" y1="' + H / 2 + '" y2="' + H / 2 + '" class="wpm-mid"/><polyline points="' + pts.join(" ") + '" class="wpm-line"/></svg>';
+    return { pm: pm, html: '<div class="sc-wpm" data-wp="' + key + '" role="button" tabindex="0" aria-label="Win probability chart, ' + wpPct(p) + ' percent. Tap to expand">' + svg +
+      '<i class="wpm-dot" style="left:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;background:" + (p >= 0.5 ? col.mine : col.theirs) + '"></i></div>' +
+      '<em class="wpm-pct" style="color:' + (p >= 0.5 ? col.mine : col.theirs) + '">' + (pm.done ? (p > 0.5 ? "Won" : p < 0.5 ? "Lost" : "Tied") : wpPct(p) + "%") + "</em>" +
+      (pm.approx ? '<small class="wpm-ap" title="This week’s play-by-play only partly reconciles to the final scores">approx.</small>' : "") + "</div>" };
+  }
+
+  // ---- the expanded chart: one SVG that is shown in the sheet and also saved as the shared image ----
+  function wpResolve(c) {
+    var m = /^var\((--[\w-]+)\)$/.exec(c || "");
+    return m ? (getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || "#888") : c;
+  }
+  function wpChartSvg(pm, W, H, share) {
+    var m = pm.model, doc = pm.doc, ml = share ? 46 : 34, mr = 10, mt = 14, mb = 26;
+    var pw = Math.max(40, W - ml - mr), ph = Math.max(40, H - mt - mb);
+    var C = { mine: wpResolve(pm.col.mine), theirs: wpResolve(pm.col.theirs), dim: wpResolve("var(--text-dim)"), line: wpResolve("var(--text)"), grid: wpResolve("var(--panel-border)") };
+    var X = function (t) { return ml + m.x(t) * pw; }, Y = function (p) { return mt + (1 - p) * ph; }, k = ++wpUid, fs = share ? 13 : 10;
+    var o = '<svg xmlns="http://www.w3.org/2000/svg" class="wp-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H + '" font-family="-apple-system, system-ui, Segoe UI, Roboto, sans-serif">';
+    o += '<defs><clipPath id="wpA' + k + '"><rect x="' + ml + '" y="' + mt + '" width="' + pw + '" height="' + ph / 2 + '"/></clipPath><clipPath id="wpB' + k + '"><rect x="' + ml + '" y="' + (mt + ph / 2) + '" width="' + pw + '" height="' + ph / 2 + '"/></clipPath></defs>';
+    [0, 25, 50, 75, 100].forEach(function (g) {
+      var y = Y(g / 100);
+      o += '<line x1="' + ml + '" x2="' + (ml + pw) + '" y1="' + y + '" y2="' + y + '" stroke="' + C.grid + '" stroke-width="1"' + (g === 50 ? ' stroke-dasharray="4 3"' : "") + "/>" +
+        '<text x="' + (ml - 5) + '" y="' + (y + 3.5) + '" text-anchor="end" font-size="' + fs + '" fill="' + C.dim + '">' + g + (share || g === 50 ? "%" : "") + "</text>";
+    });
+    // idle stretches (days) and where each block of games begins
+    var lastLab = -99;
+    m.blocks.forEach(function (b, i) {
+      var xa = X(b.a);
+      if (i > 0) {
+        var xb = X(m.blocks[i - 1].b), xm = (xa + xb) / 2;
+        o += '<line x1="' + xm + '" x2="' + xm + '" y1="' + mt + '" y2="' + (mt + ph) + '" stroke="' + C.grid + '" stroke-dasharray="2 3"/>';
+      }
+      if (xa - lastLab >= (share ? 70 : 52)) {
+        lastLab = xa;
+        o += '<text x="' + Math.min(xa, ml + pw - 20) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + wpEt(doc.t0 * 1 + b.a * 1000, true) + "</text>";
+      }
+    });
+    var pts = m.T.map(function (t, i) { return X(t).toFixed(1) + "," + Y(m.P[i]).toFixed(1); });
+    var area = "M" + X(m.T[0]).toFixed(1) + "," + Y(0.5) + "L" + pts.join("L") + "L" + X(m.T[m.T.length - 1]).toFixed(1) + "," + Y(0.5) + "Z";
+    o += '<path d="' + area + '" clip-path="url(#wpA' + k + ')" fill="' + C.mine + '" fill-opacity="0.38"/><path d="' + area + '" clip-path="url(#wpB' + k + ')" fill="' + C.theirs + '" fill-opacity="0.38"/>';
+    o += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="' + C.line + '" stroke-width="' + (share ? 2.2 : 1.8) + '" stroke-linejoin="round"/>';
+    if (!pm.done && pm.now != null) {
+      var xn = X(m.end);
+      o += '<line x1="' + xn + '" x2="' + xn + '" y1="' + mt + '" y2="' + (mt + ph) + '" stroke="' + C.dim + '" stroke-dasharray="1 3"/><text x="' + Math.min(xn, ml + pw - 12) + '" y="' + (mt - 3) + '" text-anchor="middle" font-size="' + fs + '" fill="' + C.dim + '">Now</text>';
+    }
+    // numbered markers on the biggest swings
+    pm.marks.forEach(function (mk) {
+      var cx = X(mk.t), cy = Y(mk.p1), c = mk.d >= 0 ? C.mine : C.theirs, r = share ? 11 : 9;
+      o += '<g class="wp-mk" data-n="' + mk.rank + '"><circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r + '" fill="' + c + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/><text x="' + cx.toFixed(1) + '" y="' + (cy + 3.6).toFixed(1) + '" text-anchor="middle" font-size="' + (share ? 12 : 10) + '" font-weight="800" fill="#fff">' + mk.rank + "</text></g>";
+    });
+    o += '<g class="wp-hov"></g>';
+    return { svg: o + "</svg>", geom: { ml: ml, mt: mt, pw: pw, ph: ph, W: W, H: H } };
+  }
+
+  function wpMarkLine(pm, mk) {
+    var t = pm.doc.t0 + mk.t * 1000, clock = wpClockLabel(wpRem(pm.doc, mk.sid, mk.t));
+    var who = mk.who ? mk.who + " " : "";
+    return { head: who + mk.label, meta: wpEt(t) + (clock && clock !== "Final" && clock !== "Pregame" ? " · " + clock : ""), sw: (mk.pts > 0 ? "+" : "") + mk.pts.toFixed(1) + " pts", from: wpPct(mk.p0), to: wpPct(mk.p1), up: mk.d >= 0 };
+  }
+  function wpSummary(pm) {
+    var me = pm.me, t = pm.t, last = pm.model.at(pm.model.end), gap = last.my - last.th, h2h = t.rid === me.opp;
+    var scores = escapeHtml(me.name) + " " + last.my.toFixed(2) + " – " + last.th.toFixed(2) + " " + escapeHtml(t.name);
+    var verdict = pm.done ? (gap > 0.004 ? "You won" : gap < -0.004 ? "You lost" : "A tie") : wpPct(pm.pEnd) + "% to win";
+    return { title: escapeHtml(me.name) + " vs. " + escapeHtml(t.name), sub: scores + " · " + verdict + " · " + (h2h ? "H2H, 9 pts" : "Field, 1 pt") + (pm.approx ? " · approximate" : "") };
+  }
+
+  var wpGeom = null;
+  function wpSheetRender() {
+    var pm = wpOpenKey && wpPairs[wpOpenKey];
+    var sheet = document.getElementById("wp-sheet");
+    if (!pm) { sheet.hidden = true; return; }
+    var s = wpSummary(pm), wrap = document.getElementById("wp-chart");
+    document.getElementById("wp-title").innerHTML = s.title + ' <small>Week ' + pm.win.week + "</small>";
+    document.getElementById("wp-sub").innerHTML = s.sub;
+    var land = window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
+    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(300, Math.max(190, Math.round(W * 0.6)));
+    var c = wpChartSvg(pm, W, H, false);
+    wpGeom = c.geom;
+    wrap.innerHTML = c.svg;
+    document.getElementById("wp-tipx").hidden = true;
+    var list = pm.marks.map(function (mk) {
+      var l = wpMarkLine(pm, mk);
+      return '<li><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div><span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
+    }).join("");
+    document.getElementById("wp-list").innerHTML = list || '<li class="wp-none">No single play moved the win probability by 10 points or more.</li>';
+    document.getElementById("wp-listh").hidden = !pm.marks.length;
+    sheet.hidden = false;
+  }
+  function wpOpen(key) {
+    if (!wpPairs[key]) return;
+    wpOpenKey = key;
+    wpSheetRender();
+    document.getElementById("wp-close").focus();
+  }
+  function wpClose() { wpOpenKey = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
+
+  // Hover / touch on the expanded chart: the nearest moment, with the scoring plays around it.
+  function wpHover(e) {
+    var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg"), tip = document.getElementById("wp-tipx");
+    if (!pm || !svg || !wpGeom) return;
+    var r = svg.getBoundingClientRect(), g = wpGeom, m = pm.model;
+    var px = e.clientX - r.left;
+    if (px < g.ml - 6 || px > g.ml + g.pw + 6) { wpHoverOff(); return; }
+    var fx = Math.max(0, Math.min(1, (px - g.ml) / g.pw)), t = Math.min(m.end, m.tOf(fx));
+    var a = m.at(t);
+    var win = Math.max(90, 10 * m.L / g.pw), plays = wpPlaysNear(m, pm.names, t, win, 4);
+    var cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph, ns = "http://www.w3.org/2000/svg";
+    var hov = svg.querySelector(".wp-hov");
+    hov.innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
+    var ms = pm.doc.t0 + t * 1000, h = "<b>" + wpEt(ms) + "</b> <span>" + wpPct(a.p) + "% to win</span><div>" + escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> – <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "</div>";
+    if (plays.length) {
+      h += '<div class="tt-d">' + plays.map(function (p) {
+        var clock = wpClockLabel(wpRem(pm.doc, p.sid, p.t));
+        return '<div><b style="color:' + (p.side > 0 ? pm.col.mine : pm.col.theirs) + '">' + escapeHtml(p.who) + "</b> " + escapeHtml(p.label) + " <span>" + (p.pts > 0 ? "+" : "") + p.pts.toFixed(1) + (clock && clock !== "Final" && clock !== "Pregame" ? " · " + clock : "") + "</span></div>";
+      }).join("") + "</div>";
+    } else h += '<div class="tt-d"><span>No scoring at this moment</span></div>';
+    tip.innerHTML = h;
+    tip.hidden = false;
+    var wr = document.getElementById("wp-chartwrap").getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.max(4, Math.min(wr.width - tw - 4, (r.left - wr.left) + cx - tw / 2)), top = (r.top - wr.top) + cy - th - 12;
+    if (top < 2) top = (r.top - wr.top) + cy + 14;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function wpHoverOff() {
+    var svg = document.querySelector("#wp-chart svg.wp-svg"), hov = svg && svg.querySelector(".wp-hov");
+    if (hov) hov.innerHTML = "";
+    document.getElementById("wp-tipx").hidden = true;
+  }
+
+  // ---- sharing: the same chart plus the biggest plays and when they happened, as one image ----
+  function wpShareSvg(pm) {
+    var W = 1080, s = wpSummary(pm), c = wpChartSvg(pm, W, 430, true), rows = pm.marks.slice(0, 5);
+    var bg = wpResolve("var(--panel)"), fg = wpResolve("var(--text)"), dim = wpResolve("var(--text-dim)"), top = 92, Ht = top + 430 + 24 + (rows.length ? 40 + rows.length * 54 : 0) + 46;
+    var strip = function (h) { return h.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"); };
+    var x = function (t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+    var o = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + Ht + '" viewBox="0 0 ' + W + " " + Ht + '" font-family="-apple-system, system-ui, Segoe UI, Roboto, sans-serif"><rect width="' + W + '" height="' + Ht + '" rx="0" fill="' + bg + '"/>';
+    o += '<text x="28" y="44" font-size="28" font-weight="800" fill="' + fg + '">' + x(strip(s.title)) + '</text><text x="' + (W - 28) + '" y="44" text-anchor="end" font-size="18" fill="' + dim + '">Week ' + pm.win.week + " · DTF Club</text>";
+    o += '<text x="28" y="74" font-size="17" fill="' + dim + '">' + x(strip(s.sub)) + "</text>";
+    o += '<g transform="translate(14 ' + top + ')">' + c.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "") + "</g>";
+    var y = top + 430 + 36;
+    if (rows.length) {
+      o += '<text x="28" y="' + y + '" font-size="15" font-weight="700" fill="' + dim + '" letter-spacing="1">BIGGEST SWINGS</text>';
+      rows.forEach(function (mk, i) {
+        var l = wpMarkLine(pm, mk), yy = y + 18 + i * 54, col = wpResolve(mk.d >= 0 ? pm.col.mine : pm.col.theirs);
+        o += '<circle cx="42" cy="' + (yy + 16) + '" r="14" fill="' + col + '"/><text x="42" y="' + (yy + 21) + '" text-anchor="middle" font-size="15" font-weight="800" fill="#fff">' + mk.rank + "</text>" +
+          '<text x="68" y="' + (yy + 14) + '" font-size="20" font-weight="700" fill="' + fg + '">' + x(l.head) + '</text><text x="68" y="' + (yy + 36) + '" font-size="15" fill="' + dim + '">' + x(l.meta + " · " + l.sw) + "</text>" +
+          '<text x="' + (W - 28) + '" y="' + (yy + 24) + '" text-anchor="end" font-size="20" font-weight="800" fill="' + col + '">' + l.from + "% → " + l.to + "%</text>";
+      });
+    }
+    o += '<text x="28" y="' + (Ht - 18) + '" font-size="14" fill="' + dim + '">Win probability for this Rumble through the week · Rumble Central</text></svg>';
+    return { svg: o, w: W, h: Ht };
+  }
+  function wpSharePng(pm) {
+    return new Promise(function (resolve, reject) {
+      var s = wpShareSvg(pm), img = new Image(), url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s.svg);
+      img.onload = function () {
+        var cv = document.createElement("canvas"), sc = 2;
+        cv.width = s.w * sc; cv.height = s.h * sc;
+        var cx = cv.getContext("2d");
+        cx.scale(sc, sc); cx.drawImage(img, 0, 0, s.w, s.h);
+        cv.toBlob(function (b) { b ? resolve(b) : reject(new Error("no image")); }, "image/png");
+      };
+      img.onerror = function () { reject(new Error("image failed")); };
+      img.src = url;
+    });
+  }
+  function wpShare() {
+    var pm = wpOpenKey && wpPairs[wpOpenKey], btn = document.getElementById("wp-share");
+    if (!pm) return;
+    var name = "win-probability-week-" + pm.win.week + "-" + String(pm.t.name).toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png";
+    btn.disabled = true;
+    wpSharePng(pm).then(function (blob) {
+      window.__wpShared = { size: blob.size, name: name };
+      var file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], title: wpSummary(pm).title.replace(/&amp;/g, "&") + " – Week " + pm.win.week }).catch(function () { /* cancelled */ });
+      }
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    }).catch(function () { alert("Couldn’t make the image on this device."); }).then(function () { btn.disabled = false; });
   }
 
   function rbPlayerRow(p, bench, struck) {
@@ -6988,16 +7638,25 @@
     var scenWin = rb.mode === "me" ? rbScenWindow() : null;
     var scenWait = !!(scenWin && scenWin.wait);
     if (scenWait) scenWin = null;
+    // Once every game is final the week stays viewable, as results, like any past week.
+    var liveWk = state.live && state.live.week != null ? Number(state.live.week) : null;
+    var scenFinal = rb.mode === "me" && !scenWin && !scenWait ? rbScenWindow(true) : null;
+    var curWin = scenWin || scenFinal;
+    if (curWin) curWin.week = liveWk;
+    var pastWeeks = rb.mode === "me" ? rbScenPastWeeks(curWin || scenWait ? liveWk : null) : [];
     var scenBtn = document.getElementById("rb-scen");
-    // Before the 1pm games end: shown but faded, with when it opens. After the week: gone.
-    scenBtn.hidden = !(scenWin || scenWait);
-    scenBtn.disabled = scenWait;
-    scenBtn.title = scenWait ? "Opens once the Sunday 1pm games are final" : "";
+    // Before the 1pm games end: shown but faded, with when it opens (past weeks can still be opened). Otherwise this week or a past one.
+    scenBtn.hidden = !(curWin || scenWait || pastWeeks.length);
+    scenBtn.disabled = scenWait && !pastWeeks.length;
+    scenBtn.classList.toggle("wait", scenWait);
+    scenBtn.title = scenWait ? "This week opens once the Sunday 1pm games are final" : "";
     scenBtn.innerHTML = scenWait ? "Scenarios<small>after 1pm games end</small>" : "Scenarios";
-    if (!scenWin && rb.sub === "scenarios") rb.sub = "matchup";
+    if (scenBtn.hidden && rb.sub === "scenarios") rb.sub = "matchup";
     scenBtn.classList.toggle("active", rb.sub === "scenarios");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
-    var scenOn = !!scenWin && rb.sub === "scenarios";
+    var pickedPast = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
+    var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? pastWeeks[0] : null);
+    var scenOn = rb.sub === "scenarios" && !scenBtn.hidden && !scenBtn.disabled;
     var scenView = document.getElementById("rb-scen-view");
     scenView.hidden = !scenOn;
     grid.style.display = scenOn ? "none" : "";
@@ -7005,9 +7664,10 @@
     var legend = document.querySelector(".rb-legend");
     if (legend) legend.style.display = scenOn ? "none" : "";
     document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
+    var stripTeams = teams;
     function buildStrip(shownSet, scen, scenDec) {
     var chipBefore = rbRects(rb.chipEls);
-    teams.forEach(function (t, i) {
+    stripTeams.forEach(function (t, i) {
       var el = rb.chipEls[t.rid];
       if (!el) {
         el = document.createElement("button");
@@ -7017,9 +7677,9 @@
           if (el.classList.contains("scen")) {
             // Scenarios: pick which opponents' scenarios to follow (your own chip stays on).
             if (t.rid === rb.me) return;
-            var cur = rb.scenSel || rbScenDefaultSel(rb.lastTeams);
+            var done = !!rb.scenDone, cur = done ? rb.scenSelDone || rbScenAvail(rb.lastTeams, rb.lastTeams.filter(function (x) { return x.rid === rb.me; })[0]) : rb.scenSel || rbScenDefaultSel(rb.lastTeams);
             if (cur[t.rid]) delete cur[t.rid]; else cur[t.rid] = true;
-            rb.scenSel = cur;
+            if (done) rb.scenSelDone = cur; else rb.scenSel = cur;
             renderRumblin();
             return;
           }
@@ -7044,26 +7704,42 @@
     rbFlip(rb.chipEls, chipBefore);
     }
     if (scenOn) {
-      rb.lastTeams = teams;
+      var pastMode = showPast != null, win = pastMode ? { key: "wk" + showPast, clusters: [], cur: 0, week: showPast, past: true } : curWin;
+      var scenTeams = pastMode ? rbPastTeams(showPast) : teams, scenMeT = scenTeams.filter(function (t) { return t.rid === rb.me; })[0] || null;
+      var done = pastMode || !!(win && win.final);
+      rb.scenDone = done;
+      rbOppOverride = pastMode && scenMeT ? scenMeT.opp : null;
+      stripTeams = scenTeams;
+      rb.lastTeams = scenTeams;
+      rbScenBar(curWin || scenWait ? liveWk : null, pastWeeks, pastMode ? showPast : null);
       // A different "me" starts a fresh set of followed opponents.
-      if (meTeam && rb.scenMe !== meTeam.rid) { rb.scenMe = meTeam.rid; rb.scenSel = null; }
-      var scenAvail = rbScenAvail(teams, meTeam);
-      var scenSelNow = rb.scenSel || rbScenDefaultSel(teams);
+      if (scenMeT && rb.scenMe !== scenMeT.rid) { rb.scenMe = scenMeT.rid; rb.scenSel = null; rb.scenSelDone = null; }
+      var scenAvail = rbScenAvail(scenTeams, scenMeT);
+      var scenSelNow = done ? (rb.scenSelDone || scenAvail) : (rb.scenSel || rbScenDefaultSel(scenTeams));
       var onSet = {};
       Object.keys(scenSelNow).forEach(function (k) { if (scenAvail[k]) onSet[k] = true; });
-      if (meTeam) onSet[meTeam.rid] = true;
+      if (scenMeT) onSet[scenMeT.rid] = true;
       var scenDec = {};
-      if (meTeam) teams.forEach(function (t) { if (t !== meTeam && !rbInPlay(meTeam, t)) scenDec[t.rid] = true; });
+      if (scenMeT && !done) scenTeams.forEach(function (t) { if (t !== scenMeT && !rbInPlay(scenMeT, t)) scenDec[t.rid] = true; });
       buildStrip(onSet, true, scenDec);
-      rbRenderScenarios(teams, scenWin);
-      // Live Players and the Score Feed sit below, for you and the opponents being followed.
-      var scenShown = teams.filter(function (t) { return onSet[t.rid]; });
-      rbRenderFeed(scenShown);
-      rbRenderLive(scenShown);
+      if (win) rbRenderScenarios(scenTeams, win);
+      else document.getElementById("scen-blocks").innerHTML = '<div class="rb-live-empty">This week\u2019s Scenarios open once the Sunday 1pm games are final. Pick a past week above.</div>';
+      // Live Players and the Score Feed sit below, for you and the opponents being followed (not for a finished week).
+      if (done || !win) {
+        document.getElementById("rb-feed").hidden = true;
+        document.getElementById("rb-live").hidden = true;
+      } else {
+        var scenShown = scenTeams.filter(function (t) { return onSet[t.rid]; });
+        rbRenderFeed(scenShown);
+        rbRenderLive(scenShown);
+      }
+      wpSheetKeep();
       rbStickOffset();
       prefsSave();
       return;
     }
+    rbOppOverride = null;
+    rb.scenDone = false;
 
     buildStrip(shownSet, false);
     rbRenderFeed(shown);
