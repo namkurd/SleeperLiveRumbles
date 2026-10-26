@@ -1,0 +1,69 @@
+name: Record live win probability
+
+# Watches the games as they happen and logs every starter's scoring plays and every game clock to the `wp-data`
+# branch (wp_live/week_N.json), so the Scenarios win-probability chart has a line for the week in progress.
+# See record_wp_live.py. After the week, build_wp_timeline.py (in update.yml) replaces it with the exact
+# play-by-play version.
+#
+# WHEN IT RUNS: one run covers a whole game day by itself: it looks every minute while any game is live,
+# sleeps until just before the next kickoff when one is within 6 hours, and exits when nothing is live or near.
+# Near GitHub's 6-hour job limit it starts its own successor. The schedule below only has to get ONE run going
+# before kickoff, so it fires every half hour from 8am to midnight ET (at :12/:42, away from the other workflows);
+# extra triggers queue behind the active run and exit at once when there is nothing to do.
+#
+# It commits to the `wp-data` branch, not main: a minute-by-minute log must not trigger Pages deploys or race
+# the nightly commits. The page reads it from raw.githubusercontent.com.
+on:
+  schedule:
+    - cron: "12,42 12-23 * * *"
+    - cron: "12,42 0-4 * * *"
+  workflow_dispatch: {}  # manual runs, and how a long run starts its successor
+
+permissions:
+  contents: write
+  actions: write  # start a successor run
+
+concurrency:
+  group: wp-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      WP_DATA_DIR: ${{ github.workspace }}/wpdata/wp_live
+      WP_COMMIT: "1"
+      CAPTURE_CHAIN: "1"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check out the wp-data branch (created on first use)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          url="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$url" wp-data >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch wp-data "$url" wpdata
+          else
+            mkdir wpdata
+            git -C wpdata init -q -b wp-data
+            git -C wpdata remote add origin "$url"
+          fi
+
+      - name: Run record_wp_live.py
+        run: python record_wp_live.py
+
+      - name: Push whatever is left
+        if: always()
+        run: python -c "import record_wp_live; record_wp_live.commit_data()"
