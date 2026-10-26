@@ -1326,8 +1326,12 @@
   .sfp, .sfc { position: absolute; right: -8px; top: -0.6em; display: flex; gap: 6px; font-size: 0.74em; font-weight: 800; line-height: 1; letter-spacing: 0.2px; white-space: nowrap; pointer-events: none; z-index: 9; opacity: 0; transform-origin: 100% 100%; text-shadow: 0 0 3px var(--panel), 0 1px 2px var(--panel); }
   .sfp.gain, .sfc b.gain { color: var(--good); } .sfp.loss, .sfc b.loss { color: var(--bad); } .sfc b.more { color: var(--text-dim); }
   .rb-tot .sfp, .rb-tot .sfc { font-size: 0.6em; }
-  .sc-sc b .sfp, .sc-sc b .sfc, .sc-gap b .sfp, .sc-gap b .sfc { font-size: 0.42em; }
-  .sc-sc.act b .sfp, .sc-sc.act b .sfc { font-size: 0.7em; }
+  /* Pop / credit / play text matches the other tabs' size, whatever number it floats over. */
+  #rb-scen-view .sfp, #rb-scen-view .sfc { font-size: 0.68rem !important; font-weight: 800; }
+  #rb-scen-view .sfc b { font-size: inherit !important; font-weight: inherit !important; color: inherit; line-height: 1; }
+  #rb-scen-view .sfp.gain, #rb-scen-view .sfc b.gain { color: var(--good) !important; }
+  #rb-scen-view .sfp.loss, #rb-scen-view .sfc b.loss { color: var(--bad) !important; }
+  #rb-scen-view .sfc b.more { color: var(--text-dim) !important; }
   .rb-card { overflow: visible; } .rb-card::before { border-radius: 10px 0 0 10px; }
   .rb-live-wrap { overflow: visible; } .rb-live-t td.ac { overflow: visible; }
   @media (prefers-reduced-motion: reduce) { .sfp, .sfc { display: none; } }
@@ -1432,7 +1436,7 @@
   .sc-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: color-mix(in srgb, var(--text-dim) 20%, transparent); color: var(--text-dim); vertical-align: 2px; margin-left: 4px; white-space: nowrap; }
   .sc-chip.h2h { background: var(--accent-2, #8b3df0); color: #fff; }
   .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
-  .sc-gap span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
+  .sc-gap > span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
   .sc-gap b { font-size: 1.6rem !important; font-variant-numeric: tabular-nums; }
   .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
