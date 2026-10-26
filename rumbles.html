@@ -791,7 +791,13 @@
   .trend-tabs { display: flex; gap: 6px; padding: 0 14px 8px; flex-wrap: wrap; }
   .trend-tabs button { border: 1px solid var(--panel-border); background: transparent; color: var(--text-dim); font: inherit; font-size: 0.78rem; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
   .trend-tabs button.active { background: var(--accent); color: #1a1108; border-color: var(--accent); }
+  .trend-wrap { position: relative; }
   .trend-body { padding: 0 12px 14px; }
+  .trend-tip { position: absolute; z-index: 5; color: var(--text); pointer-events: none; background: #0b0d12; border: 1px solid var(--panel-border); border-radius: 8px; padding: 7px 10px; font-size: 0.74rem; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.5); white-space: nowrap; }
+  .trend-tip[hidden] { display: none; }
+  .trend-tip span { color: var(--text-dim); }
+  .trend-tip .tt-d { color: var(--text-dim); margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--panel-border); }
+  .tr-svg .tr-hit { cursor: pointer; }
   .trend-note { color: var(--text-dim); font-size: 0.76rem; margin: 8px 2px 0; line-height: 1.4; }
   .trend-note b { color: var(--text); }
   .trend-note .up { color: var(--good); } .trend-note .dn { color: var(--bad); }
@@ -1574,7 +1580,7 @@
       <button type="button" data-v="heat">Weekly heatmap</button>
       <button type="button" data-v="form">Form</button>
     </div>
-    <div id="trend-body" class="trend-body"></div>
+    <div class="trend-wrap"><div id="trend-body" class="trend-body"></div><div id="trend-tip" class="trend-tip" hidden></div></div>
   </details>
 
   <footer>
@@ -6952,25 +6958,59 @@
     return { weeks: weeks, teams: list, proj: !!extra && !live.weekFinal };
   }
   function trendHeat(r) { var t = Math.max(0, Math.min(1, r / 20)); return "hsl(" + Math.round(t * 130) + " 55% " + Math.round(24 + 6 * (1 - Math.abs(t - 0.5) * 2)) + "%)"; }
+  // Height = Rumbles behind that week's leader, so a close race bunches the lines together and a
+  // runaway leader pulls away from the pack. Hover or tap a dot for that team's week.
   function trendRankSvg(D) {
-    var n = D.teams.length, W = 640, padL = 26, padR = 96, padT = 26, rowH = 26, H = padT + (n - 1) * rowH + 22;
-    var nw = D.weeks.length, step = nw > 1 ? (W - padL - padR) / (nw - 1) : 0;
-    var X = function (i) { return padL + i * step; }, Y = function (rk) { return padT + (rk - 1) * rowH; };
+    var n = D.teams.length, nw = D.weeks.length, W = 640, padL = 40, padR = 100, padT = 28, plotH = 330, H = padT + plotH + 18;
+    var step = nw > 1 ? (W - padL - padR) / (nw - 1) : 0;
+    var lead = D.weeks.map(function (w, i) { return Math.max.apply(null, D.teams.map(function (t) { return t.cumR[i]; })); });
+    D.lead = lead;
+    var maxGap = 1;
+    D.teams.forEach(function (t) { t.cumR.forEach(function (c, i) { maxGap = Math.max(maxGap, lead[i] - c); }); });
+    var gridStep = [1, 2, 5, 10, 20, 25, 50, 100].filter(function (g) { return maxGap / g <= 6; })[0] || 100;
+    var top = Math.ceil(maxGap / gridStep) * gridStep;
+    var X = function (i) { return padL + i * step; };
+    var Y = function (t, i) { return padT + (lead[i] - t.cumR[i]) / top * plotH; };
     var sel = state.trend.sel;
-    var o = '<svg class="tr-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rank by cumulative Rumbles after each week">';
+    var o = '<svg class="tr-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rumbles behind the leader after each week">';
     D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + (D.proj && i === nw - 1 ? "*" : "") + "</text>"; });
-    for (var k = 1; k <= n; k++) o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(k) + '" y2="' + Y(k) + '"/><text x="' + (padL - 8) + '" y="' + (Y(k) + 4) + '" text-anchor="end">' + k + "</text>";
+    for (var g = 0; g <= top; g += gridStep) {
+      var gy = padT + g / top * plotH;
+      o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '"/><text x="' + (padL - 8) + '" y="' + (gy + 4) + '" text-anchor="end">' + (g === 0 ? "Lead" : "−" + g) + "</text>";
+    }
+    // End labels: nudged apart so names never overlap.
+    var lab = D.teams.map(function (t) { return { t: t, y: Y(t, nw - 1) }; }).sort(function (p, q) { return p.y - q.y; });
+    var minGap = 13, maxY = padT + plotH + 10;
+    lab.forEach(function (l, i) { if (i && l.y < lab[i - 1].y + minGap) l.y = lab[i - 1].y + minGap; });
+    for (var k = lab.length - 1; k >= 0; k--) {
+      if (lab[k].y > maxY - (lab.length - 1 - k) * minGap) lab[k].y = maxY - (lab.length - 1 - k) * minGap;
+    }
+    var labY = {}; lab.forEach(function (l) { labY[l.t.rid] = l.y; });
     D.teams.forEach(function (t) {
       var col = trendColor(t.rid), op = sel == null ? 0.9 : (sel === t.rid ? 1 : 0.14);
-      var pt = function (i) { return X(i).toFixed(1) + "," + Y(t.rank[i]); };
-      var solid = t.rank.map(function (rk, i) { return i; }).slice(0, D.proj ? nw - 1 : nw).map(pt).join(" ");
+      var pt = function (i) { return X(i).toFixed(1) + "," + Y(t, i).toFixed(1); };
+      var idx = []; for (var i = 0; i < (D.proj ? nw - 1 : nw); i++) idx.push(i);
       var sw = sel === t.rid ? ' stroke-width="4"' : "";
-      o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + solid + '" stroke="' + col + '" opacity="' + op + '"' + sw + "/>";
+      o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + idx.map(pt).join(" ") + '" stroke="' + col + '" opacity="' + op + '"' + sw + "/>";
       if (D.proj) o += '<polyline class="tr-line" points="' + pt(nw - 2) + " " + pt(nw - 1) + '" stroke="' + col + '" stroke-dasharray="5 4" opacity="' + op + '"' + sw + "/>";
-      t.rank.forEach(function (rk, i) { var pj = D.proj && i === nw - 1; o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(rk) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + (pj ? "var(--panel)" : col) + '" stroke="' + col + '" stroke-width="' + (pj ? 2 : 0) + '" opacity="' + op + '"><title>' + escapeHtml(t.name) + " after W" + D.weeks[i] + ": #" + rk + ", " + t.cumR[i] + " Rumbles" + (pj ? " (projected)" : "") + "</title></circle>"; });
-      o += '<text class="tr-name" x="' + (W - padR + 10) + '" y="' + (Y(t.rank[nw - 1]) + 4) + '" opacity="' + (sel == null || sel === t.rid ? 1 : 0.35) + '">' + escapeHtml(t.name) + "</text></g>";
+      t.cumR.forEach(function (c, i) {
+        var pj = D.proj && i === nw - 1;
+        o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(t, i).toFixed(1) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + (pj ? "var(--panel)" : col) + '" stroke="' + col + '" stroke-width="' + (pj ? 2 : 0) + '" opacity="' + op + '"/>' +
+          '<circle class="tr-hit" data-rid="' + t.rid + '" data-i="' + i + '" cx="' + X(i).toFixed(1) + '" cy="' + Y(t, i).toFixed(1) + '" r="11" fill="transparent"/>';
+      });
+      var ey = Y(t, nw - 1), ly = labY[t.rid];
+      if (Math.abs(ly - ey) > 1) o += '<line x1="' + X(nw - 1) + '" y1="' + ey.toFixed(1) + '" x2="' + (W - padR + 6) + '" y2="' + ly.toFixed(1) + '" stroke="' + col + '" stroke-width="1" opacity="' + (op * 0.6) + '"/>';
+      o += '<text class="tr-name" x="' + (W - padR + 10) + '" y="' + (ly + 4).toFixed(1) + '" opacity="' + (sel == null || sel === t.rid ? 1 : 0.35) + '">' + escapeHtml(t.name) + "</text></g>";
     });
     return o + "</svg>";
+  }
+  // The pop-up for one dot: where the team stood after that week and what it scored that week.
+  function trendTipHtml(D, t, i) {
+    var gap = D.lead[i] - t.cumR[i], pj = D.proj && i === D.weeks.length - 1;
+    return "<b style=\"color:" + trendColor(t.rid) + "\">" + escapeHtml(t.name) + "</b> <span>after W" + D.weeks[i] + (pj ? "* (projected)" : "") + "</span>" +
+      "<div>#" + t.rank[i] + " &middot; " + t.cumR[i] + " Rumbles</div>" +
+      "<div>" + (gap ? gap + " behind the leader" : "Leading") + "</div>" +
+      '<div class="tt-d">That week: ' + t.rum[i] + " Rumbles &middot; " + t.pts[i].toFixed(1) + " pts</div>";
   }
   function trendMoveNote(D) {
     var nw = D.weeks.length, from = Math.max(0, nw - 4);
@@ -6980,7 +7020,7 @@
     var bits = [];
     if (up && up.d > 0) bits.push('<span class="up">&#9650; <b>' + escapeHtml(up.t.name) + "</b> up " + up.d + "</span>");
     if (dn && dn.d < 0) bits.push('<span class="dn">&#9660; <b>' + escapeHtml(dn.t.name) + "</b> down " + (-dn.d) + "</span>");
-    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Ranked by total Rumbles after each week." + (D.proj ? " The dashed step and hollow dot (W" + D.weeks[D.weeks.length - 1] + "*) are the live week as projected right now." : "") + " Tap a line or name to follow one team.</p>";
+    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Height is how many Rumbles each team is behind that week's leader, so a tight race bunches up and a runaway leader pulls away. Hover or tap a dot for details." + (D.proj ? " The dashed step and hollow dot (W" + D.weeks[D.weeks.length - 1] + "*) are the live week as projected right now." : "") + " Tap a line or name to follow one team.</p>";
   }
   function trendHeatHtml(D) {
     var o = '<table class="tr-heat"><thead><tr><th></th>';
@@ -7020,6 +7060,8 @@
     var D = trendData();
     if (!D || D.weeks.length < 2 || !D.teams.length) { body.innerHTML = '<p class="trend-note">Trends show up once two weeks are in the books.</p>'; return; }
     var v = state.trend.view;
+    state.trend.D = D;
+    var oldTip = document.getElementById("trend-tip"); if (oldTip) oldTip.hidden = true;
     body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendRankSvg(D) + trendMoveNote(D);
     [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) { b.classList.toggle("active", b.getAttribute("data-v") === v); });
   }
@@ -7027,7 +7069,32 @@
   [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) {
     b.addEventListener("click", function () { state.trend.view = b.getAttribute("data-v"); renderTrends(); });
   });
+  // Dot tooltip (hover on a computer, tap on a phone).
+  function trendShowTip(hit) {
+    var D = state.trend.D, body = document.getElementById("trend-body"), tip = document.getElementById("trend-tip");
+    if (!D || !tip) return;
+    var t = D.teams.filter(function (x) { return String(x.rid) === hit.getAttribute("data-rid"); })[0], i = Number(hit.getAttribute("data-i"));
+    if (!t) return;
+    tip.innerHTML = trendTipHtml(D, t, i);
+    tip.hidden = false;
+    var br = body.getBoundingClientRect(), hr = hit.getBoundingClientRect();
+    var x = hr.left - br.left + hr.width / 2, y = hr.top - br.top;
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.max(4, Math.min(br.width - tw - 4, x - tw / 2));
+    var tp = y - th - 8; if (tp < 0) tp = y + hr.height + 8;
+    tip.style.left = left + "px"; tip.style.top = tp + "px";
+  }
+  document.getElementById("trend-body").addEventListener("mouseover", function (e) {
+    var hit = e.target.closest && e.target.closest("circle.tr-hit");
+    if (hit && window.matchMedia("(hover: hover)").matches) trendShowTip(hit);
+  });
+  document.getElementById("trend-body").addEventListener("mouseout", function (e) {
+    if (e.target.closest && e.target.closest("circle.tr-hit")) { var tip = document.getElementById("trend-tip"); if (tip) tip.hidden = true; }
+  });
   document.getElementById("trend-body").addEventListener("click", function (e) {
+    var hit = e.target.closest && e.target.closest("circle.tr-hit");
+    if (hit) { trendShowTip(hit); e.stopPropagation(); return; }
+    var tip0 = document.getElementById("trend-tip"); if (tip0) tip0.hidden = true;
     var g = e.target.closest && e.target.closest("g[data-rid]");
     if (!g) { if (state.trend.sel != null) { state.trend.sel = null; renderTrends(); } return; }
     var rid = Number(g.getAttribute("data-rid"));
