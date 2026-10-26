@@ -1420,7 +1420,7 @@ def scenario_live_blending(browser):
 
     page.click("#refresh-btn")
     page.wait_for_timeout(500)
-    assert page.text_content("#refresh-btn") == "Refresh now"
+    assert page.text_content("#refresh-btn") == "Refresh (R)"
 
     error_visible = page.eval_on_selector("#error-banner", "el => el.classList.contains('show')")
     assert not error_visible, "error banner should not be showing when all mocked routes succeed"
@@ -2774,13 +2774,15 @@ def scenario_rumblin_qol(browser):
     pops = page.evaluate("[...document.querySelectorAll('.sfp')].map(e => e.textContent)")
     assert pops and all(re.fullmatch(r"[+\u2212]\d+\.\d\d", t) for t in pops), f"score Pops expected during hold, got {pops!r}"
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "no flip during the 1s hold"
-    seen_lf = 0; seen_cr = []
-    for _ in range(60):
+    seen_lf = 0; seen_cr = []; seen_play = []
+    for _ in range(110):
         page.wait_for_timeout(60)
+        seen_play += page.evaluate("[...document.querySelectorAll('.sfplay')].map(e => e.textContent)")
         seen_lf = max(seen_lf, page.evaluate("document.querySelectorAll('.fc .lf').length"))
         seen_cr += page.evaluate("[...document.querySelectorAll('.sfc')].map(e => e.textContent)")
     assert seen_lf > 0, "a changed number should flip after the hold"
     assert seen_cr and all(t.strip() for t in seen_cr), "a Credit naming the scorer should appear after the flip"
+    assert seen_play and all(x.strip() for x in seen_play), f"a scoring-play pop should follow the credit: {seen_play!r}"
     page.wait_for_timeout(4000)
     assert page.evaluate("document.querySelectorAll('.fc .lf').length") == 0, "flaps should settle"
     assert page.evaluate("document.querySelectorAll('.sfp, .sfc').length") == 0, "Pop and Credit should clean themselves up"
@@ -3175,7 +3177,11 @@ def scenario_scenarios_tab(browser):
     setgames("complete", "in_progress", "pre_game", "pre_game"); poll()
     assert page.evaluate("(() => { const b = document.getElementById('rb-scen'); return b.offsetParent !== null && !b.disabled && b.textContent === 'Scenarios'; })()"), "Scenarios opens once the 1pm games are final"
     page.click("#rb-scen"); page.wait_for_timeout(400)
-    assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent !== null && document.getElementById('rb-feed').hidden && document.getElementById('rb-live').hidden"), "other sections hidden in Scenarios"
+    assert page.evaluate("document.getElementById('rb-grid').offsetParent === null && document.getElementById('rb-strip').offsetParent !== null && !document.getElementById('rb-feed').hidden && !document.getElementById('rb-live').hidden"), "grid hidden; Score Feed and Live Players shown below Scenarios"
+    assert page.evaluate("document.querySelectorAll('#rb-scen-view .sc-sc .sf').length >= 4 && !!document.querySelector('#rb-scen-view .sc-gap .sf')"), "Scenarios numbers are flipboard tiles"
+    page.evaluate("window.__r = 0; const o = document.getElementById('refresh-btn'); new MutationObserver(() => { if (/Refreshing/.test(o.textContent)) window.__r++; }).observe(o, {childList: true, characterData: true, subtree: true})")
+    page.keyboard.press("r"); page.wait_for_timeout(500)
+    assert page.evaluate("window.__r") >= 1, "R key refreshes"
     assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
