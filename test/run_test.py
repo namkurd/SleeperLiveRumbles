@@ -3362,6 +3362,14 @@ def scenario_trends(browser):
     page.click("#trend-panel > summary"); page.wait_for_timeout(300)
     n = len(hist["standings"])
     assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-line').length") == n, "rank race: one line per team"
+    assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-po').length") == 1, "rank race: one ghost line for the 6th-place cut"
+    if os.environ.get("TRSHOT"): page.locator("#trend-body").screenshot(path="/tmp/sf/tr.png")
+    page.goto(PAGE_URL, wait_until="load"); page.wait_for_timeout(1200)
+    assert page.evaluate("document.querySelectorAll('#standings-body tr.po-cut').length") == 1 and page.evaluate("document.querySelectorAll('#standings-body tr')[5].classList.contains('po-cut')"), "gold playoff line under 6th place"
+    page.click("#th-pf"); page.wait_for_timeout(300)
+    assert page.evaluate("document.querySelectorAll('#standings-body tr.po-cut').length") == 0 and page.evaluate("document.getElementById('po-note').hidden"), "no playoff line when sorted by another column"
+    page.click("#th-pf"); page.click("#th-pf"); page.goto(PAGE_URL, wait_until="load"); page.wait_for_timeout(1200)
+    page.click("#trend-panel > summary"); page.wait_for_timeout(300)
     shot = lambda n: page.locator("#trend-panel").screenshot(path="/tmp/sf/trend_" + n + ".png") if os.environ.get("TRENDSHOT") else None
     shot("rank")
     # tapping a dot pops up that team's week; tapping elsewhere closes it
