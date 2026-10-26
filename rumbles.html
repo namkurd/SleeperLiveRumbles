@@ -806,6 +806,7 @@
   .tr-heat td { text-align: center; padding: 5px 0; border-radius: 5px; color: #fff; font-weight: 700; background-image: none; }
   .tr-heat td.tr-m { text-align: left; background: none; color: var(--text); font-weight: 600; padding: 5px 6px 5px 2px; white-space: nowrap; }
   .tr-heat td.tr-t { background: none; color: var(--text-dim); font-weight: 600; }
+  .tr-heat td.tr-proj { opacity: 0.8; outline: 1px dashed rgba(232,234,240,0.55); outline-offset: -2px; }
   .tr-heat td.tr-hot { box-shadow: inset 0 0 0 2px var(--accent); }
   .tr-legend { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; color: var(--text-dim); margin: 8px 2px 0; }
   .tr-legend i { flex: 0 0 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, hsl(0 55% 30%), hsl(60 55% 30%), hsl(130 55% 30%)); }
@@ -1128,6 +1129,7 @@
     .rb-chip { gap: 4px; padding: 0 7px 0 5px; font-size: 0.7rem; height: 25px; }
     .rb-chip .rb-pl { display: none; } .rb-chip .rb-ps { display: inline; }
   }
+  .rb-chip.scen-off { opacity: 0.35; cursor: default; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
@@ -4922,10 +4924,11 @@
 
   function render(opts) {
     prefsSave();
-    renderTrends();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();
     var rows = buildCombinedStandings();
+    state.trendRows = rows;
+    renderTrends();
     if (state.shownHistoricalWeek != null) loadWeekDetail(state.shownHistoricalWeek);
     state.epaTooltipData = {};
     rows.forEach(function (r) {
@@ -6435,6 +6438,18 @@
       '<div class="sc-pj">act <b>' + t.act.toFixed(2) + "</b> &middot; proj <b>" + t.proj.toFixed(2) + "</b></div>" + rows + "</div>";
   }
 
+  // Which opponents a Scenarios block can exist for (a Rumble still in play against you).
+  function rbScenAvail(teams, me) {
+    var o = {};
+    if (me) teams.forEach(function (t) { if (t !== me && rbInPlay(me, t)) o[t.rid] = true; });
+    return o;
+  }
+  // Until you pick, every in-play opponent is followed.
+  function rbScenDefaultSel(teams) {
+    var me = (teams || []).filter(function (t) { return t.rid === state.rb.me; })[0];
+    return rbScenAvail(teams || [], me);
+  }
+
   function rbRenderScenarios(teams, win) {
     var box = document.getElementById("rb-scen-view");
     var me = teams.filter(function (t) { return t.rid === state.rb.me; })[0];
@@ -6442,7 +6457,8 @@
     if (!state.scenFrozen || state.scenFrozen.key !== win.key) state.scenFrozen = { key: win.key, by: {} };
     var mine = rbScenPlayers(me, win);
     var blocks = [];
-    teams.filter(function (t) { return t !== me && rbInPlay(me, t); })
+    var followed = state.rb.scenSel || null;
+    teams.filter(function (t) { return t !== me && rbInPlay(me, t) && (!followed || followed[t.rid]); })
       .sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); })
       .forEach(function (t) {
         var theirs = rbScenPlayers(t, win);
@@ -6734,20 +6750,12 @@
     var scenOn = !!scenWin && rb.sub === "scenarios";
     var scenView = document.getElementById("rb-scen-view");
     scenView.hidden = !scenOn;
-    grid.style.display = strip.style.display = scenOn ? "none" : "";
+    grid.style.display = scenOn ? "none" : "";
+    strip.style.display = "";
     var legend = document.querySelector(".rb-legend");
     if (legend) legend.style.display = scenOn ? "none" : "";
     document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
-    if (scenOn) {
-      document.getElementById("rb-feed").hidden = true;
-      document.getElementById("rb-live").hidden = true;
-      rbRenderScenarios(teams, scenWin);
-      rbStickOffset();
-      prefsSave();
-      return;
-    }
-
-    // Name strip, in projected order.
+    function buildStrip(shownSet, scen, scenAvail) {
     var chipBefore = rbRects(rb.chipEls);
     teams.forEach(function (t, i) {
       var el = rb.chipEls[t.rid];
@@ -6756,6 +6764,16 @@
         el.type = "button";
         el.className = "rb-chip";
         el.addEventListener("click", function () {
+          if (el.classList.contains("scen-off")) return;
+          if (el.classList.contains("scen")) {
+            // Scenarios: pick which opponents' scenarios to follow (your own chip stays on).
+            if (t.rid === rb.me) return;
+            var cur = rb.scenSel || rbScenDefaultSel(rb.lastTeams);
+            if (cur[t.rid]) delete cur[t.rid]; else cur[t.rid] = true;
+            rb.scenSel = cur;
+            renderRumblin();
+            return;
+          }
           rb.mode = "custom";
           if (rb.sel[t.rid]) delete rb.sel[t.rid]; else rb.sel[t.rid] = true;
           renderRumblin();
@@ -6764,6 +6782,8 @@
       }
       el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("on", !!shownSet[t.rid]);
+      el.classList.toggle("scen", !!scen);
+      el.classList.toggle("scen-off", !!scen && !!scenAvail && t.rid !== rb.me && !scenAvail[t.rid]);
       el.classList.toggle("me", t.rid === rb.me);
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
       // (11 for the top projection, 0 for the bottom).
@@ -6773,6 +6793,24 @@
       strip.appendChild(el);
     });
     rbFlip(rb.chipEls, chipBefore);
+    }
+    if (scenOn) {
+      rb.lastTeams = teams;
+      var scenAvail = rbScenAvail(teams, meTeam);
+      var scenSelNow = rb.scenSel || rbScenDefaultSel(teams);
+      var onSet = {};
+      Object.keys(scenSelNow).forEach(function (k) { if (scenAvail[k]) onSet[k] = true; });
+      if (meTeam) onSet[meTeam.rid] = true;
+      buildStrip(onSet, true, scenAvail);
+      document.getElementById("rb-feed").hidden = true;
+      document.getElementById("rb-live").hidden = true;
+      rbRenderScenarios(teams, scenWin);
+      rbStickOffset();
+      prefsSave();
+      return;
+    }
+
+    buildStrip(shownSet, false);
     rbRenderFeed(shown);
     rbRenderLive(shown);
 
@@ -6886,6 +6924,14 @@
     var h = state.history;
     if (!h || !h.weekly) return null;
     var weeks = Object.keys(h.weekly).map(Number).filter(function (w) { return !isNaN(w); }).sort(function (a, b) { return a - b; });
+    // Projected tab: the live week counts too, as a projected week (see the dashed marks).
+    var extra = null, live = state.live, rows = state.trendRows;
+    if (rows && live && live.isLive && live.week != null && weeks.indexOf(Number(live.week)) < 0 && selectedHistoricalWeek() == null &&
+        ((state.mode === "custom" && live.hasKickedOff) || live.weekFinal)) {
+      extra = {};
+      rows.forEach(function (r) { extra[r.roster_id] = { rumbles: num(r.this_week), points: num(r.this_week_points) }; });
+      weeks.push(Number(live.week));
+    }
     var names = {};
     (h.standings || []).forEach(function (r) { names[r.roster_id] = r.manager; });
     var rids = Object.keys(names).map(Number);
@@ -6893,7 +6939,7 @@
     rids.forEach(function (rid) { T[rid] = { rid: rid, name: names[rid], rum: [], pts: [], cumR: [], cumP: [], rank: [] }; });
     weeks.forEach(function (w, i) {
       rids.forEach(function (rid) {
-        var e = (h.weekly[String(w)] || {})[String(rid)] || {};
+        var e = (extra && i === weeks.length - 1 ? extra[rid] : (h.weekly[String(w)] || {})[String(rid)]) || {};
         var t = T[rid];
         t.rum.push(num(e.rumbles)); t.pts.push(num(e.points));
         t.cumR.push((i ? t.cumR[i - 1] : 0) + num(e.rumbles));
@@ -6903,7 +6949,7 @@
         .forEach(function (rid, k) { T[rid].rank.push(k + 1); });
     });
     var list = rids.map(function (r) { return T[r]; }).sort(function (a, b) { return a.rank[weeks.length - 1] - b.rank[weeks.length - 1]; });
-    return { weeks: weeks, teams: list };
+    return { weeks: weeks, teams: list, proj: !!extra && !live.weekFinal };
   }
   function trendHeat(r) { var t = Math.max(0, Math.min(1, r / 20)); return "hsl(" + Math.round(t * 130) + " 55% " + Math.round(24 + 6 * (1 - Math.abs(t - 0.5) * 2)) + "%)"; }
   function trendRankSvg(D) {
@@ -6912,13 +6958,16 @@
     var X = function (i) { return padL + i * step; }, Y = function (rk) { return padT + (rk - 1) * rowH; };
     var sel = state.trend.sel;
     var o = '<svg class="tr-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rank by cumulative Rumbles after each week">';
-    D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + "</text>"; });
+    D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + (D.proj && i === nw - 1 ? "*" : "") + "</text>"; });
     for (var k = 1; k <= n; k++) o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(k) + '" y2="' + Y(k) + '"/><text x="' + (padL - 8) + '" y="' + (Y(k) + 4) + '" text-anchor="end">' + k + "</text>";
     D.teams.forEach(function (t) {
       var col = trendColor(t.rid), op = sel == null ? 0.9 : (sel === t.rid ? 1 : 0.14);
-      var pts = t.rank.map(function (rk, i) { return X(i).toFixed(1) + "," + Y(rk); }).join(" ");
-      o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + pts + '" stroke="' + col + '" opacity="' + op + '"' + (sel === t.rid ? ' stroke-width="4"' : "") + "/>";
-      t.rank.forEach(function (rk, i) { o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(rk) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + col + '" opacity="' + op + '"><title>' + escapeHtml(t.name) + " after W" + D.weeks[i] + ": #" + rk + ", " + t.cumR[i] + " Rumbles</title></circle>"; });
+      var pt = function (i) { return X(i).toFixed(1) + "," + Y(t.rank[i]); };
+      var solid = t.rank.map(function (rk, i) { return i; }).slice(0, D.proj ? nw - 1 : nw).map(pt).join(" ");
+      var sw = sel === t.rid ? ' stroke-width="4"' : "";
+      o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + solid + '" stroke="' + col + '" opacity="' + op + '"' + sw + "/>";
+      if (D.proj) o += '<polyline class="tr-line" points="' + pt(nw - 2) + " " + pt(nw - 1) + '" stroke="' + col + '" stroke-dasharray="5 4" opacity="' + op + '"' + sw + "/>";
+      t.rank.forEach(function (rk, i) { var pj = D.proj && i === nw - 1; o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(rk) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + (pj ? "var(--panel)" : col) + '" stroke="' + col + '" stroke-width="' + (pj ? 2 : 0) + '" opacity="' + op + '"><title>' + escapeHtml(t.name) + " after W" + D.weeks[i] + ": #" + rk + ", " + t.cumR[i] + " Rumbles" + (pj ? " (projected)" : "") + "</title></circle>"; });
       o += '<text class="tr-name" x="' + (W - padR + 10) + '" y="' + (Y(t.rank[nw - 1]) + 4) + '" opacity="' + (sel == null || sel === t.rid ? 1 : 0.35) + '">' + escapeHtml(t.name) + "</text></g>";
     });
     return o + "</svg>";
@@ -6931,21 +6980,21 @@
     var bits = [];
     if (up && up.d > 0) bits.push('<span class="up">&#9650; <b>' + escapeHtml(up.t.name) + "</b> up " + up.d + "</span>");
     if (dn && dn.d < 0) bits.push('<span class="dn">&#9660; <b>' + escapeHtml(dn.t.name) + "</b> down " + (-dn.d) + "</span>");
-    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Ranked by total Rumbles after each week. Tap a line or name to follow one team.</p>";
+    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Ranked by total Rumbles after each week." + (D.proj ? " The dashed step and hollow dot (W" + D.weeks[D.weeks.length - 1] + "*) are the live week as projected right now." : "") + " Tap a line or name to follow one team.</p>";
   }
   function trendHeatHtml(D) {
     var o = '<table class="tr-heat"><thead><tr><th></th>';
-    D.weeks.forEach(function (w) { o += "<th>W" + w + "</th>"; });
+    D.weeks.forEach(function (w, i) { o += "<th>W" + w + (D.proj && i === D.weeks.length - 1 ? "*" : "") + "</th>"; });
     o += "<th>Total</th></tr></thead><tbody>";
     D.teams.forEach(function (t) {
       o += '<tr><td class="tr-m">' + escapeHtml(t.name) + "</td>";
       t.rum.forEach(function (r, i) {
         var hot = r >= 15 && ((i > 0 && t.rum[i - 1] >= 15) || (i < t.rum.length - 1 && t.rum[i + 1] >= 15));
-        o += '<td class="' + (hot ? "tr-hot" : "") + '" style="background:' + trendHeat(r) + '" title="' + escapeHtml(t.name) + " W" + D.weeks[i] + ": " + r + " Rumbles, " + t.pts[i].toFixed(1) + ' pts">' + r + "</td>";
+        o += '<td class="' + (hot ? "tr-hot " : "") + (D.proj && i === t.rum.length - 1 ? "tr-proj" : "") + '" style="background:' + trendHeat(r) + '" title="' + escapeHtml(t.name) + " W" + D.weeks[i] + ": " + r + " Rumbles, " + t.pts[i].toFixed(1) + ' pts">' + r + "</td>";
       });
       o += '<td class="tr-t">' + t.cumR[t.cumR.length - 1] + "</td></tr>";
     });
-    return o + '</tbody></table><div class="tr-legend">0<i></i>20 Rumbles in a week<span class="hotkey"></span>2+ big weeks (15+) in a row</div><p class="trend-note">Rows are in current standing order. Green weeks are big ones, red weeks are bad ones.</p>';
+    return o + '</tbody></table><div class="tr-legend">0<i></i>20 Rumbles in a week<span class="hotkey"></span>2+ big weeks (15+) in a row</div><p class="trend-note">Rows are in current standing order. Green weeks are big ones, red weeks are bad ones.' + (D.proj ? " The dashed last column (W" + D.weeks[D.weeks.length - 1] + "*) is the live week as projected right now." : "") + "</p>";
   }
   function trendFormHtml(D) {
     var nw = D.weeks.length;
@@ -6957,13 +7006,13 @@
     }).sort(function (a, b) { return b.d - a.d; });
     return '<div class="tr-form">' + cards.map(function (c) {
       var t = c.t, bw = 100 / nw, o = '<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">';
-      t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"><title>W' + D.weeks[i] + ": " + r + " Rumbles</title></rect>"; });
+      t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"' + (D.proj && i === nw - 1 ? ' fill-opacity="0.55" stroke="#e8eaf0" stroke-width="0.8" stroke-dasharray="2 1.5" vector-effect="non-scaling-stroke"' : "") + '><title>W' + D.weeks[i] + ": " + r + " Rumbles" + (D.proj && i === nw - 1 ? " (projected)" : "") + "</title></rect>"; });
       var ay = 42 - c.season / 20 * 40;
       o += '<line x1="0" x2="100" y1="' + ay.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="#9aa1b0" stroke-width="0.8" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/></svg>';
       var chip = c.d >= 3 ? '<span class="tr-chip hot">Hot</span>' : c.d <= -3 ? '<span class="tr-chip cold">Cold</span>' : '<span class="tr-chip flat">Steady</span>';
       return '<div class="tr-card"><div class="tr-h"><b style="color:' + trendColor(t.rid) + '">' + escapeHtml(t.name) + "</b>" + chip + "</div>" + o +
         '<div class="tr-s">last ' + Math.min(3, nw) + ": " + c.last.toFixed(1) + " &middot; season " + c.season.toFixed(1) + "</div></div>";
-    }).join("") + '</div><p class="trend-note">Bars are each week\'s Rumbles (tall and green is a big week). The dashed line is that team\'s season average. Hot or cold compares the last 3 weeks to the season average; sorted hottest first.</p>';
+    }).join("") + '</div><p class="trend-note">Bars are each week\'s Rumbles (tall and green is a big week). The dashed line is that team\'s season average. Hot or cold compares the last 3 weeks to the season average; sorted hottest first.' + (D.proj ? " The dashed bar is the live week as projected right now." : "") + "</p>";
   }
   function renderTrends() {
     var panel = document.getElementById("trend-panel"), body = document.getElementById("trend-body");
