@@ -3262,6 +3262,16 @@ def scenario_trends(browser):
     assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-line').length") == n, "rank race: one line per team"
     shot = lambda n: page.locator("#trend-panel").screenshot(path="/tmp/sf/trend_" + n + ".png") if os.environ.get("TRENDSHOT") else None
     shot("rank")
+    # tapping a dot pops up that team's week; tapping elsewhere closes it
+    page.click("#trend-body circle.tr-hit >> nth=0", force=True); page.wait_for_timeout(200)
+    tip = page.evaluate("(() => { const e = document.getElementById('trend-tip'); return e.hidden ? null : e.innerText; })()")
+    assert tip and "Rumbles" in tip and ("behind the leader" in tip or "Leading" in tip), f"dot tooltip: {tip}"
+    shot("rank_tip")
+    page.click("#trend-body svg .tr-grid >> nth=0", force=True); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('trend-tip').hidden"), "tooltip closes when tapping elsewhere"
+    # a runaway leader looks different from a close race: lines are spread by Rumbles behind the leader
+    ys = page.evaluate("[...document.querySelectorAll('#trend-body circle.tr-dot')].map(c => parseFloat(c.getAttribute('cy')))")
+    assert max(ys) - min(ys) > 50, "dots are spread out by Rumbles behind the leader"
     page.click("#trend-body g[data-rid] .tr-name >> nth=0"); page.wait_for_timeout(200)
     assert page.evaluate("[...document.querySelectorAll('#trend-body polyline.tr-line')].filter(p => p.getAttribute('opacity') === '1').length") == 1, "tapping a team highlights just that line"
     page.click("#trend-panel .trend-tabs button[data-v=heat]"); page.wait_for_timeout(200)
