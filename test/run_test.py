@@ -37,7 +37,7 @@ import os
 from playwright.sync_api import sync_playwright
 
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
-PAGE_URL = "http://127.0.0.1:8123/rumbles.html"
+PAGE_URL = os.environ.get("PAGE_URL", "http://127.0.0.1:8123/rumbles.html")
 
 
 def load(name):
@@ -70,6 +70,12 @@ def install_routes(page, routes):
     # to "no one on IR" unless a scenario supplies its own.
     routes = dict(routes)
     routes.setdefault("**/v1/league/TESTLEAGUE1/rosters", [])
+    # Registered first = lowest priority: a Sleeper call a scenario did not mock gets an empty
+    # answer instead of reaching the real API, so the suite behaves the same offline.
+    # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
+    if not getattr(page, "_sleeper_fallback", False):
+        page._sleeper_fallback = True
+        page.route(lambda url: "sleeper.app" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
         def handler(route, request=None, payload=payload):
             route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
@@ -1815,6 +1821,7 @@ def scenario_howto_tooltip(browser):
         "**/stats/nfl/2026/2*": [],
         "**/projections/nfl/2026/2*": [],
         "**/scores/nfl/regular/2026/2": [],
+        "**/v1/players/nfl": load("players.json"),
     }
     install_routes(page, routes)
     page.goto(PAGE_URL, wait_until="load")
@@ -3343,6 +3350,20 @@ def scenario_scenarios_tab(browser):
     assert b[1]["hl"] == "Your RB needs 2.00 to catch up", b[1]
     assert b[1]["sides"][0]["names"] == ["Runner"], b[1]
 
+    # a Rumble that is already decided can be followed too: it shows as a Decided block and the others do not change
+    dec = page.evaluate("[...document.querySelectorAll('#rb-strip .rb-chip.scen-dec:not(.on) .rb-cn')].map(e => e.textContent)")
+    assert dec, f"decided managers you are not following are marked in the strip: {dec}"
+    before = [(x["who"], x["hl"], x["gap"]) for x in blocks_all()]
+    chip(dec[0]).click(); page.wait_for_timeout(300)
+    after = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent,
+      dec: !!b.querySelector('.sc-chip.dec'), hl: b.querySelector('.sc-hl').textContent, wp: b.querySelector('.sc-wp').textContent}))""")
+    added = [x for x in after if x["who"] == dec[0]]
+    assert len(after) == len(before) + 1 and added and added[0]["dec"], f"following a decided manager adds a Decided block: {after}"
+    assert re.match(r"(Clinched|Out of reach|Final)", added[0]["hl"]) and not re.search(r"\d+%", added[0]["wp"]), added[0]
+    assert [(x["who"], x["hl"]) for x in after if x["who"] != dec[0]] == [(w, h) for w, h, g in before], "existing blocks keep their sentences"
+    chip(dec[0]).click(); page.wait_for_timeout(300)
+    assert dec[0] not in [x["who"] for x in blocks_all()], "unfollowing removes the Decided block"
+
     # switching "me" re-bases every block on the new manager (no stale gap, sentence or selection)
     page.click("#rb-change"); page.wait_for_timeout(300)
     page.locator("#rb-who .rb-who-list button", has_text="Jake").first.click(); page.wait_for_timeout(600)
@@ -3623,7 +3644,7 @@ def scenario_feed_expiry(browser):
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+            executable_path=os.environ.get("CHROME_PATH", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"),
             args=[
                 "--disable-background-networking",
                 "--disable-component-update",

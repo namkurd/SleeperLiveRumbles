@@ -1172,7 +1172,7 @@
     .rb-chip { gap: 4px; padding: 0 7px 0 5px; font-size: 0.7rem; height: 25px; }
     .rb-chip .rb-pl { display: none; } .rb-chip .rb-ps { display: inline; }
   }
-  .rb-chip.scen-off { opacity: 0.35; cursor: default; }
+  .rb-chip.scen-dec { opacity: 0.6; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
   .rb-away { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--panel-border)); background: color-mix(in srgb, var(--accent-2) 9%, var(--panel)); border-radius: 10px; font-size: 0.8rem; line-height: 1.35; }
@@ -1482,6 +1482,7 @@
   .sc-bh b { font-size: 1.05rem; } .sc-vs { color: var(--text-dim); font-size: 0.8rem; }
   .sc-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: color-mix(in srgb, var(--text-dim) 20%, transparent); color: var(--text-dim); vertical-align: 2px; margin-left: 4px; white-space: nowrap; }
   .sc-chip.h2h { background: var(--accent-2, #8b3df0); color: #fff; }
+  .sc-chip.dec { background: color-mix(in srgb, var(--gold) 24%, transparent); color: var(--gold); }
   .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
   .sc-gap > span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
   .sc-gap b { font-size: 1.45rem !important; font-variant-numeric: tabular-nums; }
@@ -6661,16 +6662,17 @@
       rows + "</div>";
   }
 
-  // Which opponents a Scenarios block can exist for (a Rumble still in play against you).
+  // Every other team can be followed, including one whose Rumble against you is already decided.
   function rbScenAvail(teams, me) {
     var o = {};
-    if (me) teams.forEach(function (t) { if (t !== me && rbInPlay(me, t)) o[t.rid] = true; });
+    if (me) teams.forEach(function (t) { if (t !== me) o[t.rid] = true; });
     return o;
   }
-  // Until you pick, every in-play opponent is followed.
+  // Until you pick, every opponent still in play is followed; decided ones are added on demand.
   function rbScenDefaultSel(teams) {
-    var me = (teams || []).filter(function (t) { return t.rid === state.rb.me; })[0];
-    return rbScenAvail(teams || [], me);
+    var me = (teams || []).filter(function (t) { return t.rid === state.rb.me; })[0], o = {};
+    if (me) (teams || []).forEach(function (t) { if (t !== me && rbInPlay(me, t)) o[t.rid] = true; });
+    return o;
   }
 
   // Projected totals big in the middle, actual points smaller on the outside edges.
@@ -6692,31 +6694,42 @@
     var mine = rbScenPlayers(me, win);
     var blocks = [];
     var followed = state.rb.scenSel || null;
-    teams.filter(function (t) { return t !== me && rbInPlay(me, t) && (!followed || followed[t.rid]); })
+    teams.filter(function (t) { return t !== me && (followed ? followed[t.rid] : rbInPlay(me, t)); })
       .sort(function (a, b) { return b.proj - a.proj || a.name.localeCompare(b.name); })
       .forEach(function (t) {
         var theirs = rbScenPlayers(t, win);
         var gap = me.act - t.act;
         var mineN = mine.length, theirN = theirs.length;
-        if (!mineN && !theirN) return;
-        if (gap < -0.004 && !mineN) return;
-        if (gap > 0.004 && !theirN) return;
-        var fz = state.scenFrozen.by[t.rid];
-        if (!fz) {
-          fz = state.scenFrozen.by[t.rid] = { start: gap - (rbSum(mine) - rbSum(theirs)), n: mineN, m: theirN };
-          fz.text = rbScenSentence(fz.start, fz.n, fz.m, rbPosList(mine), rbPosList(theirs));
+        // Decided: nobody left on one side to change it (or on either side), or the Rumble is out of play.
+        var over = !mineN && !theirN;
+        var lockedUp = gap > 0.004 && !theirN, lockedOut = gap < -0.004 && !mineN;
+        var decided = over || lockedUp || lockedOut || !rbInPlay(me, t);
+        // Left to the default (in play) view, a Rumble that is settled just drops out; one you chose to follow stays as a Decided block.
+        if (!followed && (over || lockedUp || lockedOut)) return;
+        var fz = state.scenFrozen.by[t.rid], text;
+        if (over || lockedUp || lockedOut) {
+          text = over ? (gap > 0.004 ? "Final: you won this Rumble" : gap < -0.004 ? "Final: you lost this Rumble" : "Final: a tie")
+            : lockedUp ? "Clinched: nobody left to catch you" : "Out of reach: you have nobody left to catch up";
+        } else {
+          if (!fz) {
+            fz = state.scenFrozen.by[t.rid] = { start: gap - (rbSum(mine) - rbSum(theirs)), n: mineN, m: theirN };
+            fz.text = rbScenSentence(fz.start, fz.n, fz.m, rbPosList(mine), rbPosList(theirs));
+          }
+          text = fz.text;
         }
         var h2h = t.rid === me.opp;
         var cls = gap < -0.004 ? "bad" : gap > 0.004 ? "ok" : "even";
-        var label = gap < -0.004 ? "You trail by" : gap > 0.004 ? "You lead by" : "All tied up";
+        var label = over ? (gap < -0.004 ? "You lost by" : gap > 0.004 ? "You won by" : "Tied") : gap < -0.004 ? "You trail by" : gap > 0.004 ? "You lead by" : "All tied up";
         var wp = Math.round(rbWinChance(gap, mine, theirs) * 100);
         wp = Math.max(1, Math.min(99, wp));
-        var scale = Math.max(10, Math.abs(fz.start) * 2);
+        var wpTxt = over ? (gap > 0.004 ? "Won" : gap < -0.004 ? "Lost" : "Tied") : lockedUp ? "Clinched" : lockedOut ? "Out of reach" : wp + "% to win";
+        if (over) wp = gap > 0.004 ? 100 : gap < -0.004 ? 0 : 50;
+        var scale = Math.max(10, Math.abs(fz ? fz.start : gap) * 2);
         var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
         var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
-        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
-          '<div class="sc-hl" title="' + escapeHtml(fz.text) + '">' + escapeHtml(fz.text) + "</div></div>" +
-          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wp + "% to win</em></div></div>" +
+        blocks.push('<section class="sc-blk"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' + (decided ? '<span class="sc-chip dec">Decided</span>' : "") +
+          '<div class="sc-hl" title="' + escapeHtml(text) + '">' + escapeHtml(text) + "</div></div>" +
+          '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wpTxt + "</em></div></div>" +
           rbScenScores(me, t, col) +
           '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div></section>");
@@ -6992,7 +7005,7 @@
     var legend = document.querySelector(".rb-legend");
     if (legend) legend.style.display = scenOn ? "none" : "";
     document.getElementById("rb-note").hidden = !(rb.mode === "me" && rb.sub === "inplay");
-    function buildStrip(shownSet, scen, scenAvail) {
+    function buildStrip(shownSet, scen, scenDec) {
     var chipBefore = rbRects(rb.chipEls);
     teams.forEach(function (t, i) {
       var el = rb.chipEls[t.rid];
@@ -7001,7 +7014,6 @@
         el.type = "button";
         el.className = "rb-chip";
         el.addEventListener("click", function () {
-          if (el.classList.contains("scen-off")) return;
           if (el.classList.contains("scen")) {
             // Scenarios: pick which opponents' scenarios to follow (your own chip stays on).
             if (t.rid === rb.me) return;
@@ -7020,7 +7032,7 @@
       el.style.setProperty("--c", rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid));
       el.classList.toggle("on", !!shownSet[t.rid]);
       el.classList.toggle("scen", !!scen);
-      el.classList.toggle("scen-off", !!scen && !!scenAvail && t.rid !== rb.me && !scenAvail[t.rid]);
+      el.classList.toggle("scen-dec", !!scen && !!scenDec && t.rid !== rb.me && !!scenDec[t.rid]);
       el.classList.toggle("me", t.rid === rb.me);
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
       // (11 for the top projection, 0 for the bottom).
@@ -7040,7 +7052,9 @@
       var onSet = {};
       Object.keys(scenSelNow).forEach(function (k) { if (scenAvail[k]) onSet[k] = true; });
       if (meTeam) onSet[meTeam.rid] = true;
-      buildStrip(onSet, true, scenAvail);
+      var scenDec = {};
+      if (meTeam) teams.forEach(function (t) { if (t !== meTeam && !rbInPlay(meTeam, t)) scenDec[t.rid] = true; });
+      buildStrip(onSet, true, scenDec);
       rbRenderScenarios(teams, scenWin);
       // Live Players and the Score Feed sit below, for you and the opponents being followed.
       var scenShown = teams.filter(function (t) { return onSet[t.rid]; });
