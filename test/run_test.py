@@ -29,6 +29,7 @@ Scenarios (1a-1f share one live/pregame Week-2 fixture set and its variants,
   3. history_load_failure -- rumbles_history.json 404s. The page must show
                             a clear error instead of a silent blank table.
 """
+import base64
 import datetime
 import json
 import re
@@ -75,6 +76,8 @@ def install_routes(page, routes):
     # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
     if not getattr(page, "_sleeper_fallback", False):
         page._sleeper_fallback = True
+        # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
+        page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
         page.route(lambda url: "sleeper.app" in url or "raw.githubusercontent.com" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
         def handler(route, request=None, payload=payload):
@@ -87,7 +90,7 @@ def install_routes(page, routes):
     # local static server and 404 naturally.
     def block_other(route):
         route.abort()
-    page.route(lambda url: "127.0.0.1" not in url and "sleeper.app" not in url, block_other)
+    page.route(lambda url: "127.0.0.1" not in url and "sleeper.app" not in url and "sleepercdn.com" not in url, block_other)
 
 
 def get_table_rows(page):
@@ -3401,6 +3404,9 @@ def scenario_scenarios_tab(browser):
     print("\nSCENARIOS TAB SCENARIO PASSED")
 
 
+COIN_PRE = 28
+
+
 def scenario_win_probability(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: Win-probability chart (mini chart, expanded view, hover, share, past weeks)")
@@ -3448,7 +3454,10 @@ def scenario_win_probability(browser):
             "**/v1/league/TESTLEAGUE1/matchups/2": matchups, "**/v1/league/TESTLEAGUE1/matchups/1": load("matchups_week1.json"),
             "**/stats/nfl/2026/1*": load("stats_week1.json"), "**/projections/nfl/2026/1*": load("projections_week1.json"),
             "**/projections/nfl/2026/2*": projections, "**/stats/nfl/2026/2*": stats, "**/scores/nfl/regular/2026/2": score_list,
-            "**/v1/players/nfl": players, "**/v1/state/nfl": load("state.json"), "**/wp_timeline/index.json": {"weeks": [1]}, "**/wp_live/week_2.json*": doc})
+            "**/v1/players/nfl": players, "**/v1/state/nfl": load("state.json"), "**/wp_timeline/index.json": {"weeks": [1]}, "**/wp_live/week_2.json*": doc,
+            # who is who on Sleeper: their pictures (a team avatar for Jake, the plain user avatar for the others)
+            "**/v1/league/TESTLEAGUE1/rosters": [{"roster_id": 1, "owner_id": "u1"}, {"roster_id": 2, "owner_id": "u2"}, {"roster_id": 3, "owner_id": "u3"}],
+            "**/v1/league/TESTLEAGUE1/users": [{"user_id": "u1", "avatar": "av1"}, {"user_id": "u2", "avatar": "av2"}, {"user_id": "u3", "avatar": "av3", "metadata": {"avatar": "https://sleepercdn.com/uploads/jake.png"}}]})
         pg.route("**/raw.githubusercontent.com/**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(doc)))
     routes(page)
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
@@ -3464,6 +3473,14 @@ def scenario_win_probability(browser):
         assert 40 <= m["box"]["height"] <= 70 and m["box"]["top"] >= m["hl"]["bottom"] - 1 and m["box"]["bottom"] <= m["scores"]["top"] + 1, f"the chart sits between the sentence and the score row: {m}"
         assert m["box"]["width"] > 200, m
     if os.environ.get("SCENSHOT"): page.locator("#rb-scen-view .sc-blk").nth(1).screenshot(path="/tmp/sf/wp_block.png")
+
+    # the marker on the bar: the manager who is ahead (their Sleeper picture), toward their end as their chance grows
+    bars = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => { const a = b.querySelector('.sc-av'); return [b.querySelector('.sc-bh b').textContent,
+      {img: (a.querySelector('img') || {}).src || '', to: parseFloat(a.dataset.to), left: parseFloat(a.style.left), coin: a.classList.contains('coin'), w: a.getBoundingClientRect().width, head: b.querySelector('.sc-wp').textContent, dots: b.querySelectorAll('.sc-dot').length}]; }))""")
+    assert "thumbs/av2" in bars["Aidan"]["img"] and not bars["Aidan"]["coin"], f"Ben is ahead of Aidan: Ben's picture: {bars['Aidan']}"
+    assert abs(bars["Aidan"]["to"] - (100 - int(bars["Aidan"]["head"].split("%")[0]))) <= 1 and abs(bars["Aidan"]["left"] - bars["Aidan"]["to"]) < 0.6, f"it sits where the win chance says: {bars['Aidan']}"
+    assert "uploads/jake.png" in bars["Jake"]["img"] and bars["Jake"]["to"] > 85, f"Jake is far ahead: his team picture, near his end: {bars['Jake']}"
+    assert bars["Aidan"]["w"] >= 28 and bars["Aidan"]["dots"] == 0, f"bigger than the old dot: {bars['Aidan']}"
 
     # the small chart: the week's kickoff windows along the bottom, a notch for every scoring play
     mini = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, axis: [...b.querySelectorAll('.wpm-axis span')].map(x => x.textContent), notches: b.querySelectorAll('.wpm-notch').length}))""")
@@ -3560,6 +3577,20 @@ def scenario_win_probability(browser):
     friend.keyboard.press("Escape"); friend.wait_for_timeout(300)
     assert friend.evaluate("document.getElementById('wp-sheet').hidden && !location.search.includes('wp=')"), "closing returns to the page and clears the link"
     friend.close()
+    # on a wide screen the chart uses the whole width of the card (it once measured itself while hidden and stayed narrow)
+    wide = browser.new_page(viewport={"width": 1280, "height": 800}, timezone_id="UTC")
+    wide.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    wide.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    routes(wide)
+    wide.goto(link); wide.wait_for_timeout(3000)
+    wd = wide.evaluate("""() => { const svg = document.querySelector('#wp-chart svg.wp-svg'), wrap = document.getElementById('wp-chartwrap');
+      const labs = [...svg.querySelectorAll('text')].filter(t => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \\d/.test(t.textContent)).map(t => t.getBoundingClientRect());
+      let hit = false; for (let i = 0; i < labs.length; i++) for (let j = i + 1; j < labs.length; j++) if (labs[i].right > labs[j].left && labs[j].right > labs[i].left) hit = true;
+      return {svgW: svg.getBoundingClientRect().width, wrapW: wrap.getBoundingClientRect().width, h: svg.getBoundingClientRect().height, labels: labs.length, overlap: hit, listTop: document.getElementById('wp-list').getBoundingClientRect().top, svgBottom: svg.getBoundingClientRect().bottom}; }""")
+    assert wd["svgW"] >= wd["wrapW"] - 2 and wd["svgW"] > 600, f"the chart fills the space it has: {wd}"
+    assert wd["h"] >= 280 and wd["labels"] >= 3 and not wd["overlap"] and wd["listTop"] >= wd["svgBottom"], f"taller on a wide screen, labels apart, plays beneath: {wd}"
+    if os.environ.get("SCENSHOT"): wide.screenshot(path="/tmp/sf/wp_wide.png")
+    wide.close()
     # ...and a picture of it
     with page.expect_download() as dl:
         page.click("#wp-image")
@@ -3605,6 +3636,19 @@ def scenario_win_probability(browser):
     page.select_option("#week-select", ""); page.wait_for_timeout(600)
     back = [x["who"] for x in page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent}))""")]
     assert back[:2] == ["Jake", "Aidan"] and len(back) < 11, f"back on this week's blocks: {back}"
+    # a coin flip: between 47% and 53% the marker is a quarter, turning heads to tails
+    flip_doc = json.loads(json.dumps(live_doc)); flip_doc["pre"]["A2"] = COIN_PRE
+    cf = ctx.new_page()
+    cf.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    cf.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    routes(cf, flip_doc)
+    cf.goto(PAGE_URL + "?tab=rumblin&me=Ben"); cf.wait_for_timeout(2500)
+    cf.click("#rb-me"); cf.wait_for_timeout(300); cf.click("#rb-scen"); cf.wait_for_timeout(2500)
+    cq = cf.evaluate("""() => { const b = [...document.querySelectorAll('#rb-scen-view .sc-blk')].find(x => x.querySelector('.sc-bh b').textContent === 'Aidan'); const a = b.querySelector('.sc-av');
+      return {pct: b.querySelector('.sc-wp').textContent, coin: a.classList.contains('coin'), to: parseFloat(a.dataset.to), spin: getComputedStyle(a.querySelector('.coin-3d') || a).animationName, faces: a.querySelectorAll('.coin-3d svg').length, img: !!a.querySelector('img')}; }""")
+    assert cq["coin"] and cq["faces"] == 2 and cq["spin"] == "coin-turn" and not cq["img"] and 47 <= int(cq["pct"].split("%")[0]) <= 53, f"a coin flip is a spinning quarter, heads and tails: {cq}"
+    cf.close()
+
     # with a finger: a tap scrubs the small chart (and shows the plays on a notch); the corner icon expands it
     tctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, timezone_id="UTC")
     tp = tctx.new_page()

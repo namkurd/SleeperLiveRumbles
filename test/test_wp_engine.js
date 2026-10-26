@@ -29,8 +29,8 @@ const source = [
 ].join("\n");
 const sb = {};
 vm.createContext(sb);
-vm.runInContext(source + "\nthis.E = { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDone };", sb);
-const { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDone } = sb.E;
+vm.runInContext(source + "\nthis.E = { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDot, wpDone };", sb);
+const { wpRem, wpClockLabel, wpBuild, wpMarks, wpNotches, wpWindows, wpScrub, wpDot, wpDone } = sb.E;
 
 let failures = 0;
 function check(name, ok, detail) { if (ok) console.log("  ok  " + name); else { failures++; console.log("  FAIL " + name + (detail ? " -- " + detail : "")); } }
@@ -108,6 +108,13 @@ check("the end of the line is the furthest you can scrub", wpScrub(m, notches, 1
 const wins = wpWindows(doc);
 check("kickoff windows: one per cluster of games", wins.length === 2 && wins[0].t === 0 && wins[1].t === 3 * DAY, JSON.stringify(wins));
 check("games kicking off within 90 minutes share a window", wpWindows({ g: { a: { ko: 0 }, b: { ko: 4000 }, c: { ko: 13000 } } }).length === 2);
+
+console.log("the marker on the bar");
+check("47 to 53 is a coin flip", [47, 50, 53].every((w) => wpDot(w).coin) && !wpDot(46).coin && !wpDot(54).coin);
+check("whoever is ahead leads: you above 50, they below", wpDot(60).lead === 1 && wpDot(40).lead === -1 && wpDot(50).lead === 1);
+check("it slides toward the leader's end as their chance grows (yours on the left)", wpDot(60).pos < wpDot(54).pos && wpDot(80).pos < wpDot(60).pos && wpDot(40).pos > wpDot(46).pos && wpDot(20).pos > wpDot(40).pos);
+check("dead centre at 50, and never off the ends of the bar", wpDot(50).pos === 50 && wpDot(100).pos === 8 && wpDot(0).pos === 92 && wpDot(99).pos >= 8);
+check("it is where the win chance says: 70% for you is 30% along from your end", wpDot(70).pos === 30 && wpDot(25).pos === 75);
 
 if (failures) { console.log("\n" + failures + " FAILED"); process.exit(1); }
 console.log("\nALL win-probability engine UNIT TESTS PASSED");

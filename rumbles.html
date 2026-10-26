@@ -1567,10 +1567,17 @@
   .sc-sc b { font-variant-numeric: tabular-nums; line-height: 1.1; }
   .sc-sc.proj b { font-size: 1.6rem; font-weight: 800; }
   .sc-sc.act b { font-size: 0.92rem; font-weight: 700; color: var(--text-dim); }
-  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 7px 6px 9px; }
+  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 19px 6px 21px; }
+  /* The manager who is ahead (their Sleeper picture), or a quarter for a coin flip; glides along the bar with their win chance. */
+  .sc-av { position: absolute; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--c, var(--text-dim)); background: color-mix(in srgb, var(--c, #888) 30%, var(--panel)); box-shadow: 0 0 0 2px var(--panel), 0 2px 6px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; overflow: hidden; transition: left 0.9s cubic-bezier(.3,.7,.2,1); }
+  .sc-av b { font-size: 0.85rem; color: var(--text); } .sc-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .sc-av.coin { border: 0; background: none; box-shadow: 0 2px 6px rgba(0,0,0,0.45); overflow: visible; perspective: 140px; }
+  .coin-3d { position: relative; display: block; width: 100%; height: 100%; transform-style: preserve-3d; animation: coin-turn 3.6s linear infinite; }
+  .coin-3d svg { position: absolute; inset: 0; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .coin-3d svg.tails { transform: rotateY(180deg); }
+  @keyframes coin-turn { to { transform: rotateY(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .coin-3d { animation: none; } .sc-av { transition: none; } }
   .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
-  .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
-  .sc-dot.bad { background: var(--bad); } .sc-dot.ok { background: var(--good); } .sc-dot.even { background: #d98a1c; }
   .sc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
   .sc-side { border: 1px solid var(--panel-border); border-top: 3px solid var(--c); border-radius: 8px; padding: 4px 8px 3px; min-width: 0; }
   .sc-sh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
@@ -6987,6 +6994,11 @@
     if (best && bd <= hitPx) return { t: Math.min(model.end, best.t), notch: best };
     return { t: Math.min(model.end, model.tOf(fx)), notch: null };
   }
+  // The marker on a Scenarios bar for your win chance (0-100): a coin flip between 47 and 53, else whoever is ahead,
+  // sliding toward their end (yours on the left) as their chance nears 100.
+  function wpDot(winPct) {
+    return { coin: winPct >= 47 && winPct <= 53, lead: winPct >= 50 ? 1 : -1, pos: Math.max(8, Math.min(92, 100 - winPct)) };
+  }
   // WP-ENGINE-END
 
   function rbScenSideHtml(t, list, win) {
@@ -7105,19 +7117,20 @@
         wp = Math.max(1, Math.min(99, wp));
         var wpTxt = over ? (gap > 0.004 ? "Won" : gap < -0.004 ? "Lost" : "Tied") : lockedUp ? "Clinched" : lockedOut ? "Out of reach" : wp + "% to win";
         if (over) wp = gap > 0.004 ? 100 : gap < -0.004 ? 0 : 50;
-        var scale = Math.max(10, Math.abs(fz ? fz.start : gap) * 2);
-        var pos = 50 + Math.max(-1, Math.min(1, gap / scale)) * 50;
         blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + '"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' + (decided ? '<span class="sc-chip dec">Decided</span>' : "") +
           '<div class="sc-hl" title="' + escapeHtml(text) + '">' + escapeHtml(text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wpTxt + "</em></div></div>" +
           mini.html +
           (settled ? "" : rbScenScores(me, t, col) +
-          '<div class="sc-bar"><i class="sc-mid"></i><i class="sc-dot ' + cls + '" style="left:' + pos.toFixed(1) + '%"></i></div>' +
+          scBarHtml(me, t, wp, rbColor(me.rid), col) +
           '<div class="sc-cols">' + rbScenSideHtml(me, mine, win) + rbScenSideHtml(t, theirs, win) + "</div>") + "</section>");
       });
+    scAvatars();
     wpMiniOff();
     box.innerHTML = blocks.length ? blocks.join("") : '<div class="rb-live-empty">' + (finished ? "Pick a manager above to see that Rumble." : "No Rumbles are still in play against you right now.") + "</div>";
     flapScan(box);
+    // Let the pictures glide from where they were to where they are now.
+    requestAnimationFrame(function () { [].forEach.call(box.querySelectorAll(".sc-av[data-to]"), function (el) { el.style.left = el.getAttribute("data-to") + "%"; }); });
   }
 
   // ---------------------------------------------------------------------------
@@ -7133,6 +7146,42 @@
   var wpUid = 0;
 
   function wpValidDoc(d) { return !!(d && typeof d === "object" && d.g && d.ev && d.tg && d.tm && typeof d.t0 === "number"); }
+  // Each manager's Sleeper picture (their team avatar, else their own), by roster, loaded once.
+  var scAv = null, scAvBusy = false, scDotPrev = {};
+  function scAvatars() {
+    var lid = state.history && state.history.league_id;
+    if (scAv || scAvBusy || !lid) return scAv;
+    scAvBusy = true;
+    Promise.all([fetchJson(API_V1 + "/league/" + lid + "/users").catch(function () { return []; }), fetchJson(API_V1 + "/league/" + lid + "/rosters").catch(function () { return []; })]).then(function (r) {
+      var byUser = {}, m = {};
+      (Array.isArray(r[0]) ? r[0] : []).forEach(function (u) { byUser[u.user_id] = u; });
+      (Array.isArray(r[1]) ? r[1] : []).forEach(function (ro) {
+        var u = byUser[ro.owner_id];
+        var a = u && ((u.metadata && u.metadata.avatar) || (u.avatar ? "https://sleepercdn.com/avatars/thumbs/" + u.avatar : null));
+        if (a) m[ro.roster_id] = a;
+      });
+      scAv = m; scAvBusy = false;
+      if (!document.getElementById("rumblin-view").hidden) renderRumblin();
+    });
+    return null;
+  }
+  // A quarter that turns over and over, heads to tails. The turn is timed from the clock, so a re-render picks up where it was.
+  function scCoin() {
+    var face = '<circle cx="15" cy="15" r="14" fill="#c9ced6" stroke="#8b919c" stroke-width="1.2"/><circle cx="15" cy="15" r="11" fill="none" stroke="#9aa1ad" stroke-width="1" stroke-dasharray="1.3 1.3"/>';
+    var heads = '<svg viewBox="0 0 30 30" class="heads" aria-hidden="true">' + face + '<circle cx="15" cy="11.6" r="3.7" fill="#7b818d"/><path d="M7.6 22.6c.6-4 3.6-6.2 7.4-6.2s6.8 2.2 7.4 6.2z" fill="#7b818d"/></svg>';
+    var tails = '<svg viewBox="0 0 30 30" class="tails" aria-hidden="true">' + face + '<path d="M15 7.2l2.1 4.5 4.9.6-3.6 3.4.9 4.8-4.3-2.4-4.3 2.4.9-4.8-3.6-3.4 4.9-.6z" fill="#7b818d"/><text x="15" y="25.6" text-anchor="middle" font-size="5.6" font-weight="800" font-family="-apple-system, system-ui, sans-serif" fill="#5b616c">25\u00a2</text></svg>';
+    return '<span class="coin-3d" style="animation-delay:-' + (Date.now() % 3600) + 'ms">' + heads + tails + "</span>";
+  }
+  // The bar under a block: your end on the left, theirs on the right. A quarter in the middle for a coin flip; otherwise the
+  // picture of whoever is ahead, drifting toward their end as their win chance climbs. It glides from where it last was.
+  function scBarHtml(me, t, winPct, colMine, colTheirs) {
+    var d = wpDot(winPct), who = d.lead > 0 ? me : t, col = d.lead > 0 ? colMine : colTheirs, key = me.rid + ":" + t.rid;
+    var from = scDotPrev[key] != null ? scDotPrev[key] : d.pos, url = (scAv || {})[who.rid];
+    scDotPrev[key] = d.pos;
+    var face = d.coin ? scCoin() : '<b>' + escapeHtml((who.name || "?").charAt(0).toUpperCase()) + "</b>" + (url ? '<img src="' + escapeHtml(url) + '" alt="" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' : "");
+    return '<div class="sc-bar"><i class="sc-mid"></i><span class="sc-av' + (d.coin ? " coin" : "") + '" style="left:' + from.toFixed(1) + "%;--c:" + col + '" data-to="' + d.pos.toFixed(1) + '" title="' +
+      escapeHtml(d.coin ? "A coin flip: " + winPct + "% to win" : who.name + " is ahead: " + (d.lead > 0 ? winPct : 100 - winPct) + "% to win") + '">' + face + "</span></div>";
+  }
   function wpDirty() { wpLinkTry(); if (!document.getElementById("rumblin-view").hidden) renderRumblin(); }
   // ?wp=WEEK.ME.THEM (made by "Share link") opens that chart straight away, this week's or a past one, with no manager picked.
   function wpLinkTry() {
@@ -7290,15 +7339,17 @@
     } catch (e) { return ""; }
   }
   // The kickoff windows to name along the bottom of a chart: those inside what is shown, not closer than minGap (of the width).
-  function wpWindowLabels(pm, minGap) {
-    var m = pm.model, endT = m.blocks[m.blocks.length - 1].b, out = [], lastX = -9;
+  // charFrac: how much of the width one letter takes, so two names never run into each other.
+  function wpWindowLabels(pm, minGap, charFrac) {
+    var m = pm.model, endT = m.blocks[m.blocks.length - 1].b, out = [], lastX = -9, lastLen = 0;
     (pm.windows || []).forEach(function (w) {
-      var x;
+      var x, text;
       if (w.t < m.start - 7200 || w.t > endT) return;
       x = m.x(Math.max(w.t, m.start));
-      if (x - lastX < minGap) return;
-      lastX = x;
-      out.push({ x: x, text: wpWinLabel(pm.doc.t0 + w.t * 1000) });
+      text = wpWinLabel(pm.doc.t0 + w.t * 1000);
+      if (x - lastX < Math.max(minGap, (lastLen + text.length) / 2 * (charFrac || 0) + (charFrac || 0) * 1.5)) return;
+      lastX = x; lastLen = text.length;
+      out.push({ x: x, text: text });
     });
     return out;
   }
@@ -7327,7 +7378,7 @@
       var nx = (n.x * W).toFixed(1);
       return '<line class="wpm-notch" x1="' + nx + '" x2="' + nx + '" y1="' + (H - 7) + '" y2="' + H + '" style="stroke:' + (n.side > 0 ? col.mine : col.theirs) + '"/>';
     }).join("");
-    var axis = wpWindowLabels(pm, 0.13).map(function (l) { return '<span style="left:' + (l.x * 100).toFixed(1) + '%">' + escapeHtml(l.text) + "</span>"; }).join("");
+    var axis = wpWindowLabels(pm, 0.1, 0.02).map(function (l) { return '<span style="left:' + (l.x * 100).toFixed(1) + '%">' + escapeHtml(l.text) + "</span>"; }).join("");
     var svg = '<div class="wpm-plot"><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="wpa' + k + '"><rect x="0" y="0" width="' + W + '" height="' + H / 2 + '"/></clipPath><clipPath id="wpb' + k + '"><rect x="0" y="' + H / 2 + '" width="' + W + '" height="' + H / 2 + '"/></clipPath></defs>' +
       divs + '<path d="' + area + '" clip-path="url(#wpa' + k + ')" style="fill:' + col.mine + '" class="wpm-area"/><path d="' + area + '" clip-path="url(#wpb' + k + ')" style="fill:' + col.theirs + '" class="wpm-area"/>' +
       '<line x1="0" x2="' + W + '" y1="' + H / 2 + '" y2="' + H / 2 + '" class="wpm-mid"/><polyline points="' + pts.join(" ") + '" class="wpm-line"/>' + notch + "</svg>";
@@ -7362,7 +7413,7 @@
         o += '<line x1="' + xm + '" x2="' + xm + '" y1="' + mt + '" y2="' + (mt + ph) + '" stroke="' + C.grid + '" stroke-dasharray="2 3"/>';
       }
     });
-    wpWindowLabels(pm, (share ? 64 : 46) / pw).forEach(function (l, i) {
+    wpWindowLabels(pm, 0, fs * 0.6 / pw).forEach(function (l, i) {
       var lx = ml + l.x * pw;
       o += '<line x1="' + lx + '" x2="' + lx + '" y1="' + (mt + ph) + '" y2="' + (mt + ph + 4) + '" stroke="' + C.dim + '"/><text x="' + Math.max(ml, Math.min(lx, ml + pw - 18)) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 && lx < ml + 20 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + escapeHtml(l.text) + "</text>";
     });
@@ -7417,10 +7468,11 @@
     var sheet = document.getElementById("wp-sheet");
     if (!pm) { sheet.hidden = true; return; }
     var s = wpSummary(pm), wrap = document.getElementById("wp-chart");
+    sheet.hidden = false;   // measure the real width: a hidden sheet has none
     document.getElementById("wp-title").innerHTML = s.title + ' <small>Week ' + pm.win.week + "</small>";
     document.getElementById("wp-sub").innerHTML = s.sub;
     var land = window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
-    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(300, Math.max(190, Math.round(W * 0.6)));
+    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(Math.max(220, window.innerHeight - 380), Math.max(190, Math.round(W * (W > 700 ? 0.44 : 0.6))));
     var c = wpChartSvg(pm, W, H, false);
     wpGeom = c.geom;
     wrap.innerHTML = c.svg;
