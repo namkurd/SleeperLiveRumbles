@@ -4784,7 +4784,7 @@
   // (who scored it) then takes the same corner with the same motion.
   var FLAP_POP_HOLD = 1000, FLAP_POP_FADE = 1400;
   // opt.pop: "act" = pop the number's own change; "cr" = pop the actual points scored (and
-  // only animate when some player's actual changed: Projected tab). opt.cr = roster id whose
+  // only animate when some player's actual changed: Projected tab); "crq" = same animation, no labels. opt.cr = roster id whose
   // scorers are credited.
   function fl(key, text, opt) {
     return '<span data-flap="' + escapeHtml(key) + '"' + (opt && opt.pop ? ' data-pop="' + opt.pop + '"' : "") +
@@ -4880,7 +4880,7 @@
       var credit = crRid != null && state.credit ? state.credit[crRid] : null;
       var changed = old != null && old !== text && !document.hidden;
       // Projected-tab numbers only animate when somebody's actual points changed.
-      if (changed && popMode === "cr" && !(credit && credit.length)) changed = false;
+      if (changed && (popMode === "cr" || popMode === "crq") && !(credit && credit.length)) changed = false;
       var animate = changed && old.length === text.length;
       var from = animate ? old : text;
       el.textContent = "";
@@ -4895,7 +4895,7 @@
       else if (changed && popMode === "cr") popAmt = Math.round(credit.reduce(function (s, c) { return s + c.d; }, 0) * 100) / 100;
       var hasPop = popAmt != null && isFinite(popAmt) && popAmt !== 0;
       var T = flapDuration(parseFloat(old), parseFloat(text));
-      if (animate) flapAnimate(cells, old, text, hasPop ? FLAP_POP_HOLD : 0);
+      if (animate) flapAnimate(cells, old, text, hasPop || popMode === "crq" ? FLAP_POP_HOLD : 0);
       if (hasPop) {
         var pop = document.createElement("span");
         pop.className = "sfp " + (popAmt > 0 ? "gain" : "loss");
@@ -6492,8 +6492,8 @@
     var cell = function (cls, who, lab, num2, c, al, key, opt) {
       return '<div class="sc-sc ' + cls + '" style="text-align:' + al + '"><small style="color:' + c + '">' + escapeHtml(who) + " " + lab + "</small><b>" + fl(key, num2.toFixed(2), opt) + "</b></div>";
     };
-    return '<div class="sc-scores">' + cell("act", me.name, "act", me.act, mc, "left", k + "ma", { pop: "act", cr: me.rid }) + cell("proj", me.name, "proj", me.proj, mc, "right", k + "mp", { pop: "cr", cr: me.rid }) +
-      cell("proj", t.name, "proj", t.proj, col, "left", k + "tp", { pop: "cr", cr: t.rid }) + cell("act", t.name, "act", t.act, col, "right", k + "ta", { pop: "act", cr: t.rid }) + "</div>";
+    return '<div class="sc-scores">' + cell("act", me.name, "act", me.act, mc, "left", k + "ma", { pop: "act", cr: me.rid }) + cell("proj", me.name, "proj", me.proj, mc, "right", k + "mp", { pop: "crq", cr: me.rid }) +
+      cell("proj", t.name, "proj", t.proj, col, "left", k + "tp", { pop: "crq", cr: t.rid }) + cell("act", t.name, "act", t.act, col, "right", k + "ta", { pop: "act", cr: t.rid }) + "</div>";
   }
 
   function rbRenderScenarios(teams, win) {
