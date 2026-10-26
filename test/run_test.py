@@ -3649,8 +3649,14 @@ def scenario_win_probability(browser):
     cf.goto(PAGE_URL + "?tab=rumblin&me=Ben"); cf.wait_for_timeout(2500)
     cf.click("#rb-me"); cf.wait_for_timeout(300); cf.click("#rb-scen"); cf.wait_for_timeout(2500)
     cq = cf.evaluate("""() => { const b = [...document.querySelectorAll('#rb-scen-view .sc-blk')].find(x => x.querySelector('.sc-bh b').textContent === 'Aidan'); const a = b.querySelector('.sc-av');
-      return {pct: b.querySelector('.sc-wp').textContent, coin: a.classList.contains('coin'), to: parseFloat(a.dataset.to), spin: getComputedStyle(a.querySelector('.coin-3d') || a).animationName, faces: a.querySelectorAll('.coin-3d svg').length, img: !!a.querySelector('img')}; }""")
-    assert cq["coin"] and cq["faces"] == 2 and cq["spin"] == "coin-turn" and not cq["img"] and 47 <= int(cq["pct"].split("%")[0]) <= 53, f"a coin flip is a spinning quarter, heads and tails: {cq}"
+      return {pct: b.querySelector('.sc-wp').textContent, coin: a.classList.contains('coin'), to: parseFloat(a.dataset.to), spin: getComputedStyle(a.querySelector('.coin-3d') || a).animationName, faces: a.querySelectorAll('.coin-3d > *').length, img: !!a.querySelector('img:not(.heads)'), heads: (a.querySelector('.coin-3d > img.heads') || {}).src || '', tails: (a.querySelector('.coin-3d > .tails') || {textContent: ''}).textContent.replace(/\\s+/g, ' ').trim(), w: a.getBoundingClientRect().width}; }""")
+    assert cq["coin"] and cq["faces"] == 2 and cq["spin"] == "coin-turn" and not cq["img"] and 47 <= int(cq["pct"].split("%")[0]) <= 53, f"a coin flip is a spinning coin: {cq}"
+    assert cq["heads"].startswith("data:image/webp;base64,") and set(cq["tails"].replace("CBC", "")) <= {" "} and "CBC" in cq["tails"] and cq["w"] >= 38, f"the Content Boy Coin on one side, CBC on the other, bigger than the old dot: {cq}"
+    if os.environ.get("SCENSHOT"):
+        for i, rot in enumerate(("0deg", "60deg", "180deg", "250deg")):
+            cf.evaluate("(r) => { const c = document.querySelector('.sc-av.coin'); c.style.transform = 'scale(5)'; c.style.transformOrigin = 'center'; c.style.zIndex = 9; const k = c.querySelector('.coin-3d'); k.style.animation = 'none'; k.style.transform = 'rotateY(' + r + ')'; }", rot)
+            cf.wait_for_timeout(150)
+            cf.locator("#rb-scen-view .sc-blk:nth-of-type(2)").screenshot(path=f"/tmp/sf/coin_face{i}.png")
     cf.close()
 
     # with a finger: a tap scrubs the small chart (and shows the plays on a notch); the corner icon expands it

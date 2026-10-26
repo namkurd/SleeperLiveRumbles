@@ -1834,7 +1834,7 @@ of C x sqrt(points to come) per position. "Still to come" follows the game clock
 `blendedProjection`), and a defense stops projecting once its game starts. A week's chart always ends exactly on the
 real final score.
 
-**The bar under each block** (you on the left, them on the right) shows who is ahead by win chance, not by points: the Sleeper picture of the manager who is favored (their team avatar, else their own; their initial until it loads), sitting toward their end of the bar and gliding there as the chance moves (70% for you is 30% of the way along from your end). Between 47% and 53% it is a quarter, turning heads to tails, since that is a coin flip.
+**The bar under each block** (you on the left, them on the right) shows who is ahead by win chance, not by points: the Sleeper picture of the manager who is favored (their team avatar, else their own; their initial until it loads), sitting toward their end of the bar and gliding there as the chance moves (70% for you is 30% of the way along from your end). Between 47% and 53% it is the Content Boy Coin (the podcast's coin on one face, CBC on the other) turning over and over, since that is a coin flip. The art is embedded in `rumbles.html` as a small WebP; the full-size cutout is `assets/cbc-coin-heads.png`.
 
 **Decided Rumbles.** Any manager can be followed, not just the ones still in play: tap a dimmed chip in the strip. A
 Rumble that can no longer change shows as a collapsed "Decided" block (Final / Clinched / Out of reach) with its chart.
