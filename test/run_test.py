@@ -3163,6 +3163,40 @@ def scenario_gameday_helpers(browser):
     print("GAMEDAY HELPERS SCENARIO PASSED")
 
 
+def scenario_future_weeks(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Projected tab can look ahead to future weeks")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    base = _gameday_base()
+    base["**/v1/league/TESTLEAGUE1/matchups/3"] = load("matchups_week2.json")
+    base["**/projections/nfl/2026/3*"] = load("projections_week2.json")
+    install_routes(page, base)
+    page.goto(PAGE_URL); page.wait_for_timeout(2000)
+    page.click("#mode-custom"); page.wait_for_timeout(500)
+    opts = page.evaluate("[...document.querySelectorAll('#week-select option')].map(o => o.value)")
+    assert "f2" in opts and "f3" in opts, f"future weeks offered in Projected: {opts}"
+    rum0 = page.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => parseInt(r.querySelector('.rumbles').textContent))")
+    page.select_option("#week-select", "f3"); page.wait_for_timeout(2500)
+    assert page.text_content("#fw-note") and "Projected after Week 3" in page.text_content("#fw-note"), page.text_content("#fw-note")
+    assert "Wk 3" in page.text_content("#th-thisweek"), "headers name the projected week"
+    rum1 = page.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => parseInt(r.querySelector('.rumbles').textContent))")
+    assert sum(rum1) > sum(rum0), f"two more projected weeks add Rumbles: {sum(rum0)} -> {sum(rum1)}"
+    page.click("#trend-panel > summary"); page.wait_for_timeout(400)
+    labels = page.evaluate("[...document.querySelectorAll('#trend-body svg.tr-svg text')].map(t => t.textContent).filter(x => /^W\\d/.test(x))")
+    assert "W3*" in labels and "W2*" in labels, f"trend marks projected weeks: {labels}"
+    page.select_option("#week-select", ""); page.wait_for_timeout(600)
+    assert page.evaluate("document.getElementById('fw-note').hidden"), "Current goes back"
+    page.click("#mode-actual"); page.wait_for_timeout(400)
+    assert "f3" not in page.evaluate("[...document.querySelectorAll('#week-select option')].map(o => o.value)"), "no future weeks in Actual"
+    page.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("FUTURE WEEKS SCENARIO PASSED")
+
+
+
 def scenario_name_overflow_audit(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: No player name is cut off at phone widths (compact and full)")
@@ -3363,7 +3397,12 @@ def scenario_trends(browser):
     n = len(hist["standings"])
     assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-line').length") == n, "rank race: one line per team"
     assert page.evaluate("document.querySelectorAll('#trend-body svg.tr-svg polyline.tr-po').length") == 1, "rank race: one ghost line for the 6th-place cut"
-    if os.environ.get("TRSHOT"): page.locator("#trend-body").screenshot(path="/tmp/sf/tr.png")
+    if os.environ.get("TRSHOT"):
+        page.locator("#trend-body svg.tr-svg").scroll_into_view_if_needed(); page.wait_for_timeout(200)
+        bx = page.locator("#trend-body svg.tr-svg").bounding_box()
+        page.mouse.move(bx["x"] + bx["width"] * 0.1, bx["y"] + bx["height"] * 0.28); page.wait_for_timeout(300)
+        assert page.evaluate("!document.getElementById('trend-tip').hidden"), "tooltip shows on hover near a week"
+        page.locator(".trend-wrap").screenshot(path="/tmp/sf/tr.png")
     page.goto(PAGE_URL, wait_until="load"); page.wait_for_timeout(1200)
     assert page.evaluate("document.querySelectorAll('#standings-body tr.po-cut').length") == 1 and page.evaluate("document.querySelectorAll('#standings-body tr')[5].classList.contains('po-cut')"), "gold playoff line under 6th place"
     page.click("#th-pf"); page.wait_for_timeout(300)
@@ -3603,6 +3642,7 @@ def main():
         scenario_play_column(browser)
         scenario_scenarios_tab(browser)
         scenario_gameday_helpers(browser)
+        scenario_future_weeks(browser)
         scenario_name_overflow_audit(browser)
         scenario_epa(browser)
         scenario_trends(browser)
