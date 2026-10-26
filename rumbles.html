@@ -793,10 +793,10 @@
   .trend-tabs button.active { background: var(--accent); color: #1a1108; border-color: var(--accent); }
   .trend-wrap { position: relative; }
   .trend-body { padding: 0 12px 14px; }
-  .trend-tip { position: absolute; z-index: 5; color: var(--text); pointer-events: none; background: #0b0d12; border: 1px solid var(--panel-border); border-radius: 8px; padding: 7px 10px; font-size: 0.74rem; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.5); white-space: nowrap; }
+  .trend-tip { position: absolute; z-index: 5; color: #e8eaf0; pointer-events: none; background: #0b0d12; border: 1px solid var(--panel-border); border-radius: 8px; padding: 7px 10px; font-size: 0.74rem; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.5); white-space: nowrap; }
   .trend-tip[hidden] { display: none; }
-  .trend-tip span { color: var(--text-dim); }
-  .trend-tip .tt-d { color: var(--text-dim); margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--panel-border); }
+  .trend-tip span { color: #9aa1b0; }
+  .trend-tip .tt-d { color: #9aa1b0; margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--panel-border); }
   .tr-svg .tr-hit { cursor: pointer; }
   .trend-note { color: var(--text-dim); font-size: 0.76rem; margin: 8px 2px 0; line-height: 1.4; }
   .trend-note b { color: var(--text); }
@@ -812,8 +812,15 @@
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   .po-note[hidden] { display: none; }
   .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
-  .tr-svg .tr-po { fill: none; stroke: var(--gold); stroke-width: 3; stroke-dasharray: 7 6; opacity: 0.95; pointer-events: none; }
-  .tr-svg .tr-po-l { fill: var(--gold); font-size: 10px; font-weight: 700; }
+  .tr-svg .tr-po { fill: none; stroke: var(--gold); stroke-width: 2.2; opacity: 0.95; pointer-events: none; }
+  .tr-svg .tr-zone { fill: var(--gold); opacity: 0.1; pointer-events: none; }
+  .tr-svg .tr-hit { pointer-events: none; }
+  .tr-svg .tr-focus { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
+  .tr-svg .tr-guide { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 2 3; pointer-events: none; opacity: 0.7; }
+  .tr-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 0.72rem; color: var(--text-dim); margin: 0 2px 6px; }
+  .tr-key i { display: inline-block; width: 22px; height: 10px; vertical-align: -1px; margin-right: 5px; border-top: 2px solid var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+  .tr-heat tr.po-cut td { border-bottom: 2px solid var(--gold); }
+  .tr-heat td[data-tt] { cursor: pointer; }
   .tr-svg .tr-grid { stroke: var(--panel-border); stroke-width: 1; }
   .tr-heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-variant-numeric: tabular-nums; font-size: 0.74rem; }
   .tr-heat th { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; padding: 2px 0; position: static; background: none; box-shadow: none; text-align: center; }
@@ -1443,36 +1450,38 @@
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
-  .rb-scen { margin-top: 12px; }
+  .rb-scen { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr)); gap: 10px; align-items: start; }
+  .rb-scen[hidden] { display: none; }
+  .rb-scen > .rb-live-empty { grid-column: 1 / -1; }
   #rb-scen[disabled] { opacity: 0.45; cursor: default; }
   #rb-scen small { display: block; font-size: 0.6rem; font-weight: 500; line-height: 1.1; }
-  .sc-blk { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .sc-blk { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 9px 11px 10px; margin-bottom: 0; }
   .sc-bh { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
   .sc-bh b { font-size: 1.05rem; } .sc-vs { color: var(--text-dim); font-size: 0.8rem; }
   .sc-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: color-mix(in srgb, var(--text-dim) 20%, transparent); color: var(--text-dim); vertical-align: 2px; margin-left: 4px; white-space: nowrap; }
   .sc-chip.h2h { background: var(--accent-2, #8b3df0); color: #fff; }
   .sc-gap { text-align: right; line-height: 1.05; flex-shrink: 0; }
   .sc-gap > span { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
-  .sc-gap b { font-size: 1.6rem !important; font-variant-numeric: tabular-nums; }
+  .sc-gap b { font-size: 1.45rem !important; font-variant-numeric: tabular-nums; }
   .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
-  .sc-hl { font-size: 0.8rem; font-weight: 600; line-height: 1.25; margin-top: 4px; text-wrap: balance; }
-  .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 6px 16px; margin: 10px 4px 2px; }
+  .sc-hl { font-size: 0.78rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
+  .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 4px 14px; margin: 4px 4px 0; }
   .sc-sc small { display: block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sc-sc b { font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .sc-sc.proj b { font-size: 1.9rem; font-weight: 800; }
-  .sc-sc.act b { font-size: 1rem; font-weight: 700; color: var(--text-dim); }
-  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 10px 6px 10px; }
+  .sc-sc.proj b { font-size: 1.6rem; font-weight: 800; }
+  .sc-sc.act b { font-size: 0.92rem; font-weight: 700; color: var(--text-dim); }
+  .sc-bar { position: relative; height: 6px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); border-radius: 99px; margin: 7px 6px 9px; }
   .sc-mid { position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: var(--text-dim); opacity: 0.6; transform: translateX(-1px); }
   .sc-dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); border: 2px solid var(--panel); transition: left 0.5s ease; }
   .sc-dot.bad { background: var(--bad); } .sc-dot.ok { background: var(--good); } .sc-dot.even { background: #d98a1c; }
-  .sc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .sc-side { border: 1px solid var(--panel-border); border-top: 3px solid var(--c); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+  .sc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .sc-side { border: 1px solid var(--panel-border); border-top: 3px solid var(--c); border-radius: 8px; padding: 4px 8px 3px; min-width: 0; }
   .sc-sh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
   .sc-sh b { color: var(--c); } .sc-sh span { font-size: 0.68rem; color: var(--text-dim); font-weight: 600; }
   .sc-pj { font-size: 0.68rem; color: var(--text-dim); margin-bottom: 4px; } .sc-pj b { color: var(--text); font-variant-numeric: tabular-nums; }
-  .sc-p { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "b n a" "b g a"; column-gap: 5px; align-items: center; padding: 4px 0; border-top: 1px solid var(--panel-border); }
+  .sc-p { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "b n a" "b g a"; column-gap: 5px; align-items: center; padding: 3px 0; border-top: 1px solid var(--panel-border); }
   .sc-p .pos-badge, .sc-p .rb-plus { grid-area: b; min-width: 2.4em; font-size: 0.58rem; }
   .sc-nw { grid-area: n; display: flex; align-items: center; min-width: 0; }
   .sc-n { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -1603,6 +1612,7 @@
     </table>
     </div>
     <div class="po-note" id="po-note" hidden><i></i> Gold line: the top 6 make the playoffs</div>
+    <div class="po-note" id="fw-note" hidden></div>
   </div>
 
   <details class="trend-panel" id="trend-panel">
@@ -3462,6 +3472,7 @@
             reserveByRoster[r.roster_id] = set;
           });
           state.timeSlotColorByLabel = buildTimeSlotColors(teamGameSchedule);
+          state.futureMeta = { leagueId: leagueId, season: season, seasonType: seasonType, scoring: league.scoring_settings || {}, lastRegWeek: (Number((league.settings || {}).playoff_week_start) || 15) - 1 };
           var scoringSettings = league.scoring_settings || {};
           var rosterPositions = league.roster_positions || [];
           // Computed from the same SCORES_BASE feed regardless of whether
@@ -3982,6 +3993,81 @@
     });
   }
 
+
+  // ---- Projected tab: look ahead to future weeks ------------------------------------------
+  // "Projected after Week N": every team's current starters scored off Sleeper's projections for each
+  // week up to N (bye weeks count 0), with the same 9-for-the-win / 1-per-team-outscored Rumbles math.
+  state.futureWeek = null; state.futureShown = null; state.trendFuture = null;
+  state.future = { weeks: {}, loading: false, err: null };
+  var FUTURE_TTL_MS = 15 * 60 * 1000;
+  function futureWeekChoices() {
+    var live = state.live, meta = state.futureMeta;
+    if (!live || !live.isLive || !meta) return [];
+    var out = [];
+    for (var w = Number(live.week); w <= meta.lastRegWeek; w++) out.push(w);
+    return out;
+  }
+  function futureReady(n) {
+    for (var w = Number(state.live.week) + 1; w <= n; w++) {
+      var c = state.future.weeks[w];
+      if (!c || Date.now() - c.at > FUTURE_TTL_MS) return false;
+    }
+    return true;
+  }
+  function loadFutureWeeks(n) {
+    var meta = state.futureMeta, f = state.future;
+    if (!meta || f.loading) return Promise.resolve();
+    var need = [];
+    for (var w = Number(state.live.week) + 1; w <= n; w++) { var c = f.weeks[w]; if (!c || Date.now() - c.at > FUTURE_TTL_MS) need.push(w); }
+    if (!need.length) return Promise.resolve();
+    f.loading = true; f.err = null;
+    var q = "?season_type=" + encodeURIComponent(meta.seasonType);
+    return Promise.all(need.map(function (w) {
+      return Promise.all([
+        fetchJson(API_V1 + "/league/" + meta.leagueId + "/matchups/" + w),
+        fetchJson(PROJECTIONS_BASE + "/" + meta.season + "/" + w + q).catch(function () { return []; })
+      ]).then(function (r) {
+        var ms = r[0] || [], projMap = arrayToPlayerMap(r[1]);
+        if (!ms.length) throw new Error("Week " + w + " matchups aren't posted yet");
+        var scores = {}, pairs = {};
+        ms.forEach(function (m) {
+          var tot = 0;
+          (m.starters || []).forEach(function (pid) { if (pid && pid !== "0") tot += scoreFrom(projMap[pid], meta.scoring, false); });
+          scores[m.roster_id] = round2(tot);
+          (pairs[m.matchup_id] = pairs[m.matchup_id] || []).push(m.roster_id);
+        });
+        f.weeks[w] = { at: Date.now(), by: computeRumblesForWeek(scores, pairs) };
+      });
+    })).then(function () { f.loading = false; }, function (err) { f.loading = false; f.err = err && err.message ? err.message : "couldn't load"; });
+  }
+  // Fold weeks into already-built rows (see buildCombinedStandings).
+  function applyFutureFold(rows, weeksList, weeksAlready) {
+    var weeksCompleted = ((state.history && state.history.weeks_completed) || []).length;
+    rows.forEach(function (r) {
+      var last = null;
+      weeksList.forEach(function (w) {
+        var i = w.by[r.roster_id];
+        if (!i) return;
+        r.rumbles += num(i.rumbles); r.pf += num(i.points); r.pa += num(i.opponentPoints);
+        if (i.h2hWin === true) r.h2h_w++; else if (i.h2hWin === false) r.h2h_l++;
+        r.vs_field_w += num(i.teamsOutscored); r.vs_field_l += num(i.teamsOutscoredBy);
+        r.pfpa_weeks = [{ week: w.week, pf: num(i.points), pa: num(i.opponentPoints), opponent_roster_id: i.opponentRosterId,
+          win: typeof i.h2hWin === "boolean" ? i.h2hWin : null, outscored: num(i.teamsOutscored), outscored_by: num(i.teamsOutscoredBy), projected: true }].concat(r.pfpa_weeks || []);
+        last = i;
+      });
+      var weeksForPct = weeksCompleted + weeksAlready + weeksList.length;
+      r.rumble_pct = weeksForPct ? (r.rumbles / (weeksForPct * MAX_RUMBLES_PER_WEEK)) * 100 : 0;
+      if (last) {
+        r.this_week = num(last.rumbles); r.this_week_points = round2(num(last.points));
+        r.opponent_roster_id = last.opponentRosterId; r.this_week_winning = last.h2hWin;
+      }
+      r.this_week_live = false; r.this_week_points_live = false; r.this_week_points_idle = false;
+      r.this_week_points_playing = null; r.this_week_points_left = null;
+      r.this_week_player_breakdown = null; r.this_week_actual_points = null; r.qb_adjustment = null;
+      r.this_week_points_is_last_week = false; r.h2h_streak = null;
+    });
+  }
+
   function buildCombinedStandings() {
     var histStandings = (state.history && state.history.standings) || [];
     var weeksCompleted = (state.history && state.history.weeks_completed) || [];
@@ -4225,6 +4311,22 @@
       };
     });
 
+    // Projected tab looking ahead: fold this week (if not already) and every week up to the chosen one.
+    var futureOn = false;
+    state.trendFuture = null; state.futureShown = null;
+    var fwk = state.mode === "custom" && viewWeek == null && state.futureWeek != null && liveActive && state.futureMeta ? state.futureWeek : null;
+    if (fwk != null && fwk >= Number(live.week) && futureReady(fwk)) {
+      var wl = [], tf = [];
+      var curBy = {};
+      Object.keys(live.byRoster).forEach(function (rid) { curBy[rid] = live.byRoster[rid].custom; });
+      tf.push({ week: Number(live.week), by: curBy });
+      if (!foldCurrentWeekIntoTotals) wl.push({ week: Number(live.week), by: curBy });
+      for (var fw = Number(live.week) + 1; fw <= fwk; fw++) { var cw = { week: fw, by: state.future.weeks[fw].by }; wl.push(cw); tf.push(cw); }
+      applyFutureFold(rows, wl, foldCurrentWeekIntoTotals ? 1 : 0);
+      state.trendFuture = tf.map(function (x) { var by = {}; Object.keys(x.by).forEach(function (rid) { by[rid] = { rumbles: num(x.by[rid].rumbles), points: num(x.by[rid].points) }; }); return { week: x.week, by: by }; });
+      state.futureShown = fwk; futureOn = true;
+    }
+
     // "#" is each team's fixed SEASON STANDING (by cumulative Rumbles,
     // then PF) -- assigned here, once, before any column-sort reordering
     // happens in render(). Clicking a column header only changes what
@@ -4255,7 +4357,7 @@
       // projected results are folded into the totals), compared against
       // the current Actual standings; never before kickoff.
       var showMove = state.mode === "actual" || foldCurrentWeekIntoTotals;
-      r.rank_change = (showMove && prevRank) ? prevRank - r.rank : null;
+      r.rank_change = (showMove && prevRank && !futureOn) ? prevRank - r.rank : null;
     });
 
     // Color-tag this week's H2H matchup pairs (e.g. Ben and his Week N
@@ -4486,19 +4588,23 @@
     var sel = els.weekSelect;
     if (!sel) return;
     var inActual = state.mode === "actual" && state.view !== "rumblin";
-    sel.disabled = !inActual;
-    els.weekSelectWrap.classList.toggle("is-disabled", !inActual);
-    els.weekSelectWrap.title = inActual ? "" : "Past weeks are in the Actual tab";
-    var weeks = ((state.history && state.history.weeks_completed) || []).slice().sort(function (a, b) { return b - a; });
-    var sig = weeks.join(",");
+    var fut = state.mode === "custom" && state.view !== "rumblin" ? futureWeekChoices() : [];
+    var on = inActual || fut.length > 0;
+    sel.disabled = !on;
+    els.weekSelectWrap.classList.toggle("is-disabled", !on);
+    els.weekSelectWrap.title = on ? "" : "Past weeks are in the Actual tab";
+    var weeks = inActual ? ((state.history && state.history.weeks_completed) || []).slice().sort(function (a, b) { return b - a; }) : [];
+    var sig = (inActual ? "a:" : "p:") + weeks.join(",") + "|" + fut.join(",");
     if (sel.getAttribute("data-weeks") !== sig) {
       sel.innerHTML = '<option value="">Current</option>' + weeks.map(function (w) {
         return '<option value="' + w + '">After Week ' + w + "</option>";
+      }).join("") + fut.map(function (w) {
+        return '<option value="f' + w + '">Projected after Week ' + w + "</option>";
       }).join("");
       sel.setAttribute("data-weeks", sig);
     }
     var shown = selectedHistoricalWeek();
-    sel.value = shown == null ? "" : String(shown);
+    sel.value = inActual ? (shown == null ? "" : String(shown)) : (state.futureWeek != null && fut.indexOf(state.futureWeek) !== -1 ? "f" + state.futureWeek : "");
   }
 
   // PF / PA / H2H / Vs. Field cell with a week-by-week breakdown tooltip
@@ -4943,7 +5049,7 @@
   }
 
   function flashChangedCells(flash) {
-    var viewKey = state.mode + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek) +
+    var viewKey = state.mode + "|" + (state.futureShown == null ? "" : "f" + state.futureShown) + "|" + (state.shownHistoricalWeek == null ? "cur" : state.shownHistoricalWeek) +
       "|" + COLUMNS.this_week_points.label;
     var prev = state.flashPrev;
     var canFlash = !!flash && prev && prev.viewKey === viewKey;
@@ -5005,12 +5111,13 @@
     // call runs, every render -- not just once.
     var pregameActualLabels = state.mode === "actual" && !(state.live && state.live.hasKickedOff);
     var histWeek = state.shownHistoricalWeek;
-    COLUMNS.this_week_points.label = histWeek != null ? "Wk " + histWeek + " Pts" : (pregameActualLabels ? "Pts Last Week" : "Pts This Week");
+    var fShown = state.futureShown;
+    COLUMNS.this_week_points.label = fShown != null ? "Wk " + fShown + " Pts" : histWeek != null ? "Wk " + histWeek + " Pts" : (pregameActualLabels ? "Pts Last Week" : "Pts This Week");
     // Same swap, same condition, for the Rumbles-earned-this-week column --
     // pregame in Actual mode it shows last week's real Rumbles total
     // instead (see buildCombinedStandings' thisWeekRumbles), so its header
     // needs to say so too, exactly like "Pts This Week" already does.
-    COLUMNS.this_week.label = histWeek != null ? "Wk " + histWeek : (pregameActualLabels ? "Last Week" : "This Week");
+    COLUMNS.this_week.label = fShown != null ? "Wk " + fShown : histWeek != null ? "Wk " + histWeek : (pregameActualLabels ? "Last Week" : "This Week");
     updateHeaderSortIndicators();
 
     state.thisWeekTooltipData = {};
@@ -5183,6 +5290,22 @@
 
     if (state.shownHistoricalWeek != null) {
       els.liveWeekLabel.textContent = "Showing standings after Week " + state.shownHistoricalWeek + ". Pick Current to go back to this week.";
+    }
+    if (state.futureShown != null) els.liveWeekLabel.textContent = "Showing projected standings after Week " + state.futureShown + ". Pick Current to go back to this week.";
+    var fwNote = document.getElementById("fw-note");
+    if (fwNote) {
+      var wantF = state.mode === "custom" && state.futureWeek != null && state.futureMeta && state.live && state.live.isLive && state.shownHistoricalWeek == null;
+      if (wantF && state.futureShown == null) {
+        if (state.future.err) fwNote.textContent = "Couldn't project Week " + state.futureWeek + ": " + state.future.err + ".";
+        else {
+          fwNote.textContent = "Loading projections through Week " + state.futureWeek + "\u2026";
+          loadFutureWeeks(state.futureWeek).then(function () { render(); });
+        }
+        fwNote.hidden = false;
+      } else if (state.futureShown != null) {
+        fwNote.textContent = "Projected after Week " + state.futureShown + ": each team's current starters scored on Sleeper's projections, byes count 0, and Rumbles use the real schedule.";
+        fwNote.hidden = false;
+      } else fwNote.hidden = true;
     }
 
     var nowForPill = new Date();
@@ -6219,7 +6342,8 @@
   });
   els.weekSelect.addEventListener("change", function () {
     var v = els.weekSelect.value;
-    state.viewWeek = v === "" ? null : parseInt(v, 10);
+    if (v.charAt(0) === "f") { state.futureWeek = parseInt(v.slice(1), 10); state.future.err = null; }
+    else { state.futureWeek = null; state.viewWeek = v === "" ? null : parseInt(v, 10); }
     render();
   });
 
@@ -7004,14 +7128,19 @@
     var h = state.history;
     if (!h || !h.weekly) return null;
     var weeks = Object.keys(h.weekly).map(Number).filter(function (w) { return !isNaN(w); }).sort(function (a, b) { return a - b; });
-    // Projected tab: the live week counts too, as a projected week (see the dashed marks).
-    var extra = null, live = state.live, rows = state.trendRows;
-    if (rows && live && live.isLive && live.week != null && weeks.indexOf(Number(live.week)) < 0 && selectedHistoricalWeek() == null &&
+    // Projected tab: the live week counts too, as a projected week (see the dashed marks), and so do
+    // any future weeks picked in the week menu.
+    var extras = [], live = state.live, rows = state.trendRows;
+    if (state.trendFuture && state.trendFuture.length && state.mode === "custom" && selectedHistoricalWeek() == null) {
+      extras = state.trendFuture.slice();
+    } else if (rows && live && live.isLive && live.week != null && weeks.indexOf(Number(live.week)) < 0 && selectedHistoricalWeek() == null &&
         ((state.mode === "custom" && live.hasKickedOff) || live.weekFinal)) {
-      extra = {};
-      rows.forEach(function (r) { extra[r.roster_id] = { rumbles: num(r.this_week), points: num(r.this_week_points) }; });
-      weeks.push(Number(live.week));
+      var ex = {};
+      rows.forEach(function (r) { ex[r.roster_id] = { rumbles: num(r.this_week), points: num(r.this_week_points) }; });
+      extras = [{ week: Number(live.week), by: ex }];
     }
+    extras.forEach(function (x) { if (weeks.indexOf(x.week) < 0) weeks.push(x.week); });
+    var extraStart = weeks.length - extras.length;
     var names = {};
     (h.standings || []).forEach(function (r) { names[r.roster_id] = r.manager; });
     var rids = Object.keys(names).map(Number);
@@ -7019,7 +7148,7 @@
     rids.forEach(function (rid) { T[rid] = { rid: rid, name: names[rid], rum: [], pts: [], cumR: [], cumP: [], rank: [] }; });
     weeks.forEach(function (w, i) {
       rids.forEach(function (rid) {
-        var e = (extra && i === weeks.length - 1 ? extra[rid] : (h.weekly[String(w)] || {})[String(rid)]) || {};
+        var e = (extras.length && i >= extraStart ? extras[i - extraStart].by[rid] : (h.weekly[String(w)] || {})[String(rid)]) || {};
         var t = T[rid];
         t.rum.push(num(e.rumbles)); t.pts.push(num(e.points));
         t.cumR.push((i ? t.cumR[i - 1] : 0) + num(e.rumbles));
@@ -7029,7 +7158,8 @@
         .forEach(function (rid, k) { T[rid].rank.push(k + 1); });
     });
     var list = rids.map(function (r) { return T[r]; }).sort(function (a, b) { return a.rank[weeks.length - 1] - b.rank[weeks.length - 1]; });
-    return { weeks: weeks, teams: list, proj: !!extra && !live.weekFinal };
+    var projN = extras.length - (live && live.weekFinal && extras.length === 1 ? 1 : 0);
+    return { weeks: weeks, teams: list, proj: projN > 0, projN: Math.max(0, projN) };
   }
   function trendHeat(r) { var t = Math.max(0, Math.min(1, r / 20)); return "hsl(" + Math.round(t * 130) + " 55% " + Math.round(24 + 6 * (1 - Math.abs(t - 0.5) * 2)) + "%)"; }
   // Height = Rumbles behind that week's leader, so a close race bunches the lines together and a
@@ -7047,20 +7177,23 @@
     var Y = function (t, i) { return padT + (lead[i] - t.cumR[i]) / top * plotH; };
     var sel = state.trend.sel;
     var o = '<svg class="tr-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rumbles behind the leader after each week">';
-    D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + (D.proj && i === nw - 1 ? "*" : "") + "</text>"; });
+    D.weeks.forEach(function (w, i) { o += '<text x="' + X(i) + '" y="12" text-anchor="middle">W' + w + (D.proj && i >= nw - D.projN ? "*" : "") + "</text>"; });
     for (var g = 0; g <= top; g += gridStep) {
       var gy = padT + g / top * plotH;
       o += '<line class="tr-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '"/><text x="' + (padL - 8) + '" y="' + (gy + 4) + '" text-anchor="end">' + (g === 0 ? "Lead" : "−" + g) + "</text>";
     }
-    // Ghost line: wherever 6th place sits each week (Rumbles behind the leader), the playoff cut.
+    // Playoff zone: a gold tint above a gold line that follows wherever 6th place sits each week.
+    D.geom = { xs: D.weeks.map(function (w, i) { return X(i); }), ys: D.teams.map(function (t) { return t.cumR.map(function (c, i) { return Y(t, i); }); }), W: W, H: H };
+    var cutYs = null;
     if (n > PLAYOFF_SPOTS) {
-      var cutY = function (i) {
+      cutYs = D.weeks.map(function (w, i) {
         var vals = D.teams.map(function (t) { return t.cumR[i]; }).sort(function (a, b) { return b - a; });
         return padT + (lead[i] - vals[PLAYOFF_SPOTS - 1]) / top * plotH;
-      };
-      var cp = []; for (var ci = 0; ci < nw; ci++) cp.push(X(ci).toFixed(1) + "," + cutY(ci).toFixed(1));
-      o += '<polyline class="tr-po" points="' + cp.join(" ") + '"><title>6th place: the playoff cut</title></polyline>' +
-        '<text class="tr-po-l" x="' + (X(0) + 4).toFixed(1) + '" y="' + (cutY(0) - 6).toFixed(1) + '">Playoff line (6th)</text>';
+      });
+      var line = cutYs.map(function (y, ci) { return X(ci).toFixed(1) + "," + y.toFixed(1); });
+      var edge = []; for (var bi = nw - 1; bi >= 0; bi--) edge.push(X(bi).toFixed(1) + "," + padT);
+      o += '<polygon class="tr-zone" points="' + line.join(" ") + " " + edge.join(" ") + '"/>' +
+        '<polyline class="tr-po" points="' + line.join(" ") + '"/>';
     }
     // End labels: nudged apart so names never overlap.
     var lab = D.teams.map(function (t) { return { t: t, y: Y(t, nw - 1) }; }).sort(function (p, q) { return p.y - q.y; });
@@ -7070,15 +7203,19 @@
       if (lab[k].y > maxY - (lab.length - 1 - k) * minGap) lab[k].y = maxY - (lab.length - 1 - k) * minGap;
     }
     var labY = {}; lab.forEach(function (l) { labY[l.t.rid] = l.y; });
+    if (cutYs && lab.length > PLAYOFF_SPOTS) {
+      var dy = (lab[PLAYOFF_SPOTS - 1].y + lab[PLAYOFF_SPOTS].y) / 2 + 1;
+      o += '<line class="tr-po" x1="' + (W - padR + 8) + '" x2="' + (W - 4) + '" y1="' + dy.toFixed(1) + '" y2="' + dy.toFixed(1) + '"/>';
+    }
     D.teams.forEach(function (t) {
       var col = trendColor(t.rid), op = sel == null ? 0.9 : (sel === t.rid ? 1 : 0.14);
       var pt = function (i) { return X(i).toFixed(1) + "," + Y(t, i).toFixed(1); };
-      var idx = []; for (var i = 0; i < (D.proj ? nw - 1 : nw); i++) idx.push(i);
+      var idx = []; for (var i = 0; i < (D.proj ? nw - D.projN : nw); i++) idx.push(i);
       var sw = sel === t.rid ? ' stroke-width="4"' : "";
       o += '<g data-rid="' + t.rid + '"><polyline class="tr-line" points="' + idx.map(pt).join(" ") + '" stroke="' + col + '" opacity="' + op + '"' + sw + "/>";
-      if (D.proj) o += '<polyline class="tr-line" points="' + pt(nw - 2) + " " + pt(nw - 1) + '" stroke="' + col + '" stroke-dasharray="5 4" opacity="' + op + '"' + sw + "/>";
+      if (D.proj) { var dp = []; for (var di = nw - D.projN - 1; di < nw; di++) dp.push(pt(di)); o += '<polyline class="tr-line" points="' + dp.join(" ") + '" stroke="' + col + '" stroke-dasharray="5 4" opacity="' + op + '"' + sw + "/>"; }
       t.cumR.forEach(function (c, i) {
-        var pj = D.proj && i === nw - 1;
+        var pj = D.proj && i >= nw - D.projN;
         o += '<circle class="tr-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(t, i).toFixed(1) + '" r="' + (i === nw - 1 ? 5 : 3) + '" fill="' + (pj ? "var(--panel)" : col) + '" stroke="' + col + '" stroke-width="' + (pj ? 2 : 0) + '" opacity="' + op + '"/>' +
           '<circle class="tr-hit" data-rid="' + t.rid + '" data-i="' + i + '" cx="' + X(i).toFixed(1) + '" cy="' + Y(t, i).toFixed(1) + '" r="11" fill="transparent"/>';
       });
@@ -7089,12 +7226,21 @@
     return o + "</svg>";
   }
   // The pop-up for one dot: where the team stood after that week and what it scored that week.
+  function trendCutLine(D, t, i) {
+    if (D.teams.length <= PLAYOFF_SPOTS) return "";
+    var vals = D.teams.map(function (x) { return x.cumR[i]; }).sort(function (a, b) { return b - a; }), cut = vals[PLAYOFF_SPOTS - 1], d = t.cumR[i] - cut;
+    return '<div style="color:var(--gold,#f2c230)">' + (t.rank[i] <= PLAYOFF_SPOTS ? "In a playoff spot" + (d ? " (" + d + " above the line)" : " (on the line)") : (-d) + " Rumbles below the playoff line") + "</div>";
+  }
   function trendTipHtml(D, t, i) {
-    var gap = D.lead[i] - t.cumR[i], pj = D.proj && i === D.weeks.length - 1;
+    var gap = D.lead[i] - t.cumR[i], pj = D.proj && i >= D.weeks.length - D.projN;
     return "<b style=\"color:" + trendColor(t.rid) + "\">" + escapeHtml(t.name) + "</b> <span>after W" + D.weeks[i] + (pj ? "* (projected)" : "") + "</span>" +
       "<div>#" + t.rank[i] + " &middot; " + t.cumR[i] + " Rumbles</div>" +
-      "<div>" + (gap ? gap + " behind the leader" : "Leading") + "</div>" +
+      "<div>" + (gap ? gap + " behind the leader" : "Leading") + "</div>" + trendCutLine(D, t, i) +
       '<div class="tt-d">That week: ' + t.rum[i] + " Rumbles &middot; " + t.pts[i].toFixed(1) + " pts</div>";
+  }
+  function trendKeyHtml(D) {
+    if (D.teams.length <= PLAYOFF_SPOTS) return "";
+    return '<div class="tr-key"><span><i></i>Playoff zone: top ' + PLAYOFF_SPOTS + ' (the gold line is where ' + PLAYOFF_SPOTS + 'th place sits each week)</span><span>Hover or tap near a week to compare teams</span></div>';
   }
   function trendMoveNote(D) {
     var nw = D.weeks.length, from = Math.max(0, nw - 4);
@@ -7104,17 +7250,17 @@
     var bits = [];
     if (up && up.d > 0) bits.push('<span class="up">&#9650; <b>' + escapeHtml(up.t.name) + "</b> up " + up.d + "</span>");
     if (dn && dn.d < 0) bits.push('<span class="dn">&#9660; <b>' + escapeHtml(dn.t.name) + "</b> down " + (-dn.d) + "</span>");
-    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Height is how many Rumbles each team is behind that week's leader, so a tight race bunches up and a runaway leader pulls away. Hover or tap a dot for details." + (D.proj ? " The dashed step and hollow dot (W" + D.weeks[D.weeks.length - 1] + "*) are the live week as projected right now." : "") + " Tap a line or name to follow one team.</p>";
+    return '<p class="trend-note">' + (bits.length ? bits.join(" &middot; ") + " " + span + ". " : "") + "Height is how many Rumbles each team is behind that week's leader, so a tight race bunches up and a runaway leader pulls away. Hover or tap a dot for details." + (D.proj ? " The dashed steps and hollow dots (*) are projected weeks." : "") + " Tap a line or name to follow one team.</p>";
   }
   function trendHeatHtml(D) {
     var o = '<table class="tr-heat"><thead><tr><th></th>';
-    D.weeks.forEach(function (w, i) { o += "<th>W" + w + (D.proj && i === D.weeks.length - 1 ? "*" : "") + "</th>"; });
+    D.weeks.forEach(function (w, i) { o += "<th>W" + w + (D.proj && i >= D.weeks.length - D.projN ? "*" : "") + "</th>"; });
     o += "<th>Total</th></tr></thead><tbody>";
-    D.teams.forEach(function (t) {
-      o += '<tr><td class="tr-m">' + escapeHtml(t.name) + "</td>";
+    D.teams.forEach(function (t, ti) {
+      o += '<tr' + (ti === PLAYOFF_SPOTS - 1 && D.teams.length > PLAYOFF_SPOTS ? ' class="po-cut"' : "") + '><td class="tr-m">' + escapeHtml(t.name) + "</td>";
       t.rum.forEach(function (r, i) {
         var hot = r >= 15 && ((i > 0 && t.rum[i - 1] >= 15) || (i < t.rum.length - 1 && t.rum[i + 1] >= 15));
-        o += '<td class="' + (hot ? "tr-hot " : "") + (D.proj && i === t.rum.length - 1 ? "tr-proj" : "") + '" style="background:' + trendHeat(r) + '" title="' + escapeHtml(t.name) + " W" + D.weeks[i] + ": " + r + " Rumbles, " + t.pts[i].toFixed(1) + ' pts">' + r + "</td>";
+        o += '<td class="' + (hot ? "tr-hot " : "") + (D.proj && i >= t.rum.length - D.projN ? "tr-proj" : "") + '" data-tt="' + t.rid + "," + i + '" style="background:' + trendHeat(r) + '">' + r + "</td>";
       });
       o += '<td class="tr-t">' + t.cumR[t.cumR.length - 1] + "</td></tr>";
     });
@@ -7130,7 +7276,7 @@
     }).sort(function (a, b) { return b.d - a.d; });
     return '<div class="tr-form">' + cards.map(function (c) {
       var t = c.t, bw = 100 / nw, o = '<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">';
-      t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"' + (D.proj && i === nw - 1 ? ' fill-opacity="0.55" stroke="#e8eaf0" stroke-width="0.8" stroke-dasharray="2 1.5" vector-effect="non-scaling-stroke"' : "") + '><title>W' + D.weeks[i] + ": " + r + " Rumbles" + (D.proj && i === nw - 1 ? " (projected)" : "") + "</title></rect>"; });
+      t.rum.forEach(function (r, i) { var h = Math.max(2, r / 20 * 40); o += '<rect data-tt="' + t.rid + "," + i + '" x="' + (i * bw + bw * 0.12).toFixed(1) + '" y="' + (42 - h).toFixed(1) + '" width="' + (bw * 0.76).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + trendHeat(r) + '"' + (D.proj && i >= nw - D.projN ? ' fill-opacity="0.55" stroke="#e8eaf0" stroke-width="0.8" stroke-dasharray="2 1.5" vector-effect="non-scaling-stroke"' : "") + '><title>W' + D.weeks[i] + ": " + r + " Rumbles" + (D.proj && i >= nw - D.projN ? " (projected)" : "") + "</title></rect>"; });
       var ay = 42 - c.season / 20 * 40;
       o += '<line x1="0" x2="100" y1="' + ay.toFixed(1) + '" y2="' + ay.toFixed(1) + '" stroke="#9aa1b0" stroke-width="0.8" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/></svg>';
       var chip = c.d >= 3 ? '<span class="tr-chip hot">Hot</span>' : c.d <= -3 ? '<span class="tr-chip cold">Cold</span>' : '<span class="tr-chip flat">Steady</span>';
@@ -7146,39 +7292,81 @@
     var v = state.trend.view;
     state.trend.D = D;
     var oldTip = document.getElementById("trend-tip"); if (oldTip) oldTip.hidden = true;
-    body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendRankSvg(D) + trendMoveNote(D);
+    body.innerHTML = v === "heat" ? trendHeatHtml(D) : v === "form" ? trendFormHtml(D) : trendKeyHtml(D) + trendRankSvg(D) + trendMoveNote(D);
     [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) { b.classList.toggle("active", b.getAttribute("data-v") === v); });
   }
   document.getElementById("trend-panel").addEventListener("toggle", renderTrends);
   [].forEach.call(document.querySelectorAll("#trend-panel .trend-tabs button"), function (b) {
     b.addEventListener("click", function () { state.trend.view = b.getAttribute("data-v"); renderTrends(); });
   });
-  // Dot tooltip (hover on a computer, tap on a phone).
-  function trendShowTip(hit) {
-    var D = state.trend.D, body = document.getElementById("trend-body"), tip = document.getElementById("trend-tip");
-    if (!D || !tip) return;
-    var t = D.teams.filter(function (x) { return String(x.rid) === hit.getAttribute("data-rid"); })[0], i = Number(hit.getAttribute("data-i"));
-    if (!t) return;
-    tip.innerHTML = trendTipHtml(D, t, i);
+  // Tooltip: on the rank race the nearest dot to the pointer wins (ties list every team at that spot);
+  // on the heatmap and form bars each cell or bar has its own. Hover on a computer, tap on a phone.
+  function trendHideTip() {
+    var tip = document.getElementById("trend-tip"); if (tip) tip.hidden = true;
+    [].forEach.call(document.querySelectorAll("#trend-body .tr-focus, #trend-body .tr-guide"), function (n) { n.remove(); });
+  }
+  function trendPlaceTip(tip, anchor) {
+    var body = document.getElementById("trend-body"), br = body.getBoundingClientRect();
+    var x = anchor.x - br.left, y = anchor.y - br.top;
     tip.hidden = false;
-    var br = body.getBoundingClientRect(), hr = hit.getBoundingClientRect();
-    var x = hr.left - br.left + hr.width / 2, y = hr.top - br.top;
     var tw = tip.offsetWidth, th = tip.offsetHeight;
     var left = Math.max(4, Math.min(br.width - tw - 4, x - tw / 2));
-    var tp = y - th - 8; if (tp < 0) tp = y + hr.height + 8;
+    var tp = y - th - 10; if (tp < 0) tp = y + 14;
     tip.style.left = left + "px"; tip.style.top = tp + "px";
   }
-  document.getElementById("trend-body").addEventListener("mouseover", function (e) {
-    var hit = e.target.closest && e.target.closest("circle.tr-hit");
-    if (hit && window.matchMedia("(hover: hover)").matches) trendShowTip(hit);
+  function trendTeam(D, rid) { return D.teams.filter(function (x) { return String(x.rid) === String(rid); })[0]; }
+  function trendNearest(e) {
+    var D = state.trend.D, svg = document.querySelector("#trend-body svg.tr-svg");
+    if (!D || !D.geom || !svg) return null;
+    var ctm = svg.getScreenCTM(); if (!ctm) return null;
+    var p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    var q = p.matrixTransform(ctm.inverse()), g = D.geom, bi = -1, bd = 1e9;
+    g.xs.forEach(function (x, i) { var d = Math.abs(x - q.x); if (d < bd) { bd = d; bi = i; } });
+    var half = g.xs.length > 1 ? (g.xs[1] - g.xs[0]) / 2 : 30;
+    if (bi < 0 || bd > Math.min(half, 40)) return null;
+    var best = 1e9, hits = [];
+    g.ys.forEach(function (ys, ti) { var d = Math.abs(ys[bi] - q.y); if (d < best) best = d; });
+    if (best > 26) return null;
+    g.ys.forEach(function (ys, ti) { if (Math.abs(ys[bi] - q.y) <= best + 3) hits.push(ti); });
+    return { i: bi, teams: hits.map(function (ti) { return D.teams[ti]; }), x: g.xs[bi], y: g.ys[hits[0]][bi], svg: svg, ctm: ctm };
+  }
+  function trendShowNearest(e) {
+    var D = state.trend.D, tip = document.getElementById("trend-tip"), n = trendNearest(e);
+    if (!n || !tip) { trendHideTip(); return false; }
+    var ts = n.teams, i = n.i;
+    tip.innerHTML = ts.length === 1 ? trendTipHtml(D, ts[0], i)
+      : "<b>After W" + D.weeks[i] + "</b> <span>" + ts.length + " teams here</span><div>" + ts.map(function (t) { return '<b style="color:' + trendColor(t.rid) + '">' + escapeHtml(t.name) + "</b> #" + t.rank[i]; }).join(" &middot; ") + "</div><div>" + ts[0].cumR[i] + " Rumbles &middot; " + (D.lead[i] - ts[0].cumR[i] ? (D.lead[i] - ts[0].cumR[i]) + " behind the leader" : "leading") + "</div>";
+    [].forEach.call(n.svg.querySelectorAll(".tr-focus, .tr-guide"), function (x) { x.remove(); });
+    var ns = "http://www.w3.org/2000/svg", g = D.geom;
+    var gl = document.createElementNS(ns, "line"); gl.setAttribute("class", "tr-guide"); gl.setAttribute("x1", n.x); gl.setAttribute("x2", n.x); gl.setAttribute("y1", 22); gl.setAttribute("y2", g.H - 18); n.svg.appendChild(gl);
+    ts.forEach(function (t) { var c = document.createElementNS(ns, "circle"); c.setAttribute("class", "tr-focus"); c.setAttribute("cx", n.x); c.setAttribute("cy", g.ys[D.teams.indexOf(t)][i]); c.setAttribute("r", 7); n.svg.appendChild(c); });
+    var pt = n.svg.createSVGPoint(); pt.x = n.x; pt.y = n.y; var sp = pt.matrixTransform(n.ctm);
+    trendPlaceTip(tip, { x: sp.x, y: sp.y });
+    return true;
+  }
+  function trendShowCell(el) {
+    var D = state.trend.D, tip = document.getElementById("trend-tip"), tt = el.getAttribute("data-tt");
+    if (!D || !tip || !tt) return false;
+    var parts = tt.split(","), t = trendTeam(D, parts[0]), i = Number(parts[1]);
+    if (!t) return false;
+    tip.innerHTML = trendTipHtml(D, t, i);
+    var r = el.getBoundingClientRect();
+    trendPlaceTip(tip, { x: r.left + r.width / 2, y: r.top });
+    return true;
+  }
+  var trBody = document.getElementById("trend-body");
+  trBody.addEventListener("mousemove", function (e) {
+    if (!window.matchMedia("(hover: hover)").matches) return;
+    var cell = e.target.closest && e.target.closest("[data-tt]");
+    if (cell) { trendShowCell(cell); return; }
+    if (e.target.closest && e.target.closest("svg.tr-svg")) trendShowNearest(e); else trendHideTip();
   });
-  document.getElementById("trend-body").addEventListener("mouseout", function (e) {
-    if (e.target.closest && e.target.closest("circle.tr-hit")) { var tip = document.getElementById("trend-tip"); if (tip) tip.hidden = true; }
-  });
-  document.getElementById("trend-body").addEventListener("click", function (e) {
-    var hit = e.target.closest && e.target.closest("circle.tr-hit");
-    if (hit) { trendShowTip(hit); e.stopPropagation(); return; }
-    var tip0 = document.getElementById("trend-tip"); if (tip0) tip0.hidden = true;
+  trBody.addEventListener("mouseleave", trendHideTip);
+  trBody.addEventListener("click", function (e) {
+    var cell = e.target.closest && e.target.closest("[data-tt]");
+    if (cell) { trendShowCell(cell); e.stopPropagation(); return; }
+    if (e.target.closest && e.target.closest("svg.tr-svg") && !(e.target.closest("text.tr-name")) && trendShowNearest(e)) { e.stopPropagation(); return; }
+    trendHideTip();
     var g = e.target.closest && e.target.closest("g[data-rid]");
     if (!g) { if (state.trend.sel != null) { state.trend.sel = null; renderTrends(); } return; }
     var rid = Number(g.getAttribute("data-rid"));
