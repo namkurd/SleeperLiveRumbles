@@ -83,11 +83,32 @@ def test_known_false_matches_are_rejected():
     assert C.match_plays(plays, good, T0)["2:200"]["id"] == "g"
 
 
+def test_crawl_resumes_after_quota_and_picks_up_new_uploads():
+    from datetime import datetime, timezone, timedelta
+    base = datetime(2026, 1, 10, tzinfo=timezone.utc)
+    vids = [(f"v{i}", base - timedelta(days=i)) for i in range(7)]
+
+    class Q(C.Quota):
+        def get(self, url, params):
+            if self.left <= 0:
+                raise C.QuotaOut("spent")
+            self.left -= 1
+            tok = int(params.get("pageToken") or 0)
+            return {"items": [{"snippet": {"publishedAt": t.isoformat().replace("+00:00", "Z"), "title": "t" + v, "channelTitle": "Ch", "resourceId": {"videoId": v}}} for v, t in vids[tok:tok + 2]],
+                    "nextPageToken": str(tok + 2) if tok + 2 < len(vids) else None}
+    cache, win = {"pl": {}, "vid": {}}, [(0, 1e18)]
+    q = Q(2); assert C.crawl(q, cache, ["P"], 0, win) is False and len(cache["pl"]["P"]["items"]) == 4, "stops when the quota is spent"
+    q = Q(10); assert C.crawl(q, cache, ["P"], 0, win) is True and len(cache["pl"]["P"]["items"]) == 7 and q.left == 7, "resumes where it stopped"
+    vids.insert(0, ("vNew", base + timedelta(days=1)))
+    q = Q(10); C.crawl(q, cache, ["P"], 0, win)
+    assert "vNew" in cache["pl"]["P"]["items"] and q.left == 9, "a later run reads only the new page"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")

@@ -15,6 +15,7 @@ Safe to run nightly: unmatched plays are retried (clips appear a few hours after
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -28,7 +29,7 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://www.googleapis.com/youtube/v3"
 NFL_UPLOADS = "UUDVYQ4Zhbm3S2dlz7P1GBDg"   # the NFL channel's uploads playlist
-MAX_PAGES = 300                              # per channel; 50 uploads a page, one quota unit each: reaches back through several seasons
+MAX_PAGES = 400                              # per channel; 50 uploads a page, one quota unit each: reaches back through several seasons
 # Channels searched, by handle (resolved to ids once, 1 quota unit each, and remembered in wp_clips/channels.json). The NFL's own
 # channel is first; the team channels post many focused single-player clips. A handle that does not resolve is skipped, and more
 # can be added in clip_channels.json: {"handles": ["@Name", ...]}.
@@ -42,6 +43,8 @@ MAX_DURATION = 120                           # a highlight of one play, not a re
 MIN_POINTS = 2.5
 MAX_PLAYS = 150
 MIN_SCORE = 7
+DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a day, what all runs together may use
+BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
 MATCHER = 2                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
@@ -214,44 +217,116 @@ def resolve_channels(key: str, cache_path: str, extra_path: str) -> list[dict]:
     return out
 
 
-def fetch_uploads(key: str, since_ms: int, windows: list[tuple[float, float]] | None = None, playlists: list[str] | None = None) -> list[dict]:
-    """Uploads back to since_ms from each playlist (newest first, 50 a page at one quota unit each). `windows` limits the
-    per-video details lookup (also one unit per 50) to uploads inside some week's span."""
-    items, seen = [], set()
-    for pl in playlists or [NFL_UPLOADS]:
-        token = None
-        for _ in range(MAX_PAGES):
-            r = requests.get(f"{API}/playlistItems", params={"part": "snippet", "playlistId": pl, "maxResults": 50, "key": key, **({"pageToken": token} if token else {})}, timeout=30)
-            if not r.ok:
-                print(f"[warn] playlist {pl}: HTTP {r.status_code}", file=sys.stderr)
-                break
-            j = r.json()
-            stop = False
+class QuotaOut(Exception):
+    """YouTube says today's free quota is spent: stop, keep what was read, carry on tomorrow."""
+
+
+class Quota:
+    def __init__(self, budget: int):
+        self.left = budget
+        self.key = ""
+
+    def get(self, url: str, params: dict) -> dict:
+        if self.left <= 0:
+            raise QuotaOut("budget for this run is spent")
+        self.left -= 1
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code == 403 and "quota" in r.text.lower():
+            raise QuotaOut("YouTube daily quota is spent")
+        if not r.ok:
+            raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
+        return r.json()
+
+
+def load_cache(path: str) -> dict:
+    try:
+        with gzip.open(path, "rt") as fh:
+            return json.load(fh)
+    except Exception:  # noqa: BLE001
+        return {"pl": {}, "vid": {}}
+
+
+def save_cache(path: str, cache: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with gzip.open(path, "wt") as fh:
+        json.dump(cache, fh, separators=(",", ":"))
+
+
+def crawl(q: Quota, cache: dict, playlists: list[str], since_ms: float, windows: list[tuple[float, float]]) -> bool:
+    """Reads each playlist newest-first into the cache: first whatever is new since last time, then further back toward
+    since_ms from where an earlier (maybe interrupted) crawl stopped. Only uploads inside some week's window are kept.
+    Returns True when every playlist is read back to since_ms."""
+    complete = True
+    for pl in playlists:
+        c = cache["pl"].setdefault(pl, {"items": {}, "newest": 0, "token": None, "back": False, "ch": ""})
+
+        def page(token):
+            """(in-window uploads, next token, newest and oldest publish time on the page)"""
+            j = q.get(f"{API}/playlistItems", {"part": "snippet", "playlistId": pl, "maxResults": 50, "key": q.key, **({"pageToken": token} if token else {})})
+            kept, pubs = [], []
             for it in j.get("items", []):
                 sn = it.get("snippet") or {}
                 if not sn.get("publishedAt"):
                     continue
                 pub = datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000
-                if pub < since_ms:
-                    stop = True
-                    continue
+                pubs.append(pub)
+                c["ch"] = sn.get("channelTitle") or c["ch"]
                 vid = (sn.get("resourceId") or {}).get("videoId")
-                if vid and vid not in seen and (windows is None or any(a <= pub <= b for a, b in windows)):
-                    seen.add(vid)
-                    items.append({"id": vid, "title": sn.get("title") or "", "pub_ms": pub, "ch": sn.get("channelTitle") or ""})
-            token = j.get("nextPageToken")
-            if stop or not token:
-                break
-    for i in range(0, len(items), 50):
-        chunk = items[i:i + 50]
-        r = requests.get(f"{API}/videos", params={"part": "contentDetails,status", "id": ",".join(c["id"] for c in chunk), "key": key}, timeout=30)
-        r.raise_for_status()
-        info = {v["id"]: v for v in r.json().get("items", [])}
-        for c in chunk:
-            v = info.get(c["id"]) or {}
-            c["dur"] = duration_seconds((v.get("contentDetails") or {}).get("duration", ""))
-            c["embeddable"] = bool((v.get("status") or {}).get("embeddable")) and (v.get("status") or {}).get("privacyStatus") == "public"
-    return items
+                if vid and pub >= since_ms and any(a <= pub <= b for a, b in windows):
+                    c["items"][vid] = [int(pub // 1000), sn.get("title") or ""]
+            return j.get("nextPageToken"), (max(pubs) if pubs else 0), (min(pubs) if pubs else 0)
+
+        try:
+            if c["newest"]:
+                # what is new since the last run: from the top until we meet something already read
+                token, seen_top = None, c["newest"]
+                for _ in range(MAX_PAGES):
+                    token, hi, lo = page(token)
+                    c["newest"] = max(c["newest"], hi)
+                    if lo <= seen_top or not token or lo < since_ms:
+                        break
+            if not c["back"]:
+                # the rest of the way back (a first crawl starts at the top; an interrupted one resumes where it stopped)
+                for _ in range(MAX_PAGES):
+                    nxt, hi, lo = page(c["token"])
+                    c["newest"] = max(c["newest"], hi)
+                    c["token"] = nxt
+                    if lo < since_ms or not nxt:
+                        c["back"] = True
+                        break
+        except QuotaOut as e:
+            print(f"[warn] {e}; the crawl continues on the next run", file=sys.stderr)
+            return False
+        except requests.HTTPError as e:
+            print(f"[warn] playlist {pl}: {e}", file=sys.stderr)
+            continue
+        complete = complete and c["back"]
+    return complete
+
+
+def verify(q: Quota, cache: dict, ids: list[str]) -> None:
+    """Duration and embeddability for the few uploads that look like a match (one unit per 50)."""
+    need = [i for i in ids if i not in cache["vid"]]
+    for i in range(0, len(need), 50):
+        chunk = need[i:i + 50]
+        j = q.get(f"{API}/videos", {"part": "contentDetails,status", "id": ",".join(chunk), "key": q.key})
+        info = {v["id"]: v for v in j.get("items", [])}
+        for vid in chunk:
+            v = info.get(vid) or {}
+            st = v.get("status") or {}
+            cache["vid"][vid] = [duration_seconds((v.get("contentDetails") or {}).get("duration", "")), int(bool(st.get("embeddable")) and st.get("privacyStatus") == "public")]
+
+
+def uploads_from_cache(cache: dict, playlists: list[str], windows: list[tuple[float, float]]) -> list[dict]:
+    out, seen = [], set()
+    for pl in playlists:
+        c = cache["pl"].get(pl) or {}
+        for vid, (pub_s, title) in (c.get("items") or {}).items():
+            pub = pub_s * 1000
+            if vid not in seen and any(a <= pub <= b for a, b in windows):
+                seen.add(vid)
+                out.append({"id": vid, "title": title, "pub_ms": pub, "ch": c.get("ch", ""), "dur": 0, "embeddable": True})
+    return out
 
 
 def season_jobs(root: str = HERE) -> list[dict]:
@@ -304,8 +379,44 @@ def run(root: str = HERE, force: bool = False) -> None:
         return
     windows = [(doc["t0"], doc["t0"] + 8 * 86400 * 1000) for _, _, doc, _ in work]
     print(f"[info] channels: {', '.join(c['handle'] for c in chans) or 'none resolved (using the NFL channel)'}")
-    uploads = fetch_uploads(key, min(a for a, _ in windows), windows, [c["playlist"] for c in chans] or None)
-    print(f"[info] {len(uploads)} uploads in the windows of {len(work)} week(s)")
+    playlists = [c["playlist"] for c in chans] or [NFL_UPLOADS]
+    cache_path = os.path.join(root, "wp_clips", "uploads_cache.json.gz")
+    cache = load_cache(cache_path)
+    # Several runs a day (Tuesday has eight) share one 10,000-unit daily quota: spend only what the last 24 hours left over.
+    now_s = now_ms / 1000
+    cache["spent"] = [r for r in cache.get("spent", []) if now_s - r[0] < 86400]
+    allowed = min(BUDGET, DAILY_UNITS - sum(r[1] for r in cache["spent"]))
+    if allowed < 150:
+        print(f"[info] only {allowed} API units left for today; clips wait for the next run")
+        return
+    q = Quota(allowed)
+    q.key = key
+    complete = crawl(q, cache, playlists, min(a for a, _ in windows), windows)
+    uploads = uploads_from_cache(cache, playlists, windows)
+    print(f"[info] {len(uploads)} uploads in the windows of {len(work)} week(s); crawl {'complete' if complete else 'to be continued'}; {allowed - q.left} API units used")
+    # 1) by title alone, which uploads could be any play's clip; 2) look up only those; 3) match for real
+    cand = set()
+    plays_by_week = {}
+    for d, w, doc, names in work:
+        plays_by_week[(d, w)] = candidate_plays(doc, names)
+        for p in plays_by_week[(d, w)]:
+            for u in uploads:
+                if u["pub_ms"] >= doc["t0"] + p["sec"] * 1000 and u["pub_ms"] <= doc["t0"] + p["sec"] * 1000 + 7 * 86400 * 1000 and score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u["ch"]) >= MIN_SCORE:
+                    cand.add(u["id"])
+    try:
+        verify(q, cache, sorted(cand))
+    except QuotaOut as e:
+        print(f"[warn] {e}; some clips will be checked on the next run", file=sys.stderr)
+        complete = False
+    for u in uploads:
+        if u["id"] in cache["vid"]:
+            u["dur"], u["embeddable"] = cache["vid"][u["id"]][0], bool(cache["vid"][u["id"]][1])
+        else:
+            u["embeddable"] = False   # not looked up yet (quota): not offered until it has been
+    cache["spent"].append([int(now_s), allowed - q.left])
+    save_cache(cache_path, cache)
+    # an archived week is only marked done once every channel has been read all the way back
+    wsig = sig if complete else "partial"
     touched = set()
     for d, w, doc, names in work:
         out_dir = os.path.join(d, "wp_clips")
@@ -316,10 +427,10 @@ def run(root: str = HERE, force: bool = False) -> None:
             have = (old.get("clips") or {}) if old.get("mv") == MATCHER else {}
         except Exception:  # noqa: BLE001
             have = {}
-        found = match_plays([p for p in candidate_plays(doc, names) if p["key"] not in have], uploads, doc["t0"])
+        found = match_plays([p for p in plays_by_week[(d, w)] if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
         with open(path, "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "chs": sig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "chs": wsig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({len(found)} new)")
     for out_dir in touched:
