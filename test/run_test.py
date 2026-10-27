@@ -2737,6 +2737,8 @@ def scenario_rumblin_qol(browser):
     page.click("#rb-me"); page.wait_for_timeout(300)
     assert not page.is_visible("#rb-who") and active("#rb-me") and active("#rb-matchup"), "saved me skips the picker"
     assert sorted(cards()) == ["Aidan", "Ben"]
+    page.click("#home-link"); page.wait_for_timeout(500)
+    assert page.evaluate("document.getElementById('mode-actual').classList.contains('active') && !document.getElementById('standings-view').hidden && document.getElementById('rumblin-view').hidden && document.getElementById('week-select').value === ''"), "the title goes home: this season's Actual standings, current week"
 
     # Deep link opens Rumblin' directly as that manager.
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
@@ -3606,8 +3608,20 @@ def scenario_win_probability(browser):
     pf.wait_for_timeout(3000)
     pst = pf.evaluate("({tip: !document.getElementById('wp-tipx').hidden, line: document.querySelectorAll('#wp-chart .wp-hov line').length, text: document.getElementById('wp-tipx').textContent})")
     assert pst["tip"] and pst["line"] == 1 and "% to win" in pst["text"], f"then the pinned moment lights up: {pst}"
-    pf.click("#wp-replay"); pf.wait_for_timeout(300)
-    assert pf.evaluate("document.getElementById('wp-tipx').hidden"), "replay starts the week over"
+    cols = pf.evaluate("[...document.querySelectorAll('#wp-list .wp-col')].map(o => [...o.querySelectorAll('li .wp-n')].map(n => n.textContent))")
+    assert len(cols) == 2 and cols[0] == ["1", "2", "3", "4", "5"] and cols[1] == ["6", "7", "8", "9", "10"], f"the ten biggest swings in two columns, 1-5 then 6-10: {cols}"
+    pf.evaluate("window.__wpPlayMs = 3000")
+    pf.click("#wp-replay"); pf.wait_for_timeout(500)
+    ps = pf.evaluate("({label: document.getElementById('wp-replay').getAttribute('aria-label'), wait: document.querySelectorAll('#wp-list li.wp-wait').length, clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
+    assert "Stop" in ps["label"] and ps["wait"] >= 1 and "inset" in ps["clip"], f"watching the week play out: the line draws, the swings wait their turn: {ps}"
+    pf.wait_for_timeout(1000)
+    mid = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, tip: !document.getElementById('wp-tipx').hidden})")
+    assert mid["tip"], "the tooltip shows as the line passes a notch"
+    pf.wait_for_timeout(2600)
+    end = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, label: document.getElementById('wp-replay').getAttribute('aria-label'), clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
+    assert end["wait"] == 0 and "Replay" in end["label"] and not end["clip"], f"at the end everything is uncovered: {end}"
+    pf.evaluate("window.__wpPlayMs = 20000"); pf.click("#wp-replay"); pf.wait_for_timeout(300); pf.click("#wp-replay"); pf.wait_for_timeout(200)
+    assert pf.evaluate("document.querySelectorAll('#wp-list li.wp-wait').length") == 0, "tapping it again stops and shows the whole week"
     pf.close()
     # the share button on the small chart shares the picture, the story and the link in one go
     page.keyboard.press("Escape"); page.wait_for_timeout(200)
@@ -3852,6 +3866,10 @@ def scenario_past_seasons(browser):
     pg.select_option("#week-select", ""); pg.wait_for_timeout(300)
 
     # Scenarios for any week of that season, with the win-probability charts
+    with pg.expect_navigation():
+        pg.click("#home-link")
+    assert "season=" not in pg.url, f"from a past season the title loads the live page: {pg.url}"
+    pg.goto(PAGE_URL + "?season=2025"); pg.wait_for_timeout(2500)
     pg.click("#mode-scen"); pg.wait_for_timeout(2500)
     bm = pg.evaluate("""() => ({best: document.getElementById('sm-best').classList.contains('active'), n: document.querySelectorAll('#scen-blocks .sc-blk.best').length, week: document.getElementById('week-select').value,
       h2h: [...document.querySelectorAll('#scen-blocks .sc-blk.best .sc-chip')].map(c => c.textContent.slice(0, 3)), charts: document.querySelectorAll('#scen-blocks .sc-blk.best .sc-wpm svg').length,
@@ -3867,6 +3885,7 @@ def scenario_past_seasons(browser):
     assert pg.evaluate("!document.getElementById('wp-sheet').hidden && /vs\\./.test(document.getElementById('wp-title').textContent)"), "a best matchup expands like any other"
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     pg.select_option("#week-select", "18"); pg.wait_for_timeout(600)
+    assert pg.evaluate("(() => { const r = document.getElementById('scen-mode-row'); return !r.hidden && r.nextElementSibling.classList.contains('status-row') && r.previousElementSibling.tagName === 'HEADER'; })()"), "the Mine/Best toggle sits right below the header's tabs"
     pg.click("#sm-mine"); pg.wait_for_timeout(500)
     assert pg.evaluate("!document.getElementById('rb-who').hidden"), "asks who you were that season"
     pg.locator("#rb-who .rb-who-list button", has_text="Ben").first.click(); pg.wait_for_timeout(3000)

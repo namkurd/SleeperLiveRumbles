@@ -1882,6 +1882,8 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 `extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
 "not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
 
+The **Rumble Central** title is a link: it goes back to this season's Actual standings at the current week (from a past season it reloads the live page). The Mine/Best toggle sits right under the header tabs while Scenarios is open.
+
 ### Best matchups
 
 Scenarios has a toggle with two views: **Mine** (your Rumbles, as before) and **Best** (the best matchups), which needs no manager. With a manager picked it opens on Mine; with none it opens on Best, and tapping Mine asks who you are. It scores every
@@ -1897,7 +1899,7 @@ Every mini chart has a share button (and the expanded chart a **Share** button).
 picture of the chart, the story of the week (written from the win-probability model: the result, how low the winner got and
 what flipped it, the lead changes) and a link; on a computer the story and link are copied. The link opens that chart for
 whoever gets it, with the week drawing itself in. Tap a moment in the chart, or a play in the list, and the link made after
-that carries `&t=` and opens on that moment. The replay button (↻) draws the week again. Tap a pinned moment's tooltip, or empty space beside the chart, to let go of it.
+that carries `&t=` and opens on that moment. The replay button (↻) plays the week out over 30 seconds: the line draws itself, the tooltip appears at every scoring play it passes, and the ten biggest swings (listed in two columns, 1-5 and 6-10) are uncovered one at a time as the line reaches them; tap it again to stop. Tap a pinned moment's tooltip, or empty space beside the chart, to let go of it.
 
 ### Play clips
 
