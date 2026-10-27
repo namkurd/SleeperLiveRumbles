@@ -78,6 +78,7 @@ def install_routes(page, routes):
         page._sleeper_fallback = True
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
+        page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
         page.route(lambda url: "sleeper.app" in url or "raw.githubusercontent.com" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
         def handler(route, request=None, payload=payload):
@@ -3813,10 +3814,27 @@ def scenario_past_seasons(browser):
     pg.select_option("#week-select", "15"); pg.wait_for_timeout(1500)
     assert pg.evaluate("document.getElementById('scen-weeks').hidden"), "a counted week has no such note"
     pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
+    # official clips for the week's plays (the nightly job writes these): every play has one here, so the top swings all get a play button
+    tl3 = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seasons", "2025", "wp_timeline", "week_3.json")))
+    clips3 = {f"{e[1]}:{e[0]}": {"id": "abc123XYZ00", "s": 0, "e": 15, "t": "clip"} for e in tl3["ev"]}
+    pg.route("**/wp_clips/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))   # (a real week with no clips file is a quiet 404)
+    pg.route("**/seasons/2025/wp_clips/week_3.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"v": 1, "week": 3, "clips": clips3})))
+    pg.route("**/youtube-nocookie.com/**", lambda r: r.fulfill(status=200, content_type="text/html", body="<html><body>player</body></html>"))
     pg.click("#rb-scen-view .sc-blk:first-of-type .sc-wpm"); pg.wait_for_timeout(700)
     sh = pg.evaluate("""() => ({title: document.getElementById('wp-title').textContent, marks: document.querySelectorAll('#wp-chart .wp-mk').length, notches: document.querySelectorAll('#wp-chart .wp-notch').length,
       first: (document.querySelector('#wp-list li .wp-ph') || {}).textContent, axis: [...document.querySelectorAll('#wp-chart svg text')].map(t => t.textContent).filter(t => /^(Sun|Mon|Thu) \\d/.test(t))})""")
     assert "Week 3" in sh["title"] and sh["marks"] >= 3 and sh["notches"] >= 5 and sh["first"], f"a 2025 game, play by play: {sh}"
+    nclip = pg.evaluate("document.querySelectorAll('#wp-list li.has-clip').length")
+    assert nclip >= 3, f"the biggest swings that have a clip show a play button: {nclip}"
+    pg.click("#wp-list li.has-clip >> nth=0"); pg.wait_for_timeout(300)
+    fsrc = pg.evaluate("(document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || ''")
+    assert "youtube-nocookie.com/embed/abc123XYZ00" in fsrc and "autoplay=1" in fsrc and "start=0" in fsrc and "end=15" in fsrc, f"tapping a play opens its clip, playing at once: {fsrc}"
+    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 1
+    pg.click("#wp-list li.has-clip >> nth=0"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 0, "tapping it again closes it"
+    pg.evaluate("document.querySelector('#wp-chart .wp-mk').dispatchEvent(new MouseEvent('click', {bubbles: true}))"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") <= 1, "tapping a numbered mark on the chart opens its clip too"
+    pg.evaluate("(document.querySelector('#wp-list .wp-clipbox') || {remove(){}}).remove()")
     assert any(a.startswith("Sun 1pm") for a in sh["axis"]), f"kickoff windows on its axis: {sh['axis']}"
     pg.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true})")
     pg.click("#wp-share"); pg.wait_for_timeout(400)
@@ -3827,6 +3845,7 @@ def scenario_past_seasons(browser):
     fr.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     fr.on("pageerror", lambda exc: page_errors.append(str(exc)))
     install_routes(fr, {"**/v1/state/nfl": load("state.json")})
+    fr.route("**/wp_clips/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))
     fr.add_init_script("try { localStorage.clear(); } catch (e) {}")
     fr.goto(link); fr.wait_for_timeout(3500)
     fs = fr.evaluate("({vis: !document.getElementById('wp-sheet').hidden, title: document.getElementById('wp-title').textContent, notches: document.querySelectorAll('#wp-chart .wp-notch').length, who: !document.getElementById('rb-who').hidden})")

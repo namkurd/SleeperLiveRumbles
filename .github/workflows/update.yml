@@ -45,6 +45,12 @@ jobs:
         run: python build_wp_timeline.py
         continue-on-error: true
 
+      - name: Run build_wp_clips.py (short official highlights for each week's biggest plays, from the NFL's YouTube channel)
+        run: python build_wp_clips.py
+        continue-on-error: true
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
       - name: Run build_seasons.py (archives each finished past season, once)
         run: python build_seasons.py
         continue-on-error: true
@@ -53,7 +59,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add rumbles_history.json epa_weekly.json wp_timeline seasons
+          git add rumbles_history.json epa_weekly.json wp_timeline wp_clips seasons
           if git diff --cached --quiet; then
             echo "No data changes -- nothing to commit."
           else

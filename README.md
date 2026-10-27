@@ -1882,10 +1882,22 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 `extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
 "not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
 
+### Play clips
+
+In a finished week's expanded chart, any of the "biggest swings" that has an official highlight shows a ▶. Tapping the
+numbered row (or its number on the chart) opens YouTube's own player under it and plays the first 15 seconds
+(`start`/`end` on the embed; nothing is downloaded or re-hosted). `build_wp_clips.py` finds them nightly: it reads the
+NFL channel's recent uploads (cheap on API quota) and matches titles to the week's plays by player name, team nickname,
+play kind (TD, interception, sack...) and yardage, keeping only confident matches of 2 minutes or less that allow
+embedding. Unmatched plays are retried on later nights. Needs the `YOUTUBE_API_KEY` repository secret (a YouTube Data
+API v3 key); without it nothing is written and the rows simply have no ▶. Output: `wp_clips/week_N.json`. Current
+season only, and only about three weeks back, since the channel's uploads list is paged from the newest.
+
 ## Files
 
 | File | What it does |
 |---|---|
+| `build_wp_clips.py` / `wp_clips/` | Official NFL highlight clips for each week's biggest plays (see "Play clips"). Generated nightly by `update.yml`. |
 | `build_seasons.py` / `seasons/` | The past-season archive described above. Generated; don't hand-edit. |
 | `build_rumbles.py` | Computes and writes `rumbles_history.json` for every fully completed week of the current season. Standalone -- discovers the league and manager names straight from Sleeper's API each run. |
 | `rumbles.html` | The live standings page. Self-contained (no build step, no server) -- just needs to be served as a static file next to `rumbles_history.json`. |

@@ -1547,6 +1547,10 @@
   .wp-side { width: 100%; min-width: 0; }
   /* The plays sit beneath the chart; on a wide card they run in two columns so ten still fit without a long scroll. */
   @media (min-width: 701px) { .wp-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; } .wp-list li:nth-child(2) { border-top: 0; } }
+  .wp-list li.has-clip { cursor: pointer; flex-wrap: wrap; }
+  .wp-play { flex: none; font-size: 0.7rem; color: var(--accent); opacity: 0.9; }
+  .wp-list li.wp-clipbox { display: block; grid-column: 1 / -1; padding: 4px 0 8px; border-top: 0; }
+  .wp-clipbox iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
   .wp-listh { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
   .wp-listh[hidden] { display: none; }
   .wp-list { list-style: none; margin: 0; padding: 0; }
@@ -6561,6 +6565,14 @@
       if (el && !el.classList.contains("empty") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); wpOpen(el.getAttribute("data-wp")); }
     });
     document.getElementById("wp-close").addEventListener("click", wpClose);
+    document.getElementById("wp-list").addEventListener("click", function (e) { wpClipToggle(e.target.closest && e.target.closest("li.has-clip")); });
+    document.getElementById("wp-list").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { var li = e.target.closest && e.target.closest("li.has-clip"); if (li) { e.preventDefault(); wpClipToggle(li); } }
+    });
+    chart.addEventListener("click", function (e) {
+      var g = e.target.closest && e.target.closest(".wp-mk");
+      if (g) wpClipToggle(document.querySelector('#wp-list li.has-clip[data-n="' + g.getAttribute("data-n") + '"]'));
+    });
     document.getElementById("wp-share").addEventListener("click", wpShare);
     document.getElementById("wp-image").addEventListener("click", wpShareImage);
     document.getElementById("wp-sheet").addEventListener("click", function (e) { if (e.target.id === "wp-sheet") wpClose(); });
@@ -7011,7 +7023,7 @@
       var top = c.ev.slice().sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); })[0];
       var p0 = model.at(c.t0 - 1).p, p1 = model.at(c.t1).p, a = model.at(c.t1);
       var label = top.label === "scoring adjustment" ? "stat correction" : top.label;
-      return { t: c.t1, t0: c.t0, p0: p0, p1: p1, d: p1 - p0, sid: top.sid, who: names[top.sid] || "", label: label, pts: top.pts, side: top.side, n: c.ev.length, my: a.my, th: a.th };
+      return { t: c.t1, t0: c.t0, p0: p0, p1: p1, d: p1 - p0, sid: top.sid, tt: top.t, who: names[top.sid] || "", label: label, pts: top.pts, side: top.side, n: c.ev.length, my: a.my, th: a.th };
     });
     var min = opts.min != null ? opts.min : 0.10, max = opts.max || 5;
     var big = out.filter(function (m) { return Math.abs(m.d) >= min; }).sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); }).slice(0, max);
@@ -7564,16 +7576,46 @@
     document.getElementById("wp-tipx").hidden = true;
     var list = pm.marks.map(function (mk) {
       var l = wpMarkLine(pm, mk);
-      return '<li><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div><span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
+      var clip = wpClipFor(pm.win.week, mk);
+      return '<li' + (clip ? ' class="has-clip" data-clip="' + escapeHtml(clip.id) + "|" + clip.s + "|" + clip.e + '" data-n="' + mk.rank + '" tabindex="0" role="button" aria-expanded="false" title="Watch the play"' : "") + '><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div>' + (clip ? '<span class="wp-play" aria-hidden="true">\u25b6</span>' : "") + '<span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
     }).join("");
     document.getElementById("wp-list").innerHTML = list || '<li class="wp-none">No single play moved the win probability by 10 points or more.</li>';
     document.getElementById("wp-listh").hidden = !pm.marks.length;
     document.getElementById("wp-listh").textContent = pm.marks.length >= 10 ? "10 biggest swings" : "Biggest swings";
     sheet.hidden = false;
   }
+  // Official NFL clips for a finished week's biggest plays (wp_clips/week_N.json, found nightly), keyed "<sleeper id>:<seconds>".
+  var wpClips = {};
+  function wpClipsLoad(week) {
+    if (wpClips[week]) return;
+    wpClips[week] = { clips: {} };
+    fetchJson(DATA_BASE + "wp_clips/week_" + week + ".json").then(function (d) {
+      if (d && d.clips) { wpClips[week] = d; wpSheetKeep(); }
+    }, function () { /* no clips for this week: the rows simply have no play button */ });
+  }
+  function wpClipFor(week, mk) {
+    var d = wpClips[week];
+    return d && mk.tt != null ? d.clips[mk.sid + ":" + mk.tt] || null : null;
+  }
+  // Tap a numbered play: its clip opens under it and plays at once (YouTube's own player, trimmed to start/end). Tap again to close.
+  function wpClipToggle(li) {
+    if (!li) return;
+    var list = document.getElementById("wp-list"), open = li.nextElementSibling && li.nextElementSibling.classList.contains("wp-clipbox");
+    Array.prototype.forEach.call(list.querySelectorAll(".wp-clipbox"), function (b) { b.previousElementSibling.setAttribute("aria-expanded", "false"); b.parentNode.removeChild(b); });
+    if (open) return;
+    var p = li.getAttribute("data-clip").split("|");
+    var box = document.createElement("li");
+    box.className = "wp-clipbox";
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(p[0]) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1&start=" + Number(p[1]) + "&end=" + Number(p[2]) +
+      '" title="Play highlight" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+    li.parentNode.insertBefore(box, li.nextSibling);
+    li.setAttribute("aria-expanded", "true");
+    if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
+  }
   function wpOpen(key) {
     if (!wpPairs[key]) return;
     wpOpenKey = key;
+    if (wpPairs[key].done) wpClipsLoad(wpPairs[key].win.week);
     wpSheetRender();
     document.getElementById("wp-close").focus();
   }
