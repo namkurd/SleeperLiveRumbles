@@ -1528,7 +1528,8 @@
   .wpm-area { fill-opacity: 0.4; } .wpm-mid { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
   .wpm-div { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; opacity: 0.45; }
   .wpm-line { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-  .wpm-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; margin: -4px 0 0 -4px; box-shadow: 0 0 0 2px var(--panel); }
+  .wpm-dot { position: absolute; left: min(var(--x), calc(100% - 11px)); width: 22px; height: 22px; border-radius: 50%; margin: -11px 0 0 -11px; box-sizing: border-box; border: 2px solid var(--c, var(--text-dim)); background: color-mix(in srgb, var(--c, #888) 35%, var(--panel)); box-shadow: 0 0 0 2px var(--panel), 0 1px 4px rgba(0,0,0,0.45); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .wpm-dot b { font-size: 0.62rem; line-height: 1; color: var(--text); } .wpm-dot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .wpm-pct { position: absolute; right: 0; top: 19px; transform: translateY(-50%); width: 44px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .wpm-ap { position: absolute; left: 6px; top: 2px; font-size: 0.56rem; color: var(--text-dim); }
   .sc-blk.sc-done { padding-bottom: 8px; }
@@ -7472,6 +7473,11 @@
   function wpPct(p) { return Math.max(1, Math.min(99, Math.round(p * 100))); }
 
   // The small chart that sits in a Scenarios block. Tap it to open the full view.
+  // The end of the line is the picture of whoever is ahead (their Sleeper team picture, as on the bar), or their initial until it loads.
+  function wpFace(who) {
+    var url = (scAv || {})[who.rid];
+    return "<b>" + escapeHtml((who.name || "?").charAt(0).toUpperCase()) + "</b>" + (url ? '<img src="' + escapeHtml(url) + '" alt="" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' : "");
+  }
   function wpMiniHtml(win, me, t, col) {
     var key = win.key + ":" + me.rid + ":" + t.rid;
     var pm = wpPair(win, me, t, col);
@@ -7499,7 +7505,7 @@
       divs + '<path d="' + area + '" clip-path="url(#wpa' + k + ')" style="fill:' + col.mine + '" class="wpm-area"/><path d="' + area + '" clip-path="url(#wpb' + k + ')" style="fill:' + col.theirs + '" class="wpm-area"/>' +
       '<line x1="0" x2="' + W + '" y1="' + H / 2 + '" y2="' + H / 2 + '" class="wpm-mid"/><polyline points="' + pts.join(" ") + '" class="wpm-line"/>' + notch + "</svg>";
     return { pm: pm, html: '<div class="sc-wpm" data-wp="' + key + '" role="button" tabindex="0" aria-label="Win probability chart, ' + wpPct(p) + ' percent. Drag across it to see the week; Enter expands it">' + svg +
-      '<i class="wpm-dot" style="left:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;background:" + (p >= 0.5 ? col.mine : col.theirs) + '"></i><i class="wpm-cur" hidden></i></div>' +
+      '<i class="wpm-dot" style="--x:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;--c:" + (p >= 0.5 ? col.mine : col.theirs) + '">' + wpFace(p >= 0.5 ? me : t) + '</i><i class="wpm-cur" hidden></i></div>' +
       '<em class="wpm-pct" style="color:' + (p >= 0.5 ? col.mine : col.theirs) + '">' + (pm.done ? (p > 0.5 ? "Won" : p < 0.5 ? "Lost" : "Tied") : wpPct(p) + "%") + "</em>" +
       '<div class="wpm-axis" aria-hidden="true">' + axis + '</div><button type="button" class="wpm-exp" aria-label="Expand the chart" title="Expand">\u2922</button>' +
       (pm.approx ? '<small class="wpm-ap" title="This week’s play-by-play only partly reconciles to the final scores">approx.</small>' : "") + "</div>" };
