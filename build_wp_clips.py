@@ -15,6 +15,7 @@ Safe to run nightly: unmatched plays are retried (clips appear a few hours after
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -253,6 +254,8 @@ def run(root: str = HERE, force: bool = False) -> None:
         print("[info] no YOUTUBE_API_KEY; skipping clips")
         return
     now_ms = datetime.now(timezone.utc).timestamp() * 1000
+    chans = resolve_channels(key, os.path.join(root, "wp_clips", "channels.json"), os.path.join(root, "clip_channels.json"))
+    sig = hashlib.md5(",".join(sorted(c["playlist"] for c in chans)).encode()).hexdigest()[:8]
     work = []   # (dir, week, doc, names)
     for job in season_jobs(root):
         d = job["dir"]
@@ -270,7 +273,10 @@ def run(root: str = HERE, force: bool = False) -> None:
             doc = json.load(open(os.path.join(tl_dir, f)))
             if not doc.get("ev"):
                 continue
-            done_before = os.path.exists(os.path.join(out_dir, f"week_{w}.json"))
+            try:   # an archived week is searched once per set of channels: adding a channel searches it again
+                done_before = json.load(open(os.path.join(out_dir, f"week_{w}.json"))).get("chs") == sig
+            except Exception:  # noqa: BLE001
+                done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
             if (job["recent"] and now_ms - doc["t0"] < 21 * 86400 * 1000) or (not job["recent"] and (force or not done_before)) or (job["recent"] and force):
                 work.append((d, w, doc, names))
@@ -278,7 +284,6 @@ def run(root: str = HERE, force: bool = False) -> None:
         print("[info] no week needs clips")
         return
     windows = [(doc["t0"], doc["t0"] + 8 * 86400 * 1000) for _, _, doc, _ in work]
-    chans = resolve_channels(key, os.path.join(root, "wp_clips", "channels.json"), os.path.join(root, "clip_channels.json"))
     print(f"[info] channels: {', '.join(c['handle'] for c in chans) or 'none resolved (using the NFL channel)'}")
     uploads = fetch_uploads(key, min(a for a, _ in windows), windows, [c["playlist"] for c in chans] or None)
     print(f"[info] {len(uploads)} uploads in the windows of {len(work)} week(s)")
@@ -294,7 +299,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         found = match_plays([p for p in candidate_plays(doc, names) if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
         with open(path, "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "chs": sig, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({len(found)} new)")
     for out_dir in touched:
