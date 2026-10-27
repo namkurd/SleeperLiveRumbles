@@ -1890,8 +1890,10 @@ numbered row (or its number on the chart) opens YouTube's own player under it an
 NFL channel's recent uploads (cheap on API quota) and matches titles to the week's plays by player name, team nickname,
 play kind (TD, interception, sack...) and yardage, keeping only confident matches of 2 minutes or less that allow
 embedding. Unmatched plays are retried on later nights. Needs the `YOUTUBE_API_KEY` repository secret (a YouTube Data
-API v3 key); without it nothing is written and the rows simply have no ▶. Output: `wp_clips/week_N.json`. Current
-season only, and only about three weeks back, since the channel's uploads list is paged from the newest.
+API v3 key); without it nothing is written and the rows simply have no ▶. Output: `wp_clips/week_N.json`, in the
+repo root for the current season (its last three weeks are rechecked nightly) and in `seasons/<year>/wp_clips/` for each
+archived season, which is searched once (`python build_wp_clips.py --force` redoes them). The first run pages the
+channel's uploads back to 2021 (about one API unit per 50 videos), so it takes a few minutes.
 
 ## Files
 

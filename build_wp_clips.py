@@ -10,6 +10,7 @@ downloaded or re-hosted; the page embeds YouTube's own player, trimmed to the fi
 
 The key is the play's own entry in the timeline's `ev` list (sleeper id and seconds), which is what the page's
 "biggest swings" rows carry. Needs YOUTUBE_API_KEY (a YouTube Data API v3 key); without it this does nothing.
+Covers the current season (recent weeks, every night) and every archived season under seasons/ (once; --force redoes them).
 Safe to run nightly: unmatched plays are retried (clips appear a few hours after games), matched ones are kept.
 """
 from __future__ import annotations
@@ -26,7 +27,7 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://www.googleapis.com/youtube/v3"
 NFL_UPLOADS = "UUDVYQ4Zhbm3S2dlz7P1GBDg"   # the NFL channel's uploads playlist
-MAX_PAGES = 30                               # 50 uploads a page; plenty for the week since the games
+MAX_PAGES = 600                              # 50 uploads a page, one quota unit each: reaches back through several seasons
 CLIP_SECONDS = 15
 MAX_DURATION = 120                           # a highlight of one play, not a recap
 MIN_POINTS = 2.5
@@ -38,7 +39,7 @@ NICK = {
     "ARI": ["cardinals"], "ATL": ["falcons"], "BAL": ["ravens"], "BUF": ["bills"], "CAR": ["panthers"], "CHI": ["bears"],
     "CIN": ["bengals"], "CLE": ["browns"], "DAL": ["cowboys"], "DEN": ["broncos"], "DET": ["lions"], "GB": ["packers"],
     "HOU": ["texans"], "IND": ["colts"], "JAX": ["jaguars", "jags"], "JAC": ["jaguars", "jags"], "KC": ["chiefs"],
-    "LV": ["raiders"], "LAC": ["chargers"], "LAR": ["rams"], "MIA": ["dolphins"], "MIN": ["vikings"], "NE": ["patriots"],
+    "LV": ["raiders"], "OAK": ["raiders"], "SD": ["chargers"], "STL": ["rams"], "LA": ["rams"], "LAC": ["chargers"], "LAR": ["rams"], "MIA": ["dolphins"], "MIN": ["vikings"], "NE": ["patriots"],
     "NO": ["saints"], "NYG": ["giants"], "NYJ": ["jets"], "PHI": ["eagles"], "PIT": ["steelers"], "SF": ["49ers", "niners"],
     "SEA": ["seahawks"], "TB": ["buccaneers", "bucs"], "TEN": ["titans"], "WAS": ["commanders"], "WSH": ["commanders"],
 }
@@ -148,7 +149,9 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
     return out
 
 
-def fetch_uploads(key: str, since_ms: int) -> list[dict]:
+def fetch_uploads(key: str, since_ms: int, windows: list[tuple[float, float]] | None = None) -> list[dict]:
+    """The channel's uploads back to since_ms (newest first, 50 a page at one quota unit each). `windows` limits the
+    per-video details lookup (also one unit per 50) to uploads inside some week's span."""
     items, token = [], None
     for _ in range(MAX_PAGES):
         r = requests.get(f"{API}/playlistItems", params={"part": "snippet", "playlistId": NFL_UPLOADS, "maxResults": 50, "key": key, **({"pageToken": token} if token else {})}, timeout=30)
@@ -161,7 +164,8 @@ def fetch_uploads(key: str, since_ms: int) -> list[dict]:
             if pub < since_ms:
                 stop = True
                 continue
-            items.append({"id": (sn.get("resourceId") or {}).get("videoId"), "title": sn.get("title") or "", "pub_ms": pub})
+            if windows is None or any(a <= pub <= b for a, b in windows):
+                items.append({"id": (sn.get("resourceId") or {}).get("videoId"), "title": sn.get("title") or "", "pub_ms": pub})
         token = j.get("nextPageToken")
         if stop or not token:
             break
@@ -178,46 +182,74 @@ def fetch_uploads(key: str, since_ms: int) -> list[dict]:
     return items
 
 
-def run(season_dir: str = HERE, epa_path: str | None = None) -> None:
+def season_jobs(root: str = HERE) -> list[dict]:
+    """Every season folder with timelines: the current season (the repo root, rechecked nightly for recent weeks) and each
+    archived one under seasons/ (searched once; the channel's old uploads no longer change)."""
+    jobs = [{"dir": root, "recent": True}]
+    sdir = os.path.join(root, "seasons")
+    if os.path.isdir(sdir):
+        for y in sorted(os.listdir(sdir), reverse=True):
+            if os.path.isdir(os.path.join(sdir, y, "wp_timeline")):
+                jobs.append({"dir": os.path.join(sdir, y), "recent": False})
+    return jobs
+
+
+def run(root: str = HERE, force: bool = False) -> None:
     key = os.environ.get("YOUTUBE_API_KEY")
     if not key:
         print("[info] no YOUTUBE_API_KEY; skipping clips")
         return
-    tl_dir = os.path.join(season_dir, "wp_timeline")
-    out_dir = os.path.join(season_dir, "wp_clips")
-    try:
-        names = json.load(open(epa_path or os.path.join(season_dir, "epa_weekly.json"))).get("names") or {}
-    except Exception:  # noqa: BLE001
-        names = {}
-    weeks = sorted(int(f[5:-5]) for f in os.listdir(tl_dir) if f.startswith("week_") and f.endswith(".json")) if os.path.isdir(tl_dir) else []
-    os.makedirs(out_dir, exist_ok=True)
-    docs = {w: json.load(open(os.path.join(tl_dir, f"week_{w}.json"))) for w in weeks}
     now_ms = datetime.now(timezone.utc).timestamp() * 1000
-    # only recent weeks are worth looking for: the channel's uploads page back only so far
-    todo = [w for w in weeks if now_ms - docs[w]["t0"] < 21 * 86400 * 1000 and docs[w].get("ev")]
-    if not todo:
-        print("[info] no recent week to find clips for")
+    work = []   # (dir, week, doc, names)
+    for job in season_jobs(root):
+        d = job["dir"]
+        tl_dir, out_dir = os.path.join(d, "wp_timeline"), os.path.join(d, "wp_clips")
+        if not os.path.isdir(tl_dir):
+            continue
+        try:
+            names = json.load(open(os.path.join(d, "epa_weekly.json"))).get("names") or {}
+        except Exception:  # noqa: BLE001
+            names = {}
+        for f in sorted(os.listdir(tl_dir)):
+            if not (f.startswith("week_") and f.endswith(".json")):
+                continue
+            w = int(f[5:-5])
+            doc = json.load(open(os.path.join(tl_dir, f)))
+            if not doc.get("ev"):
+                continue
+            done_before = os.path.exists(os.path.join(out_dir, f"week_{w}.json"))
+            # the current season: weeks of the last three weeks, every night. An archived season: once.
+            if (job["recent"] and now_ms - doc["t0"] < 21 * 86400 * 1000) or (not job["recent"] and (force or not done_before)) or (job["recent"] and force):
+                work.append((d, w, doc, names))
+    if not work:
+        print("[info] no week needs clips")
         return
-    uploads = fetch_uploads(key, min(docs[w]["t0"] for w in todo))
-    print(f"[info] {len(uploads)} NFL uploads since week {min(todo)}")
-    for w in todo:
+    windows = [(doc["t0"], doc["t0"] + 8 * 86400 * 1000) for _, _, doc, _ in work]
+    uploads = fetch_uploads(key, min(a for a, _ in windows), windows)
+    print(f"[info] {len(uploads)} NFL uploads in the windows of {len(work)} week(s)")
+    touched = set()
+    for d, w, doc, names in work:
+        out_dir = os.path.join(d, "wp_clips")
+        os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"week_{w}.json")
         try:
             have = json.load(open(path)).get("clips") or {}
         except Exception:  # noqa: BLE001
             have = {}
-        found = match_plays([p for p in candidate_plays(docs[w], names) if p["key"] not in have], uploads, docs[w]["t0"])
+        found = match_plays([p for p in candidate_plays(doc, names) if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
         with open(path, "w") as fh:
             json.dump({"v": 1, "week": w, "clips": have, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
-        print(f"[info] week {w}: {len(have)} clip(s) ({len(found)} new)")
-    idx = sorted(int(f[5:-5]) for f in os.listdir(out_dir) if f.startswith("week_") and f.endswith(".json"))
-    with open(os.path.join(out_dir, "index.json"), "w") as fh:
-        json.dump({"weeks": idx}, fh, separators=(",", ":"))
+        touched.add(out_dir)
+        print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({len(found)} new)")
+    for out_dir in touched:
+        idx = sorted(int(f[5:-5]) for f in os.listdir(out_dir) if f.startswith("week_") and f.endswith(".json"))
+        with open(os.path.join(out_dir, "index.json"), "w") as fh:
+            json.dump({"weeks": idx}, fh, separators=(",", ":"))
 
 
 if __name__ == "__main__":
     try:
-        run()
+        run(force="--force" in sys.argv)
     except Exception as e:  # noqa: BLE001 - clips are an extra; never fail the build
         print(f"[warn] clips skipped: {e}", file=sys.stderr)
