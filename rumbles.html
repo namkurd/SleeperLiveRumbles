@@ -7934,6 +7934,11 @@
 
   // A past season's teams: that season's final week, in the same shape the live view uses (the strip, the picker).
   function rbArchiveTeams() {
+    // The lineups live in the season's epa_weekly.json; fetch it once, then draw again.
+    if (!state.epa && !state.epaScenBusy) {
+      state.epaScenBusy = true;
+      epaLoad().then(function () { state.epaScenBusy = false; renderRumblin(); }, function () { state.epaScenBusy = false; });
+    }
     var done = (state.history && state.history.weeks_completed) || [];
     return done.length ? rbPastTeams(Math.max.apply(null, done)) : [];
   }
