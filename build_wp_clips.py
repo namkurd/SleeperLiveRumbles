@@ -165,16 +165,26 @@ def resolve_channels(key: str, cache_path: str, extra_path: str) -> list[dict]:
         known = {}
     handles = list(HANDLES)
     try:
-        handles += [h for h in json.load(open(extra_path)).get("handles", []) if h not in handles]
+        extra = json.load(open(extra_path))
+        handles += [h for h in extra.get("handles", []) if h not in handles]
+        # a video from a channel worth searching: its channel is found from the video id
+        handles += ["video:" + v for v in extra.get("videos", []) if "video:" + v not in handles]
     except Exception:  # noqa: BLE001
         pass
     out = []
     for h in handles:
         if h not in known:
             try:
-                r = requests.get(f"{API}/channels", params={"part": "id", "forHandle": h, "key": key}, timeout=30)
-                items = r.json().get("items") if r.ok else None
-                known[h] = ("UU" + items[0]["id"][2:]) if items else None
+                if h.startswith("video:"):
+                    r = requests.get(f"{API}/videos", params={"part": "snippet", "id": h[6:], "key": key}, timeout=30)
+                    items = r.json().get("items") if r.ok else None
+                    known[h] = ("UU" + items[0]["snippet"]["channelId"][2:]) if items else None
+                    if items:
+                        print(f"[info] {h} is from the channel {items[0]['snippet'].get('channelTitle')}")
+                else:
+                    r = requests.get(f"{API}/channels", params={"part": "id", "forHandle": h, "key": key}, timeout=30)
+                    items = r.json().get("items") if r.ok else None
+                    known[h] = ("UU" + items[0]["id"][2:]) if items else None
             except Exception:  # noqa: BLE001
                 continue
         if known.get(h):

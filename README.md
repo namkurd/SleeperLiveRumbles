@@ -1888,7 +1888,7 @@ In a finished week's expanded chart, any of the "biggest swings" that has an off
 numbered row (or its number on the chart) opens YouTube's own player under it and plays the first 15 seconds
 (`start`/`end` on the embed; nothing is downloaded or re-hosted). `build_wp_clips.py` finds them nightly: it reads the
 recent uploads of the NFL channel and of the team and network channels listed in `HANDLES` (focused single-player
-clips; add more in `clip_channels.json` as `{"handles": ["@Name"]}`) (cheap on API quota) and matches titles to the week's plays by player name, team nickname,
+clips; add more in `clip_channels.json`: `{"handles": ["@Name"], "videos": ["<id of any video from a channel to add>"]}`) (cheap on API quota) and matches titles to the week's plays by player name, team nickname,
 play kind (TD, interception, sack...) and yardage, keeping only confident matches of 2 minutes or less that allow
 embedding. Unmatched plays are retried on later nights. Needs the `YOUTUBE_API` repository secret (a YouTube Data
 API v3 key); without it nothing is written and the rows simply have no ▶. Output: `wp_clips/week_N.json`, in the
