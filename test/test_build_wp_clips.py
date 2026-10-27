@@ -68,11 +68,26 @@ def test_channels_resolve_once_and_skip_unknown_handles():
     assert len(calls) == n, "resolved handles (and misses) are remembered"
 
 
+def test_known_false_matches_are_rejected():
+    doc = {"t0": T0, "tm": {"1": "IND", "2": "LAC", "3": "CHI", "SEA": "SEA"}, "tg": {"IND": "IND@NYJ", "LAC": "LAC@KC", "CHI": "CHI@DAL", "SEA": "SEA@ARI"},
+           "ev": [[100, "1", 6.1, "1 yd TD run"], [200, "2", 4.8, "20 yd TD pass"], [300, "3", 5.4, "35 yd TD pass"], [400, "SEA", 6.0, "return TD"]]}
+    names = {"1": ["Jonathan Taylor", "RB"], "2": ["Justin Herbert", "QB"], "3": ["Caleb Williams", "QB"]}
+    plays = C.candidate_plays(doc, names)
+    bad = [up("a", "Tyrod Taylor zips TD to Garrett Wilson"),                                  # another Taylor
+           up("b", "Bears' Caleb Williams on 4-TD game vs. Cowboys & more"),                    # a recap
+           up("c", "Herbert dials up launch codes on 36-yard TD to Johnston"),                  # another distance
+           up("d", "Kyler Murray's best plays from 2-TD game vs. Seahawks", ),                  # a different player's day
+           up("e", "Williams weighs in on the TD celly")]                                       # a reaction
+    assert C.match_plays(plays, bad, T0) == {}, C.match_plays(plays, bad, T0)
+    good = [dict(up("g", "Herbert's 20-yard touchdown pass"), ch="Los Angeles Chargers")]       # last name + his team's channel + distance
+    assert C.match_plays(plays, good, T0)["2:200"]["id"] == "g"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")

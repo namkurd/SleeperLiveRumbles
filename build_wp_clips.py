@@ -41,7 +41,8 @@ CLIP_SECONDS = 15
 MAX_DURATION = 120                           # a highlight of one play, not a recap
 MIN_POINTS = 2.5
 MAX_PLAYS = 150
-MIN_SCORE = 6
+MIN_SCORE = 7
+MATCHER = 2                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
 NICK = {
@@ -69,17 +70,22 @@ def play_kind(label: str) -> list[str]:
     """Words a title is likely to use for this kind of play."""
     l = label.lower()
     out = []
-    if "td" in l or "pick-six" in l:
-        out += ["touchdown", "td", "score", "scores"]
     if "interception" in l or "pick" in l:
-        out += ["interception", "pick", "int"]
+        out += ["interception", "pick", "int", "picks", "intercepts"]
+    elif "td" in l:
+        out += ["touchdown", "td"]
     if "sack" in l:
         out += ["sack", "sacks", "sacked"]
     if "fumble" in l:
         out += ["fumble", "strip", "forced", "recovery"]
     if "field goal" in l:
-        out += ["field goal", "fg", "kick"]
+        out += ["field goal", "fg"]
     return out
+
+
+# A title about a whole game, a player's day or a reaction is not about this play.
+NOT_A_PLAY = re.compile(r"\b(game|games|highlights|best plays|recap|every|all|weighs|reacts|reaction|interview|press conference|postgame|"
+                        r"pregame|talks|says|speaks|celly|celebration|film|breakdown|season|career|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns", re.I)
 
 
 def yards_in(label: str) -> int | None:
@@ -87,25 +93,33 @@ def yards_in(label: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool) -> int:
+def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "") -> int:
+    if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
+        return 0
     t = norm(title)
+    words = t.split()
+    ch = norm(channel)
+    nicks = NICK.get(team or "", [])
+    opps = NICK.get(opp or "", [])
+    team_in_title = any(n in t for n in nicks)
+    own_channel = any(n in ch for n in nicks)
     s = 0
     if player:
         parts = norm(player).replace(" jr", "").replace(" sr", "").replace(" iii", "").replace(" ii", "").split()
-        if len(parts) >= 2 and parts[-1] in t.split():
-            s += 4
-            if parts[0] in t.split():
-                s += 1
-        else:
+        if len(parts) < 2 or parts[-1] not in words:
             return 0   # a play is about a player: no name, no match
-    nicks = NICK.get(team or "", [])
-    if is_def and not any(n in t for n in nicks):
-        return 0       # a D/ST has no name to find, so its team has to be in the title
-    if is_def:
-        s += 3         # (what a player's name would have been worth)
-    if any(n in t for n in nicks):
+        first = parts[0] in words
+        # a last name alone is any number of players: the first name, or his team (in the title or as the channel), must back it up
+        if not (first or team_in_title or own_channel or any(n in t for n in opps)):
+            return 0
+        s += 5 if first else 4
+    else:
+        if not (team_in_title or own_channel):
+            return 0       # a D/ST has no name to find, so its team has to be in the title or the channel
+        s += 3             # (what a player's name would have been worth)
+    if team_in_title or own_channel:
         s += 2
-    if any(n in t for n in NICK.get(opp or "", [])):
+    if any(n in t for n in opps):
         s += 1
     kinds = play_kind(label)
     specific = False
@@ -113,9 +127,13 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
         s += 2
         specific = True
     y = yards_in(label)
-    if y is not None and re.search(rf"\b{y} (yard|yd)", t):
-        s += 3
-        specific = True
+    if y is not None:
+        said = [int(x) for x in re.findall(r"\b(\d+) (?:yard|yd)", t)]
+        if said and y not in said:
+            return 0   # the title gives a different distance: another play
+        if said:
+            s += 3
+            specific = True
     # the name and team alone could be any of his plays: the title must also say what kind, or how far
     return s if specific else 0
 
@@ -150,7 +168,7 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
-            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"])
+            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""))
             if s > best_s:
                 best, best_s = u, s
         if best and best_s >= MIN_SCORE:
@@ -274,7 +292,8 @@ def run(root: str = HERE, force: bool = False) -> None:
             if not doc.get("ev"):
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
-                done_before = json.load(open(os.path.join(out_dir, f"week_{w}.json"))).get("chs") == sig
+                old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -293,13 +312,14 @@ def run(root: str = HERE, force: bool = False) -> None:
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"week_{w}.json")
         try:
-            have = json.load(open(path)).get("clips") or {}
+            old = json.load(open(path))
+            have = (old.get("clips") or {}) if old.get("mv") == MATCHER else {}
         except Exception:  # noqa: BLE001
             have = {}
         found = match_plays([p for p in candidate_plays(doc, names) if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
         with open(path, "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "chs": sig, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "chs": sig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({len(found)} new)")
     for out_dir in touched:
