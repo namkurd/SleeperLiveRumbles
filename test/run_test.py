@@ -3557,12 +3557,45 @@ def scenario_win_probability(browser):
     seen = notches = None
 
     # share a link: it opens this chart for whoever gets it, and they can scrub through the week themselves
-    assert page.evaluate("document.getElementById('wp-share').textContent") == "Share link"
+    assert page.evaluate("document.getElementById('wp-share').textContent") == "Share"
     page.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true})")
     page.click("#wp-share"); page.wait_for_timeout(400)
     link = page.evaluate("window.__wpLink")
     assert re.search(r"rumbles\.html\?wp=2\.\d+\.\d+$", link or ""), f"the shared link names the week and the two managers: {link}"
-    assert page.evaluate("document.getElementById('wp-share').textContent") == "Link copied", "the button says so when it copied the link"
+    assert page.evaluate("document.getElementById('wp-share').textContent") == "Copied", "the button says so when it copied the link"
+    story = page.evaluate("document.getElementById('wp-story').textContent")
+    assert story and ("beat" in story or "leads" in story or "trails" in story or "tied" in story) and "Ben" in story, f"the chart tells the story of the week: {story}"
+    sent = page.evaluate("window.__wpText")
+    assert sent.startswith(story) and sent.endswith(link), f"what is copied is the story and the link: {sent!r}"
+    # tap a moment in the chart: the link now carries it, and opens right there
+    box = page.evaluate("(() => { const r = document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; })()")
+    page.mouse.move(box["x"] + box["w"] * 0.6, box["y"] + box["h"] / 2); page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
+    page.click("#wp-share"); page.wait_for_timeout(400)
+    pinned = page.evaluate("window.__wpLink")
+    assert re.search(r"wp=2\.\d+\.\d+&t=\d+$", pinned or ""), f"a pinned moment rides along in the link: {pinned}"
+    pf = ctx.new_page()
+    pf.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    pf.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    routes(pf)
+    pf.add_init_script("try { localStorage.clear(); } catch (e) {}")
+    pf.goto(pinned); pf.wait_for_timeout(1000)
+    assert pf.evaluate("document.getElementById('wp-tipx').hidden"), "the week draws itself in first"
+    pf.wait_for_timeout(3000)
+    pst = pf.evaluate("({tip: !document.getElementById('wp-tipx').hidden, line: document.querySelectorAll('#wp-chart .wp-hov line').length, text: document.getElementById('wp-tipx').textContent})")
+    assert pst["tip"] and pst["line"] == 1 and "% to win" in pst["text"], f"then the pinned moment lights up: {pst}"
+    pf.click("#wp-replay"); pf.wait_for_timeout(300)
+    assert pf.evaluate("document.getElementById('wp-tipx').hidden"), "replay starts the week over"
+    pf.close()
+    # the share button on the small chart shares the picture, the story and the link in one go
+    page.keyboard.press("Escape"); page.wait_for_timeout(200)
+    page.evaluate("""(() => { window.__sent = null; Object.defineProperty(navigator, 'share', {value: async (d) => { window.__sent = d; }, configurable: true});
+      Object.defineProperty(navigator, 'canShare', {value: () => true, configurable: true}); })()""")
+    page.click("#rb-scen-view .sc-blk:nth-of-type(2) .wpm-share"); page.wait_for_timeout(1500)
+    sent = page.evaluate("window.__sent && {files: (window.__sent.files || []).map(f => f.type), text: window.__sent.text}")
+    assert sent and sent["files"] == ["image/png"] and "wp=2." in sent["text"] and ("beat" in sent["text"] or "leads" in sent["text"] or "trails" in sent["text"]), f"one share: picture, story, link: {sent}"
+    assert page.evaluate("document.getElementById('wp-sheet').hidden"), "sharing from the small chart does not open the big one"
+    page.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true}); Object.defineProperty(navigator, 'canShare', {value: undefined, configurable: true})")
+    page.click("#rb-scen-view .sc-blk:nth-of-type(2) .sc-wpm .wpm-exp"); page.wait_for_timeout(600)
     friend = ctx.new_page()
     friend.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     friend.on("pageerror", lambda exc: page_errors.append(str(exc)))

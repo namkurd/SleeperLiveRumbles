@@ -1882,6 +1882,14 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 `extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
 "not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
 
+### Sharing a chart
+
+Every mini chart has a share button (and the expanded chart a **Share** button). One tap hands the phone's share sheet the
+picture of the chart, the story of the week (written from the win-probability model: the result, how low the winner got and
+what flipped it, the lead changes) and a link; on a computer the story and link are copied. The link opens that chart for
+whoever gets it, with the week drawing itself in. Tap a moment in the chart, or a play in the list, and the link made after
+that carries `&t=` and opens on that moment. The replay button (↻) draws the week again; **Save** downloads the picture.
+
 ### Play clips
 
 In a finished week's expanded chart, each of the "biggest swings" can be tapped (or its number on the chart). If it has an
