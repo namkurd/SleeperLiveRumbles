@@ -74,6 +74,8 @@ DISPLAY_NAME_OVERRIDES = {
 }
 
 RUMBLES_PER_WIN = 9
+LAST_COUNTED_WEEK = 15   # Rumbles and standings count weeks 1-15; 16-18 can be viewed but never count
+LAST_WEEK = 18
 MAX_RUMBLES_PER_WEEK = 20  # 9 for the H2H win + up to 11 for outscoring the field (12-team league)
 
 session = requests.Session()
@@ -157,7 +159,18 @@ def get_completed_weeks(state: dict) -> list[int]:
     if state.get("season_type") == "pre":
         return []
     current_week = state.get("week") or 1
-    return list(range(1, current_week))
+    return [w for w in range(1, current_week) if w <= LAST_COUNTED_WEEK]
+
+
+def build_extra_weekly(league_id: str, weeks: list[int], manager_map: dict[int, str]) -> dict[str, dict]:
+    """Weeks after the counted ones (the league's playoff weeks, up to NFL week 18): scored the same way so the page can
+    show them in Scenarios, but kept apart from `weekly` so they never reach the standings."""
+    out: dict[str, dict] = {}
+    for week in weeks:
+        matchups = get_json(f"{API_BASE}/league/{league_id}/matchups/{week}")
+        if matchups and any(official_points(m) for m in matchups):
+            out[str(week)] = score_week(matchups, manager_map)
+    return out
 
 
 def official_points(m: dict) -> float:
@@ -1014,6 +1027,14 @@ def main() -> None:
             previously_completed_weeks,
             live_captures_by_key,
         )
+
+    state_week = state.get("week") or 1
+    extra_weeks = [w for w in range(LAST_COUNTED_WEEK + 1, LAST_WEEK + 1) if w < state_week or season_type == "post"]
+    if state.get("season_type") != "pre" and extra_weeks:
+        try:
+            history["extra_weekly"] = build_extra_weekly(league_id, extra_weeks, manager_map)
+        except Exception as e:  # noqa: BLE001 - viewing-only extras never block the standings
+            print(f"[warn] weeks 16-18 skipped ({e})", file=sys.stderr)
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(history, f, indent=2)

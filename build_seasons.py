@@ -63,22 +63,26 @@ def build_one(league: dict, force: bool = False) -> dict | None:
         print(f"[skip] {season}: no matchups found")
         return None
     manager_map = BR.build_manager_map(lid)
-    if force or not os.path.exists(hist_path) or json.load(open(hist_path)).get("weeks_completed") != weeks:
+    old = json.load(open(hist_path)) if os.path.exists(hist_path) else {}
+    if force or old.get("weeks_completed") != weeks or "extra_weekly" not in old:
         hist = BR.build_history(lid, season, "regular", weeks, manager_map)
         hist["playoff_spots"] = int((league.get("settings") or {}).get("playoff_teams") or 6)   # a 10-team league sent 4
+        # the playoff weeks after the counted ones can be viewed in Scenarios but never count
+        hist["extra_weekly"] = BR.build_extra_weekly(lid, list(range(weeks[-1] + 1, BR.LAST_WEEK + 1)), manager_map)
         with open(hist_path, "w") as fh:
             json.dump(hist, fh, separators=(",", ":"))
         print(f"[info] {season}: standings for {len(weeks)} weeks, {len(manager_map)} managers")
     else:
         hist = json.load(open(hist_path))
     epa_path = os.path.join(out_dir, "epa_weekly.json")
+    all_weeks = weeks + sorted(int(w) for w in hist.get("extra_weekly") or {})
     have = []
     try:
         have = sorted(int(w) for w in json.load(open(epa_path)).get("lineups", {}))
     except Exception:  # noqa: BLE001
         pass
-    if force or have != weeks:
-        build_epa.build_season(int(season), lid, weeks, epa_path)
+    if force or have != all_weeks:
+        build_epa.build_season(int(season), lid, all_weeks, epa_path)
     if os.path.exists(epa_path):
         WP.run(epa_path, os.path.join(out_dir, "wp_timeline"), lid)
     top = hist["standings"][0] if hist.get("standings") else {}

@@ -3804,9 +3804,14 @@ def scenario_past_seasons(browser):
       opts: [...document.querySelectorAll('#week-select option')].map(o => o.textContent), val: document.getElementById('week-select').value,
       blocks: [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, hl: b.querySelector('.sc-hl').textContent, chart: !!b.querySelector('.sc-wpm svg polyline'), pct: (b.querySelector('.wpm-pct') || {}).textContent})),
       hidden: ['rb-inplay', 'rb-matchup', 'rb-density'].map(i => getComputedStyle(document.getElementById(i)).display)})""")
-    assert sc["view"] and sc["tab"] and sc["opts"][0] == "Week 15" and sc["val"] == "15" and len(sc["opts"]) == 15, f"every regular-season week, latest first: {sc['opts'][:3]}"
-    assert len(sc["blocks"]) == 9 and sc["blocks"][0]["hl"].startswith("Final") and all(b["chart"] for b in sc["blocks"]), f"nine finished Rumbles, each with its chart: {sc['blocks'][:2]}"
-    assert all(b["pct"] in ("Won", "Lost", "Tied") for b in sc["blocks"]) and sc["hidden"] == ["none", "none", "none"], f"results, with the live controls gone: {sc}"
+    assert sc["view"] and sc["tab"] and sc["opts"][0] == "Week 18" and sc["val"] == "18" and len(sc["opts"]) == 18, f"all 18 weeks (16-18 are viewable extras), latest first: {sc['opts'][:3]}"
+    assert pg.evaluate("document.getElementById('scen-weeks').hidden === false") and "not counted" in pg.inner_text("#scen-weeks"), "extra weeks say they are not counted"
+    for wk in ("17", "16", "18"):
+        pg.select_option("#week-select", wk); pg.wait_for_timeout(1500)
+        pb = pg.evaluate("({val: document.getElementById('week-select').value, err: document.getElementById('error-banner').classList.contains('show')})")
+        assert pb["val"] == wk and not pb["err"], f"week {wk} opens from the same dropdown: {pb}"
+    pg.select_option("#week-select", "15"); pg.wait_for_timeout(1500)
+    assert pg.evaluate("document.getElementById('scen-weeks').hidden"), "a counted week has no such note"
     pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
     pg.click("#rb-scen-view .sc-blk:first-of-type .sc-wpm"); pg.wait_for_timeout(700)
     sh = pg.evaluate("""() => ({title: document.getElementById('wp-title').textContent, marks: document.querySelectorAll('#wp-chart .wp-mk').length, notches: document.querySelectorAll('#wp-chart .wp-notch').length,

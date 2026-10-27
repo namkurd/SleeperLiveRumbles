@@ -211,7 +211,7 @@ def build_season(season: int, league_id: str, weeks_done: list[int], out_path: s
 def main() -> None:
     season = int(requests.get(SLEEPER_STATE, timeout=30).json()["season"])
     hist = json.load(open(os.path.join(HERE, "rumbles_history.json")))
-    build_season(season, hist["league_id"], hist.get("weeks_completed") or [], OUTPUT_PATH)
+    build_season(season, hist["league_id"], (hist.get("weeks_completed") or []) + sorted(int(w) for w in hist.get("extra_weekly") or {}), OUTPUT_PATH)
 
 
 if __name__ == "__main__":

@@ -802,6 +802,15 @@ def test_possible_tier_carried_through_next_weeks_span_then_dropped_end_to_end()
     print("PASS: an unconfirmed 'possible' entry is carried forward for the entire span the following week is live-but-not-completed, then dropped once that following week itself completes -- same lifecycle as 'likely'")
 
 
+def test_weeks_after_15_never_count_but_can_be_scored_for_viewing():
+    BR = build_rumbles
+    assert BR.get_completed_weeks({"season_type": "post", "week": 19}) == list(range(1, 16)), "standings stop at week 15"
+    BR.get_json = lambda url, *a, **k: [{"roster_id": 1, "matchup_id": 1, "points": 100.0}, {"roster_id": 2, "matchup_id": 1, "points": 90.0}] if url.endswith("/matchups/16") else []
+    out = BR.build_extra_weekly("L", [16, 17], {1: "A", 2: "B"})
+    assert list(out) == ["16"] and out["16"][1]["h2h_win"] is True, "a week with scores is scored; an empty one is skipped"
+    print("OK weeks 16-18 are viewable extras")
+
+
 def main():
     test_official_points_prefers_custom_points_when_set()
     test_score_week_applies_override_to_pf()
@@ -843,6 +852,7 @@ def main():
     test_determine_fresh_week_missing_previous_data_defaults_to_fresh()
     test_possible_tier_carried_through_next_weeks_span_then_dropped_end_to_end()
     test_likely_qb_credit_counts_in_week_score()
+    test_weeks_after_15_never_count_but_can_be_scored_for_viewing()
     print("\nALL build_rumbles.py UNIT TESTS PASSED")
 
 

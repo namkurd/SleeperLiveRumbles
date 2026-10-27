@@ -1876,6 +1876,12 @@ they only make sense for a season in progress. "Me" is remembered by manager nam
 `epa_weekly.json`, `wp_timeline/`) plus `seasons/index.json`. A finished season is built once and then left alone
 (`--force` rebuilds). `update.yml` runs it nightly, so a season is archived on its own when the next begins.
 
+### Weeks 16-18
+
+Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to the regular season, from the same header week dropdown as every other week. They are scored with the usual Rumbles rule but kept in
+`extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
+"not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
+
 ## Files
 
 | File | What it does |

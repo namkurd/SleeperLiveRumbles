@@ -1489,6 +1489,7 @@
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
   .rb-scen { margin-top: 12px; }
+  .scen-wk-note { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
   #scen-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr)); gap: 10px; align-items: start; }
   .rb-scen[hidden] { display: none; }
   #scen-blocks > .rb-live-empty { grid-column: 1 / -1; }
@@ -1683,7 +1684,7 @@
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid totals" id="rb-grid"></div>
-    <div class="rb-scen" id="rb-scen-view" hidden><div id="scen-blocks"></div></div>
+    <div class="rb-scen" id="rb-scen-view" hidden><div id="scen-weeks" class="scen-wk-note" hidden></div><div id="scen-blocks"></div></div>
     <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
@@ -7112,12 +7113,26 @@
       epaLoad().then(function () { state.epaScenBusy = false; if (state.epa) renderRumblin(); });
     }
     if (!L) return [];
-    return done.filter(function (w) { return L[String(w)] && state.history.weekly && state.history.weekly[String(w)] && (exceptWeek == null || w !== exceptWeek); })
+    // Weeks after the counted ones (playoff weeks 16-18) can be viewed here too, but are never in weeks_completed or the standings.
+    var extra = Object.keys((state.history && state.history.extra_weekly) || {}).map(Number);
+    return done.concat(extra).filter(function (w) { return L[String(w)] && rbWeekLog(w) && (exceptWeek == null || w !== exceptWeek); })
       .map(Number).sort(function (a, b) { return b - a; });
+  }
+  function rbWeekLog(week) {
+    var h = state.history || {};
+    return (h.weekly && h.weekly[String(week)]) || (h.extra_weekly && h.extra_weekly[String(week)]) || null;
+  }
+  // Playoff weeks (16-18) open from the same week dropdown as every other week; this just says they don't count.
+  function rbWeekNote(ui) {
+    var box = document.getElementById("scen-weeks");
+    var counted = ((state.history && state.history.weeks_completed) || []).map(Number);
+    var extra = ui.value !== "" && counted.indexOf(Number(ui.value)) < 0;
+    box.hidden = !extra;
+    box.textContent = extra ? "Playoff week: not counted in the standings" : "";
   }
   // A finished week as the same team shape the live view uses: final points, the starters, and who each team played.
   function rbPastTeams(week) {
-    var wd = weekDetailFromFile(week), hw = state.history && state.history.weekly && state.history.weekly[String(week)];
+    var wd = weekDetailFromFile(week), hw = rbWeekLog(week);
     if (!wd || !hw) return [];
     var names = {};
     ((state.history && state.history.standings) || []).forEach(function (st) { names[st.roster_id] = st.manager; });
@@ -8038,6 +8053,7 @@
       rb.lastTeams = scenTeams;
       rb.scenUi = { cur: !!(curWin || scenWait), past: pastWeeks, value: showPast != null ? String(showPast) : "" };
       renderWeekSelect();
+      rbWeekNote(rb.scenUi);
       // A different "me" starts a fresh set of followed opponents.
       if (scenMeT && rb.scenMe !== scenMeT.rid) { rb.scenMe = scenMeT.rid; rb.scenSel = null; rb.scenSelDone = null; }
       var scenAvail = rbScenAvail(scenTeams, scenMeT);
