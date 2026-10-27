@@ -22,7 +22,7 @@ import os
 import re
 import sys
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -33,7 +33,8 @@ MAX_PAGES = 400                              # per channel; 50 uploads a page, o
 # Channels searched, by handle (resolved to ids once, 1 quota unit each, and remembered in wp_clips/channels.json). The NFL's own
 # channel is first; the team channels post many focused single-player clips. A handle that does not resolve is skipped, and more
 # can be added in clip_channels.json: {"handles": ["@Name", ...]}.
-HANDLES = ["@NFL", "@NFLonFOX", "@NFLNetwork", "@ESPN",
+HANDLES = ["@NFL", "@NFLonFOX", "@NFLNetwork", "@ESPN", "@BleacherReport", "@HouseofHighlights", "@FOXSports", "@CBSSports", "@CBSSportsHQ",
+           "@NBCSports", "@SportsCenter", "@YahooSports", "@NFLonCBS", "@SNFonNBC", "@NFLThrowback", "@NFLFilms", "@ProFootballFocus",
            "@azcardinals", "@AtlantaFalcons", "@baltimoreravens", "@buffalobills", "@panthers", "@chicagobears", "@bengals", "@Browns",
            "@dallascowboys", "@DenverBroncos", "@Lions", "@packers", "@HoustonTexans", "@Colts", "@Jaguars", "@KansasCityChiefs",
            "@Raiders", "@chargers", "@LosAngelesRams", "@MiamiDolphins", "@vikings", "@patriots", "@neworleanssaints", "@Giants",
@@ -45,6 +46,8 @@ MAX_PLAYS = 150
 MIN_SCORE = 7
 DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a day, what all runs together may use
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
+MAX_SEARCHES = 40                            # YouTube searches (100 units each) a run may spend on plays no upload matched
+SEARCH_TOP = 12                              # only a week's biggest plays are worth a search
 MATCHER = 3                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
@@ -191,6 +194,103 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
             if alts:
                 clip["alt"] = alts
             out[p["key"]] = clip
+    return out
+
+
+RECAP = re.compile(r"\b(highlights?|recap|full game|game)\b", re.I)
+CHAPTER = re.compile(r"^\s*[\u25b6\-\u2022*]?\s*((?:\d{1,2}:)?\d{1,2}:\d{2})\s*[-\u2013:|]?\s*(.+?)\s*$")
+
+
+def chapters_from(description: str) -> list[list]:
+    """[[seconds, text], ...] from the timestamp lines of a video description (needs at least three to be a chapter list)."""
+    out = []
+    for line in (description or "").splitlines():
+        m = CHAPTER.match(line)
+        if m:
+            sec = sum(int(x) * 60 ** i for i, x in enumerate(reversed(m.group(1).split(":"))))
+            out.append([sec, m.group(2)[:100]])
+    return out if len(out) >= 3 else []
+
+
+def fetch_chapters(q: "Quota", cache: dict, ids: list[str]) -> None:
+    """Duration, embeddability and chapter list of longer highlight videos (one unit per 50)."""
+    need = [i for i in ids if i not in cache.setdefault("chap", {})]
+    for i in range(0, len(need), 50):
+        chunk = need[i:i + 50]
+        j = q.get(f"{API}/videos", {"part": "snippet,contentDetails,status", "id": ",".join(chunk), "key": q.key})
+        info = {v["id"]: v for v in j.get("items", [])}
+        for vid in chunk:
+            v = info.get(vid) or {}
+            st = v.get("status") or {}
+            cache["vid"][vid] = [duration_seconds((v.get("contentDetails") or {}).get("duration", "")), int(bool(st.get("embeddable")) and st.get("privacyStatus") == "public")]
+            cache["chap"][vid] = chapters_from((v.get("snippet") or {}).get("description", ""))
+
+
+def match_chapters(plays: list[dict], recaps: list[dict], cache: dict, t0_ms: float) -> dict:
+    """A clip inside a longer highlight video: the chapter whose text names the player and the play."""
+    out = {}
+    for p in plays:
+        at = t0_ms + p["sec"] * 1000
+        best, best_s = None, 0
+        for u in recaps:
+            info = cache["vid"].get(u["id"]) or [0, 0]
+            if not info[1] or info[0] > 3600 or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
+                continue
+            for sec, text in (cache.get("chap", {}).get(u["id"]) or []):
+                sc = score_title(text, p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", "") + " " + u["title"])
+                if sc > best_s:
+                    best, best_s = (u, sec, text), sc
+        if best and best_s >= MIN_SCORE:
+            u, sec, text = best
+            st = max(0, sec - 2)
+            out[p["key"]] = {"id": u["id"], "s": st, "e": st + CLIP_SECONDS, "t": text[:90], "c": (u.get("ch") or "")[:40], "chap": 1}
+    return out
+
+
+def video_id(ref: str) -> str | None:
+    m = re.search(r"(?:v=|youtu\.be/|embed/|shorts/)([\w-]{11})", ref or "") or re.fullmatch(r"([\w-]{11})", (ref or "").strip())
+    return m.group(1) if m else None
+
+
+def apply_manual(have: dict, plays: list[dict], entries: list[dict], season: int, week: int) -> int:
+    """Hand-picked clips (clips_manual.json) win over anything found: {season, week, player, label (or part of it), video, start}."""
+    n = 0
+    for e in entries:
+        if int(e.get("season", 0)) != season or int(e.get("week", 0)) != week:
+            continue
+        vid = video_id(e.get("video", ""))
+        if not vid:
+            continue
+        want = norm(e.get("player", ""))
+        lab = norm(e.get("label", ""))
+        for p in plays:
+            who = norm(p["player"] or p["team"] or "")
+            if want and want in who and (not lab or lab in norm(p["label"])):
+                st = int(e.get("start", 0))
+                have[p["key"]] = {"id": vid, "s": st, "e": st + CLIP_SECONDS, "t": "picked by hand", "c": "manual", "m": 1}
+                n += 1
+                break
+    return n
+
+
+def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
+    """YouTube search for one play (100 units): short, embeddable videos from the week after it, scored like any upload."""
+    at = datetime.fromtimestamp((t0_ms + play["sec"] * 1000) / 1000, timezone.utc)
+    words = [play["player"] or " ".join(NICK.get(play["team"], [""])[:1]), (play_kind(play["label"]) or [""])[0]]
+    y = yards_in(play["label"])
+    if y is not None:
+        words.append(f"{y} yard")
+    words += NICK.get(play["opp"] or "", [])[:1]
+    j = q.get(f"{API}/search", {"part": "snippet", "type": "video", "q": " ".join(w for w in words if w), "maxResults": 8, "videoEmbeddable": "true",
+                                "videoDuration": "short", "regionCode": "US", "key": q.key,
+                                "publishedAfter": at.isoformat().replace("+00:00", "Z"), "publishedBefore": (at + timedelta(days=7)).isoformat().replace("+00:00", "Z")})
+    out = []
+    for it in j.get("items", []):
+        sn = it.get("snippet") or {}
+        vid = (it.get("id") or {}).get("videoId")
+        if vid and sn.get("publishedAt"):
+            out.append({"id": vid, "title": sn.get("title") or "", "ch": sn.get("channelTitle") or "", "dur": 0, "embeddable": True,
+                        "pub_ms": datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000})
     return out
 
 
@@ -428,26 +528,78 @@ def run(root: str = HERE, force: bool = False) -> None:
             u["dur"], u["embeddable"] = cache["vid"][u["id"]][0], bool(cache["vid"][u["id"]][1])
         else:
             u["embeddable"] = False   # not looked up yet (quota): not offered until it has been
-    cache["spent"].append([int(now_s), allowed - q.left])
-    save_cache(cache_path, cache)
     # an archived week is only marked done once every channel has been read all the way back
     wsig = sig if complete else "partial"
-    touched = set()
+    manual = []
+    try:
+        manual = json.load(open(os.path.join(root, "clips_manual.json")))
+    except Exception:  # noqa: BLE001
+        pass
+    # plays still without a clip get a YouTube search each (100 units), the biggest swings first and only while quota is left
+    searches = max(0, min(MAX_SEARCHES, (q.left - 300) // 100))
+    by_ch = {}
+    touched, results = set(), []
     for d, w, doc, names in work:
         out_dir = os.path.join(d, "wp_clips")
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"week_{w}.json")
         try:
             old = json.load(open(path))
-            have = (old.get("clips") or {}) if old.get("mv") == MATCHER else {}
+            fresh = old.get("mv") == MATCHER
+            have = (old.get("clips") or {}) if fresh else {}
+            tried = set(old.get("tried") or []) if fresh else set()
         except Exception:  # noqa: BLE001
-            have = {}
-        found = match_plays([p for p in plays_by_week[(d, w)] if p["key"] not in have], uploads, doc["t0"])
+            have, tried = {}, set()
+        plays = plays_by_week[(d, w)]
+        found = match_plays([p for p in plays if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
-        with open(path, "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "chs": wsig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+        results.append((d, w, doc, have, tried, plays, len(found)))
+    # chapters of longer highlight videos for the plays no short clip covered
+    try:
+        for i, (d, w, doc, have, tried, plays, n) in enumerate(results):
+            games = [g for g in (doc.get("g") or {})]
+            nicks = {n_ for g in games for t_ in g.split("@") for n_ in NICK.get(t_, [])}
+            recaps = [u for u in uploads if RECAP.search(u["title"]) and any(n_ in norm(u["title"]) for n_ in nicks) and doc["t0"] <= u["pub_ms"] <= doc["t0"] + 8 * 86400 * 1000]
+            if not recaps:
+                continue
+            fetch_chapters(q, cache, [u["id"] for u in recaps])
+            m = match_chapters([p for p in plays[:SEARCH_TOP * 2] if p["key"] not in have], recaps, cache, doc["t0"])
+            have.update(m)
+            results[i] = (d, w, doc, have, tried, plays, n + len(m))
+    except QuotaOut as e:
+        print(f"[warn] {e}; chapters resume on a later run", file=sys.stderr)
+    # searches go to the biggest plays across all the weeks being worked on
+    gaps = sorted(((p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results) for p in plays[:SEARCH_TOP] if p["key"] not in have and p["key"] not in tried), key=lambda x: -x[0])
+    quota_out = False
+    for _, i, p in gaps:
+        if searches <= 0 or quota_out:
+            break
+        d, w, doc, have, tried, plays, n = results[i]
+        try:
+            ups = search_clips(q, p, doc["t0"])
+            verify(q, cache, [u["id"] for u in ups])
+            for u in ups:
+                u["dur"], u["embeddable"] = (cache["vid"].get(u["id"]) or [0, 0])[0], bool((cache["vid"].get(u["id"]) or [0, 0])[1])
+            m = match_plays([p], ups, doc["t0"])
+            have.update(m)
+            tried.add(p["key"])
+            searches -= 1
+            results[i] = (d, w, doc, have, tried, plays, n + len(m))
+        except QuotaOut as e:
+            print(f"[warn] {e}; searching resumes on a later run", file=sys.stderr)
+            quota_out = True
+    cache["spent"].append([int(now_s), allowed - q.left])
+    save_cache(cache_path, cache)
+    for d, w, doc, have, tried, plays, n in results:
+        out_dir = os.path.join(d, "wp_clips")
+        apply_manual(have, plays, manual, int(doc.get("season") or 0), w)
+        for c in have.values():
+            by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
+        with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "chs": wsig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
-        print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({len(found)} new)")
+        print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
+    print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))
     for out_dir in touched:
         idx = sorted(int(f[5:-5]) for f in os.listdir(out_dir) if f.startswith("week_") and f.endswith(".json"))
         with open(os.path.join(out_dir, "index.json"), "w") as fh:

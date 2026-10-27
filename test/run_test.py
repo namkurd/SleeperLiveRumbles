@@ -3818,7 +3818,7 @@ def scenario_past_seasons(browser):
     tl3 = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seasons", "2025", "wp_timeline", "week_3.json")))
     # the first candidate refuses to play here (the NFL's usual refusal), the second plays; the last event's clip has nothing that plays
     clips3 = {f"{e[1]}:{e[0]}": ({"id": "badNFL00000", "s": 0, "e": 15, "t": "clip", "c": "NFL", "alt": [{"id": "abc123XYZ00", "s": 0, "e": 15, "c": "Team"}]} if e[0] % 2 == 0
-              else {"id": "badOnly0000", "s": 0, "e": 15, "t": "clip", "c": "NFL"}) for e in tl3["ev"]}
+              else {"id": "badOnly0000", "s": 0, "e": 15, "t": "clip", "c": "NFL"}) for e in tl3["ev"] if e[0] % 3 != 0}
     pg.route("**/iframe_api", lambda r: r.fulfill(status=200, content_type="text/javascript", body="""
       window.YT = { Player: function (el, o) { var f = document.createElement('iframe'), pv = o.playerVars; f.src = o.host + '/embed/' + o.videoId + '?autoplay=' + pv.autoplay + '&start=' + pv.start + '&end=' + pv.end;
         el.parentNode.replaceChild(f, el); this.destroy = function () { f.remove(); }; var self = this;
@@ -3843,6 +3843,12 @@ def scenario_past_seasons(browser):
         pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(150)
         assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 0, "tapping it again closes it"
     assert played and "youtube-nocookie.com/embed/abc123XYZ00" in played and "autoplay=1" in played and "start=0" in played and "end=15" in played, f"a refused clip falls through to the next one, playing at once: {played}"
+    nof = pg.evaluate("document.querySelectorAll('#wp-list li.no-clip').length")
+    if nof:
+        pg.click("#wp-list li.no-clip >> nth=0"); pg.wait_for_timeout(200)
+        fl_ = pg.evaluate("[...document.querySelectorAll('#wp-list .wp-find a')].map(a => a.href)")
+        assert len(fl_) == 2 and "youtube.com/results?search_query=" in fl_[0] and "x.com/search" in fl_[1] and "week" in fl_[0], f"a play with no clip offers a search: {fl_}"
+        pg.click("#wp-list li.no-clip >> nth=0"); pg.wait_for_timeout(100)
     assert failed is None or "youtube.com/watch?v=badOnly0000" in failed, f"a play with nothing that will play here links to YouTube: {failed}"
     pg.evaluate("document.querySelector('#wp-chart .wp-mk').dispatchEvent(new MouseEvent('click', {bubbles: true}))"); pg.wait_for_timeout(200)
     assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") <= 1, "tapping a numbered mark on the chart opens its clip too"

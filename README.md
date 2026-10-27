@@ -1884,17 +1884,29 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 
 ### Play clips
 
-In a finished week's expanded chart, any of the "biggest swings" that has an official highlight shows a ▶. Tapping the
-numbered row (or its number on the chart) opens YouTube's own player under it and plays the first 15 seconds
-(`start`/`end` on the embed; nothing is downloaded or re-hosted). `build_wp_clips.py` finds them nightly: it reads the
-recent uploads of the NFL channel and of the team and network channels listed in `HANDLES` (focused single-player
-clips; add more in `clip_channels.json`: `{"handles": ["@Name"], "videos": ["<id of any video from a channel to add>"]}`) (cheap on API quota) and matches titles to the week's plays by player name, team nickname,
-play kind (TD, interception, sack...) and yardage, keeping only confident matches of 2 minutes or less that allow
-embedding. Unmatched plays are retried on later nights. Needs the `YOUTUBE_API` repository secret (a YouTube Data
-API v3 key); without it nothing is written and the rows simply have no ▶. Output: `wp_clips/week_N.json`, in the
-repo root for the current season (its last three weeks are rechecked nightly) and in `seasons/<year>/wp_clips/` for each
-archived season, which is searched once (`python build_wp_clips.py --force` redoes them). The first run pages the
-channel's uploads back to 2021 (about one API unit per 50 videos), so it takes a few minutes.
+In a finished week's expanded chart, each of the "biggest swings" can be tapped (or its number on the chart). If it has an
+official highlight, YouTube's own player opens under it and plays 15 seconds (`start`/`end` on the embed; nothing is
+downloaded or re-hosted). Some uploads refuse to play outside YouTube (the NFL's own often do); the player reports it and
+the next candidate is tried, then a "Watch on YouTube" link. A play with no clip offers "Search YouTube" and "Search X".
+
+`build_wp_clips.py` finds the clips nightly, in this order for each play:
+1. **Channel uploads.** The recent uploads of the channels in `HANDLES` (the NFL, networks, media and the team channels; more in
+   `clip_channels.json` as `{"handles": ["@Name"], "videos": ["<id of any video from a channel to add>"]}`) are matched to the
+   week's plays by title: player name plus first name or team, the same distance, and the kind of play (TD, interception, sack...).
+   Recaps, reactions and a different distance are rejected. Other channels are preferred over the NFL's own, which is kept as
+   a fallback candidate.
+2. **Chapters.** Longer highlight videos (a team's game highlights) often list timestamps in the description; a chapter that
+   names the player and play starts the embed at that moment.
+3. **YouTube search** (100 API units each, up to 40 a run) for the biggest swings still without a clip.
+4. **Your own picks.** `clips_manual.json`, a list like
+   `{"season": 2026, "week": 5, "player": "Travis Kelce", "label": "40 yd", "video": "https://youtu.be/ID", "start": 12}`,
+   overrides anything found.
+
+It needs the `YOUTUBE_API` repository secret (a YouTube Data API v3 key); without it nothing is written. YouTube's free
+quota is 10,000 units a day, so the crawl is cached (`wp_clips/uploads_cache.json.gz`), resumes after a quota stop, and the
+runs of one day share a budget. The log ends with clips by channel, which is how weak channels get dropped. Output:
+`wp_clips/week_N.json` for the current season (last three weeks rechecked nightly) and `seasons/<year>/wp_clips/` for each
+archived one (searched once per set of channels).
 
 ## Files
 

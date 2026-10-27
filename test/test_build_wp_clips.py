@@ -1,4 +1,5 @@
 """Unit tests for build_wp_clips.py: matching NFL upload titles to the week's big plays (no network)."""
+import json
 import os
 import sys
 
@@ -112,11 +113,71 @@ def test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates():
     assert got["id"] == "kc" and [a["id"] for a in got["alt"]] == ["nfl"], got
 
 
+def test_run_end_to_end_with_a_fake_youtube():
+    import tempfile, gzip
+    from datetime import datetime, timezone, timedelta
+    root = tempfile.mkdtemp()
+    t0 = datetime.now(timezone.utc) - timedelta(days=3)
+    t0ms = int(t0.timestamp() * 1000)
+    os.makedirs(os.path.join(root, "wp_timeline")); os.makedirs(os.path.join(root, "wp_clips"))
+    doc = {"t0": t0ms, "season": 2026, "tm": {"1": "KC", "2": "LAC", "3": "KC"}, "tg": {"KC": "KC@MIA", "MIA": "KC@MIA", "LAC": "LAC@KC"},
+           "ev": [[100, "1", 6.0, "40 yd TD catch"], [200, "2", 5.0, "20 yd TD pass"], [300, "3", 4.0, "12 yd TD catch"]]}
+    json.dump(doc, open(os.path.join(root, "wp_timeline", "week_5.json"), "w"))
+    json.dump({"names": {"1": ["Travis Kelce", "TE"], "2": ["Justin Herbert", "QB"], "3": ["Rashee Rice", "WR"]}}, open(os.path.join(root, "epa_weekly.json"), "w"))
+    json.dump([{"season": 2026, "week": 5, "player": "Rashee Rice", "label": "12 yd", "video": "https://youtu.be/MANUAL12345", "start": 7}], open(os.path.join(root, "clips_manual.json"), "w"))
+    pub = (t0 + timedelta(hours=30)).isoformat().replace("+00:00", "Z")
+    calls = []
+
+    class R:
+        ok = True; status_code = 200; text = ""
+        def __init__(self, j): self._j = j
+        def json(self): return self._j
+
+    def fake_get(url, params=None, timeout=0):
+        calls.append(url.rsplit("/", 1)[-1])
+        if url.endswith("/channels"):
+            return R({"items": [{"id": "UCnflchan"}]} if params["forHandle"] == "@NFL" else {"items": []})
+        if url.endswith("/playlistItems"):
+            return R({"items": [{"snippet": {"publishedAt": pub, "title": "Travis Kelce's 40-yard touchdown | Chiefs vs. Dolphins", "channelTitle": "Kansas City Chiefs", "resourceId": {"videoId": "KELCEvid001"}}}]})
+        if url.endswith("/videos"):
+            ids = params["id"].split(",")
+            return R({"items": [{"id": i, "contentDetails": {"duration": "PT20S"}, "status": {"embeddable": True, "privacyStatus": "public"}} for i in ids]})
+        if url.endswith("/search"):
+            return R({"items": [{"id": {"videoId": "HERBERTvid01"}, "snippet": {"publishedAt": pub, "title": "Justin Herbert 20-yard touchdown pass", "channelTitle": "Los Angeles Chargers"}}]})
+        raise AssertionError(url)
+    C.requests.get = fake_get
+    C.HANDLES = ["@NFL", "@Missing"]
+    os.environ["YOUTUBE_API_KEY"] = "k"
+    C.run(root)
+    wk = json.load(open(os.path.join(root, "wp_clips", "week_5.json")))
+    assert wk["clips"]["1:100"]["id"] == "KELCEvid001" and wk["clips"]["1:100"]["e"] == 15, wk
+    assert wk["clips"]["2:200"]["id"] == "HERBERTvid01", "a play no channel upload covered is found by search"
+    assert wk["clips"]["3:300"]["id"] == "MANUAL12345" and wk["clips"]["3:300"]["s"] == 7 and wk["clips"]["3:300"].get("m") == 1, "a hand-picked link wins"
+    assert os.path.exists(os.path.join(root, "wp_clips", "uploads_cache.json.gz")) and "search" in calls
+    n = len(calls)
+    C.run(root)
+    assert "search" not in calls[n:], "plays already tried are not searched again"
+
+
+def test_chapters_in_a_longer_highlight_video():
+    desc = "Chiefs vs Dolphins\n0:00 Intro\n1:05 Travis Kelce 40-yard touchdown\n12:30 Tua Tagovailoa sack\nsubscribe!"
+    ch = C.chapters_from(desc)
+    assert ch == [[0, "Intro"], [65, "Travis Kelce 40-yard touchdown"], [750, "Tua Tagovailoa sack"]], ch
+    assert C.chapters_from("0:10 only\n0:20 two") == [], "two lines are not a chapter list"
+    plays = [p for p in C.candidate_plays(DOC, NAMES) if p["key"] == "1:100"]
+    rec = [dict(up("recap", "Chiefs vs. Dolphins | 2025 Week 3 Highlights", dur=600), ch="Kansas City Chiefs")]
+    cache = {"vid": {"recap": [600, 1]}, "chap": {"recap": ch}}
+    got = C.match_chapters(plays, rec, cache, T0)["1:100"]
+    assert got["id"] == "recap" and got["s"] == 63 and got["e"] == 78, got
+    cache["vid"]["recap"] = [600, 0]
+    assert C.match_chapters(plays, rec, cache, T0) == {}, "not embeddable: not offered"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_run_end_to_end_with_a_fake_youtube(); test_chapters_in_a_longer_highlight_video(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")
