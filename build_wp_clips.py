@@ -99,7 +99,7 @@ def yards_in(label: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "") -> int:
+def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False) -> int:
     if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
         return 0
     t = norm(title)
@@ -110,14 +110,19 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
     team_in_title = any(n in t for n in nicks)
     own_channel = any(n in ch for n in nicks)
     s = 0
+    need_yards = False
     if player:
         parts = norm(player).replace(" jr", "").replace(" sr", "").replace(" iii", "").replace(" ii", "").split()
         if len(parts) < 2 or parts[-1] not in words:
             return 0   # a play is about a player: no name, no match
         first = parts[0] in words
         # a last name alone is any number of players: the first name, or his team (in the title or as the channel), must back it up
-        if not (first or team_in_title or own_channel or any(n in t for n in opps)):
+        backed = first or team_in_title or own_channel or any(n in t for n in opps)
+        # A short from any channel often names the player by surname alone. For a result of a search made for exactly this play, a
+        # surname is enough when the title also gives this play's distance (checked below).
+        if not backed and not (loose and yards_in(label) is not None):
             return 0
+        need_yards = not backed
         s += 5 if first else 4
     else:
         if not (team_in_title or own_channel):
@@ -140,6 +145,8 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
         if said:
             s += 3
             specific = True
+    if player and need_yards and not (y is not None and re.search(rf"\b{y} (yard|yd)", t)):
+        return 0
     # the name and team alone could be any of his plays: the title must also say what kind, or how far
     return s if specific else 0
 
@@ -176,7 +183,7 @@ def clip_of(u: dict) -> dict:
     return {"id": u["id"], "s": 0, "e": min(CLIP_SECONDS, u["dur"]) if u["dur"] > 0 else CLIP_SECONDS, "t": u["title"][:90], "c": u.get("ch", "")[:40]}
 
 
-def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
+def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool = False) -> dict:
     out = {}
     for p in plays:
         at = t0_ms + p["sec"] * 1000
@@ -184,7 +191,7 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
-            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""))
+            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose)
             if s >= MIN_SCORE:
                 found.append((s - (3 if u.get("ch") in NO_EMBED_HINT else 0), u))
         if found:
@@ -281,6 +288,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
     if y is not None:
         words.append(f"{y} yard")
     words += NICK.get(play["opp"] or "", [])[:1]
+    words.append("shorts")   # a YouTube Short of the play is very often among the first results
     j = q.get(f"{API}/search", {"part": "snippet", "type": "video", "q": " ".join(w for w in words if w), "maxResults": 8, "videoEmbeddable": "true",
                                 "videoDuration": "short", "regionCode": "US", "key": q.key,
                                 "publishedAfter": at.isoformat().replace("+00:00", "Z"), "publishedBefore": (at + timedelta(days=7)).isoformat().replace("+00:00", "Z")})
@@ -580,7 +588,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             verify(q, cache, [u["id"] for u in ups])
             for u in ups:
                 u["dur"], u["embeddable"] = (cache["vid"].get(u["id"]) or [0, 0])[0], bool((cache["vid"].get(u["id"]) or [0, 0])[1])
-            m = match_plays([p], ups, doc["t0"])
+            m = match_plays([p], ups, doc["t0"], loose=True)
             have.update(m)
             tried.add(p["key"])
             searches -= 1

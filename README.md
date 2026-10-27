@@ -1916,7 +1916,7 @@ the next candidate is tried, then a "Watch on YouTube" link. A play with no clip
    a fallback candidate.
 2. **Chapters.** Longer highlight videos (a team's game highlights) often list timestamps in the description; a chapter that
    names the player and play starts the embed at that moment.
-3. **YouTube search** (100 API units each, up to 40 a run) for the biggest swings still without a clip.
+3. **YouTube search** (100 API units each, up to 40 a run) for the biggest swings still without a clip. The query ends in "shorts", since a YouTube Short of the play is very often among the first results; a Short that names the player by surname alone is accepted when its title gives this play's distance.
 4. **Your own picks.** `clips_manual.json`, a list like
    `{"season": 2026, "week": 5, "player": "Travis Kelce", "label": "40 yd", "video": "https://youtu.be/ID", "start": 12}`,
    overrides anything found.

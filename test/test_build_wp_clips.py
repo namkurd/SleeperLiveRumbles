@@ -173,11 +173,23 @@ def test_chapters_in_a_longer_highlight_video():
     assert C.match_chapters(plays, rec, cache, T0) == {}, "not embeddable: not offered"
 
 
+def test_a_short_naming_only_the_surname_is_found_by_search_but_not_by_title_crawl():
+    plays = [p for p in C.candidate_plays(DOC, NAMES) if p["key"] == "1:100"]
+    short = [up("short", "Kelce 40 yard TD #shorts", dur=14)]
+    assert C.match_plays(plays, short, T0) == {}, "the crawl needs the first name or a team: a surname alone is any of several players"
+    got = C.match_plays(plays, short, T0, loose=True)
+    assert got["1:100"]["id"] == "short" and got["1:100"]["e"] == 14, got
+    no_yards = [up("s2", "Kelce touchdown #shorts", dur=14)]
+    assert C.match_plays(plays, no_yards, T0, loose=True) == {}, "...and it must give this play's distance"
+    other = [up("s3", "Kelce 12 yard TD #shorts", dur=14)]
+    assert C.match_plays(plays, other, T0, loose=True) == {}, "another distance is another play"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_run_end_to_end_with_a_fake_youtube(); test_chapters_in_a_longer_highlight_video(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_run_end_to_end_with_a_fake_youtube(); test_chapters_in_a_longer_highlight_video(); test_a_short_naming_only_the_surname_is_found_by_search_but_not_by_title_crawl(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")
