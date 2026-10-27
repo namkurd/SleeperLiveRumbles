@@ -59,7 +59,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add rumbles_history.json epa_weekly.json wp_timeline wp_clips seasons
+          git add rumbles_history.json epa_weekly.json wp_timeline seasons
+          if [ -d wp_clips ]; then git add wp_clips; fi
           if git diff --cached --quiet; then
             echo "No data changes -- nothing to commit."
           else
