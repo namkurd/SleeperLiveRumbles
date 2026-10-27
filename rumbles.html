@@ -202,9 +202,9 @@
   .week-select:disabled { cursor: default; }
   .week-select option { color: #111; background: #fff; }
   .week-select {
-    border: 1px solid var(--accent);
-    background: var(--accent);
-    color: #1a1108;
+    border: 1.5px solid var(--accent);
+    background: var(--panel);
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
     padding: 7px 12px;
     border-radius: 999px;
     font-size: 0.78rem;
@@ -212,7 +212,7 @@
     font-family: inherit;
     cursor: pointer;
     /* Fixed width so the picker is the same size in Actual and Projected (whose option labels are longer). */
-    width: 7rem; max-width: 100%; text-overflow: ellipsis;
+    width: 6.1rem; max-width: 100%; text-overflow: ellipsis;
   }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1204,7 +1204,6 @@
   .rb-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   /* Team-picker groups: same pill style as the size toggle, in the page's
      green so they read as separate controls from the orange size toggle. */
-  .rb-view-group button.active { background: var(--good); color: var(--bg); }
   .rb-view-group button[hidden] { display: none; }
   @media (max-width: 400px) { #rb-sub { max-width: 100%; } #rb-sub button { padding: 6px 7px; } }
   /* Refresh sits at the end of the Everyone/Live/Me pill so it rides along with the sticky bar. */
@@ -1639,6 +1638,22 @@
   /* Pull down at the top of the page to refresh. */
   #ptr { position: fixed; top: 8px; left: 50%; z-index: 90; padding: 5px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-border); color: var(--text-dim); font-size: 0.76rem; font-weight: 600; opacity: 0; pointer-events: none; transform: translate(-50%, -30px); }
   #ptr.go { color: var(--text); border-color: var(--accent); }
+  /* Controls, one system. The four views in the header are the primary navigation: a solid orange pill for where you are. Every other
+     segmented control (card size, which teams, which of my teams, Scenarios view) is a quieter blue-tinted pill, so the two levels never
+     compete. The week picker is an outlined orange select: a chooser, not a place. Hover, keyboard focus and disabled look the same everywhere. */
+  .toggle-group button { transition: background 0.15s, color 0.15s, box-shadow 0.15s; }
+  .toggle-group button:hover:not(.active):not(:disabled):not(.off) { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+  .toggle-group button.active, .rb-view-group button.active { background: color-mix(in srgb, var(--accent-2) 24%, var(--panel)); color: color-mix(in srgb, var(--accent-2) 70%, var(--text)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-2) 55%, transparent); }
+  header .toggle-group button.active { background: var(--accent); color: #1a1108; box-shadow: 0 1px 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .toggle-group button:focus-visible, .week-select:focus-visible, .refresh-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  header .toggle-group button:focus-visible, .week-select:focus-visible { outline-color: var(--accent); }
+  .week-select:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+  /* A head-to-head Rumble (worth 9) glows in the accent; a Field one stays plain. No extra room: it is the block's own edge. */
+  .scen-mode { margin: 0 0 8px; }
+  .sc-rk { display: inline-block; min-width: 1.6em; font-size: 0.7rem; font-weight: 800; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .sc-why { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; line-height: 1.3; }
+  .sc-blk.best .sc-gap b { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sc-blk.h2h { border-color: color-mix(in srgb, var(--accent) 70%, var(--panel-border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent), 0 0 14px -2px color-mix(in srgb, var(--accent) 38%, transparent); }
 </style>
 </head>
 <body>
@@ -1701,7 +1716,7 @@
     </div>
     <div class="rb-note" id="rb-note" hidden>In Play: teams whose Rumble against you is still undecided. Their points so far are below your projection, and yours are below theirs.</div>
     <div class="rb-grid totals" id="rb-grid"></div>
-    <div class="rb-scen" id="rb-scen-view" hidden><div id="scen-weeks" class="scen-wk-note" hidden></div><div id="scen-blocks"></div></div>
+    <div class="rb-scen" id="rb-scen-view" hidden><div class="toggle-group scen-mode" id="scen-mode" role="group" aria-label="Scenarios view"><button type="button" id="sm-mine">Mine</button><button type="button" id="sm-best">Best</button></div><div id="scen-weeks" class="scen-wk-note" hidden></div><div id="scen-blocks"></div></div>
     <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
@@ -4780,7 +4795,7 @@
     var sel = els.weekSelect;
     if (!sel) return;
     // On the Scenarios tab the same picker chooses which week's Scenarios to show (this week, or a finished one).
-    var su = state.view === "rumblin" && state.rb && state.rb.mode === "me" && state.rb.sub === "scenarios" ? state.rb.scenUi : null;
+    var su = state.view === "rumblin" && state.rb && ((state.rb.mode === "me" && state.rb.sub === "scenarios") || (state.rb.scenBest && state.rb.sub === "scenarios")) ? state.rb.scenUi : null;
     if (su) {
       var ssig = "s:" + (su.cur ? "c" : "") + "|" + su.past.join(",");
       sel.disabled = (su.cur ? 1 : 0) + su.past.length < 2;
@@ -6477,8 +6492,9 @@
     var rb = view === "rumblin";
     els.modeActual.classList.toggle("active", !rb && state.mode === "actual");
     els.modeCustom.classList.toggle("active", !rb && state.mode === "custom");
-    els.modeRumblin.classList.toggle("active", rb && !(state.rb.mode === "me" && state.rb.sub === "scenarios"));
-    els.modeScen.classList.toggle("active", rb && state.rb.mode === "me" && state.rb.sub === "scenarios");
+    var onScen = (state.rb.mode === "me" && state.rb.sub === "scenarios") || (state.rb.scenBest && state.rb.sub === "scenarios");
+    els.modeRumblin.classList.toggle("active", rb && !onScen);
+    els.modeScen.classList.toggle("active", rb && onScen);
     document.getElementById("standings-view").hidden = rb;
     document.getElementById("rumblin-view").hidden = !rb;
     render();
@@ -6614,7 +6630,7 @@
   });
   els.weekSelect.addEventListener("change", function () {
     var v = els.weekSelect.value;
-    if (state.view === "rumblin" && state.rb.scenUi && state.rb.mode === "me" && state.rb.sub === "scenarios") {
+    if (state.view === "rumblin" && state.rb.scenUi && ((state.rb.mode === "me" && state.rb.sub === "scenarios") || (state.rb.scenBest && state.rb.sub === "scenarios"))) {
       state.rb.scenWeek = v === "" ? null : parseInt(v, 10);
       renderRumblin();
       return;
@@ -7243,7 +7259,7 @@
         wp = Math.max(1, Math.min(99, wp));
         var wpTxt = over ? (gap > 0.004 ? "Won" : gap < -0.004 ? "Lost" : "Tied") : lockedUp ? "Clinched" : lockedOut ? "Out of reach" : wp + "% to win";
         if (over) wp = gap > 0.004 ? 100 : gap < -0.004 ? 0 : 50;
-        blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + '"><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' + (decided ? '<span class="sc-chip dec">Decided</span>' : "") +
+        blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + (h2h ? " h2h" : "") + '"' + (decided ? ' data-decided="1"' : "") + '><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
           '<div class="sc-hl" title="' + escapeHtml(text) + '">' + escapeHtml(text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wpTxt + "</em></div></div>" +
           mini.html +
@@ -7257,6 +7273,87 @@
     flapScan(box);
     // Let the pictures glide from where they were to where they are now.
     requestAnimationFrame(function () { [].forEach.call(box.querySelectorAll(".sc-av[data-to]"), function (el) { el.style.left = el.getAttribute("data-to") + "%"; }); });
+  }
+
+  // ---- Best matchups: no manager picked. The ten most interesting Rumbles of a week, every pairing considered ----
+  var RB_PAL = ["#a855f7", "#e0a100", "#d6399e", "#22a34a", "#14b8a6", "#c2506b", "#4d9fff", "#ff8a3d", "#8b9cf6", "#5fb8d9", "#b6c23a", "#e05a5a"];
+  function rbPairCols(a, b) {
+    var ca = RB_PAL[(Number(a.rid) - 1 + RB_PAL.length) % RB_PAL.length], cb = RB_PAL[(Number(b.rid) - 1 + RB_PAL.length) % RB_PAL.length];
+    return { mine: ca, theirs: ca === cb ? "var(--bad)" : cb };
+  }
+  // Every pairing of the week (a head-to-head game, or any two teams for the Field point) scored by wpInterest; best ten, no team more than three times.
+  function rbBestList(teams, win) {
+    var out = [], missing = 0, i, j;
+    for (i = 0; i < teams.length; i++) for (j = i + 1; j < teams.length; j++) {
+      var a = teams[i], b = teams[j];
+      if (b.act > a.act) { var sw = a; a = b; b = sw; }   // whoever is ahead is listed first, so "Won" on the chart means the first name
+      var pm = wpPair(win, a, b, rbPairCols(a, b));
+      if (!pm) { missing++; continue; }
+      var h2h = a.opp === b.rid || b.opp === a.rid;
+      out.push({ a: a, b: b, pm: pm, h2h: h2h, it: wpInterest(pm, h2h) });
+    }
+    out.sort(function (x, y) { return y.it.score - x.it.score; });
+    var uses = {}, picked = [];
+    out.forEach(function (r) {
+      if (picked.length >= 10 || (uses[r.a.rid] || 0) >= 3 || (uses[r.b.rid] || 0) >= 3) return;
+      uses[r.a.rid] = (uses[r.a.rid] || 0) + 1; uses[r.b.rid] = (uses[r.b.rid] || 0) + 1;
+      picked.push(r);
+    });
+    return { list: picked, missing: missing, total: out.length + missing };
+  }
+  function rbScenModeUi(best) {
+    document.getElementById("sm-best").classList.toggle("active", best);
+    document.getElementById("sm-mine").classList.toggle("active", !best);
+  }
+  function rbRenderBest() {
+    var rb = state.rb;
+    var liveWk = !ARCHIVE && state.live && state.live.week != null ? Number(state.live.week) : null;
+    var liveTeams = ARCHIVE ? [] : rbTeams();
+    var counted = ((state.history && state.history.weeks_completed) || []).map(Number);
+    var curOpt = liveWk != null && liveTeams.length > 0 && counted.indexOf(liveWk) < 0;
+    var pastWeeks = rbScenPastWeeks(curOpt ? liveWk : null);
+    var picked = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
+    var fallback = pastWeeks.filter(function (w) { return counted.indexOf(w) >= 0; })[0];
+    var showPast = picked != null ? picked : (!curOpt ? (fallback != null ? fallback : pastWeeks[0]) : null);
+    var grid = document.getElementById("rb-grid"), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
+    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
+    var legend = document.querySelector(".rb-legend"); if (legend) legend.style.display = "none";
+    grid.style.display = "none";
+    ["rb-feed", "rb-live", "rb-empty"].forEach(function (id) { var e = document.getElementById(id); if (e) e.hidden = true; });
+    view.hidden = false;
+    rbScenModeUi(true);
+    els.modeScen.classList.add("active"); els.modeRumblin.classList.remove("active");
+    rb.scenUi = { cur: curOpt, past: pastWeeks, value: showPast != null ? String(showPast) : "" };
+    renderWeekSelect();
+    rbWeekNote(rb.scenUi);
+    var teams, win;
+    if (showPast != null) { teams = rbPastTeams(showPast); win = { key: "wk" + showPast, clusters: [], cur: 0, week: showPast, past: true }; }
+    else if (curOpt) {
+      var fw = rbScenWindow(true);
+      teams = liveTeams; win = { key: "best" + liveWk, clusters: [], cur: 0, week: liveWk, past: false, final: !!(fw && fw.final) };
+    } else { box.innerHTML = '<div class="rb-live-empty">No games to show yet.</div>'; return; }
+    // a finished week is scored once; the week in progress at most every 90 seconds
+    var c = state.bestCache, fresh = c && c.key === win.key && c.res.missing === 0 && c.res.total > 0 && (win.past || win.final || Date.now() - c.at < 90000) && c.docs === wpStatus(win.week);
+    if (!fresh) { c = state.bestCache = { key: win.key, at: Date.now(), docs: wpStatus(win.week), res: rbBestList(teams, win) }; }
+    var res = c.res, live = !win.past && !win.final;
+    if (!res.list.length) {
+      var st = wpStatus(win.week);
+      box.innerHTML = '<div class="rb-live-empty">' + (st === "loading" ? "Loading the week\u2019s play-by-play\u2026" : live ? "Best matchups start once the games kick off." : "Play-by-play isn\u2019t available for this week.") + "</div>";
+      return;
+    }
+    var html = res.list.map(function (r, i) {
+      var cols = rbPairCols(r.a, r.b), mini = wpMiniHtml(win, r.a, r.b, cols), pm = r.pm, last = pm.model.at(pm.model.end);
+      var cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
+      var verdict = pm.done ? (last.my > last.th + 0.004 ? r.a.name + " won" : last.th > last.my + 0.004 ? r.b.name + " won" : "Tied") : "Live";
+      return '<section class="sc-blk best' + (r.h2h ? " h2h" : "") + '"><div class="sc-bh"><div><span class="sc-rk">#' + (i + 1) + '</span><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip' + (r.h2h ? " h2h" : "") + '">' + (r.h2h ? "H2H · 9 pts" : "Field · 1 pt") + "</span>" +
+        '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + escapeHtml(r.it.why.join(" \u00b7 ")) + "</div></div>" +
+        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + "</section>";
+    }).join("");
+    box.innerHTML = html;
+    scAvatars(); wpMiniOff();
+    wpSheetKeep();
+    rbStickOffset();
   }
 
   // ---------------------------------------------------------------------------
@@ -7604,15 +7701,45 @@
     return { title: escapeHtml(me.name) + " vs. " + escapeHtml(t.name), sub: scores + " · " + verdict + " · " + (h2h ? "H2H, 9 pts" : "Field, 1 pt") + (pm.approx ? " · approximate" : "") };
   }
 
-  // The week in a sentence or two, for the sheet, the shared picture and the message that goes with it.
-  function wpStory(pm) {
-    var m = pm.model, last = m.at(m.end), a = last.my, b = last.th, me = pm.me.name, th = pm.t.name, f = function (x) { return x.toFixed(2); };
-    var win = a > b + 0.004 ? 1 : b > a + 0.004 ? -1 : 0, P = m.P, T = m.T, side = 0, flips = 0, i;
-    for (i = 0; i < P.length; i++) {
+  // How many times the lead changed hands (a side counts as ahead above 60% or below 40%, so a wobble around 50% is not a change).
+  function wpFlips(P) {
+    var side = 0, flips = 0;
+    for (var i = 0; i < P.length; i++) {
       var sd = P[i] >= 0.6 ? 1 : P[i] <= 0.4 ? -1 : 0;
       if (sd && side && sd !== side) flips++;
       if (sd) side = sd;
     }
+    return flips;
+  }
+  // How good a matchup is to watch or to have watched: close, back and forth, decided late, a deep comeback, one huge swing.
+  // A head-to-head Rumble is worth 9 points to the winner, so it counts for more than a Field comparison. { score, why[] }
+  function wpInterest(pm, h2h) {
+    var m = pm.model, P = m.P, T = m.T, last = m.at(m.end), margin = Math.abs(last.my - last.th), flips = wpFlips(P), why = [], i;
+    var close = Math.exp(-margin / 12), swing = pm.marks[0] ? Math.min(1, Math.abs(pm.marks[0].d) / 0.6) : 0, score, f2 = function (x) { return x.toFixed(2); };
+    if (pm.done) {
+      var w = last.my >= last.th ? 1 : -1, wp = function (k) { return w > 0 ? P[k] : 1 - P[k]; }, lo = 0, at85 = P.length - 1;
+      for (i = 1; i < P.length; i++) if (wp(i) < wp(lo)) lo = i;
+      for (i = 0; i < P.length; i++) if (m.x(T[i]) >= 0.85) { at85 = i; break; }
+      var late = Math.max(0, 0.75 - wp(at85)) / 0.75, depth = Math.max(0, 0.5 - wp(lo)) / 0.5;
+      score = 0.34 * close + 0.2 * Math.min(flips, 6) / 6 + 0.18 * late + 0.16 * depth + 0.12 * swing;
+      why.push(margin < 0.005 ? "A tie" : (w > 0 ? pm.me.name : pm.t.name) + " won by " + f2(margin));
+      if (wp(lo) < 0.25) why.push("was down to " + wpPct(wp(lo)) + "%");
+      if (late > 0.35) why.push("decided late");
+    } else {
+      var tension = 1 - Math.abs(2 * pm.pEnd - 1);
+      score = 0.4 * tension + 0.25 * Math.min(flips, 6) / 6 + 0.15 * close + 0.2 * swing;
+      why.push((last.my >= last.th ? pm.me.name : pm.t.name) + " up " + f2(margin));
+      why.push(wpPct(pm.pEnd) + "% " + pm.me.name);
+    }
+    if (flips) why.push(flips + " lead change" + (flips > 1 ? "s" : ""));
+    if (h2h) score *= 1.25;
+    return { score: score, why: why, margin: margin, flips: flips };
+  }
+
+  // The week in a sentence or two, for the sheet, the shared picture and the message that goes with it.
+  function wpStory(pm) {
+    var m = pm.model, last = m.at(m.end), a = last.my, b = last.th, me = pm.me.name, th = pm.t.name, f = function (x) { return x.toFixed(2); };
+    var win = a > b + 0.004 ? 1 : b > a + 0.004 ? -1 : 0, P = m.P, T = m.T, flips = wpFlips(P), i;
     var head, parts = [];
     if (pm.done) head = win === 0 ? me + " and " + th + " tied " + f(a) + "\u2013" + f(b) : win > 0 ? me + " beat " + th + " " + f(a) + "\u2013" + f(b) : th + " beat " + me + " " + f(b) + "\u2013" + f(a);
     else head = me + (a >= b ? " leads " : " trails ") + th + " " + f(a) + "\u2013" + f(b) + " \u00b7 " + wpPct(pm.pEnd) + "% to win";
@@ -8132,6 +8259,12 @@
   }
   function renderRumblin() {
     var rb = state.rb;
+    // Best matchups needs no manager and no live cards: it has the page to itself.
+    var ctlBox = document.querySelector(".rb-controls");
+    if (rb.scenBest && rb.sub === "scenarios") { rbRenderBest(); return; }
+    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = ""; });
+    if (ctlBox) ctlBox.style.display = "";
+    rbScenModeUi(false);
     var teams = ARCHIVE ? rbArchiveTeams() : rbTeams();
     if (ARCHIVE) {
       // Scenarios is all a past season has: you as a manager of that season, any week, with the charts.
@@ -8662,7 +8795,7 @@
         state.rb.me = t.rid;
         rbSaveMe(t.rid);
         // Picking yourself from the Me button goes straight to the Me view.
-        if (state.rb.wantMe) { rbEnterMe(); if (state.rb.wantScen) state.rb.sub = "scenarios"; }
+        if (state.rb.wantMe) { rbEnterMe(); if (state.rb.wantScen) { state.rb.sub = "scenarios"; state.rb.scenBest = false; } }
         state.rb.wantMe = false; state.rb.wantScen = false;
         document.getElementById("rb-who").hidden = true;
         renderRumblin();
@@ -8746,6 +8879,7 @@
     var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
     if (me) state.rb.me = Number(me.roster_id);
     prefsRestore();
+    if (ARCHIVE && !me) { state.rb.scenBest = true; state.rb.sub = "scenarios"; }   // a past season with nobody picked: its best matchups
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
     if (ARCHIVE && params && params.get("tab") === "scenarios") { if (me) rbEnterMe(); setView("rumblin"); if (me) state.rb.sub = "scenarios"; }
     else if (ARCHIVE) { /* a past season opens on its standings */ }
@@ -8943,15 +9077,26 @@
     if (ARCHIVE) return;   // live cards are for the current season
     // Leaving Scenarios for the cards: back to the Matchup view of the Me tab (or whatever Rumblin' was on).
     if (state.rb.sub === "scenarios" && state.view === "rumblin") state.rb.sub = "matchup";
+    state.rb.scenBest = false;
     setView("rumblin");
   });
   // Scenarios is also a tab of its own (it is still under Rumblin' > Me, too).
   els.modeScen.addEventListener("click", function () {
+    // Opens on Mine when a manager is picked, otherwise on Best (the league's best matchups); tapping Mine then asks who you are.
+    state.rb.scenBest = state.rb.me == null;
+    if (state.rb.scenBest) { state.rb.sub = "scenarios"; setView("rumblin"); return; }
     setView("rumblin");
-    if (state.rb.me == null) { state.rb.wantMe = true; state.rb.wantScen = true; openWhoPicker(); return; }
     rbEnterMe();
     state.rb.sub = "scenarios";
     renderRumblin();
+  });
+  document.getElementById("sm-best").addEventListener("click", function () {
+    state.rb.scenBest = true; state.rb.sub = "scenarios"; state.rb.scenWeek = state.rb.scenWeek; renderRumblin();
+  });
+  document.getElementById("sm-mine").addEventListener("click", function () {
+    state.rb.scenBest = false;
+    if (state.rb.me == null) { state.rb.wantMe = true; state.rb.wantScen = true; openWhoPicker(); state.rb.scenBest = true; return; }
+    rbEnterMe(); state.rb.sub = "scenarios"; renderRumblin();
   });
 
   // "next update in 18s" beside the Last updated time.

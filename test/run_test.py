@@ -2612,20 +2612,19 @@ def scenario_rumblin_controls(browser):
     page.click("#rb-all")
     page.wait_for_timeout(300)
     assert len(cards()) == 12
-    # The selected button is the page's green, and Change me only exists in the Me view.
+    # The selected secondary button is the quiet blue pill (the header's four views are the solid orange one), and Change me only exists in the Me view.
     assert not page.is_visible("#rb-change"), "Change me should be hidden outside the Me view"
-    green_rgb = page.evaluate(
-        "(() => { var p = document.createElement('span'); p.style.color = getComputedStyle(document.documentElement).getPropertyValue('--good').trim(); document.body.appendChild(p); var c = getComputedStyle(p).color; p.remove(); return c; })()"
-    )
-    assert page.evaluate("getComputedStyle(document.getElementById('rb-all')).backgroundColor") == green_rgb, "the selected Everyone button should be green"
+    bg = lambda sel: page.evaluate("getComputedStyle(document.querySelector('%s')).backgroundColor" % sel)
+    sel_bg, hdr_bg = bg("#rb-all"), bg("header .toggle-group button.active")
+    assert sel_bg != bg("#rb-livemode") and sel_bg != hdr_bg, "the selected Everyone button is its own tinted pill, apart from the transparent ones and the header's orange"
+    assert page.evaluate("(() => { const c = getComputedStyle(document.getElementById('rb-all')).backgroundColor.match(/[\\d.]+/g).map(Number); return c[2] > c[0] && c[2] > c[1]; })()"), "...and it leans blue"
 
     # Me defaults to Matchup: just you and your opponent.
     page.click("#rb-me")
     page.wait_for_timeout(400)
     assert active("#rb-me") and active("#rb-matchup") and page.is_visible("#rb-sub")
     assert page.is_visible("#rb-change"), "Change me should show once Me is selected"
-    assert page.evaluate("getComputedStyle(document.getElementById('rb-me')).backgroundColor") == green_rgb, "the selected Me button should be green"
-    assert page.evaluate("getComputedStyle(document.getElementById('rb-matchup')).backgroundColor") == green_rgb, "the selected Matchup button should be green"
+    assert bg("#rb-me") == sel_bg and bg("#rb-matchup") == sel_bg, "the selected Me and Matchup buttons use the same pill"
     assert sorted(cards()) == ["Aidan", "Ben"], f"unexpected Matchup cards: {cards()}"
     assert active("#rb-density [data-d=compact]"), "the Me view should be on Compact cards"
 
@@ -3321,6 +3320,15 @@ def scenario_scenarios_tab(browser):
     page.keyboard.press("r"); page.wait_for_timeout(500)
     assert page.evaluate("window.__r") >= 1, "R key refreshes"
     assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
+    # the league's best matchups need no manager: this week (or its message), and back to my games
+    page.click("#sm-best"); page.wait_for_timeout(1500)
+    bst = page.evaluate("({best: document.getElementById('sm-best').classList.contains('active'), cards: document.querySelectorAll('#scen-blocks .sc-blk.best').length, msg: (document.querySelector('#scen-blocks .rb-live-empty') || {}).textContent, ctl: getComputedStyle(document.querySelector('.rb-controls')).display, strip: getComputedStyle(document.getElementById('rb-strip')).display})")
+    assert bst["best"] and (bst["cards"] > 0 or bst["msg"]) and bst["ctl"] == "none" and bst["strip"] == "none", f"best matchups has the page to itself: {bst}"
+    page.click("#sm-mine"); page.wait_for_timeout(800)
+    assert page.evaluate("document.getElementById('sm-mine').classList.contains('active') && getComputedStyle(document.querySelector('.rb-controls')).display !== 'none' && document.querySelectorAll('#scen-blocks .sc-blk.best').length === 0"), "Mine brings the controls and my blocks back"
+    page.click("#sm-best"); page.wait_for_timeout(500)
+    page.click("#mode-rumblin"); page.wait_for_timeout(300); page.click("#mode-scen"); page.wait_for_timeout(800)
+    assert page.evaluate("document.getElementById('sm-mine').classList.contains('active') && !document.getElementById('sm-best').classList.contains('active')"), "with a manager picked, Scenarios opens on Mine"
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
     assert b[1]["chip"].startswith("H2H") and b[0]["chip"].startswith("Field"), b
@@ -3366,7 +3374,7 @@ def scenario_scenarios_tab(browser):
     before = [(x["who"], x["hl"], x["gap"]) for x in blocks_all()]
     chip(dec[0]).click(); page.wait_for_timeout(300)
     after = page.evaluate("""() => [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent,
-      dec: !!b.querySelector('.sc-chip.dec'), hl: b.querySelector('.sc-hl').textContent, wp: b.querySelector('.sc-wp').textContent}))""")
+      dec: b.dataset.decided === '1', hl: b.querySelector('.sc-hl').textContent, wp: b.querySelector('.sc-wp').textContent}))""")
     added = [x for x in after if x["who"] == dec[0]]
     assert len(after) == len(before) + 1 and added and added[0]["dec"], f"following a decided manager adds a Decided block: {after}"
     assert re.match(r"(Clinched|Out of reach|Final)", added[0]["hl"]) and not re.search(r"\d+%", added[0]["wp"]), added[0]
@@ -3490,6 +3498,7 @@ def scenario_win_probability(browser):
     assert "Mon 8pm" in jake["axis"], f"...Monday night too when a player is in it: {jake}"
     assert 8 <= aid["notches"] <= 12, f"a notch for each play worth more than 2 points or that moves the odds: {aid}"
     blk = "#rb-scen-view .sc-blk:nth-of-type(2)"
+    page.locator(blk).scroll_into_view_if_needed(); page.wait_for_timeout(300)
     nx = page.evaluate("[...document.querySelectorAll('%s .wpm-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })" % blk)
     mb = page.locator(blk + " .wpm-plot").bounding_box()
     tipm = "(() => { const t = document.getElementById('wp-tipm'); return t && !t.hidden ? t.textContent : null; })()"
@@ -3710,6 +3719,7 @@ def scenario_win_probability(browser):
     routes(tp)
     tp.goto(PAGE_URL + "?tab=rumblin&me=Ben"); tp.wait_for_timeout(2500)
     tp.tap("#rb-me"); tp.wait_for_timeout(300); tp.tap("#rb-scen"); tp.wait_for_timeout(2500)
+    tp.locator("#rb-scen-view .sc-blk:nth-of-type(2)").scroll_into_view_if_needed(); tp.wait_for_timeout(300)
     nxy = tp.evaluate("[...document.querySelectorAll('#rb-scen-view .sc-blk:nth-of-type(2) .wpm-notch')].map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })")
     tt = None
     for pt in nxy:
@@ -3789,7 +3799,9 @@ def scenario_header_tabs(browser):
     page.add_init_script("try { localStorage.removeItem('rumbles.me'); localStorage.removeItem('rumbles.prefs'); } catch (e) {}")
     page.goto(PAGE_URL); page.wait_for_timeout(2000)
     page.click("#mode-scen"); page.wait_for_timeout(500)
-    assert page.evaluate("!document.getElementById('rb-who').hidden"), "asks who you are"
+    assert page.evaluate("document.getElementById('sm-best').classList.contains('active') && !document.getElementById('rb-scen-view').hidden && document.getElementById('rb-who').hidden"), "with nobody picked, Scenarios opens on the best matchups"
+    page.click("#sm-mine"); page.wait_for_timeout(400)
+    assert page.evaluate("!document.getElementById('rb-who').hidden"), "Mine asks who you are"
     page.locator("#rb-who .rb-who-list button", has_text="Ben").first.click(); page.wait_for_timeout(1500)
     assert page.evaluate("document.getElementById('mode-scen').classList.contains('active') && !document.getElementById('rb-scen-view').hidden"), "then opens Scenarios"
     page.close()
@@ -3840,7 +3852,22 @@ def scenario_past_seasons(browser):
     pg.select_option("#week-select", ""); pg.wait_for_timeout(300)
 
     # Scenarios for any week of that season, with the win-probability charts
-    pg.click("#mode-scen"); pg.wait_for_timeout(600)
+    pg.click("#mode-scen"); pg.wait_for_timeout(2500)
+    bm = pg.evaluate("""() => ({best: document.getElementById('sm-best').classList.contains('active'), n: document.querySelectorAll('#scen-blocks .sc-blk.best').length, week: document.getElementById('week-select').value,
+      h2h: [...document.querySelectorAll('#scen-blocks .sc-blk.best .sc-chip')].map(c => c.textContent.slice(0, 3)), charts: document.querySelectorAll('#scen-blocks .sc-blk.best .sc-wpm svg').length,
+      why: (document.querySelector('#scen-blocks .sc-blk.best .sc-why') || {}).textContent, who: document.getElementById('rb-who').hidden})""")
+    assert bm["best"] and bm["who"] and bm["n"] == 10 and bm["week"] == "15" and bm["charts"] == 10, f"a past season opens on its ten best matchups of the last counted week: {bm}"
+    assert set(bm["h2h"]) <= {"H2H", "Fie"} and bm["why"], f"each says H2H or Field, and why it is good: {bm}"
+    first = pg.evaluate("document.querySelector('#scen-blocks .sc-blk.best b').textContent + '|' + document.querySelector('#scen-blocks .sc-blk.best .sc-hl').textContent")
+    pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
+    second = pg.evaluate("document.querySelector('#scen-blocks .sc-blk.best b').textContent + '|' + document.querySelector('#scen-blocks .sc-blk.best .sc-hl').textContent")
+    assert pg.evaluate("document.querySelectorAll('#scen-blocks .sc-blk.best').length") == 10 and first != second, "another week, another ten"
+    pg.select_option("#week-select", "15"); pg.wait_for_timeout(1500)
+    pg.click("#scen-blocks .sc-blk.best:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(1200)
+    assert pg.evaluate("!document.getElementById('wp-sheet').hidden && /vs\\./.test(document.getElementById('wp-title').textContent)"), "a best matchup expands like any other"
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    pg.select_option("#week-select", "18"); pg.wait_for_timeout(600)
+    pg.click("#sm-mine"); pg.wait_for_timeout(500)
     assert pg.evaluate("!document.getElementById('rb-who').hidden"), "asks who you were that season"
     pg.locator("#rb-who .rb-who-list button", has_text="Ben").first.click(); pg.wait_for_timeout(3000)
     sc = pg.evaluate("""() => ({view: !document.getElementById('rb-scen-view').hidden, tab: document.getElementById('mode-scen').classList.contains('active'),

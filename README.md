@@ -1882,6 +1882,15 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 `extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
 "not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
 
+### Best matchups
+
+Scenarios has a toggle with two views: **Mine** (your Rumbles, as before) and **Best** (the best matchups), which needs no manager. With a manager picked it opens on Mine; with none it opens on Best, and tapping Mine asks who you are. It scores every
+pairing of the week (a head-to-head game, or any two teams for the Field point) for how good it was to watch: a close
+finish, lead changes, a deep comeback, a win decided late, one huge swing (a week in progress leans on how undecided it is
+and the lead changes so far), and counts a head-to-head game for more, since it is worth 9. The ten best are listed with
+the reason, and each says **H2H** or **Field**. No team appears more than three times. It follows the header week picker,
+this week or any finished one, and works for past seasons too. A head-to-head block has an orange outline in both views.
+
 ### Sharing a chart
 
 Every mini chart has a share button (and the expanded chart a **Share** button). One tap hands the phone's share sheet the
