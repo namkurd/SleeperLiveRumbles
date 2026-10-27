@@ -1550,6 +1550,9 @@
   .wp-list li.has-clip { cursor: pointer; flex-wrap: wrap; }
   .wp-play { flex: none; font-size: 0.7rem; color: var(--accent); opacity: 0.9; }
   .wp-list li.wp-clipbox { display: block; grid-column: 1 / -1; padding: 4px 0 8px; border-top: 0; }
+  .wp-clipbox > div:not(.wp-clipfail) { aspect-ratio: 16 / 9; }
+  .wp-clipfail { padding: 10px 12px; border-radius: 8px; background: var(--panel-border); font-size: 0.78rem; }
+  .wp-clipfail a { color: var(--accent); font-weight: 700; }
   .wp-clipbox iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
   .wp-listh { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
   .wp-listh[hidden] { display: none; }
@@ -7093,6 +7096,20 @@
       rows + "</div>";
   }
 
+  // A Rumble counts as decided only when it is over, or when someone's win probability is under 1% (the same model as "% to win").
+  // Nothing short of that: a gap, or a projection that says the other side should win, leaves it open.
+  var rbScenCtx = null;   // the week's window while Scenarios renders
+  function rbOdds(me, t) {
+    var win = rbScenCtx;
+    if (!win) return null;
+    var pm = wpPairs[win.key + ":" + me.rid + ":" + t.rid];
+    if (pm) return pm.done ? null : pm.pEnd;
+    return rbWinChance(me.act - t.act, rbScenPlayers(me, win), rbScenPlayers(t, win));
+  }
+  function rbLocked(me, t) {
+    var p = rbOdds(me, t);
+    return p != null && (p < 0.01 || p > 0.99);
+  }
   // Every other team can be followed, including one whose Rumble against you is already decided.
   function rbScenAvail(teams, me) {
     var o = {};
@@ -7102,7 +7119,7 @@
   // Until you pick, every opponent still in play is followed; decided ones are added on demand.
   function rbScenDefaultSel(teams) {
     var me = (teams || []).filter(function (t) { return t.rid === state.rb.me; })[0], o = {};
-    if (me) (teams || []).forEach(function (t) { if (t !== me && rbInPlay(me, t)) o[t.rid] = true; });
+    if (me) (teams || []).forEach(function (t) { if (t !== me && !rbLocked(me, t)) o[t.rid] = true; });
     return o;
   }
 
@@ -7169,7 +7186,7 @@
       followed = state.rb.scenSelDone || null;
       if (!followed) { followed = {}; teams.forEach(function (t) { if (t !== me) followed[t.rid] = true; }); }
     }
-    teams.filter(function (t) { return t !== me && (followed ? followed[t.rid] : rbInPlay(me, t)); })
+    teams.filter(function (t) { return t !== me && (followed ? followed[t.rid] : !rbLocked(me, t)); })
       .sort(function (a, b) {
         if (finished) return (b.rid === me.opp) - (a.rid === me.opp) || b.act - a.act || a.name.localeCompare(b.name);
         return b.proj - a.proj || a.name.localeCompare(b.name);
@@ -7182,7 +7199,7 @@
         var over = !mineN && !theirN;
         var lockedUp = gap > 0.004 && !theirN, lockedOut = gap < -0.004 && !mineN;
         var settled = over || lockedUp || lockedOut;
-        var decided = settled || !rbInPlay(me, t);
+        var decided = settled || rbLocked(me, t);
         // Left to the default (in play) view, a Rumble that is settled just drops out; one you chose to follow stays as a Decided block.
         if (!followed && settled) return;
         var fz = state.scenFrozen.by[t.rid], text;
@@ -7577,7 +7594,7 @@
     var list = pm.marks.map(function (mk) {
       var l = wpMarkLine(pm, mk);
       var clip = wpClipFor(pm.win.week, mk);
-      return '<li' + (clip ? ' class="has-clip" data-clip="' + escapeHtml(clip.id) + "|" + clip.s + "|" + clip.e + '" data-n="' + mk.rank + '" tabindex="0" role="button" aria-expanded="false" title="Watch the play"' : "") + '><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div>' + (clip ? '<span class="wp-play" aria-hidden="true">\u25b6</span>' : "") + '<span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
+      return '<li' + (clip ? ' class="has-clip" data-ck="' + escapeHtml(mk.sid + ":" + mk.tt) + '" data-n="' + mk.rank + '" tabindex="0" role="button" aria-expanded="false" title="Watch the play"' : "") + '><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div>' + (clip ? '<span class="wp-play" aria-hidden="true">\u25b6</span>' : "") + '<span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
     }).join("");
     document.getElementById("wp-list").innerHTML = list || '<li class="wp-none">No single play moved the win probability by 10 points or more.</li>';
     document.getElementById("wp-listh").hidden = !pm.marks.length;
@@ -7598,18 +7615,57 @@
     return d && mk.tt != null ? d.clips[mk.sid + ":" + mk.tt] || null : null;
   }
   // Tap a numbered play: its clip opens under it and plays at once (YouTube's own player, trimmed to start/end). Tap again to close.
+  // Some uploads (the NFL's own, often) refuse to play outside YouTube: the player reports it, the next candidate clip is tried, and
+  // when none will play there is a "Watch on YouTube" link instead.
+  var wpYtLoad = null;
+  function wpYtApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if (wpYtLoad) return wpYtLoad;
+    wpYtLoad = new Promise(function (resolve, reject) {
+      var prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = function () { if (prev) prev(); resolve(window.YT); };
+      var sc = document.createElement("script");
+      sc.src = "https://www.youtube.com/iframe_api"; sc.async = true;
+      sc.onerror = function () { wpYtLoad = null; reject(new Error("no player api")); };
+      document.head.appendChild(sc);
+      setTimeout(function () { if (!(window.YT && window.YT.Player)) { wpYtLoad = null; reject(new Error("player api timeout")); } }, 8000);
+    });
+    return wpYtLoad;
+  }
+  function wpClipLink(c) {
+    return "https://www.youtube.com/watch?v=" + encodeURIComponent(c.id) + (c.s ? "&t=" + Number(c.s) + "s" : "");
+  }
+  function wpClipPlay(box, list, i, tries) {
+    var c = list[i], slot = document.createElement("div");
+    box.innerHTML = ""; box.appendChild(slot);
+    function giveUp() {
+      box.innerHTML = '<div class="wp-clipfail">This clip can\u2019t play here. <a href="' + escapeHtml(wpClipLink(list[0])) + '" target="_blank" rel="noopener">Watch on YouTube</a></div>';
+    }
+    function next() { if (i + 1 < list.length) wpClipPlay(box, list, i + 1, tries); else giveUp(); }
+    wpYtApi().then(function (YT) {
+      if (!box.parentNode) return;
+      var pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: c.id, width: "100%", height: "100%",
+        playerVars: { autoplay: 1, start: Number(c.s) || 0, end: Number(c.e) || 15, playsinline: 1, rel: 0, modestbranding: 1 },
+        events: { onReady: function (e) { try { e.target.playVideo(); } catch (x) { /* autoplay may need a tap */ } },
+          onError: function () { try { pl.destroy(); } catch (x) { /* gone already */ } if (box.parentNode) next(); } } });
+    }, function () {
+      // no player API (blocked or offline): a plain embed, which cannot report a refusal
+      box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(c.id) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1&start=" + (Number(c.s) || 0) + "&end=" + (Number(c.e) || 15) +
+        '" title="Play highlight" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+    });
+  }
   function wpClipToggle(li) {
     if (!li) return;
+    var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
+    if (!c) return;
     var list = document.getElementById("wp-list"), open = li.nextElementSibling && li.nextElementSibling.classList.contains("wp-clipbox");
     Array.prototype.forEach.call(list.querySelectorAll(".wp-clipbox"), function (b) { b.previousElementSibling.setAttribute("aria-expanded", "false"); b.parentNode.removeChild(b); });
     if (open) return;
-    var p = li.getAttribute("data-clip").split("|");
     var box = document.createElement("li");
     box.className = "wp-clipbox";
-    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(p[0]) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1&start=" + Number(p[1]) + "&end=" + Number(p[2]) +
-      '" title="Play highlight" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
     li.parentNode.insertBefore(box, li.nextSibling);
     li.setAttribute("aria-expanded", "true");
+    wpClipPlay(box, [c].concat(c.alt || []), 0, 0);
     if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
   }
   function wpOpen(key) {
@@ -8095,6 +8151,7 @@
       var scenTeams = pastMode ? rbPastTeams(showPast) : teams, scenMeT = scenTeams.filter(function (t) { return t.rid === rb.me; })[0] || null;
       var done = pastMode || !!(win && win.final);
       rb.scenDone = done;
+      rbScenCtx = win || null;
       rbOppOverride = pastMode && scenMeT ? scenMeT.opp : null;
       stripTeams = scenTeams;
       rb.lastTeams = scenTeams;
@@ -8109,7 +8166,7 @@
       Object.keys(scenSelNow).forEach(function (k) { if (scenAvail[k]) onSet[k] = true; });
       if (scenMeT) onSet[scenMeT.rid] = true;
       var scenDec = {};
-      if (scenMeT && !done) scenTeams.forEach(function (t) { if (t !== scenMeT && !rbInPlay(scenMeT, t)) scenDec[t.rid] = true; });
+      if (scenMeT && !done) scenTeams.forEach(function (t) { if (t !== scenMeT && rbLocked(scenMeT, t)) scenDec[t.rid] = true; });
       buildStrip(onSet, true, scenDec);
       if (win) rbRenderScenarios(scenTeams, win);
       else document.getElementById("scen-blocks").innerHTML = '<div class="rb-live-empty">This week\u2019s Scenarios open once the Sunday 1pm games are final. Pick a past week above.</div>';

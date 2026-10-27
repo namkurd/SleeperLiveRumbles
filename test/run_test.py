@@ -3320,7 +3320,7 @@ def scenario_scenarios_tab(browser):
     page.evaluate("window.__r = 0; const o = document.getElementById('refresh-btn'); new MutationObserver(() => { if (/Refreshing/.test(o.textContent)) window.__r++; }).observe(o, {childList: true, characterData: true, subtree: true})")
     page.keyboard.press("r"); page.wait_for_timeout(500)
     assert page.evaluate("window.__r") >= 1, "R key refreshes"
-    assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
+    assert [x["who"] for x in blocks_all()] == ["Jake", "Aidan"], f"a Rumble under 1% to win is decided, so it is not in the default view: {blocks_all()}"
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
     assert b[1]["chip"].startswith("H2H") and b[0]["chip"].startswith("Field"), b
@@ -3816,7 +3816,14 @@ def scenario_past_seasons(browser):
     pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
     # official clips for the week's plays (the nightly job writes these): every play has one here, so the top swings all get a play button
     tl3 = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seasons", "2025", "wp_timeline", "week_3.json")))
-    clips3 = {f"{e[1]}:{e[0]}": {"id": "abc123XYZ00", "s": 0, "e": 15, "t": "clip"} for e in tl3["ev"]}
+    # the first candidate refuses to play here (the NFL's usual refusal), the second plays; the last event's clip has nothing that plays
+    clips3 = {f"{e[1]}:{e[0]}": ({"id": "badNFL00000", "s": 0, "e": 15, "t": "clip", "c": "NFL", "alt": [{"id": "abc123XYZ00", "s": 0, "e": 15, "c": "Team"}]} if e[0] % 2 == 0
+              else {"id": "badOnly0000", "s": 0, "e": 15, "t": "clip", "c": "NFL"}) for e in tl3["ev"]}
+    pg.route("**/iframe_api", lambda r: r.fulfill(status=200, content_type="text/javascript", body="""
+      window.YT = { Player: function (el, o) { var f = document.createElement('iframe'), pv = o.playerVars; f.src = o.host + '/embed/' + o.videoId + '?autoplay=' + pv.autoplay + '&start=' + pv.start + '&end=' + pv.end;
+        el.parentNode.replaceChild(f, el); this.destroy = function () { f.remove(); }; var self = this;
+        setTimeout(function () { if (/^bad/.test(o.videoId)) o.events.onError({ data: 150 }); else o.events.onReady({ target: { playVideo: function () {} } }); }, 30); } };
+      setTimeout(function () { window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 0);"""))
     pg.route("**/wp_clips/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))   # (a real week with no clips file is a quiet 404)
     pg.route("**/seasons/2025/wp_clips/week_3.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"v": 1, "week": 3, "clips": clips3})))
     pg.route("**/youtube-nocookie.com/**", lambda r: r.fulfill(status=200, content_type="text/html", body="<html><body>player</body></html>"))
@@ -3826,12 +3833,17 @@ def scenario_past_seasons(browser):
     assert "Week 3" in sh["title"] and sh["marks"] >= 3 and sh["notches"] >= 5 and sh["first"], f"a 2025 game, play by play: {sh}"
     nclip = pg.evaluate("document.querySelectorAll('#wp-list li.has-clip').length")
     assert nclip >= 3, f"the biggest swings that have a clip show a play button: {nclip}"
-    pg.click("#wp-list li.has-clip >> nth=0"); pg.wait_for_timeout(300)
-    fsrc = pg.evaluate("(document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || ''")
-    assert "youtube-nocookie.com/embed/abc123XYZ00" in fsrc and "autoplay=1" in fsrc and "start=0" in fsrc and "end=15" in fsrc, f"tapping a play opens its clip, playing at once: {fsrc}"
-    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 1
-    pg.click("#wp-list li.has-clip >> nth=0"); pg.wait_for_timeout(200)
-    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 0, "tapping it again closes it"
+    played, failed = None, None
+    for i in range(nclip):
+        pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(500)
+        st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-clipfail a') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
+        assert st["n"] == 1, "one clip open at a time"
+        played = played or (st["src"] if st["src"] else None)
+        failed = failed or (st["link"] if st["link"] else None)
+        pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(150)
+        assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 0, "tapping it again closes it"
+    assert played and "youtube-nocookie.com/embed/abc123XYZ00" in played and "autoplay=1" in played and "start=0" in played and "end=15" in played, f"a refused clip falls through to the next one, playing at once: {played}"
+    assert failed is None or "youtube.com/watch?v=badOnly0000" in failed, f"a play with nothing that will play here links to YouTube: {failed}"
     pg.evaluate("document.querySelector('#wp-chart .wp-mk').dispatchEvent(new MouseEvent('click', {bubbles: true}))"); pg.wait_for_timeout(200)
     assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") <= 1, "tapping a numbered mark on the chart opens its clip too"
     pg.evaluate("(document.querySelector('#wp-list .wp-clipbox') || {remove(){}}).remove()")

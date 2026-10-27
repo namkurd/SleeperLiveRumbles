@@ -45,7 +45,7 @@ MAX_PLAYS = 150
 MIN_SCORE = 7
 DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a day, what all runs together may use
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
-MATCHER = 2                                  # bump when the matching rules change: earlier matches are then thrown away and redone
+MATCHER = 3                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
 NICK = {
@@ -163,19 +163,34 @@ def candidate_plays(doc: dict, names: dict) -> list[dict]:
     return plays[:MAX_PLAYS]
 
 
+# The NFL's own channel often forbids embedding outside YouTube ("blocked it from display on this website") even where the API says
+# embeddable, so its uploads are used only when nothing else matches; the page also falls back to the next candidate, then to a link.
+NO_EMBED_HINT = ("NFL", "NFL Network")
+ALTERNATES = 3
+
+
+def clip_of(u: dict) -> dict:
+    return {"id": u["id"], "s": 0, "e": min(CLIP_SECONDS, u["dur"]) if u["dur"] > 0 else CLIP_SECONDS, "t": u["title"][:90], "c": u.get("ch", "")[:40]}
+
+
 def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
     out = {}
     for p in plays:
         at = t0_ms + p["sec"] * 1000
-        best, best_s = None, 0
+        found = []
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
             s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""))
-            if s > best_s:
-                best, best_s = u, s
-        if best and best_s >= MIN_SCORE:
-            out[p["key"]] = {"id": best["id"], "s": 0, "e": min(CLIP_SECONDS, best["dur"]) if best["dur"] > 0 else CLIP_SECONDS, "t": best["title"][:90], "c": best.get("ch", "")[:40]}
+            if s >= MIN_SCORE:
+                found.append((s - (3 if u.get("ch") in NO_EMBED_HINT else 0), u))
+        if found:
+            found.sort(key=lambda x: -x[0])
+            clip = clip_of(found[0][1])
+            alts = [clip_of(u) for _, u in found[1:ALTERNATES + 1] if u["id"] != found[0][1]["id"]]
+            if alts:
+                clip["alt"] = alts
+            out[p["key"]] = clip
     return out
 
 

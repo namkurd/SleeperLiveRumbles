@@ -104,11 +104,19 @@ def test_crawl_resumes_after_quota_and_picks_up_new_uploads():
     assert "vNew" in cache["pl"]["P"]["items"] and q.left == 9, "a later run reads only the new page"
 
 
+def test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates():
+    plays = [p for p in C.candidate_plays(DOC, NAMES) if p["key"] == "1:100"]
+    ups = [dict(up("nfl", "Travis Kelce 40-yard touchdown | Chiefs vs. Dolphins"), ch="NFL"),
+           dict(up("kc", "Travis Kelce 40-yard touchdown"), ch="Kansas City Chiefs")]
+    got = C.match_plays(plays, ups, T0)["1:100"]
+    assert got["id"] == "kc" and [a["id"] for a in got["alt"]] == ["nfl"], got
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")
