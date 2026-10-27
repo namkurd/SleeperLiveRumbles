@@ -110,6 +110,13 @@
     color: var(--text-dim);
     margin: 0;
   }
+  /* The season in the subtitle: reads as text, opens a list. */
+  .season-select { font: inherit; color: var(--text); background: transparent; border: 0; border-bottom: 1px dotted var(--text-dim); border-radius: 0; padding: 0 1px; margin: 0 0 0 -1px; cursor: pointer; }
+  .season-select option { color: #111; background: #fff; }
+  /* A past season is read-only: the live tabs and controls step aside. */
+  .toggle-group button.off { opacity: 0.38; cursor: default; }
+  body.archive #refresh-btn, body.archive #status-actions #refresh-btn, body.archive #rb-density, body.archive .rb-controls > .rb-view-group:not(#rb-sub), body.archive #rb-inplay, body.archive #rb-matchup,
+  body.archive #rb-note, body.archive .rb-legend, body.archive #rb-next, body.archive #rb-away { display: none !important; }
   .status-row {
     display: flex;
     align-items: center;
@@ -1813,6 +1820,12 @@
   "use strict";
 
   var HISTORY_URL = "./rumbles_history.json";
+  // Past seasons: ?season=2025 shows that season's saved files (seasons/2025/...) instead of the live league. Nothing live
+  // is fetched for it; it is read-only, like the current season once it is over.
+  var SEASON_INDEX = [];     // seasons/index.json: the past seasons that can be opened
+  var SEASON_CURRENT = null; // ...and which season is the live one
+  var ARCHIVE = null;        // { season, base } while a past season is showing
+  var DATA_BASE = "./";      // where rumbles_history.json, epa_weekly.json and wp_timeline/ are read from
   // Durable, timestamped log of QB-injury-backup cases that
   // capture_live_qb_injuries.py (a separate, more-frequently-scheduled
   // GitHub Actions workflow -- see that script's own header) confirmed
@@ -3258,12 +3271,51 @@
 
   // ---- data loading ----------------------------------------------------
 
+  // "DTF Club · 2026 season" with the season as a small picker once there are past seasons to open.
+  function renderSeasonPicker(currentSeason) {
+    var sub = els.subtitle, shown = ARCHIVE ? ARCHIVE.season : String(currentSeason || "");
+    var sig = shown + "|" + SEASON_INDEX.map(function (r) { return r.season; }).join(",") + "|" + (ARCHIVE ? String((state.history && state.history.season) || "") : String(currentSeason || ""));
+    if (sub.getAttribute("data-sig") === sig) return;
+    sub.setAttribute("data-sig", sig);
+    if (!SEASON_INDEX.length) { sub.textContent = "DTF Club \u00b7 " + shown + " season"; return; }
+    var cur = ARCHIVE ? String(SEASON_CURRENT || (Math.max.apply(null, SEASON_INDEX.map(function (r) { return Number(r.season); })) + 1)) : String(currentSeason || "");
+    var opts = [{ v: "", t: cur + " season" }].concat(SEASON_INDEX.map(function (r) { return { v: r.season, t: r.season + " season" }; }));
+    sub.innerHTML = "DTF Club \u00b7 " + '<select id="season-select" class="season-select" aria-label="Season">' + opts.map(function (o) {
+      return '<option value="' + o.v + '"' + ((ARCHIVE ? o.v === ARCHIVE.season : o.v === "") ? " selected" : "") + ">" + escapeHtml(o.t) + "</option>";
+    }).join("") + "</select>";
+  }
+  // Switching seasons is a fresh page load of that season (nothing live carries over), keeping who you are by name.
+  document.getElementById("subtitle").addEventListener("change", function (e) {
+    if (e.target.id !== "season-select") return;
+    var u = new URL(location.href), row = rbFindManager(state.rb && state.rb.me);
+    ["wp", "tab", "season", "me"].forEach(function (k) { u.searchParams.delete(k); });
+    if (e.target.value) u.searchParams.set("season", e.target.value);
+    if (row) u.searchParams.set("me", row.manager);
+    location.href = u.toString();
+  });
+
+  function loadSeasonIndex() {
+    return fetchJson("./seasons/index.json").then(function (d) { SEASON_INDEX = (d && d.seasons) || []; SEASON_CURRENT = d && d.current || null; }, function () { SEASON_INDEX = []; }).then(function () {
+      var y = null;
+      try { y = new URLSearchParams(location.search).get("season"); } catch (e) { /* old browser */ }
+      var hit = y && SEASON_INDEX.filter(function (r) { return r.season === y; })[0];
+      if (hit) {
+        ARCHIVE = { season: hit.season, base: "./seasons/" + hit.season + "/" };
+        DATA_BASE = ARCHIVE.base;
+        HISTORY_URL = DATA_BASE + "rumbles_history.json";
+        document.body.classList.add("archive");
+      }
+    });
+  }
   function loadHistory() {
     state.historyError = null;
     return fetchJson(HISTORY_URL)
       .then(function (data) {
         state.history = data;
-        return markConfirmedFromSleeper(data);
+        // A past season can have had another size of league: its playoff field and the most Rumbles a week can pay.
+        if (data && data.playoff_spots) PLAYOFF_SPOTS = data.playoff_spots;
+        if (data && data.max_rumbles_per_week) MAX_RUMBLES_PER_WEEK = data.max_rumbles_per_week;
+        return ARCHIVE ? null : markConfirmedFromSleeper(data);
       })
       .catch(function (err) {
         // Don't swallow this silently -- an unreachable/missing
@@ -4548,7 +4600,7 @@
   function epaLoad(force) {
     if (!force && state.epaAt && Date.now() - state.epaAt < 600000) return Promise.resolve();
     state.epaAt = Date.now();
-    return fetchJson("./epa_weekly.json").then(function (d) { state.epa = d && d.weeks ? d : null; }, function () { /* optional */ });
+    return fetchJson(DATA_BASE + "epa_weekly.json").then(function (d) { state.epa = d && d.weeks ? d : null; }, function () { /* optional */ });
   }
   function epaEntry(pid, week) {
     var w = state.epa && state.epa.weeks && state.epa.weeks[String(week)];
@@ -4717,7 +4769,7 @@
       els.weekSelectWrap.classList.toggle("is-disabled", sel.disabled);
       els.weekSelectWrap.title = "";
       if (sel.getAttribute("data-weeks") !== ssig) {
-        sel.innerHTML = (su.cur ? '<option value="">Current</option>' : "") + su.past.map(function (w) { return '<option value="' + w + '">Week ' + w + "</option>"; }).join("");
+        sel.innerHTML = (su.cur ? '<option value="">' + (ARCHIVE ? "Final" : "Current") + "</option>" : "") + su.past.map(function (w) { return '<option value="' + w + '">Week ' + w + "</option>"; }).join("");
         sel.setAttribute("data-weeks", ssig);
       }
       sel.value = su.value;
@@ -4732,7 +4784,7 @@
     var weeks = inActual ? ((state.history && state.history.weeks_completed) || []).slice().sort(function (a, b) { return b - a; }) : [];
     var sig = (inActual ? "a:" : "p:") + weeks.join(",") + "|" + fut.join(",");
     if (sel.getAttribute("data-weeks") !== sig) {
-      sel.innerHTML = '<option value="">Current</option>' + weeks.map(function (w) {
+      sel.innerHTML = '<option value="">' + (ARCHIVE ? "Final" : "Current") + "</option>" + weeks.map(function (w) {
         return '<option value="' + w + '">Week ' + w + "</option>";
       }).join("") + fut.map(function (w) {
         return '<option value="f' + w + '">Week ' + w + "</option>";
@@ -5380,7 +5432,7 @@
     refreshOrHidePfPaTooltip();
 
     var season = (state.history && state.history.season) || (state.live && state.live.season) || "";
-    els.subtitle.textContent = "DTF Club · " + season + " season";
+    renderSeasonPicker(season);
 
     // "Live" (green dot) now specifically means the week has both posted
     // matchups AND actually kicked off (see computeWeekKickoffInfo) --
@@ -5423,6 +5475,12 @@
       shortStatus = "Not live";
       els.liveWeekLabel.textContent = "";
     }
+    if (ARCHIVE) {
+      els.statusDot.className = "dot";
+      els.statusText.textContent = ARCHIVE.season + " season \u00b7 final";
+      shortStatus = ARCHIVE.season + " final";
+      els.liveWeekLabel.textContent = "";
+    }
     els.statusTextShort.textContent = shortStatus;
 
     if (state.shownHistoricalWeek != null) {
@@ -5448,6 +5506,7 @@
     var nowForPill = new Date();
     els.updatedPill.textContent = "Last updated " + nowForPill.toLocaleTimeString();
     els.updatedPillShort.textContent = "Updated " + nowForPill.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (ARCHIVE) { els.updatedPill.textContent = "Saved standings"; els.updatedPillShort.textContent = "Saved"; }
     tickNext();
 
     if (state.historyError && rows.length) {
@@ -6389,6 +6448,7 @@
   }
 
   function setMode(mode) {
+    if (ARCHIVE && mode === "custom") return;   // projections are for the live season
     state.mode = mode;
     setView("standings");
   }
@@ -7217,7 +7277,7 @@
   function wpLoadIdx() {
     if (wpIdx || wpIdxBusy) return;
     wpIdxBusy = true;
-    fetchJson("./wp_timeline/index.json").then(function (d) { wpIdx = d && d.weeks ? d : { weeks: [] }; }, function () { wpIdx = { weeks: [] }; })
+    fetchJson(DATA_BASE + "wp_timeline/index.json").then(function (d) { wpIdx = d && d.weeks ? d : { weeks: [] }; }, function () { wpIdx = { weeks: [] }; })
       .then(function () { wpIdxBusy = false; wpDirty(); });
   }
   // The week's timeline (null while loading or when none exists). A finished week comes from the nightly play-by-play
@@ -7231,10 +7291,12 @@
     var e = wpDocs[week] || (wpDocs[week] = { doc: null, at: 0, busy: false, final: false, missing: false });
     if (!wpIdx) { wpLoadIdx(); return e.doc; }
     var now = Date.now(), has = wpIdx.weeks.indexOf(Number(week)) >= 0;
+    // A past season has no live recording to fall back on: it is either in the timeline folder or nowhere.
+    if (ARCHIVE && !has) { e.missing = true; e.at = now; return null; }
     var due = has ? !e.final : (!e.at || now - e.at > (e.missing ? 300000 : live ? 60000 : 600000));
     if (due && !e.busy) {
       e.busy = true;
-      var url = has ? "./wp_timeline/week_" + week + ".json" : WP_LIVE_RAW + week + ".json?t=" + Math.floor(now / 60000);
+      var url = has ? DATA_BASE + "wp_timeline/week_" + week + ".json" : WP_LIVE_RAW + week + ".json?t=" + Math.floor(now / 60000);
       fetchJson(url).then(function (d) {
         e.busy = false; e.at = Date.now();
         if (!wpValidDoc(d)) { e.missing = true; return; }
@@ -7607,7 +7669,7 @@
     });
   }
   // The link opens this very chart for whoever gets it: they can hover or drag across the week themselves.
-  function wpLinkUrl(pm) { return location.href.split(/[?#]/)[0] + "?wp=" + pm.win.week + "." + pm.me.rid + "." + pm.t.rid; }
+  function wpLinkUrl(pm) { return location.href.split(/[?#]/)[0] + "?wp=" + pm.win.week + "." + pm.me.rid + "." + pm.t.rid + (ARCHIVE ? "&season=" + ARCHIVE.season : ""); }
   function wpShare() {
     var pm = wpOpenKey && wpPairs[wpOpenKey], btn = document.getElementById("wp-share");
     if (!pm) return;
@@ -7855,9 +7917,20 @@
     renderRumblin();
   });
 
+  // A past season's teams: that season's final week, in the same shape the live view uses (the strip, the picker).
+  function rbArchiveTeams() {
+    var done = (state.history && state.history.weeks_completed) || [];
+    return done.length ? rbPastTeams(Math.max.apply(null, done)) : [];
+  }
   function renderRumblin() {
     var rb = state.rb;
-    var teams = rbTeams();
+    var teams = ARCHIVE ? rbArchiveTeams() : rbTeams();
+    if (ARCHIVE) {
+      // Scenarios is all a past season has: you as a manager of that season, any week, with the charts.
+      rb.mode = rb.me != null ? "me" : "all";
+      if (rb.me != null) rb.sub = "scenarios";
+      else if (!rb.asked && teams.length) { rb.wantMe = true; rb.wantScen = true; openWhoPicker(); }
+    }
     var grid = document.getElementById("rb-grid");
     var strip = document.getElementById("rb-strip");
     var empty = document.getElementById("rb-empty");
@@ -7873,7 +7946,7 @@
     var shown = rb.mode === "all" ? teams : rb.mode === "live" ? teams.filter(function (t) { return t.liveCount > 0; }) : rb.mode === "me" ? rbMeView(teams) : teams.filter(function (t) { return rb.sel[t.rid]; });
     var shownSet = {};
     shown.forEach(function (t) { shownSet[t.rid] = true; });
-    rbRenderNext(teams, shown);
+    if (!ARCHIVE) rbRenderNext(teams, shown);
     rb.sel = shownSet;
     document.getElementById("rb-all").classList.toggle("active", rb.mode === "all");
     document.getElementById("rb-livemode").classList.toggle("active", rb.mode === "live");
@@ -7949,7 +8022,7 @@
       // Projected Vs. Field Rumbles: teams this one is projected to outscore
       // (11 for the top projection, 0 for the bottom).
       var outscored = t.vsField;
-      el.title = "Projected to outscore " + outscored + (outscored === 1 ? " team" : " teams");
+      el.title = (ARCHIVE ? "Outscored " : "Projected to outscore ") + outscored + (outscored === 1 ? " team" : " teams");
       el.innerHTML = '<span class="rb-rank">' + outscored + "</span>" + '<span class="rb-cn">' + escapeHtml(t.name) + '</span><span class="rb-proj"><span class="rb-pl">' + t.proj.toFixed(1) + '</span><span class="rb-ps">' + t.proj.toFixed(0) + "</span></span>";
       strip.appendChild(el);
     });
@@ -8398,7 +8471,14 @@
   // ---- remembering who you are (this device only) ----------------------
   var RB_ME_KEY = "rumbles.me";
   function rbSaveMe(rid) {
-    try { localStorage.setItem(RB_ME_KEY, String(rid)); } catch (e) { /* storage blocked: fine */ }
+    try {
+      localStorage.setItem(RB_ME_KEY, String(rid));
+      var row = rbFindManager(rid);
+      if (row) localStorage.setItem(RB_ME_KEY + ".name", row.manager);   // roster numbers change from year to year; the name does not
+    } catch (e) { /* storage blocked: fine */ }
+  }
+  function rbLoadMeName() {
+    try { return localStorage.getItem(RB_ME_KEY + ".name"); } catch (e) { return null; }
   }
   function rbLoadMe() {
     try { return localStorage.getItem(RB_ME_KEY); } catch (e) { return null; }
@@ -8453,11 +8533,13 @@
     var linkMe = params ? rbFindManager(params.get("me")) : null;
     var wl = params ? /^(\d+)\.(\d+)\.(\d+)$/.exec(params.get("wp") || "") : null;
     if (wl) state.wpLink = { week: Number(wl[1]), me: Number(wl[2]), t: Number(wl[3]) };
-    var me = linkMe || rbFindManager(rbLoadMe());
+    var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
     if (me) state.rb.me = Number(me.roster_id);
     prefsRestore();
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
-    if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
+    if (ARCHIVE && params && params.get("tab") === "scenarios") { if (me) rbEnterMe(); setView("rumblin"); if (me) state.rb.sub = "scenarios"; }
+    else if (ARCHIVE) { /* a past season opens on its standings */ }
+    else if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
     else rbAutoLand();
     state.prefsReady = true;
   }
@@ -8592,7 +8674,7 @@
     var btn = this;
     var row = rbFindManager(state.rb.me);
     if (!row) return;
-    var url = location.href.split(/[?#]/)[0] + "?tab=rumblin&me=" + encodeURIComponent(row.manager);
+    var url = location.href.split(/[?#]/)[0] + (ARCHIVE ? "?season=" + ARCHIVE.season + "&tab=scenarios&me=" : "?tab=rumblin&me=") + encodeURIComponent(row.manager);
     rbCopyText(url).then(function (ok) {
       btn.textContent = ok ? "Copied!" : "Couldn't copy";
       setTimeout(function () { btn.textContent = "Copy link"; }, 1500);
@@ -8648,6 +8730,7 @@
     if (d) rbSetDensity(d);
   });
   els.modeRumblin.addEventListener("click", function () {
+    if (ARCHIVE) return;   // live cards are for the current season
     // Leaving Scenarios for the cards: back to the Matchup view of the Me tab (or whatever Rumblin' was on).
     if (state.rb.sub === "scenarios" && state.view === "rumblin") state.rb.sub = "matchup";
     setView("rumblin");
@@ -8665,6 +8748,7 @@
   function tickNext() {
     var full = document.getElementById("updated-next"), short = document.getElementById("updated-next-short");
     if (!full || !short) return;
+    if (ARCHIVE) { full.textContent = ""; short.textContent = ""; return; }
     var f = "", sh = "";
     if (state.refreshing) { f = " \u00b7 refreshing\u2026"; sh = " \u00b7 \u2026"; }
     else if (state.lastPollAt) {
@@ -8721,8 +8805,13 @@
 
   // ---- boot ------------------------------------------------------------
 
-  loadHistory()
-    .then(loadLive)
+  loadSeasonIndex()
+    .then(function () {
+      if (!ARCHIVE) return;
+      [els.modeCustom, els.modeRumblin].forEach(function (b) { b.classList.add("off"); b.title = "Live tabs are for the current season"; b.setAttribute("aria-disabled", "true"); });
+    })
+    .then(loadHistory)
+    .then(function () { return ARCHIVE ? null : loadLive(); })
     .then(function () { rbInit(); return state.epaOn ? epaLoad(true) : null; })
     .then(render)
     .then(function () { state.awayFrom = seenLoad(); showAway(); })
@@ -8731,6 +8820,7 @@
       render();
     })
     .finally(function () {
+      if (ARCHIVE) return;   // a finished season has nothing to poll
       state.lastPollAt = Date.now();
       function pollNow() {
         if (state.refreshing) return;

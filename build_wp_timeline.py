@@ -499,10 +499,10 @@ def build_week(week: int, rows: list[dict], lineup: dict[str, list], g2s: dict[s
     }
 
 
-def write_index() -> None:
+def write_index(out_dir: str = OUT_DIR) -> None:
     """Which weeks have a timeline, so the page asks only for files that exist."""
-    weeks = sorted(int(f[5:-5]) for f in os.listdir(OUT_DIR) if f.startswith("week_") and f.endswith(".json"))
-    with open(os.path.join(OUT_DIR, "index.json"), "w") as fh:
+    weeks = sorted(int(f[5:-5]) for f in os.listdir(out_dir) if f.startswith("week_") and f.endswith(".json"))
+    with open(os.path.join(out_dir, "index.json"), "w") as fh:
         json.dump({"weeks": weeks}, fh, separators=(",", ":"))
 
 
@@ -516,19 +516,19 @@ def already_good(path: str, have_league: bool = False) -> bool:
         return False
 
 
-def load_scoring() -> dict | None:
-    """The league's scoring_settings (cached after the first fetch), or None when neither is available."""
+def load_scoring(league_id: str | None = None, cache: str = SCORING_CACHE) -> dict | None:
+    """A league's scoring_settings (cached after the first fetch), or None when neither is available."""
     try:
-        lid = json.load(open(HISTORY_PATH))["league_id"]
+        lid = league_id or json.load(open(HISTORY_PATH))["league_id"]
         s = requests.get(f"{SLEEPER_API}/league/{lid}", timeout=30).json().get("scoring_settings")
         if s:
-            os.makedirs(OUT_DIR, exist_ok=True)
-            json.dump(s, open(SCORING_CACHE, "w"), separators=(",", ":"))
+            os.makedirs(os.path.dirname(cache), exist_ok=True)
+            json.dump(s, open(cache, "w"), separators=(",", ":"))
             return s
     except Exception as e:  # noqa: BLE001
         print(f"[warn] league scoring unavailable ({e})", file=sys.stderr)
     try:
-        return json.load(open(SCORING_CACHE))
+        return json.load(open(cache))
     except Exception:  # noqa: BLE001
         return None
 
@@ -566,9 +566,15 @@ def fetch_projections(season: int, week: int, scoring: dict) -> dict[str, float]
         return None
 
 
+_XWALK: dict[str, str] = {}
+
+
 def id_crosswalk() -> dict[str, str]:
-    """gsis id -> Sleeper id: the community table first, then Sleeper's own gsis_id (it has the newest players)."""
-    out: dict[str, str] = {}
+    """gsis id -> Sleeper id: the community table first, then Sleeper's own gsis_id (it has the newest players).
+    Fetched once per run (several seasons are built in one go)."""
+    if _XWALK:
+        return _XWALK
+    out = _XWALK
     text = requests.get(PLAYER_IDS_URL, timeout=120).text
     for row in csv.DictReader(io.StringIO(text)):
         g, s = row.get("gsis_id"), row.get("sleeper_id")
@@ -617,8 +623,9 @@ def load_pbp_rows(season: int) -> list[dict] | None:
     return list(csv.DictReader(io.StringIO(gzip.decompress(resp.content).decode("utf-8"))))
 
 
-def main() -> None:
-    epa = json.load(open(EPA_PATH))
+def run(epa_path: str = EPA_PATH, out_dir: str = OUT_DIR, league_id: str | None = None) -> None:
+    """Builds every finished week of one season's timelines into out_dir (the current season by default)."""
+    epa = json.load(open(epa_path))
     season = int(epa["season"])
     lineups = epa.get("lineups") or {}
     names = epa.get("names") or {}
@@ -630,11 +637,11 @@ def main() -> None:
         print("[warn] no play-by-play yet; leaving wp_timeline as is")
         return
     played = {int(float(r["week"])) for r in rows if (r.get("season_type") or "REG") == "REG"}
-    candidates = scoring_candidates(load_scoring())
+    candidates = scoring_candidates(load_scoring(league_id, os.path.join(out_dir, "scoring.json")))
     scoring = candidates[0][1]
     g2s = id_crosswalk()
     pos_of = {sid: v[1] for sid, v in names.items()}
-    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     by_week: dict[int, dict[str, float]] = {}
     for w, lu in lineups.items():
         for starters in lu.values():
@@ -647,7 +654,7 @@ def main() -> None:
             if w2 != wk:
                 for pid, p in d.items():
                     prior.setdefault(pid, []).append(p)
-        path = os.path.join(OUT_DIR, f"week_{wk}.json")
+        path = os.path.join(out_dir, f"week_{wk}.json")
         lineup = lineups[str(wk)]
         if wk in played and not already_good(path, candidates[0][0] == "league"):
             tl = build_best(wk, rows, lineup, g2s, candidates, prior, fetch_projections(season, wk, scoring), season, pos_of)
@@ -657,7 +664,11 @@ def main() -> None:
                 print(f"[info] week {wk}: {len(tl['ev'])} events, q={tl['q']}, {os.path.getsize(path) // 1024} KB")
             elif tl:
                 print(f"[warn] week {wk}: only {tl['q']:.0%} of the points explained so far (play-by-play incomplete?); will retry")
-    write_index()
+    write_index(out_dir)
+
+
+def main() -> None:
+    run()
 
 
 if __name__ == "__main__":

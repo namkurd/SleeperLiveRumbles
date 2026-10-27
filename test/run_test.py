@@ -3755,6 +3755,99 @@ def scenario_header_tabs(browser):
     print("\nHEADER TABS SCENARIO PASSED")
 
 
+def scenario_past_seasons(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Past seasons (picker, read-only tabs, standings, Scenarios with charts, share link)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=False, timezone_id="UTC")
+    # the season picker on the current season: five past seasons offered, and choosing one reloads into it
+    cur = ctx.new_page()
+    cur.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    cur.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(cur, _gameday_base())
+    cur.goto(PAGE_URL); cur.wait_for_timeout(2500)
+    opts = cur.evaluate("[...document.querySelectorAll('#season-select option')].map(o => o.textContent + (o.selected ? '*' : ''))")
+    assert opts == ["2026 season*", "2025 season", "2024 season", "2023 season", "2022 season", "2021 season"], f"this season and the five before it: {opts}"
+    with cur.expect_navigation():
+        cur.select_option("#season-select", "2023")
+    assert "season=2023" in cur.url and "wp=" not in cur.url, cur.url
+    cur.close()
+
+    # a past season, read-only, from its saved files (no live league behind it)
+    pg = ctx.new_page()
+    pg.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    pg.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(pg, {"**/v1/state/nfl": load("state.json")})
+    pg.goto(PAGE_URL + "?season=2025"); pg.wait_for_timeout(3000)
+    st = pg.evaluate("""() => ({sel: document.getElementById('season-select').value, status: document.getElementById('status-text').textContent, upd: document.getElementById('updated-pill').textContent,
+      rows: [...document.querySelectorAll('#standings-body tr')].map(r => [r.querySelector('.manager').textContent.trim().split(' ')[0], parseInt(r.querySelector('.rumbles').textContent)]),
+      off: ['mode-custom', 'mode-rumblin'].map(i => document.getElementById(i).classList.contains('off')), tabs: [...document.querySelectorAll('header .toggle-group button')].map(b => b.textContent),
+      weeks: [...document.querySelectorAll('#week-select option')].map(o => o.textContent), err: document.getElementById('error-banner').classList.contains('show'), po: document.querySelectorAll('#standings-body tr.po-cut').length})""")
+    assert st["sel"] == "2025" and "2025 season" in st["status"] and "final" in st["status"].lower() and st["upd"] == "Saved standings", f"a past season says so: {st}"
+    assert len(st["rows"]) == 10 and st["rows"][0] == ["Steven", 210], f"the real 2025 standings, ten managers: {st['rows']}"
+    assert st["off"] == [True, True] and st["tabs"] == ["Actual", "Projected", "Rumblin'", "Scenarios"], f"live tabs step aside: {st}"
+    assert st["weeks"][0] == "Final" and st["weeks"][1:3] == ["Week 15", "Week 14"] and not st["err"], f"any week's standings: {st['weeks'][:4]}"
+    assert st["po"] == 1, "the playoff line is drawn (4 teams made it)"
+    assert pg.evaluate("[...document.querySelectorAll('#standings-body tr')].map(r => r.className).indexOf('po-cut')") == 3, "...under 4th place, not 6th"
+    pg.evaluate("document.getElementById('mode-custom').click(); document.getElementById('mode-rumblin').click()"); pg.wait_for_timeout(300)
+    assert pg.evaluate("document.getElementById('rumblin-view').hidden && document.getElementById('mode-actual').classList.contains('active')"), "Projected and Rumblin' do nothing in a past season"
+    pg.select_option("#week-select", "1"); pg.wait_for_timeout(700)
+    assert pg.evaluate("document.getElementById('standings-body').rows.length") == 10, "the standings after any week still work"
+    pg.select_option("#week-select", ""); pg.wait_for_timeout(300)
+
+    # Scenarios for any week of that season, with the win-probability charts
+    pg.click("#mode-scen"); pg.wait_for_timeout(600)
+    assert pg.evaluate("!document.getElementById('rb-who').hidden"), "asks who you were that season"
+    pg.locator("#rb-who .rb-who-list button", has_text="Ben").first.click(); pg.wait_for_timeout(3000)
+    sc = pg.evaluate("""() => ({view: !document.getElementById('rb-scen-view').hidden, tab: document.getElementById('mode-scen').classList.contains('active'),
+      opts: [...document.querySelectorAll('#week-select option')].map(o => o.textContent), val: document.getElementById('week-select').value,
+      blocks: [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, hl: b.querySelector('.sc-hl').textContent, chart: !!b.querySelector('.sc-wpm svg polyline'), pct: (b.querySelector('.wpm-pct') || {}).textContent})),
+      hidden: ['rb-inplay', 'rb-matchup', 'rb-density'].map(i => getComputedStyle(document.getElementById(i)).display)})""")
+    assert sc["view"] and sc["tab"] and sc["opts"][0] == "Week 15" and sc["val"] == "15" and len(sc["opts"]) == 15, f"every regular-season week, latest first: {sc['opts'][:3]}"
+    assert len(sc["blocks"]) == 9 and sc["blocks"][0]["hl"].startswith("Final") and all(b["chart"] for b in sc["blocks"]), f"nine finished Rumbles, each with its chart: {sc['blocks'][:2]}"
+    assert all(b["pct"] in ("Won", "Lost", "Tied") for b in sc["blocks"]) and sc["hidden"] == ["none", "none", "none"], f"results, with the live controls gone: {sc}"
+    pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
+    pg.click("#rb-scen-view .sc-blk:first-of-type .sc-wpm"); pg.wait_for_timeout(700)
+    sh = pg.evaluate("""() => ({title: document.getElementById('wp-title').textContent, marks: document.querySelectorAll('#wp-chart .wp-mk').length, notches: document.querySelectorAll('#wp-chart .wp-notch').length,
+      first: (document.querySelector('#wp-list li .wp-ph') || {}).textContent, axis: [...document.querySelectorAll('#wp-chart svg text')].map(t => t.textContent).filter(t => /^(Sun|Mon|Thu) \\d/.test(t))})""")
+    assert "Week 3" in sh["title"] and sh["marks"] >= 3 and sh["notches"] >= 5 and sh["first"], f"a 2025 game, play by play: {sh}"
+    assert any(a.startswith("Sun 1pm") for a in sh["axis"]), f"kickoff windows on its axis: {sh['axis']}"
+    pg.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true})")
+    pg.click("#wp-share"); pg.wait_for_timeout(400)
+    link = pg.evaluate("window.__wpLink")
+    assert "season=2025" in link and re.search(r"wp=3\.\d+\.\d+", link), f"the shared link names the season: {link}"
+    # the person who gets the link sees that chart, interactively, with nobody signed in
+    fr = ctx.new_page()
+    fr.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    fr.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(fr, {"**/v1/state/nfl": load("state.json")})
+    fr.add_init_script("try { localStorage.clear(); } catch (e) {}")
+    fr.goto(link); fr.wait_for_timeout(3500)
+    fs = fr.evaluate("({vis: !document.getElementById('wp-sheet').hidden, title: document.getElementById('wp-title').textContent, notches: document.querySelectorAll('#wp-chart .wp-notch').length, who: !document.getElementById('rb-who').hidden})")
+    assert fs["vis"] and "Week 3" in fs["title"] and fs["notches"] >= 5 and not fs["who"], f"the link opens the 2025 chart: {fs}"
+    nx = fr.evaluate("[...document.querySelectorAll('#wp-chart .wp-notch')].slice(0, 6).map(n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })")
+    tip = None
+    for p_ in nx:
+        fr.mouse.move(p_[0], p_[1]); tip = fr.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
+        if tip and "yd" in tip: break
+    assert tip and "% to win" in tip, f"hovering a notch names the play: {tip}"
+    fr.close()
+    # the picker from inside a past season: another season keeps who you are by name, the live season is one pick away
+    with pg.expect_navigation():
+        pg.keyboard.press("Escape"); pg.select_option("#season-select", "2022")
+    assert "season=2022" in pg.url and "me=Ben" in pg.url, pg.url
+    pg.wait_for_timeout(2500)
+    assert pg.evaluate("document.getElementById('season-select').value") == "2022" and pg.evaluate("document.getElementById('standings-body').rows[0].querySelector('.manager').textContent.trim().split(' ')[0]") == "Ben", "2022: Ben won it with 218"
+    with pg.expect_navigation():
+        pg.select_option("#season-select", "")
+    assert "season=" not in pg.url, pg.url
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("\nPAST SEASONS SCENARIO PASSED")
+
+
 def scenario_trends(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: Season trends chart (collapsed by default, three views)")
@@ -4033,6 +4126,7 @@ def main():
         scenario_scenarios_tab(browser)
         scenario_win_probability(browser)
         scenario_header_tabs(browser)
+        scenario_past_seasons(browser)
         scenario_gameday_helpers(browser)
         scenario_future_weeks(browser)
         scenario_name_overflow_audit(browser)

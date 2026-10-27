@@ -118,7 +118,7 @@ def kicker_defense(pbp_text: str, gsis_to_sleeper: dict[str, str]) -> dict[str, 
     return weeks
 
 
-def lineups_for(weeks_done: list[int], previous: dict) -> tuple[dict, dict, list]:
+def lineups_for(weeks_done: list[int], previous: dict, league_id: str | None = None) -> tuple[dict, dict, list]:
     """Starters and points per roster for completed weeks. Weeks already in the previous file are reused,
     so a normal night makes no Sleeper calls at all and a new week makes a few."""
     lineups = dict(previous.get("lineups") or {})
@@ -127,8 +127,7 @@ def lineups_for(weeks_done: list[int], previous: dict) -> tuple[dict, dict, list
     todo = [w for w in weeks_done if str(w) not in lineups]
     if not todo:
         return lineups, names, slots
-    hist = json.load(open(os.path.join(HERE, "rumbles_history.json")))
-    lid = hist["league_id"]
+    lid = league_id or json.load(open(os.path.join(HERE, "rumbles_history.json")))["league_id"]
     slots = requests.get(f"{SLEEPER_API}/league/{lid}", timeout=30).json().get("roster_positions") or slots
     meta = requests.get(SLEEPER_PLAYERS, timeout=120).json()
     for w in todo:
@@ -167,13 +166,14 @@ def id_crosswalk() -> dict[str, str]:
     return out
 
 
-def main() -> None:
-    season = int(requests.get(SLEEPER_STATE, timeout=30).json()["season"])
-    gsis_to_sleeper = id_crosswalk()
+def build_season(season: int, league_id: str, weeks_done: list[int], out_path: str, gsis_to_sleeper: dict[str, str] | None = None) -> dict | None:
+    """Writes one season's epa_weekly.json (EPA per player-week, plus that league's starters and points for the weeks
+    done). Used for the current season by main() and for past seasons by build_seasons.py."""
+    gsis_to_sleeper = gsis_to_sleeper or id_crosswalk()
     resp = requests.get(NFLVERSE_URL.format(season=season), timeout=120)
     if resp.status_code != 200:
-        print(f"[warn] nflverse has no stats file for {season} yet (HTTP {resp.status_code}); leaving {OUTPUT_PATH} as is")
-        return
+        print(f"[warn] nflverse has no stats file for {season} yet (HTTP {resp.status_code}); leaving {out_path} as is")
+        return None
     out = build(season, resp.text, gsis_to_sleeper)
     try:
         pbp = requests.get(PBP_URL.format(season=season), timeout=180)
@@ -188,23 +188,30 @@ def main() -> None:
         print(f"[warn] kicker/defense EPA skipped ({e})", file=sys.stderr)
     previous = {}
     try:
-        previous = json.load(open(OUTPUT_PATH))
+        previous = json.load(open(out_path))
         if previous.get("season") != season:
             previous = {}
     except Exception:  # noqa: BLE001
         previous = {}
     try:
-        done = json.load(open(os.path.join(HERE, "rumbles_history.json"))).get("weeks_completed") or []
-        out["lineups"], out["names"], out["slots"] = lineups_for(done, previous)
+        out["lineups"], out["names"], out["slots"] = lineups_for(weeks_done, previous, league_id)
     except Exception as e:  # noqa: BLE001 - lineups are a convenience; keep whatever we had
         print(f"[warn] lineups skipped ({e})", file=sys.stderr)
         for k in ("lineups", "names", "slots"):
             if k in previous:
                 out[k] = previous[k]
-    with open(OUTPUT_PATH, "w") as fh:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
         json.dump(out, fh, separators=(",", ":"))
     n = sum(len(w) for w in out["weeks"].values())
-    print(f"[info] wrote {OUTPUT_PATH}: {len(out['weeks'])} weeks, {n} player-weeks")
+    print(f"[info] wrote {out_path}: {len(out['weeks'])} weeks, {n} player-weeks")
+    return out
+
+
+def main() -> None:
+    season = int(requests.get(SLEEPER_STATE, timeout=30).json()["season"])
+    hist = json.load(open(os.path.join(HERE, "rumbles_history.json")))
+    build_season(season, hist["league_id"], hist.get("weeks_completed") or [], OUTPUT_PATH)
 
 
 if __name__ == "__main__":

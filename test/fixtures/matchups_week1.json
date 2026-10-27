@@ -1,0 +1,110 @@
+[
+  {
+    "roster_id": 1,
+    "matchup_id": 1,
+    "starters": [
+      "WK1_R1_PLAYED",
+      "WK1_R1_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 2,
+    "matchup_id": 1,
+    "starters": [
+      "P_HIST_INJURED",
+      "WK1_R2_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 3,
+    "matchup_id": 2,
+    "starters": [
+      "WK1_R3_A",
+      "WK1_R3_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 4,
+    "matchup_id": 2,
+    "starters": [
+      "WK1_R4_INJURED",
+      "WK1_R4_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 5,
+    "matchup_id": 3,
+    "starters": [
+      "WK1_R5_A",
+      "WK1_R5_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 6,
+    "matchup_id": 3,
+    "starters": [
+      "WK1_R6_A",
+      "WK1_R6_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 7,
+    "matchup_id": 4,
+    "starters": [
+      "WK1_R7_A",
+      "WK1_R7_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 8,
+    "matchup_id": 4,
+    "starters": [
+      "WK1_R8_A",
+      "WK1_R8_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 9,
+    "matchup_id": 5,
+    "starters": [
+      "WK1_R9_A",
+      "WK1_R9_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 10,
+    "matchup_id": 5,
+    "starters": [
+      "WK1_R10_A",
+      "WK1_R10_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 11,
+    "matchup_id": 6,
+    "starters": [
+      "WK1_R11_A",
+      "WK1_R11_B"
+    ],
+    "points": 0
+  },
+  {
+    "roster_id": 12,
+    "matchup_id": 6,
+    "starters": [
+      "WK1_R12_A",
+      "WK1_R12_B"
+    ],
+    "points": 0
+  }
+]

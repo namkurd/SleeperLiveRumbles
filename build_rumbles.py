@@ -802,7 +802,9 @@ def build_history(
             c["vs_field_l"] += info["teams_outscored_by"]
 
     weeks_played = len(completed_weeks)
-    max_possible = weeks_played * MAX_RUMBLES_PER_WEEK
+    # 9 for the H2H win plus 1 for every other team: 20 in a 12-team league, 18 in a 10-team one (past seasons).
+    max_per_week = RUMBLES_PER_WIN + max(0, len(manager_map) - 1)
+    max_possible = weeks_played * max_per_week
 
     standings = []
     for rid, c in cumulative.items():
@@ -836,7 +838,7 @@ def build_history(
         "league_id": league_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "weeks_completed": completed_weeks,
-        "max_rumbles_per_week": MAX_RUMBLES_PER_WEEK,
+        "max_rumbles_per_week": max_per_week,
         "rumbles_per_h2h_win": RUMBLES_PER_WIN,
         "standings": standings,
         "weekly": weekly,

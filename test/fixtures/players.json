@@ -28,5 +28,59 @@
     "team": "KC",
     "full_name": "Some Other QB",
     "injury_status": null
+  },
+  "P9": {
+    "position": "RB",
+    "team": "DAL",
+    "full_name": "Joe Starter One",
+    "injury_status": null
+  },
+  "P10": {
+    "position": "WR",
+    "team": "PHI",
+    "full_name": "Joe Starter Two",
+    "injury_status": null
+  },
+  "P13": {
+    "position": "RB",
+    "team": "SEA",
+    "full_name": "Steven Starter One",
+    "injury_status": null
+  },
+  "P14": {
+    "position": "WR",
+    "team": "SEA",
+    "full_name": "Steven Starter Two",
+    "injury_status": null
+  },
+  "WK1_R1_PLAYED": {
+    "position": "WR",
+    "team": null,
+    "full_name": "Week1 Aidan Starter",
+    "injury_status": null
+  },
+  "P_HIST_INJURED": {
+    "position": "QB",
+    "team": null,
+    "full_name": "Test Injured QB",
+    "injury_status": "Out"
+  },
+  "P_HIST_BACKUP": {
+    "position": "QB",
+    "team": null,
+    "full_name": "Test Backup QB",
+    "injury_status": null
+  },
+  "WK1_R4_INJURED": {
+    "position": "QB",
+    "team": null,
+    "full_name": "Week1 Rohaan Injured QB",
+    "injury_status": "Out"
+  },
+  "WK1_R4_BACKUP": {
+    "position": "QB",
+    "team": null,
+    "full_name": "Week1 Rohaan Backup QB",
+    "injury_status": null
   }
 }

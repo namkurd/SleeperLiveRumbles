@@ -1,18 +1,42 @@
 [
   {
-    "status": "complete",
-    "game_id": "TESTGAME1",
-    "week": 2,
-    "away_team": "DET",
-    "home_team": "GB",
-    "quarter": "F"
+    "status": "post_game",
+    "metadata": {
+      "away_team": "DET",
+      "home_team": "GB",
+      "is_over": true,
+      "is_in_progress": false
+    }
   },
   {
     "status": "in_progress",
-    "game_id": "TESTGAME2",
-    "week": 2,
-    "away_team": "MIN",
-    "home_team": "CHI",
-    "quarter": "3"
+    "start_time": 1790020800000,
+    "metadata": {
+      "away_team": "MIN",
+      "home_team": "CHI",
+      "is_over": false,
+      "is_in_progress": true,
+      "quarter_num": 2,
+      "time_remaining": "9:00"
+    }
+  },
+  {
+    "status": "pre_game",
+    "start_time": 1789909200000,
+    "metadata": {
+      "away_team": "DAL",
+      "home_team": "PHI",
+      "is_over": false,
+      "is_in_progress": false
+    }
+  },
+  {
+    "status": "post_game",
+    "metadata": {
+      "away_team": "SEA",
+      "home_team": "ARI",
+      "is_over": true,
+      "is_in_progress": false
+    }
   }
 ]

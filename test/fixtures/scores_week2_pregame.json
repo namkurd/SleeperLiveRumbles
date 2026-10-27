@@ -1,0 +1,42 @@
+[
+  {
+    "status": "pre_game",
+    "start_time": 1793390400000,
+    "metadata": {
+      "away_team": "DET",
+      "home_team": "GB",
+      "is_over": false,
+      "is_in_progress": false
+    }
+  },
+  {
+    "status": "pre_game",
+    "start_time": 1793390400000,
+    "metadata": {
+      "away_team": "MIN",
+      "home_team": "CHI",
+      "is_over": false,
+      "is_in_progress": false
+    }
+  },
+  {
+    "status": "pre_game",
+    "start_time": 1793304000000,
+    "metadata": {
+      "away_team": "DAL",
+      "home_team": "PHI",
+      "is_over": false,
+      "is_in_progress": false
+    }
+  },
+  {
+    "status": "pre_game",
+    "start_time": 1793390400000,
+    "metadata": {
+      "away_team": "SEA",
+      "home_team": "ARI",
+      "is_over": false,
+      "is_in_progress": false
+    }
+  }
+]
