@@ -27,7 +27,15 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://www.googleapis.com/youtube/v3"
 NFL_UPLOADS = "UUDVYQ4Zhbm3S2dlz7P1GBDg"   # the NFL channel's uploads playlist
-MAX_PAGES = 600                              # 50 uploads a page, one quota unit each: reaches back through several seasons
+MAX_PAGES = 300                              # per channel; 50 uploads a page, one quota unit each: reaches back through several seasons
+# Channels searched, by handle (resolved to ids once, 1 quota unit each, and remembered in wp_clips/channels.json). The NFL's own
+# channel is first; the team channels post many focused single-player clips. A handle that does not resolve is skipped, and more
+# can be added in clip_channels.json: {"handles": ["@Name", ...]}.
+HANDLES = ["@NFL", "@NFLonFOX", "@NFLNetwork", "@ESPN",
+           "@azcardinals", "@AtlantaFalcons", "@baltimoreravens", "@buffalobills", "@panthers", "@chicagobears", "@bengals", "@Browns",
+           "@dallascowboys", "@DenverBroncos", "@Lions", "@packers", "@HoustonTexans", "@Colts", "@Jaguars", "@KansasCityChiefs",
+           "@Raiders", "@chargers", "@LosAngelesRams", "@MiamiDolphins", "@vikings", "@patriots", "@neworleanssaints", "@Giants",
+           "@NewYorkJets", "@philadelphiaeagles", "@steelers", "@49ers", "@Seahawks", "@TBBuccaneers", "@tennesseetitans", "@commanders"]
 CLIP_SECONDS = 15
 MAX_DURATION = 120                           # a highlight of one play, not a recap
 MIN_POINTS = 2.5
@@ -145,31 +153,66 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int) -> dict:
             if s > best_s:
                 best, best_s = u, s
         if best and best_s >= MIN_SCORE:
-            out[p["key"]] = {"id": best["id"], "s": 0, "e": min(CLIP_SECONDS, best["dur"]) if best["dur"] > 0 else CLIP_SECONDS, "t": best["title"][:90]}
+            out[p["key"]] = {"id": best["id"], "s": 0, "e": min(CLIP_SECONDS, best["dur"]) if best["dur"] > 0 else CLIP_SECONDS, "t": best["title"][:90], "c": best.get("ch", "")[:40]}
     return out
 
 
-def fetch_uploads(key: str, since_ms: int, windows: list[tuple[float, float]] | None = None) -> list[dict]:
-    """The channel's uploads back to since_ms (newest first, 50 a page at one quota unit each). `windows` limits the
-    per-video details lookup (also one unit per 50) to uploads inside some week's span."""
-    items, token = [], None
-    for _ in range(MAX_PAGES):
-        r = requests.get(f"{API}/playlistItems", params={"part": "snippet", "playlistId": NFL_UPLOADS, "maxResults": 50, "key": key, **({"pageToken": token} if token else {})}, timeout=30)
-        r.raise_for_status()
-        j = r.json()
-        stop = False
-        for it in j.get("items", []):
-            sn = it.get("snippet") or {}
-            pub = datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000
-            if pub < since_ms:
-                stop = True
+def resolve_channels(key: str, cache_path: str, extra_path: str) -> list[dict]:
+    """[{handle, playlist}] for every handle that resolves; remembered so later runs spend nothing on it."""
+    try:
+        known = json.load(open(cache_path))
+    except Exception:  # noqa: BLE001
+        known = {}
+    handles = list(HANDLES)
+    try:
+        handles += [h for h in json.load(open(extra_path)).get("handles", []) if h not in handles]
+    except Exception:  # noqa: BLE001
+        pass
+    out = []
+    for h in handles:
+        if h not in known:
+            try:
+                r = requests.get(f"{API}/channels", params={"part": "id", "forHandle": h, "key": key}, timeout=30)
+                items = r.json().get("items") if r.ok else None
+                known[h] = ("UU" + items[0]["id"][2:]) if items else None
+            except Exception:  # noqa: BLE001
                 continue
-            if windows is None or any(a <= pub <= b for a, b in windows):
-                items.append({"id": (sn.get("resourceId") or {}).get("videoId"), "title": sn.get("title") or "", "pub_ms": pub})
-        token = j.get("nextPageToken")
-        if stop or not token:
-            break
-    items = [i for i in items if i["id"]]
+        if known.get(h):
+            out.append({"handle": h, "playlist": known[h]})
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "w") as fh:
+        json.dump(known, fh, separators=(",", ":"), sort_keys=True)
+    return out
+
+
+def fetch_uploads(key: str, since_ms: int, windows: list[tuple[float, float]] | None = None, playlists: list[str] | None = None) -> list[dict]:
+    """Uploads back to since_ms from each playlist (newest first, 50 a page at one quota unit each). `windows` limits the
+    per-video details lookup (also one unit per 50) to uploads inside some week's span."""
+    items, seen = [], set()
+    for pl in playlists or [NFL_UPLOADS]:
+        token = None
+        for _ in range(MAX_PAGES):
+            r = requests.get(f"{API}/playlistItems", params={"part": "snippet", "playlistId": pl, "maxResults": 50, "key": key, **({"pageToken": token} if token else {})}, timeout=30)
+            if not r.ok:
+                print(f"[warn] playlist {pl}: HTTP {r.status_code}", file=sys.stderr)
+                break
+            j = r.json()
+            stop = False
+            for it in j.get("items", []):
+                sn = it.get("snippet") or {}
+                if not sn.get("publishedAt"):
+                    continue
+                pub = datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000
+                if pub < since_ms:
+                    stop = True
+                    continue
+                vid = (sn.get("resourceId") or {}).get("videoId")
+                if vid and vid not in seen and (windows is None or any(a <= pub <= b for a, b in windows)):
+                    seen.add(vid)
+                    items.append({"id": vid, "title": sn.get("title") or "", "pub_ms": pub, "ch": sn.get("channelTitle") or ""})
+            token = j.get("nextPageToken")
+            if stop or not token:
+                break
     for i in range(0, len(items), 50):
         chunk = items[i:i + 50]
         r = requests.get(f"{API}/videos", params={"part": "contentDetails,status", "id": ",".join(c["id"] for c in chunk), "key": key}, timeout=30)
@@ -225,8 +268,10 @@ def run(root: str = HERE, force: bool = False) -> None:
         print("[info] no week needs clips")
         return
     windows = [(doc["t0"], doc["t0"] + 8 * 86400 * 1000) for _, _, doc, _ in work]
-    uploads = fetch_uploads(key, min(a for a, _ in windows), windows)
-    print(f"[info] {len(uploads)} NFL uploads in the windows of {len(work)} week(s)")
+    chans = resolve_channels(key, os.path.join(root, "wp_clips", "channels.json"), os.path.join(root, "clip_channels.json"))
+    print(f"[info] channels: {', '.join(c['handle'] for c in chans) or 'none resolved (using the NFL channel)'}")
+    uploads = fetch_uploads(key, min(a for a, _ in windows), windows, [c["playlist"] for c in chans] or None)
+    print(f"[info] {len(uploads)} uploads in the windows of {len(work)} week(s)")
     touched = set()
     for d, w, doc, names in work:
         out_dir = os.path.join(d, "wp_clips")

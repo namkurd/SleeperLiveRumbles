@@ -46,11 +46,33 @@ def test_rejects_long_unembeddable_and_early_videos():
     assert short["1:100"]["e"] == 9, "a short clip ends where it ends"
 
 
+def test_channels_resolve_once_and_skip_unknown_handles():
+    import tempfile
+    calls = []
+
+    class R:
+        def __init__(self, items): self.ok, self._i = True, items
+        def json(self): return {"items": self._i}
+
+    def fake_get(url, params=None, timeout=0):
+        calls.append(params["forHandle"])
+        return R([{"id": "UCabc123"}] if params["forHandle"] in ("@NFL", "@Chiefs") else [])
+    C.requests.get = fake_get
+    C.HANDLES = ["@NFL", "@Nope"]
+    d = tempfile.mkdtemp()
+    extra = os.path.join(d, "x.json"); open(extra, "w").write('{"handles": ["@Chiefs"]}')
+    got = C.resolve_channels("k", os.path.join(d, "w", "c.json"), extra)
+    assert [c["handle"] for c in got] == ["@NFL", "@Chiefs"] and got[0]["playlist"] == "UUabc123", got
+    n = len(calls)
+    C.resolve_channels("k", os.path.join(d, "w", "c.json"), extra)
+    assert len(calls) == n, "resolved handles (and misses) are remembered"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
 if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_duration_parse()
+    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")
