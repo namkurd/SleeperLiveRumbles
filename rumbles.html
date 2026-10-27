@@ -200,10 +200,11 @@
      hidden, so the Actual/Projected buttons never shift when switching. */
   .week-select-wrap.is-disabled { opacity: 0.4; }
   .week-select:disabled { cursor: default; }
+  .week-select option { color: #111; background: #fff; }
   .week-select {
-    border: 1px solid var(--panel-border);
-    background: var(--panel);
-    color: var(--text);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #1a1108;
     padding: 7px 12px;
     border-radius: 999px;
     font-size: 0.78rem;
@@ -831,7 +832,7 @@
   /* Inset shadow, not a border: collapsed borders vanish under the sticky # / Manager cells on phones. */
   #standings-body tr.po-cut td { border-bottom: 0 !important; box-shadow: inset 0 -2px 0 var(--gold); }
   #standings-body tr.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
-  #standings-table tr.me-row.po-cut td.rank { box-shadow: inset 3px 0 0 var(--accent-2), inset 0 -2px 0 var(--gold); }
+  #standings-table tr.me-row.po-cut td.rank { box-shadow: inset 0 -2px 0 var(--gold); }
   #standings-table tr.me-row.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   .po-note[hidden] { display: none; }
@@ -1458,9 +1459,8 @@
   #standings-table thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); }
   #standings-table thead th:first-child, #standings-table thead th:nth-child(2) { z-index: 5; }
   /* Your own row: tinted, accent stripe, and it stays pinned at the bottom while you scroll above it. */
-  #standings-table tr.me-row td { position: sticky; bottom: 0; z-index: 2; background-color: var(--panel); background-image: linear-gradient(color-mix(in srgb, var(--accent-2) 14%, transparent), color-mix(in srgb, var(--accent-2) 14%, transparent)); border-top: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--panel-border)); }
+  #standings-table tr.me-row td { position: sticky; bottom: 0; z-index: 2; background-color: var(--panel); }
   #standings-table tr.me-row td.rank, #standings-table tr.me-row td.manager { z-index: 4; }
-  #standings-table tr.me-row td.rank { box-shadow: inset 3px 0 0 var(--accent-2); }
   #standings-table tr.me-row td.manager { box-shadow: 1px 0 0 var(--panel-border); }
   .rb-live-t thead th { position: sticky; top: var(--rb-stick, 0px); z-index: 6; background: var(--panel); }
   .rb-live-t tbody tr.me { background-image: linear-gradient(color-mix(in srgb, var(--accent-2) 12%, transparent), color-mix(in srgb, var(--accent-2) 12%, transparent)); }
@@ -1510,18 +1510,18 @@
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
   .sc-hl { font-size: 0.72rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
   /* Win-probability chart in Scenarios */
-  .sc-wpm { position: relative; height: 62px; margin: 6px 0 4px; padding-right: 44px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
+  .sc-wpm { position: relative; height: 62px; margin: 6px 0 4px; padding-right: 54px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
   .sc-wpm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .wpm-plot { position: absolute; left: 0; right: 44px; top: 0; bottom: 16px; touch-action: pan-y; }
+  .wpm-plot { position: absolute; left: 0; right: 54px; top: 0; bottom: 16px; touch-action: pan-y; }
   .sc-wpm { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
   .wpm-notch { stroke-width: 1.6; vector-effect: non-scaling-stroke; opacity: 0.95; }
   .wpm-cur { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; background: var(--text-dim); pointer-events: none; }
   .wpm-cur[hidden] { display: none; }
-  .wpm-axis { position: absolute; left: 0; right: 44px; bottom: 1px; height: 13px; pointer-events: none; }
+  .wpm-axis { position: absolute; left: 0; right: 54px; bottom: 1px; height: 13px; pointer-events: none; }
   .wpm-axis span { position: absolute; transform: translateX(-35%); font-size: 0.56rem; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .wpm-axis span:first-child { transform: none; }
-  .wpm-share, .wpm-exp { position: absolute; right: 2px; bottom: 15px; width: 20px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.78rem; line-height: 1; cursor: pointer; }
-  .wpm-share { right: 24px; }
+  .wpm-share, .wpm-exp { position: absolute; right: 2px; bottom: 15px; width: 18px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.78rem; line-height: 1; cursor: pointer; }
+  .wpm-share { right: 22px; }
   .wpm-share:disabled { opacity: 0.5; }
   .wpm-exp-old { position: absolute; right: 12px; bottom: 15px; width: 22px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.8rem; line-height: 1; cursor: pointer; }
   #wp-tipm { position: fixed; z-index: 70; max-width: min(92vw, 340px); white-space: normal; }
@@ -1531,9 +1531,9 @@
   .wpm-area { fill-opacity: 0.4; } .wpm-mid { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
   .wpm-div { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; opacity: 0.45; }
   .wpm-line { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-  .wpm-dot { position: absolute; left: min(var(--x), calc(100% - 11px)); width: 22px; height: 22px; border-radius: 50%; margin: -11px 0 0 -11px; box-sizing: border-box; border: 2px solid var(--c, var(--text-dim)); background: color-mix(in srgb, var(--c, #888) 35%, var(--panel)); box-shadow: 0 0 0 2px var(--panel), 0 1px 4px rgba(0,0,0,0.45); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .wpm-dot { position: absolute; left: var(--x); width: 22px; height: 22px; border-radius: 50%; margin: -11px 0 0 -11px; box-sizing: border-box; border: 2px solid var(--c, var(--text-dim)); background: color-mix(in srgb, var(--c, #888) 35%, var(--panel)); box-shadow: 0 0 0 2px var(--panel), 0 1px 4px rgba(0,0,0,0.45); overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .wpm-dot b { font-size: 0.62rem; line-height: 1; color: var(--text); } .wpm-dot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .wpm-pct { position: absolute; right: 0; top: 19px; transform: translateY(-50%); width: 44px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .wpm-pct { position: absolute; right: 0; top: 19px; transform: translateY(-50%); width: 54px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .wpm-ap { position: absolute; left: 6px; top: 2px; font-size: 0.56rem; color: var(--text-dim); }
   .sc-blk.sc-done { padding-bottom: 8px; }
   .wp-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(5,7,12,0.66); display: flex; align-items: center; justify-content: center; padding: 12px; }
@@ -1825,7 +1825,7 @@
   <div class="wp-card">
     <div class="wp-head">
       <div class="wp-ttl"><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div></div>
-      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-image" class="refresh-btn" title="Save a picture of this chart to your device">Save</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
+      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
       <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div></div>
@@ -6579,6 +6579,14 @@
       if (el && !el.classList.contains("empty") && (e.key === "Enter" || e.key === " ") && !(e.target.closest && e.target.closest(".wpm-share"))) { e.preventDefault(); wpOpen(el.getAttribute("data-wp")); }
     });
     document.getElementById("wp-close").addEventListener("click", wpClose);
+    // A pinned moment goes away with a tap on its tooltip, or on empty space around the chart: it stays for the chart, the buttons and the list.
+    document.getElementById("wp-sheet").addEventListener("pointerdown", function (e) {
+      if (wpPinT == null || !wpOpenKey) return;
+      var tip = document.getElementById("wp-tipx"), r = tip.getBoundingClientRect();
+      var onTip = !tip.hidden && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      var keep = e.target.closest && e.target.closest(".wp-btns, #wp-list, #wp-chart svg");
+      if (onTip || !keep) { wpUnpin(); if (onTip) { e.stopPropagation(); e.preventDefault(); } }
+    }, true);
     document.getElementById("wp-list").addEventListener("click", function (e) { wpClipToggle(e.target.closest && e.target.closest("li[data-ck]")); });
     document.getElementById("wp-list").addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") { var li = e.target.closest && e.target.closest("li[data-ck]"); if (li) { e.preventDefault(); wpClipToggle(li); } }
@@ -6589,7 +6597,6 @@
     });
     document.getElementById("wp-share").addEventListener("click", function () { wpShare(); });
     document.getElementById("wp-replay").addEventListener("click", function () { wpReveal(); });
-    document.getElementById("wp-image").addEventListener("click", wpShareImage);
     document.getElementById("wp-sheet").addEventListener("click", function (e) { if (e.target.id === "wp-sheet") wpClose(); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && wpOpenKey) wpClose(); });
     chart.addEventListener("pointermove", wpHover);
@@ -7108,7 +7115,7 @@
       rows + "</div>";
   }
 
-  // A Rumble counts as decided only when it is over, or when someone's win probability is under 1% (the same model as "% to win").
+  // A Rumble counts as decided only when it is over, or when someone's win probability is under 0.5% (the same model as "% to win").
   // Nothing short of that: a gap, or a projection that says the other side should win, leaves it open.
   var rbScenCtx = null;   // the week's window while Scenarios renders
   function rbOdds(me, t) {
@@ -7120,7 +7127,7 @@
   }
   function rbLocked(me, t) {
     var p = rbOdds(me, t);
-    return p != null && (p < 0.01 || p > 0.99);
+    return p != null && (p < 0.005 || p > 0.995);
   }
   // Every other team can be followed, including one whose Rumble against you is already decided.
   function rbScenAvail(teams, me) {
@@ -7758,7 +7765,11 @@
     var px = e.clientX - r.left;
     if (px < g.ml - 6 || px > g.ml + g.pw + 6) { wpHoverOff(); return; }
     var sc = wpScrub(m, pm.notches, Math.max(0, Math.min(1, (px - g.ml) / g.pw)), g.pw, 7);
-    if (e.type === "pointerdown") wpPinT = sc.t;   // a tap pins the moment: the link opens right there
+    if (e.type === "pointerdown") {
+      // a tap pins the moment (the link opens right there); tapping the pinned spot again lets go of it
+      if (wpPinT != null && Math.abs(m.x(wpPinT) - m.x(sc.t)) * g.pw < 12) { wpUnpin(); return; }
+      wpPinT = sc.t;
+    }
     wpShowAt(pm, sc.t, sc.notch);
   }
   // The cursor, dot and tooltip at one moment of the week.
@@ -7776,6 +7787,7 @@
     if (top < 2) top = (r.top - wr.top) + cy + 14;
     tip.style.left = left + "px"; tip.style.top = top + "px";
   }
+  function wpUnpin() { wpPinT = null; wpHoverOff(); }
   function wpHoverOff() {
     var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg"), hov = svg && svg.querySelector(".wp-hov");
     if (hov) hov.innerHTML = "";
@@ -7891,24 +7903,6 @@
       return navigator.share({ title: title, text: story, url: url }).catch(function () { /* cancelled */ });
     }).then(function () { btn.disabled = false; });
   }
-  function wpShareImage() {
-    var pm = wpOpenKey && wpPairs[wpOpenKey], btn = document.getElementById("wp-image");
-    if (!pm) return;
-    var name = "win-probability-week-" + pm.win.week + "-" + String(pm.t.name).toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png";
-    btn.disabled = true;
-    wpSharePng(pm).then(function (blob) {
-      window.__wpShared = { size: blob.size, name: name };
-      var file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
-      if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        return navigator.share({ files: [file], title: wpSummary(pm).title.replace(/&amp;/g, "&") + " – Week " + pm.win.week }).catch(function () { /* cancelled */ });
-      }
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    }).catch(function () { alert("Couldn’t make the image on this device."); }).then(function () { btn.disabled = false; });
-  }
-
   function rbPlayerRow(p, bench, struck) {
     var status = p.game_status;
     var live = status === "in_progress";

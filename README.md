@@ -1888,7 +1888,7 @@ Every mini chart has a share button (and the expanded chart a **Share** button).
 picture of the chart, the story of the week (written from the win-probability model: the result, how low the winner got and
 what flipped it, the lead changes) and a link; on a computer the story and link are copied. The link opens that chart for
 whoever gets it, with the week drawing itself in. Tap a moment in the chart, or a play in the list, and the link made after
-that carries `&t=` and opens on that moment. The replay button (↻) draws the week again; **Save** downloads the picture.
+that carries `&t=` and opens on that moment. The replay button (↻) draws the week again. Tap a pinned moment's tooltip, or empty space beside the chart, to let go of it.
 
 ### Play clips
 

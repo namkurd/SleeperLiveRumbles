@@ -3320,7 +3320,7 @@ def scenario_scenarios_tab(browser):
     page.evaluate("window.__r = 0; const o = document.getElementById('refresh-btn'); new MutationObserver(() => { if (/Refreshing/.test(o.textContent)) window.__r++; }).observe(o, {childList: true, characterData: true, subtree: true})")
     page.keyboard.press("r"); page.wait_for_timeout(500)
     assert page.evaluate("window.__r") >= 1, "R key refreshes"
-    assert [x["who"] for x in blocks_all()] == ["Jake", "Aidan"], f"a Rumble under 1% to win is decided, so it is not in the default view: {blocks_all()}"
+    assert [x["who"] for x in blocks_all()][:2] == ["Jake", "Aidan"] and blocks_all()[2]["hl"].endswith("to catch up"), blocks_all()
     b = blocks()
     assert [x["who"] for x in b] == ["Jake", "Aidan"], f"ordered by the opposing manager's projection: {b}"
     assert b[1]["chip"].startswith("H2H") and b[0]["chip"].startswith("Field"), b
@@ -3573,6 +3573,20 @@ def scenario_win_probability(browser):
     page.click("#wp-share"); page.wait_for_timeout(400)
     pinned = page.evaluate("window.__wpLink")
     assert re.search(r"wp=2\.\d+\.\d+&t=\d+$", pinned or ""), f"a pinned moment rides along in the link: {pinned}"
+    assert not page.evaluate("document.getElementById('wp-tipx').hidden"), "a tapped moment stays up"
+    page.click("#wp-title"); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('wp-tipx').hidden"), "a tap on empty space lets go of it"
+    page.mouse.move(box["x"] + box["w"] * 0.6, box["y"] + box["h"] / 2); page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
+    tb = page.evaluate("(() => { const r = document.getElementById('wp-tipx').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2, hidden: document.getElementById('wp-tipx').hidden}; })()")
+    assert not tb["hidden"]
+    page.mouse.click(tb["x"], tb["y"]); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('wp-tipx').hidden"), "a tap on the tooltip itself dismisses it"
+    page.mouse.move(box["x"] + box["w"] * 0.6, box["y"] + box["h"] / 2); page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
+    page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
+    assert page.evaluate("document.getElementById('wp-tipx').hidden"), "tapping the pinned spot again lets go of it"
+    page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
+    page.click("#wp-share"); page.wait_for_timeout(300)
+    assert "&t=" in page.evaluate("window.__wpLink"), "the pin is back for the link"
     pf = ctx.new_page()
     pf.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     pf.on("pageerror", lambda exc: page_errors.append(str(exc)))
@@ -3628,11 +3642,6 @@ def scenario_win_probability(browser):
     assert wd["h"] >= 280 and wd["labels"] >= 3 and not wd["overlap"] and wd["listTop"] >= wd["svgBottom"], f"taller on a wide screen, labels apart, plays beneath: {wd}"
     if os.environ.get("SCENSHOT"): wide.screenshot(path="/tmp/sf/wp_wide.png")
     wide.close()
-    # ...and a picture of it
-    with page.expect_download() as dl:
-        page.click("#wp-image")
-    assert dl.value.suggested_filename.endswith(".png") and "week-2" in dl.value.suggested_filename, dl.value.suggested_filename
-    assert page.evaluate("window.__wpShared && window.__wpShared.size") > 3000, "the shared image is a real picture"
     # escape closes
     page.keyboard.press("Escape"); page.wait_for_timeout(200)
     assert page.evaluate("document.getElementById('wp-sheet').hidden"), "Escape closes it"
