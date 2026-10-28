@@ -3628,6 +3628,9 @@ def scenario_win_probability(browser):
         lab = page.evaluate("""(() => { const sv = document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect(), L = [...document.querySelectorAll('#wp-chart .wp-wl')].map(t => t.getBoundingClientRect()), pop = document.getElementById('wp-pop');
           const pr = [...pop.querySelectorAll('img, .wp-pop-av, span')].map(e => e.getBoundingClientRect());
           return {n: L.length, out: L.filter(r => r.left < sv.left - 1 || r.right > sv.right + 1 || r.bottom > sv.bottom + 1).length, covered: !pop.hidden && L.some(r => pr.some(q => q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top))}; })()""")
+        cen = page.evaluate("""(() => { const t = document.getElementById('wp-ticker'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (t.hidden || getComputedStyle(t).display === 'none') return null;
+          const r = document.createRange(); r.selectNodeContents(t); const c = r.getBoundingClientRect(); return {text: (c.left + c.right) / 2, plays: (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2}; })()""")
+        assert cen is None or abs(cen["text"] - cen["plays"]) <= 8, f"the time, score and odds line is centred over the two pinned plays: {cen}"
         assert lab["out"] == 0 and not lab["covered"], f"the game windows stay in frame and visible during the replay: {lab}"
     page.click("#wp-replay") if page.evaluate("document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')") else None
     page.set_viewport_size(vp0); page.wait_for_timeout(600)
@@ -3678,6 +3681,9 @@ def scenario_win_probability(browser):
           return ['wp-last-top', 'wp-last-bot'].some(id => { const e = document.getElementById(id); if (e.hidden) return false; const b = e.getBoundingClientRect(); return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; }); })()""")
         assert not ov, "the moving tooltip never covers a manager's pinned scoring play: " + str(pf.evaluate("['wp-tipx','wp-last-top','wp-last-bot','wp-chart'].map(i => { const r = document.getElementById(i).getBoundingClientRect(); return [i, Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; })"))
         pf.wait_for_timeout(700)
+    cen = pf.evaluate("""(() => { const t = document.getElementById('wp-ticker'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (getComputedStyle(t).display === 'none') return null;
+      const r = document.createRange(); r.selectNodeContents(t); const c = r.getBoundingClientRect(); return {text: (c.left + c.right) / 2, plays: (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2}; })()""")
+    assert cen is None or abs(cen["text"] - cen["plays"]) <= 6, f"the time, score and odds are centred over the two pinned plays: {cen}"
     xs = []
     for _ in range(4):
         xs.append(pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))")); pf.wait_for_timeout(350)

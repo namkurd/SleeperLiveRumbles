@@ -1585,7 +1585,7 @@
   body.solo .wp-card { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; box-shadow: none; }
   .wp-brand { display: none; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); text-decoration: none; margin-bottom: 2px; }
   body.solo .wp-brand { display: inline-block; } .wp-brand:hover { text-decoration: underline; }
-  .wp-ticker { margin-top: 6px; padding: 5px 9px; border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 12%, var(--panel)); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wp-ticker { margin-top: 6px; padding: 5px 9px; border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 12%, var(--panel)); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
   .wp-ticker[hidden] { display: none; } .wp-ticker span { color: var(--text-dim); margin-left: 4px; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-ticker { display: none; } }
   .wp-list li.wp-now { background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -8181,6 +8181,7 @@
     w.classList.remove("on");
     if (w.getAttribute("data-fs")) { w.setAttribute("font-size", w.getAttribute("data-fs")); w.setAttribute("x", w.getAttribute("data-x0")); }
   }
+  function wpTickReset() { var t = document.getElementById("wp-ticker"); if (t) { t.style.width = ""; t.style.marginLeft = ""; t.style.overflow = ""; } }
   function wpPlayStop() {
     if (!wpPlay.on) return;
     cancelAnimationFrame(wpPlay.raf); wpPlay.on = false; wpUnblind();
@@ -8191,7 +8192,7 @@
     if (svg) svg.style.clipPath = "";
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-wait"), function (li) { li.classList.remove("wp-wait"); });
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
-    document.getElementById("wp-ticker").hidden = true;
+    document.getElementById("wp-ticker").hidden = true; wpTickReset();
     wpLastBox(true).hidden = true; wpLastBox(false).hidden = true;
     btn.innerHTML = "&#8635;"; btn.setAttribute("aria-label", "Replay the week"); btn.title = "Watch the week play out";
     var pm = wpOpenKey && wpPairs[wpOpenKey];
@@ -8257,6 +8258,15 @@
     // side by side along the top, clear of the first manager's name tag: the first manager's last play on the left, the other's on the right
     var x0 = host.offsetLeft + g.ml + (wide ? 126 : 6), avail = g.ml + g.pw + host.offsetLeft - x0 - 4, each = Math.max(80, Math.floor(avail / 2) - 4), y = host.offsetTop + g.mt + (wide ? 4 : 36);
     [top, bot].forEach(function (b, i) { b.style.transform = "none"; b.style.maxWidth = each + "px"; b.style.width = each + "px"; b.style.left = (x0 + i * (each + 8)) + "px"; b.style.top = y + "px"; });
+  }
+  // The time, score and odds line sits centred over the two pinned plays below it.
+  function wpTickAlign() {
+    var tick = document.getElementById("wp-ticker"), a = wpLastBox(true), b = wpLastBox(false);
+    if (!tick || tick.hidden || a.hidden || b.hidden) return;
+    var par = tick.parentNode.getBoundingClientRect(), ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+    if (!par.width || !ar.width) return;
+    var l = Math.min(ar.left, br.left), r = Math.max(ar.right, br.right);
+    tick.style.boxSizing = "border-box"; tick.style.width = (r - l) + "px"; tick.style.marginLeft = (l - par.left) + "px"; tick.style.overflow = "visible";
   }
   function wpLastSet(pm, side, notch) {
     var isTop = side > 0, box = wpLastBox(isTop), col = wpResolve(isTop ? pm.col.mine : pm.col.theirs);
@@ -8420,6 +8430,7 @@
       var at = m.at(tt);
       tick.hidden = false;
       tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span class=\"wp-bigp\" style=\"color:" + wpResolve(at.p >= 0.5 ? pm.col.mine : pm.col.theirs) + "\">" + wpPct(at.p >= 0.5 ? at.p : 1 - at.p) + "% " + escapeHtml(at.p >= 0.5 ? pm.me.name : pm.t.name) + "</span>";
+      wpTickAlign();
       rows.forEach(function (li) {
         if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) {
           li.classList.remove("wp-wait");
