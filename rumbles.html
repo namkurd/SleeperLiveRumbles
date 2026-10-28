@@ -1675,7 +1675,7 @@
 <div class="wrap">
   <header>
     <div>
-      <h1><a href="./" id="home-link" title="Back to this week's standings">Rumble Central</a></h1>
+      <h1><a href="rumbles.html" id="home-link" title="Back to this week's standings">Rumble Central</a></h1>
       <p class="subtitle" id="subtitle">DTF Club · loading…</p>
     </div>
     <div class="controls">
@@ -6594,8 +6594,9 @@
   // The title goes home: this season's Actual standings at the current week. From a past season that is a fresh load of the live page.
   document.getElementById("home-link").addEventListener("click", function (e) {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;   // let "open in a new tab" work
-    if (ARCHIVE) return;   // the link itself loads the live season
     e.preventDefault();
+    // From a past season: this very page without the season (not the folder, which is not where the page lives).
+    if (ARCHIVE) { location.href = location.pathname; return; }
     wpClose();
     state.viewWeek = null; state.futureWeek = null;
     if (state.wpLink) state.wpLink.gone = true;

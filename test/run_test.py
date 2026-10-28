@@ -3886,6 +3886,7 @@ def scenario_past_seasons(browser):
     with pg.expect_navigation():
         pg.click("#home-link")
     assert "season=" not in pg.url, f"from a past season the title loads the live page: {pg.url}"
+    assert pg.url.split("?")[0].endswith("/rumbles.html"), f"...this page, not the folder: {pg.url}"
     pg.goto(PAGE_URL + "?season=2025"); pg.wait_for_timeout(2500)
     pg.click("#mode-scen"); pg.wait_for_timeout(2500)
     bm = pg.evaluate("""() => ({best: document.getElementById('sm-best').classList.contains('active'), n: document.querySelectorAll('#scen-blocks .sc-blk.best').length, week: document.getElementById('week-select').value,
