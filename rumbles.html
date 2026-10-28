@@ -1575,6 +1575,14 @@
   .wp-bigp { font-size: 1.55em; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; }
   /* While a replay is about to start or is playing, the result stays out of sight: the title's score line, the story, and (before it starts) the chart and the swings. */
   .wp-blind #wp-sub, .wp-blind #wp-story { visibility: hidden; } .wp-prep #wp-chart svg, .wp-prep #wp-list, .wp-prep #wp-listh { visibility: hidden; }
+  .wp-read { position: absolute; z-index: 5; box-sizing: border-box; text-align: center; white-space: nowrap; padding: 3px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); font-size: 0.85rem; font-variant-numeric: tabular-nums; pointer-events: none; overflow: hidden; text-overflow: ellipsis; } .wp-read[hidden] { display: none; } .wp-read span { margin-left: 4px; }
+  @media (max-height: 500px) and (orientation: landscape) { .wp-read { font-size: 0.72rem; padding: 2px 8px; } }
+  .wp-sheet.wp-rot .wp-read { font-size: 0.72rem; padding: 2px 8px; }
+  .wp-proj { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 86%; padding: 12px 22px 14px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c, var(--accent)) 26%, transparent), 0 14px 44px rgba(0,0,0,0.6); pointer-events: none; animation: wp-clutch-in 0.45s cubic-bezier(.2,1.4,.4,1) both; }
+  .wp-proj[hidden] { display: none; } .wp-proj b { display: block; font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .wp-proj .wp-proj-av { position: relative; width: 52px; height: 52px; margin: 0 auto 6px; } .wp-proj img, .wp-proj .wp-proj-i { position: absolute; inset: 0; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; background: var(--panel); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-shadow: 0 0 16px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) 0.1s both; }
+  .wp-proj i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; animation: wp-ring-s 1.2s ease-out 0.25s both; z-index: -1; } @keyframes wp-ring-s { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.3); opacity: 0; } }
+  .wp-proj .wp-proj-n { font-size: 1.25rem; font-weight: 800; color: var(--c, var(--accent)); line-height: 1.1; } .wp-proj .wp-proj-d { font-size: 0.82rem; color: var(--text); margin-top: 3px; } .wp-proj .wp-proj-d strong { font-size: 1.15em; color: var(--c, var(--accent)); }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
@@ -1642,12 +1650,17 @@
     .wp-sheet:not(.wp-rot) .wp-chartwrap { flex: 1 1 auto; width: auto; min-width: 0; }
     .wp-sheet:not(.wp-rot) .wp-side { flex: 0 0 36%; width: auto; overflow: auto; } .wp-sheet:not(.wp-rot) .wp-list { display: block; }
     .wp-sheet:not(.wp-rot) .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-sheet:not(.wp-rot) .wp-hint { display: none; }
-    .wp-sheet:not(.wp-rot) .wp-col li:not(.wp-clipbox):not(.wp-none) { height: var(--wp-rowh, 3.7rem); box-sizing: border-box; }
+    .wp-sheet:not(.wp-rot) .wp-body { align-items: stretch; } .wp-sheet:not(.wp-rot) .wp-side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; max-height: none; }
+    .wp-sheet:not(.wp-rot) .wp-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; } .wp-sheet:not(.wp-rot) .wp-col { display: contents; }
+    .wp-sheet:not(.wp-rot) .wp-col li:not(.wp-clipbox):not(.wp-none) { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; box-sizing: border-box; padding-top: 1px; padding-bottom: 1px; } .wp-sheet:not(.wp-rot) .wp-list li.wp-clipbox { flex: 0 0 auto; }
   }
   @media (max-height: 500px) and (orientation: landscape) {
-    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: var(--wp-rowh, 3.7rem); padding-top: 1px; padding-bottom: 1px; box-sizing: border-box; }
+    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; }
     /* Too short to stack: the chart and the plays share the width instead, so nothing scrolls. */
     .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-chartwrap { flex: 1 1 auto; width: auto; } .wp-side { flex: 0 0 38%; width: auto; max-height: calc(100vh - 76px); overflow: auto; } .wp-list { display: block; } .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
+    .wp-body { align-items: stretch; } .wp-side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; max-height: none; }
+    .wp-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; } .wp-col { display: contents; }
+    .wp-col li:not(.wp-clipbox):not(.wp-none) { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; box-sizing: border-box; padding-top: 1px; padding-bottom: 1px; } .wp-list li.wp-clipbox { flex: 0 0 auto; }
   }
   /* A phone held upright turns the sheet on its side while the matchup plays (the page cannot turn the phone; this lays the sheet out
      as the landscape view, rotated a quarter turn). Closing it, or really turning the phone, puts it back. */
@@ -1660,7 +1673,9 @@
   .wp-sheet.wp-rot .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-sheet.wp-rot .wp-chartwrap { flex: 1 1 auto; width: auto; }
   .wp-sheet.wp-rot .wp-side { flex: 0 0 38%; width: auto; max-height: calc(var(--rot-w, 100vw) - 76px); overflow: auto; } .wp-sheet.wp-rot .wp-list { display: block; }
   .wp-sheet.wp-rot .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-sheet.wp-rot .wp-hint { display: none; } .wp-sheet.wp-rot .wp-sub { font-size: 0.68rem; }
-  .wp-sheet.wp-rot .wp-col li:not(.wp-clipbox):not(.wp-none) { height: var(--wp-rowh, 3.7rem); padding-top: 1px; padding-bottom: 1px; box-sizing: border-box; }
+  .wp-sheet.wp-rot .wp-body { align-items: stretch; } .wp-sheet.wp-rot .wp-side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; max-height: none; }
+  .wp-sheet.wp-rot .wp-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; } .wp-sheet.wp-rot .wp-col { display: contents; }
+    .wp-sheet.wp-rot .wp-col li:not(.wp-clipbox):not(.wp-none) { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; box-sizing: border-box; padding-top: 1px; padding-bottom: 1px; } .wp-sheet.wp-rot .wp-list li.wp-clipbox { flex: 0 0 auto; }
   .wp-sheet.wp-rot .wp-list li { display: flex; align-items: center; position: static; } .wp-sheet.wp-rot .wp-list li.wp-clipbox { display: block; }
   .wp-sheet.wp-rot .wp-list li > .wp-n { grid-row: auto; } .wp-sheet.wp-rot .wp-pd { grid-column: auto; flex-basis: auto; padding-left: 0; } .wp-sheet.wp-rot .wp-play { position: static; }
   }
@@ -1928,7 +1943,7 @@
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
-      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
       <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
@@ -7061,7 +7076,8 @@
   // Share of the game left (0..1) for a player at second t.
   function wpRem(doc, sid, t) {
     var g = doc.g[doc.tg[doc.tm[sid]]];
-    if (!g) return wpDone(doc) && t >= wpWeekEnd(doc) ? 0 : 1;
+    // a lineup player whose team has no game in the timeline (a bye, or inactive) never scores: nothing is left to come for him once the week's games are all over
+    if (!g) return wpDone(doc) ? 0 : 1;
     if (g.end != null && t >= g.end) return 0;
     var c = g.clk;
     if (!c || !c.length || t < c[0][0]) return 1;
@@ -7116,7 +7132,7 @@
       });
       var gap = my - th, d = gap + em - et;
       var pr = v <= 0 ? (d > 0.004 ? 1 : d < -0.004 ? 0 : 0.5) : rbNormCdf(d / Math.sqrt(v));
-      return { p: pr, my: my, th: th, gap: gap };
+      return { p: pr, my: my, th: th, gap: gap, proj: d };
     }
 
     // The time axis: every game these players are in, joined into blocks; long idle stretches are squeezed.
@@ -8033,18 +8049,9 @@
   // Every swing keeps the same room and shows all its words: if a play's text needs more height than the row has, the text (not the row)
   // is made a little smaller until it fits.
   function wpFitRows() {
-    // On its side the ten swings share the height of the panel, so all of them show without scrolling
-    var list = document.getElementById("wp-list"), side = list.parentNode, card = document.querySelector(".wp-card");
-    var land = wpRot || wpDesk() || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches, rowsN = list.querySelectorAll(".wp-col li[data-t]").length;
-    list.style.removeProperty("--wp-rowh");
-    side.style.maxHeight = "";
-    if (land && rowsN && card) {
-      var top = 0, el = side;
-      while (el && el !== card) { top += el.offsetTop; el = el.offsetParent; }
-      var head = document.getElementById("wp-listh"), avail = card.clientHeight - top - (head.hidden ? 0 : head.offsetHeight + 4) - 8;
-      list.style.setProperty("--wp-rowh", Math.max(22, Math.floor(avail / rowsN)) + "px");
-      side.style.maxHeight = (avail + (head.hidden ? 0 : head.offsetHeight + 4) + 4) + "px";
-    }
+    // Beside the chart the ten swings share the height of the panel (the style sheet does that); a row's text shrinks to fit its share
+    var land = wpRot || wpDesk() || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
+    var list = document.getElementById("wp-list");
     [].forEach.call(document.querySelectorAll("#wp-list .wp-col li[data-t]"), function (li) {
       var fs = 1, floor = land ? 0.45 : 0.6;
       li.style.removeProperty("--wp-fs");
@@ -8186,6 +8193,7 @@
     if (!wpPlay.on) return;
     cancelAnimationFrame(wpPlay.raf); wpPlay.on = false; wpUnblind();
     var cl = document.getElementById("wp-clutch"); if (cl) cl.hidden = true;
+    var pj2 = document.getElementById("wp-proj"); if (pj2) pj2.hidden = true; var rd2 = document.getElementById("wp-read"); if (rd2) rd2.hidden = true;
     [].forEach.call(document.querySelectorAll("#wp-chart .wp-wl.on"), wpLabelReset); wpPlay.wl = null;
     if (wpPlay.clip) { var stop = wpPlay.clip; wpPlay.clip = null; stop(true); }
     var svg = document.querySelector("#wp-chart svg.wp-svg"), btn = document.getElementById("wp-replay");
@@ -8194,6 +8202,7 @@
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
     document.getElementById("wp-ticker").hidden = true; wpTickReset();
     wpLastBox(true).hidden = true; wpLastBox(false).hidden = true;
+    var tg0 = document.querySelector("#wp-chart .wp-tag"); if (tg0) tg0.removeAttribute("transform");
     btn.innerHTML = "&#8635;"; btn.setAttribute("aria-label", "Replay the week"); btn.title = "Watch the week play out";
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (pm && wpPinT != null) wpShowAt(pm, wpPinT); else wpHoverOff();
@@ -8254,10 +8263,15 @@
   function wpLastPlace() {
     var g = wpGeom, host = document.getElementById("wp-chart");
     if (!g || !host) return;
-    var top = wpLastBox(true), bot = wpLastBox(false), wide = g.pw >= 520;
-    // side by side along the top, clear of the first manager's name tag: the first manager's last play on the left, the other's on the right
-    var x0 = host.offsetLeft + g.ml + (wide ? 126 : 6), avail = g.ml + g.pw + host.offsetLeft - x0 - 4, each = Math.max(80, Math.floor(avail / 2) - 4), y = host.offsetTop + g.mt + (wide ? 4 : 36);
+    var top = wpLastBox(true), bot = wpLastBox(false), rd = document.getElementById("wp-read");
+    // along the very top: the time, score and odds, centred, and under it the two managers' last plays side by side (first manager left)
+    var x0 = host.offsetLeft + g.ml + 6, avail = g.ml + g.pw + host.offsetLeft - x0 - 4, each = Math.max(80, Math.floor(avail / 2) - 4), y0 = host.offsetTop + g.mt + 2;
+    rd.style.left = x0 + "px"; rd.style.width = (2 * each + 8) + "px"; rd.style.top = y0 + "px";
+    var y = y0 + (rd.hidden ? 0 : rd.offsetHeight + 4);
     [top, bot].forEach(function (b, i) { b.style.transform = "none"; b.style.maxWidth = each + "px"; b.style.width = each + "px"; b.style.left = (x0 + i * (each + 8)) + "px"; b.style.top = y + "px"; });
+    // the first manager's name tag sits just under all of it
+    var tag = document.querySelector("#wp-chart .wp-tag");
+    if (tag && !top.hidden) tag.setAttribute("transform", "translate(0," + (y - y0 + Math.max(top.offsetHeight, bot.offsetHeight) + 6) + ")");
   }
   // The time, score and odds line sits centred over the two pinned plays below it.
   function wpTickAlign() {
@@ -8291,13 +8305,14 @@
     if (show) wpLastPlace();
   }
   // The moving line: the cursor, its dot and a small tooltip with the score and the win probability, nothing else.
-  function wpScrubDraw(pm, t) {
+  function wpScrubDraw(pm, t, noTip) {
     var svg = document.querySelector("#wp-chart svg.wp-svg"), tip = document.getElementById("wp-tipx");
     if (!svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, a = m.at(t), cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph;
     var fav = a.p >= 0.5 ? { p: a.p, name: pm.me.name, col: pm.col.mine } : { p: 1 - a.p, name: pm.t.name, col: pm.col.theirs };
     svg.querySelector(".wp-hov").innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
     tip.innerHTML = escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "<div><span class=\"wp-bigp\" style=\"color:" + wpResolve(fav.col) + "\">" + wpPct(fav.p) + "%</span> to win <b style=\"color:" + wpResolve(fav.col) + "\">" + escapeHtml(fav.name) + "</b></div>";
+    if (noTip) { tip.hidden = true; return; }   // (a replay shows its readout in one fixed place instead)
     tip.hidden = false;
     var host = document.getElementById("wp-chart"), wrap = document.getElementById("wp-chartwrap"), tw = tip.offsetWidth, th = tip.offsetHeight;
     var left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, host.offsetLeft + cx - tw / 2)), top = host.offsetTop + cy - th - 12;
@@ -8330,7 +8345,18 @@
     var a = pm.model.at(pm.model.end), mineWins = a.my >= a.th;
     return { who: mineWins ? pm.me : pm.t, col: wpResolve(mineWins ? pm.col.mine : pm.col.theirs), p: a.p };
   }
-  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
+  // The pre-game call, shown as the replay begins: who was projected to win, with what chance and by how many points.
+  function wpProjShow(pm) {
+    var el = document.getElementById("wp-proj"), a = pm.model.at(pm.model.start), meFav = a.p >= 0.5, who = meFav ? pm.me : pm.t, col = wpResolve(meFav ? pm.col.mine : pm.col.theirs), p = meFav ? a.p : 1 - a.p;
+    var url = (scAv || {})[who.rid], close = p < 0.53;
+    el.style.setProperty("--c", col);
+    el.innerHTML = "<b>Before kickoff</b><div class=\"wp-proj-av\"><i></i><i></i>" + (url ? '<img alt="" src="' + escapeHtml(url) + '">' : '<div class="wp-proj-i">' + escapeHtml(String(who.name || "?").charAt(0)) + "</div>") + "</div>" +
+      (close ? '<div class="wp-proj-n">Too close to call</div><div class="wp-proj-d">' + escapeHtml(pm.me.name) + " vs. " + escapeHtml(pm.t.name) + " \u00b7 " + wpPct(p) + "% / " + wpPct(1 - p) + "%</div>"
+             : '<div class="wp-proj-n">' + escapeHtml(who.name || "") + '</div><div class="wp-proj-d">projected to win \u00b7 <strong>' + wpPct(p) + "%</strong> \u00b7 by " + Math.abs(a.proj).toFixed(1) + " pts</div>");
+    el.hidden = false;
+    var wrap = document.getElementById("wp-chartwrap"); wrap.style.setProperty("--c", col); wrap.classList.remove("wp-flash"); void wrap.offsetWidth; wrap.classList.add("wp-flash");
+  }
+  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
   // The winner's picture pops at the end of the line.
   function wpPop(pm) {
     var g = wpGeom, host = document.getElementById("wp-chart"), el = document.getElementById("wp-pop");
@@ -8384,7 +8410,7 @@
     var spent = paceAt(prog);
     rows.forEach(function (li) { if (m.x(Number(li.getAttribute("data-t"))) > prog) li.classList.add("wp-wait"); });
     document.getElementById("wp-tipx").hidden = true;
-    var tick = document.getElementById("wp-ticker");
+    var tick = document.getElementById("wp-read");
     wpLastReset(pm, true);
     // resuming part way (the phone was turned): the plays so far are already on show
     while (ni < notches.length && notches[ni].x <= prog) {
@@ -8395,10 +8421,15 @@
     document.getElementById("wp-sheet").classList.remove("wp-prep"); document.getElementById("wp-sheet").classList.add("wp-blind");
     wpPlay.on = true;
     btn.innerHTML = "&#9632;"; btn.setAttribute("aria-label", "Stop and show the whole week"); btn.title = "Stop";
-    var lastNow = performance.now(), paused = false, queue = [];
+    var lastNow = performance.now(), paused = false, queue = [], INTRO = window.__wpIntroMs != null ? Number(window.__wpIntroMs) : 2600, intro = !(Number(from) > 0) && INTRO > 0, introAt = null;
     function frame(now) {
       if (!wpPlay.on) return;
-      if (!paused) { spent = Math.min(1, spent + (now - lastNow) / DUR); prog = spent >= 1 ? 1 : xAtPace(spent); }
+      // first, who was projected to win and by how much; then the line starts to move
+      if (intro) {
+        if (introAt == null) { introAt = now; wpProjShow(pm); }
+        else if (now - introAt > INTRO) { intro = false; document.getElementById("wp-proj").hidden = true; lastNow = now; }
+      }
+      if (!paused && !intro) { spent = Math.min(1, spent + (now - lastNow) / DUR); prog = spent >= 1 ? 1 : xAtPace(spent); }
       lastNow = now; wpPlay.prog = prog;
       var p = prog, tt = wpTAtX(m, p);
       { var cx0 = (g.ml + p * g.pw).toFixed(1), cy0 = (g.mt + g.ph + 2).toFixed(1); svg.style.clipPath = "polygon(0 0, " + cx0 + "px 0, " + cx0 + "px " + cy0 + "px, 100% " + cy0 + "px, 100% 100%, 0 100%)"; }   // the line is uncovered as it goes; the time labels below it are always there
@@ -8407,7 +8438,7 @@
         var nt = notches[ni++];
         [1, -1].forEach(function (sd) { if (nt.ev.some(function (e) { return (e.side > 0) === (sd > 0); })) wpLastSet(pm, sd, nt); });
       }
-      wpScrubDraw(pm, tt);
+      wpScrubDraw(pm, tt, true);
       // the game window most recently passed is lit (with a pop as the line reaches it) until the next one starts
       var wls = [].slice.call(svg.querySelectorAll(".wp-wl")), wcur = null;
       var edge = g.ml + p * g.pw;   // a label is lit once the line reaches its game window
@@ -8430,7 +8461,7 @@
       var at = m.at(tt);
       tick.hidden = false;
       tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span class=\"wp-bigp\" style=\"color:" + wpResolve(at.p >= 0.5 ? pm.col.mine : pm.col.theirs) + "\">" + wpPct(at.p >= 0.5 ? at.p : 1 - at.p) + "% " + escapeHtml(at.p >= 0.5 ? pm.me.name : pm.t.name) + "</span>";
-      wpTickAlign();
+      wpLastPlace();
       rows.forEach(function (li) {
         if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) {
           li.classList.remove("wp-wait");

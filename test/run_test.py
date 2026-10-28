@@ -76,7 +76,7 @@ def install_routes(page, routes):
     # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
     if not getattr(page, "_sleeper_fallback", False):
         page._sleeper_fallback = True
-        page.add_init_script("window.__wpAuto = false; window.__wpFs = false;")   # the chart does not start playing by itself unless a test asks
+        page.add_init_script("window.__wpAuto = false; window.__wpFs = false; window.__wpIntroMs = 0;")   # the chart does not start playing by itself unless a test asks
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
         page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
@@ -3621,6 +3621,13 @@ def scenario_win_probability(browser):
     page.set_viewport_size({"width": 1280, "height": 760}); page.wait_for_timeout(900)
     dk = page.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'), s = c.querySelector('.wp-side'), ch = document.getElementById('wp-chart').getBoundingClientRect(), sr = s.getBoundingClientRect(); const li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')]; return {cardScroll: c.scrollHeight - c.clientHeight, sideScroll: s.scrollHeight - s.clientHeight, side: sr.left >= ch.right - 2, n: li.length, inside: li.every(l => { const b = l.getBoundingClientRect(), cb = c.getBoundingClientRect(); return b.bottom <= cb.bottom + 1 && b.top >= cb.top; }), chartBottom: ch.bottom, vh: innerHeight}; })()")
     assert dk["cardScroll"] <= 1 and dk["sideScroll"] <= 1 and dk["side"] and dk["n"] == 10 and dk["inside"] and dk["chartBottom"] <= dk["vh"], f"on a desktop the whole replay fits the window: {dk}"
+    # a phone held in landscape: all ten swings are in view, none cut off or scrolled away
+    page.set_viewport_size({"width": 956, "height": 440}); page.wait_for_timeout(900)
+    if os.environ.get("SCENSHOT"): page.screenshot(path="/tmp/sf/wp_phone_land.png")
+    ph = page.evaluate("""(() => { const c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect(), s = document.querySelector('#wp-sheet .wp-side'), sr = s.getBoundingClientRect(); const li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')];
+      return {n: li.length, cardBottom: c.bottom, vh: innerHeight, side: [Math.round(sr.top), Math.round(sr.bottom)], scroll: s.scrollHeight - s.clientHeight, st: s.scrollTop, rows: li.map(l => { const b = l.getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; }), head: document.getElementById('wp-listh').getBoundingClientRect().top}; })()""")
+    assert ph["n"] == 10 and ph["scroll"] <= 1 and all(r[1] <= ph["side"][1] + 1 and r[1] - r[0] >= 18 for r in ph["rows"]) and ph["cardBottom"] <= ph["vh"] + 1, f"on a phone in landscape all ten swings show without scrolling: {ph}"
+    page.set_viewport_size({"width": 1280, "height": 760}); page.wait_for_timeout(700)
     # ...and during the replay every game-window label stays whole, inside the chart, and the winner's picture never covers one
     page.evaluate("window.__wpPlayMs = 4000"); page.click("#wp-replay")
     for _ in range(7):
@@ -3628,7 +3635,8 @@ def scenario_win_probability(browser):
         lab = page.evaluate("""(() => { const sv = document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect(), L = [...document.querySelectorAll('#wp-chart .wp-wl')].map(t => t.getBoundingClientRect()), pop = document.getElementById('wp-pop');
           const pr = [...pop.querySelectorAll('img, .wp-pop-av, span')].map(e => e.getBoundingClientRect());
           return {n: L.length, out: L.filter(r => r.left < sv.left - 1 || r.right > sv.right + 1 || r.bottom > sv.bottom + 1).length, covered: !pop.hidden && L.some(r => pr.some(q => q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top))}; })()""")
-        cen = page.evaluate("""(() => { const t = document.getElementById('wp-ticker'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (t.hidden || getComputedStyle(t).display === 'none') return null;
+        if os.environ.get("SCENSHOT") and _ == 3: page.screenshot(path="/tmp/sf/wp_desk_replay.png")
+        cen = page.evaluate("""(() => { const t = document.getElementById('wp-read'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (t.hidden) return null;
           const r = document.createRange(); r.selectNodeContents(t); const c = r.getBoundingClientRect(); return {text: (c.left + c.right) / 2, plays: (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2}; })()""")
         assert cen is None or abs(cen["text"] - cen["plays"]) <= 8, f"the time, score and odds line is centred over the two pinned plays: {cen}"
         assert lab["out"] == 0 and not lab["covered"], f"the game windows stay in frame and visible during the replay: {lab}"
@@ -3655,9 +3663,12 @@ def scenario_win_probability(browser):
     rot = pf.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'); return {cls: document.getElementById('wp-sheet').classList.contains('wp-rot'), w: c.offsetWidth, h: c.offsetHeight, vw: innerWidth, vh: innerHeight, tf: getComputedStyle(c).transform}; })()")
     assert rot["cls"] and rot["w"] == rot["vh"] and rot["h"] == rot["vw"] and rot["tf"].startswith("matrix(0, 1, -1, 0"), f"on an upright phone the replay turns the sheet on its side: {rot}"
     pf.wait_for_timeout(1000)
-    mid = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, tip: !document.getElementById('wp-tipx').hidden})")
-    assert mid["tip"], "the tooltip shows as the line passes a notch"
+    mid = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, tip: !document.getElementById('wp-read').hidden, moving: document.getElementById('wp-tipx').hidden})")
+    assert mid["tip"] and mid["moving"], "a replay shows its readout in one fixed place, not a tooltip that follows the line"
     pf.wait_for_timeout(1700)
+    tagpos = pf.evaluate("(() => { const tg = document.querySelector('#wp-chart .wp-tag').getBoundingClientRect(), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); return {tag: tg.top, plays: Math.max(a.bottom, b.bottom), tagLeft: tg.left, playsLeft: Math.min(a.left, b.left), rot: document.getElementById('wp-sheet').classList.contains('wp-rot')}; })()")
+    if not tagpos["rot"]:
+        assert tagpos["tag"] >= tagpos["plays"] - 2, f"the first manager's name tag sits under the pinned plays: {tagpos}"
     popped = pf.evaluate("({pop: !document.getElementById('wp-pop').hidden, text: document.getElementById('wp-pop').textContent, running: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')})")
     assert popped["pop"] and "wins" in popped["text"] and popped["running"], f"at the end of the line the winner pops: {popped}"
     pf.wait_for_timeout(3000)
@@ -3668,22 +3679,19 @@ def scenario_win_probability(browser):
     assert pf.evaluate("document.querySelectorAll('#wp-list li.wp-wait').length") == 0, "tapping it again stops and shows the whole week"
     # the replay keeps one managers's last scoring play pinned along the top and the other's along the bottom, with a line that never stops moving
     pf.evaluate("window.__wpPlayMs = 24000"); pf.click("#wp-replay"); pf.wait_for_timeout(2500)
-    pin = pf.evaluate("({top: !document.getElementById('wp-last-top').hidden, bot: !document.getElementById('wp-last-bot').hidden, tt: document.getElementById('wp-last-top').textContent, bt: document.getElementById('wp-last-bot').textContent, tip: document.getElementById('wp-tipx').textContent})")
+    pin = pf.evaluate("({top: !document.getElementById('wp-last-top').hidden, bot: !document.getElementById('wp-last-bot').hidden, tt: document.getElementById('wp-last-top').textContent, bt: document.getElementById('wp-last-bot').textContent, tip: document.getElementById('wp-read').textContent})")
     assert pin["top"] and pin["bot"] and ("yd" in pin["tt"] or "yd" in pin["bt"] or "interception" in pin["tt"] + pin["bt"] or "sack" in pin["tt"] + pin["bt"]), f"each manager's last scoring play is pinned: {pin}"
-    big = pf.evaluate("(() => { const b = document.querySelector('#wp-tipx .wp-bigp'); return b && {size: parseFloat(getComputedStyle(b).fontSize), color: getComputedStyle(b).color, wl: document.querySelectorAll('#wp-chart .wp-wl.on').length, labels: document.querySelectorAll('#wp-chart .wp-wl').length}; })()")
+    big = pf.evaluate("(() => { const b = document.querySelector('#wp-read .wp-bigp'); return b && {size: parseFloat(getComputedStyle(b).fontSize), color: getComputedStyle(b).color, wl: document.querySelectorAll('#wp-chart .wp-wl.on').length, labels: document.querySelectorAll('#wp-chart .wp-wl').length}; })()")
     assert big and big["size"] > 14 and big["color"] != "rgb(0, 0, 0)", f"the win percentage is big and in the favoured manager's colour: {big}"
     assert big["labels"] == 0 or big["wl"] == 1, f"the game window most recently passed is lit: {big}"
-    assert "% to win" in pin["tip"] and "yd" not in pin["tip"], f"the moving tooltip is only the score and the odds: {pin['tip']}"
+    assert re.search(r"\d+% ", pin["tip"]) and "yd" not in pin["tip"], f"the readout is only the time, the score and the odds: {pin['tip']}"
     fit = pf.evaluate("(() => { const s = document.querySelector('#wp-sheet .wp-side'), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect(), r = s.getBoundingClientRect(); return {n: li.length, scroll: s.scrollHeight - s.clientHeight, cut: li.filter(l => l.scrollHeight > l.clientHeight + 1).length, inside: li.every(l => { const b = l.getBoundingClientRect(); return b.left >= c.left - 1 && b.right <= c.right + 1 && b.top >= c.top - 1 && b.bottom <= c.bottom + 1 && b.height > 8; })}; })()")
     assert fit["n"] == 10 and fit["scroll"] <= 1 and fit["cut"] == 0 and fit["inside"], f"all ten swings show beside the chart without scrolling or cut-off text: {fit}"
-    for _ in range(6):
-        ov = pf.evaluate("""(() => { const t = document.getElementById('wp-tipx'); if (t.hidden) return false; const a = t.getBoundingClientRect();
-          return ['wp-last-top', 'wp-last-bot'].some(id => { const e = document.getElementById(id); if (e.hidden) return false; const b = e.getBoundingClientRect(); return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; }); })()""")
-        assert not ov, "the moving tooltip never covers a manager's pinned scoring play: " + str(pf.evaluate("['wp-tipx','wp-last-top','wp-last-bot','wp-chart'].map(i => { const r = document.getElementById(i).getBoundingClientRect(); return [i, Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; })"))
-        pf.wait_for_timeout(700)
-    cen = pf.evaluate("""(() => { const t = document.getElementById('wp-ticker'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (getComputedStyle(t).display === 'none') return null;
-      const r = document.createRange(); r.selectNodeContents(t); const c = r.getBoundingClientRect(); return {text: (c.left + c.right) / 2, plays: (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2}; })()""")
-    assert cen is None or abs(cen["text"] - cen["plays"]) <= 6, f"the time, score and odds are centred over the two pinned plays: {cen}"
+    for _ in range(4):
+        rd = pf.evaluate("""(() => { const q = id => document.getElementById(id), r = q('wp-read'), a = q('wp-last-top'), b = q('wp-last-bot');
+          return {tipHidden: q('wp-tipx').hidden, above: r.offsetTop + r.offsetHeight <= Math.min(a.offsetTop, b.offsetTop) + 1, centre: Math.abs((r.offsetLeft + r.offsetWidth / 2) - ((Math.min(a.offsetLeft, b.offsetLeft) + Math.max(a.offsetLeft + a.offsetWidth, b.offsetLeft + b.offsetWidth)) / 2)), text: r.textContent}; })()""")
+        assert rd["tipHidden"] and rd["above"] and rd["centre"] <= 6, f"the readout is centred above the pinned plays and nothing follows the line: {rd}"
+        pf.wait_for_timeout(500)
     xs = []
     for _ in range(4):
         xs.append(pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))")); pf.wait_for_timeout(350)
@@ -3700,6 +3708,16 @@ def scenario_win_probability(browser):
     t2 = pf.evaluate("({rot: document.getElementById('wp-sheet').classList.contains('wp-rot'), playing: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')})")
     assert t2["rot"] and t2["playing"], f"turned back upright: landscape kept: {t2}"
     pf.click("#wp-replay"); pf.wait_for_timeout(200)
+    # the replay opens with the pre-game call (who was projected to win, and by how much), then the line starts to move
+    pf.evaluate("window.__wpIntroMs = 1600; window.__wpPlayMs = 8000"); pf.click("#wp-replay"); pf.wait_for_timeout(500)
+    pj = pf.evaluate("({shown: !document.getElementById('wp-proj').hidden, text: document.getElementById('wp-proj').textContent, x1: (document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1')})")
+    if os.environ.get("SCENSHOT"): pf.screenshot(path="/tmp/sf/wp_intro.png")
+    assert pj["shown"] and ("projected to win" in pj["text"] or "Too close" in pj["text"]) and "Before kickoff" in pj["text"], f"the replay opens with who was projected to win: {pj}"
+    pf.wait_for_timeout(400)
+    assert pf.evaluate("(document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1')") == pj["x1"], "the line waits while the projection shows"
+    pf.wait_for_timeout(2200)
+    assert pf.evaluate("document.getElementById('wp-proj').hidden") and pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))") > float(pj["x1"]) + 2, "then the projection goes and the line moves"
+    pf.evaluate("window.__wpIntroMs = 0"); pf.click("#wp-replay"); pf.wait_for_timeout(200)
     pf.close()
     # the share button on the small chart shares the picture, the story and the link in one go
     page.keyboard.press("Escape"); page.wait_for_timeout(200)
@@ -4046,6 +4064,16 @@ def scenario_past_seasons(browser):
     assert "clip:start:abc123XYZ00" in ev["events"] and "clip:end" in ev["events"], f"a swing with a playable clip plays it during the replay: {ev}"
     assert ev["pv"]["mute"] == 1 and ev["pv"]["autoplay"] == 1, f"...muted: {ev}"
     assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
+    sidefit = pg.evaluate("""(() => { const s = document.querySelector('#wp-sheet .wp-side'), sr = s.getBoundingClientRect(), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect();
+      return {n: li.length, st: s.scrollTop, scroll: s.scrollHeight - s.clientHeight, vp: [innerWidth, innerHeight], hidden: li.filter(l => { const b = l.getBoundingClientRect(); return b.bottom > sr.bottom + 1 || b.top < sr.top - 1 || b.bottom > c.bottom + 1; }).length, head: document.getElementById('wp-listh').getBoundingClientRect().top >= sr.top - 1}; })()""")
+    assert sidefit["n"] == 10 and sidefit["hidden"] == 0 and sidefit["st"] == 0 and sidefit["head"], f"after the replay (and its clips) all ten swings are in view: {sidefit}"
+    for vw, vh in ((896, 414), (932, 430), (844, 390), (740, 360), (1100, 560), (1792, 828)):
+        pg.set_viewport_size({"width": vw, "height": vh}); pg.wait_for_timeout(700)
+        sf = pg.evaluate("""(() => { const s = document.querySelector('#wp-sheet .wp-side'), sr = s.getBoundingClientRect(), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect();
+          return {n: li.length, st: s.scrollTop, scroll: s.scrollHeight - s.clientHeight, side: [Math.round(sr.top), Math.round(sr.bottom)], card: [Math.round(c.top), Math.round(c.bottom)], rowH: li[0] && Math.round(li[0].getBoundingClientRect().height), cut: li.filter(l => l.scrollHeight > l.clientHeight + 1).length, hidden: li.filter(l => { const b = l.getBoundingClientRect(); return b.bottom > sr.bottom + 1 || b.top < sr.top - 1 || b.bottom > c.bottom + 1 || b.height < 14; }).length}; })()""")
+        if os.environ.get("SCENSHOT"): pg.screenshot(path=f"/tmp/sf/wp_{vw}x{vh}.png")
+        assert sf["n"] == 10 and sf["hidden"] == 0 and sf["scroll"] <= 1 and sf["cut"] == 0, f"all ten swings in view and none of their text cut off at {vw}x{vh}: {sf}"
+    pg.set_viewport_size({"width": 1280, "height": 720}); pg.wait_for_timeout(600)
     # expanding a chart plays it by itself
     pg.evaluate("window.__wpAuto = true"); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     pg.click("#scen-blocks .sc-blk:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(30)
