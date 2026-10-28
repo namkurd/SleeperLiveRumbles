@@ -3621,15 +3621,17 @@ def scenario_win_probability(browser):
     pf.on("pageerror", lambda exc: page_errors.append(str(exc)))
     routes(pf)
     pf.add_init_script("try { localStorage.clear(); } catch (e) {}")
-    pf.goto(pinned); pf.wait_for_timeout(1000)
-    assert pf.evaluate("document.getElementById('wp-tipx').hidden"), "the week draws itself in first"
-    pf.wait_for_timeout(3000)
+    pf.goto(pinned); pf.wait_for_timeout(3500)
+    solo = pf.evaluate("({solo: document.body.classList.contains('solo'), app: getComputedStyle(document.querySelector('.wrap')).display, brand: getComputedStyle(document.getElementById('wp-brand')).display, href: document.getElementById('wp-brand').getAttribute('href'), w: document.querySelector('#wp-sheet .wp-card').getBoundingClientRect().width, h: document.querySelector('#wp-sheet .wp-card').getBoundingClientRect().height, vw: innerWidth, vh: innerHeight})")
+    assert solo["solo"] and solo["app"] == "none" and solo["brand"] != "none" and solo["href"].endswith("rumbles.html"), f"a shared link shows just that matchup, with Rumble Central to lead into the app: {solo}"
+    assert solo["w"] >= solo["vw"] - 2 and solo["h"] >= solo["vh"] - 2, f"...full screen: {solo}"
     pst = pf.evaluate("({tip: !document.getElementById('wp-tipx').hidden, line: document.querySelectorAll('#wp-chart .wp-hov line').length, text: document.getElementById('wp-tipx').textContent})")
-    assert pst["tip"] and pst["line"] == 1 and "% to win" in pst["text"], f"then the pinned moment lights up: {pst}"
+    assert pst["tip"] and pst["line"] == 1 and "% to win" in pst["text"], f"the moment the link names is lit: {pst}"
     cols = pf.evaluate("[...document.querySelectorAll('#wp-list .wp-col')].map(o => [...o.querySelectorAll('li .wp-n')].map(n => n.textContent))")
     assert len(cols) == 2 and cols[0] == ["1", "2", "3", "4", "5"] and cols[1] == ["6", "7", "8", "9", "10"], f"the ten biggest swings in two columns, 1-5 then 6-10: {cols}"
     pf.evaluate("window.__wpPlayMs = 3000")
-    pf.click("#wp-replay"); pf.wait_for_timeout(500)
+    pf.click("#wp-replay")
+    pf.wait_for_timeout(500)
     ps = pf.evaluate("({label: document.getElementById('wp-replay').getAttribute('aria-label'), wait: document.querySelectorAll('#wp-list li.wp-wait').length, clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
     assert "Stop" in ps["label"] and ps["wait"] >= 1 and "inset" in ps["clip"], f"watching the week play out: the line draws, the swings wait their turn: {ps}"
     rot = pf.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'); return {cls: document.getElementById('wp-sheet').classList.contains('wp-rot'), w: c.offsetWidth, h: c.offsetHeight, vw: innerWidth, vh: innerHeight, tf: getComputedStyle(c).transform}; })()")
@@ -3642,6 +3644,24 @@ def scenario_win_probability(browser):
     assert end["wait"] == 0 and "Replay" in end["label"] and not end["clip"], f"at the end everything is uncovered: {end}"
     pf.evaluate("window.__wpPlayMs = 20000"); pf.click("#wp-replay"); pf.wait_for_timeout(300); pf.click("#wp-replay"); pf.wait_for_timeout(200)
     assert pf.evaluate("document.querySelectorAll('#wp-list li.wp-wait').length") == 0, "tapping it again stops and shows the whole week"
+    # the replay keeps one managers's last scoring play pinned along the top and the other's along the bottom, with a line that never stops moving
+    pf.evaluate("window.__wpPlayMs = 9000"); pf.click("#wp-replay"); pf.wait_for_timeout(2500)
+    pin = pf.evaluate("({top: !document.getElementById('wp-last-top').hidden, bot: !document.getElementById('wp-last-bot').hidden, tt: document.getElementById('wp-last-top').textContent, bt: document.getElementById('wp-last-bot').textContent, tip: document.getElementById('wp-tipx').textContent})")
+    assert pin["top"] and pin["bot"] and ("yd" in pin["tt"] or "yd" in pin["bt"] or "interception" in pin["tt"] + pin["bt"] or "sack" in pin["tt"] + pin["bt"]), f"each manager's last scoring play is pinned: {pin}"
+    assert "% to win" in pin["tip"] and "yd" not in pin["tip"], f"the moving tooltip is only the score and the odds: {pin['tip']}"
+    xs = []
+    for _ in range(4):
+        xs.append(pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))")); pf.wait_for_timeout(120)
+    assert xs == sorted(xs) and len(set(xs)) == 4, f"the scrub line moves constantly, not from notch to notch: {xs}"
+    # turning the phone does not change the landscape view, and the replay carries on
+    vs = pf.viewport_size
+    pf.set_viewport_size({"width": vs["height"], "height": vs["width"]}); pf.wait_for_timeout(900)
+    t1 = pf.evaluate("({rot: document.getElementById('wp-sheet').classList.contains('wp-rot'), playing: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop'), w: document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect().width, vw: innerWidth})")
+    assert not t1["rot"] and t1["playing"] and t1["w"] < t1["vw"], f"turned to landscape: the natural landscape view, the replay still going: {t1}"
+    pf.set_viewport_size(vs); pf.wait_for_timeout(900)
+    t2 = pf.evaluate("({rot: document.getElementById('wp-sheet').classList.contains('wp-rot'), playing: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')})")
+    assert t2["rot"] and t2["playing"], f"turned back upright: landscape kept: {t2}"
+    pf.click("#wp-replay"); pf.wait_for_timeout(200)
     pf.close()
     # the share button on the small chart shares the picture, the story and the link in one go
     page.keyboard.press("Escape"); page.wait_for_timeout(200)

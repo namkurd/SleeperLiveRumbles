@@ -1557,6 +1557,16 @@
   .wp-title { font-size: 1.3rem; font-weight: 800; } .wp-title small { font-weight: 600; color: var(--text-dim); font-size: 0.74rem; margin-left: 4px; }
   .wp-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
   #wp-share { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .wp-last { position: absolute; z-index: 4; transform: translateX(-50%); max-width: 74%; min-height: 2.7em; box-sizing: border-box; padding: 4px 9px; border: 1px solid var(--c, var(--panel-border)); border-radius: 8px; background: color-mix(in srgb, var(--panel) 90%, transparent); font-size: 0.78rem; line-height: 1.3; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,0.35); }
+  .wp-last[hidden] { display: none; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
+  /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
+  .solo-splash { display: none; position: fixed; inset: 0; z-index: 50; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--bg); color: var(--text-dim); }
+  .solo-splash b { font-size: 1.5rem; color: var(--text); }
+  body.solo .solo-splash { display: flex; } body.solo .wrap, body.solo .epa-toggle { display: none !important; }
+  body.solo .wp-sheet { background: var(--bg); padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.solo .wp-card { width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0; box-shadow: none; }
+  .wp-brand { display: none; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); text-decoration: none; margin-bottom: 2px; }
+  body.solo .wp-brand { display: inline-block; } .wp-brand:hover { text-decoration: underline; }
   .wp-ticker { margin-top: 6px; padding: 5px 9px; border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 12%, var(--panel)); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wp-ticker[hidden] { display: none; } .wp-ticker span { color: var(--text-dim); margin-left: 4px; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-ticker { display: none; } }
@@ -1880,14 +1890,15 @@
 
 <button type="button" class="epa-toggle" id="epa-toggle" aria-pressed="false" title="Show EPA next to points (from nflverse; filled in after each game ends)">EPA</button>
 
+<div class="solo-splash" id="solo-splash"><b>Rumble Central</b><span>Loading the matchup\u2026</span></div>
 <div class="wp-sheet" id="wp-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="wp-title">
   <div class="wp-card">
     <div class="wp-head">
-      <div class="wp-ttl"><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div><div class="wp-ticker" id="wp-ticker" hidden></div></div>
+      <div class="wp-ttl"><a class="wp-brand" id="wp-brand" href="rumbles.html" hidden>Rumble Central &rsaquo;</a><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div><div class="wp-ticker" id="wp-ticker" hidden></div></div>
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
-      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div></div>
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div></div>
       <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
@@ -6666,6 +6677,7 @@
       if (el && !el.classList.contains("empty") && (e.key === "Enter" || e.key === " ") && !(e.target.closest && e.target.closest(".wpm-share"))) { e.preventDefault(); wpOpen(el.getAttribute("data-wp")); }
     });
     document.getElementById("wp-close").addEventListener("click", wpClose);
+    document.getElementById("wp-brand").addEventListener("click", function (e) { e.preventDefault(); location.href = location.pathname; });
     // A pinned moment goes away with a tap on its tooltip, or on empty space around the chart: it stays for the chart, the buttons and the list.
     document.getElementById("wp-sheet").addEventListener("pointerdown", function (e) {
       if (wpPinT == null || !wpOpenKey) return;
@@ -6683,21 +6695,23 @@
       if (g) wpClipToggle(document.querySelector('#wp-list li[data-ck][data-n="' + g.getAttribute("data-n") + '"]'));
     });
     document.getElementById("wp-share").addEventListener("click", function () { wpShare(); });
-    document.getElementById("wp-replay").addEventListener("click", wpPlayStart);
+    document.getElementById("wp-replay").addEventListener("click", function () { wpPlayStart(); });
     document.getElementById("wp-sheet").addEventListener("click", function (e) { if (e.target.id === "wp-sheet") wpClose(); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && wpOpenKey) wpClose(); });
     chart.addEventListener("pointermove", wpHover);
     chart.addEventListener("pointerdown", wpHover);
     chart.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") wpHoverOff(); });
-    window.addEventListener("resize", function () {
+    function wpResized() {
       if (!wpOpenKey) return;
-      // (a phone's address bar sliding away also "resizes": a replay in progress is left alone)
-      if (wpRot) {
-        if (window.innerWidth > window.innerHeight) wpRotateOff();
-        else { var sh = document.getElementById("wp-sheet"); sh.style.setProperty("--rot-w", window.innerWidth + "px"); sh.style.setProperty("--rot-h", window.innerHeight + "px"); if (wpPlay.on) return; }
-      } else if (wpPlay.on) return;
-      clearTimeout(rs); rs = setTimeout(wpSheetRender, 120);
-    });
+      clearTimeout(rs);
+      rs = setTimeout(function () {
+        if (wpOrient()) return;       // the phone was turned: laid out again for it (a replay carries on)
+        if (wpPlay.on) return;        // a phone's address bar sliding away also "resizes": a replay in progress is left alone
+        wpSheetRender();
+      }, 150);
+    }
+    window.addEventListener("resize", wpResized);
+    window.addEventListener("orientationchange", wpResized);
   })();
   // R refreshes (unless typing in a field or using a modifier key).
   document.addEventListener("keydown", function (e) {
@@ -7506,14 +7520,15 @@
       win = { key: "lnk" + L.week, clusters: [], cur: 0, week: L.week, past: true };
     } else return;
     var me = teams.filter(function (x) { return x.rid === L.me; })[0], t = teams.filter(function (x) { return x.rid === L.t; })[0];
-    if (!me || !t) { L.gone = true; return; }
+    if (!me || !t) { L.gone = true; wpSoloOff(); return; }
     var pm = wpPair(win, me, t, { mine: rbColor(me.rid), theirs: "var(--bad)" });
-    if (!pm) { if (wpStatus(L.week) === "none") L.gone = true; return; }
+    if (!pm) { if (wpStatus(L.week) === "none") { L.gone = true; wpSoloOff(); } return; }
     L.key = pm.key;
     if (!L.opened) {
-      L.opened = true; wpOpen(pm.key, { noPlay: L.at != null });
-      // the week draws itself in; then the moment the link was made at lights up
-      wpReveal().then(function () { if (L.at != null && wpOpenKey === pm.key) { wpPinT = Math.max(0, Math.min(pm.model.end, L.at)); wpShowAt(pm, wpPinT); } });
+      // The link opens the matchup replaying (full screen, landscape on a phone); the moment it was made at, if it names one, is where it
+      // rests when the replay ends.
+      L.opened = true; wpOpen(pm.key);
+      if (L.at != null) { wpPinT = Math.max(0, Math.min(pm.model.end, L.at)); if (!wpPlay.on && window.__wpAuto === false) wpShowAt(pm, wpPinT); }
     }
     else if (wpOpenKey === pm.key) wpSheetRender();   // a live week keeps moving while the chart is open
   }
@@ -7965,7 +7980,9 @@
     // Expanding a chart plays the matchup straight away (on a phone in either orientation too); tap the chart or ■ to take over.
     if (!(opts && opts.noPlay) && window.__wpAuto !== false) setTimeout(function () { if (wpOpenKey === key && !wpPlay.on) wpPlayStart(); }, 400);
   }
+  function wpSoloOff() { document.body.classList.remove("solo"); document.getElementById("wp-brand").hidden = true; }
   function wpClose() {
+    wpSoloOff();
     if (state.wpLink && state.wpLink.key === wpOpenKey) {
       // Closed the shared chart: the page carries on as normal, and a reload no longer reopens it.
       state.wpLink.gone = true;
@@ -8031,19 +8048,26 @@
   // passes (the scoring play, the time, the score, the win probability), and the ten biggest swings are uncovered one at a time as the
   // line reaches them. Tap again to stop and see it all.
   var wpPlay = { raf: 0, on: false, clip: null };
-  var wpRot = false;   // the sheet is turned on its side (a phone held upright)
+  var wpRot = false;        // the sheet is turned on its side (a phone held upright)
+  var wpLandMode = false;   // the sheet is to be in landscape however the phone is held (set when a replay starts on a phone)
   function wpRotatable() { try { return window.matchMedia("(max-width: 700px) and (orientation: portrait)").matches; } catch (e) { return false; } }
-  function wpRotateOn() {
-    if (wpRot || !wpRotatable()) return false;
-    var sh = document.getElementById("wp-sheet");
-    sh.style.setProperty("--rot-w", window.innerWidth + "px"); sh.style.setProperty("--rot-h", window.innerHeight + "px");
-    sh.classList.add("wp-rot"); wpRot = true;
-    return true;
-  }
+  function wpRotVars() { var sh = document.getElementById("wp-sheet"); sh.style.setProperty("--rot-w", window.innerWidth + "px"); sh.style.setProperty("--rot-h", window.innerHeight + "px"); }
   function wpRotateOff() {
-    if (!wpRot) return;
     var sh = document.getElementById("wp-sheet");
-    sh.classList.remove("wp-rot"); wpRot = false;
+    sh.classList.remove("wp-rot"); wpRot = false; wpLandMode = false;
+  }
+  // Landscape is kept whichever way the phone is held: held upright, the sheet is turned a quarter turn; turned to landscape, it already
+  // is landscape and the turn is taken off. When that changes the sheet is laid out again, and a replay in progress carries on from where it was.
+  // Returns whether the layout changed.
+  function wpOrient() {
+    if (!wpOpenKey) return false;
+    var sh = document.getElementById("wp-sheet"), portrait = window.innerWidth < window.innerHeight, want = wpLandMode && portrait && Math.min(window.innerWidth, window.innerHeight) <= 700;
+    if (want === wpRot) { if (wpRot) wpRotVars(); return false; }
+    if (want) { wpRotVars(); sh.classList.add("wp-rot"); wpRot = true; } else { sh.classList.remove("wp-rot"); wpRot = false; }
+    var was = wpPlay.on, prog = wpPlay.prog || 0;
+    wpPlayStop(); wpSheetRender();
+    if (was) wpPlayStart(prog);
+    return true;
   }
   // The time (seconds into the timeline) that sits at position x (0..1) along the chart.
   function wpTAtX(m, x) {
@@ -8060,6 +8084,7 @@
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-wait"), function (li) { li.classList.remove("wp-wait"); });
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
     document.getElementById("wp-ticker").hidden = true;
+    wpLastBox(true).hidden = true; wpLastBox(false).hidden = true;
     btn.innerHTML = "&#8635;"; btn.setAttribute("aria-label", "Replay the week"); btn.title = "Watch the week play out";
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (pm && wpPinT != null) wpShowAt(pm, wpPinT); else wpHoverOff();
@@ -8115,33 +8140,104 @@
     }
     attempt(0);
   }
-  function wpPlayStart() {
+  // The two pinned boxes during a replay: the top manager's last scoring play along the top middle of the chart, the other manager's along the bottom middle.
+  function wpLastBox(which) { return document.getElementById(which ? "wp-last-top" : "wp-last-bot"); }
+  function wpLastPlace() {
+    var g = wpGeom, host = document.getElementById("wp-chart");
+    if (!g || !host) return;
+    var cxm = host.offsetLeft + g.ml + g.pw / 2, top = wpLastBox(true), bot = wpLastBox(false);
+    top.style.left = cxm + "px"; top.style.top = (host.offsetTop + g.mt + 4) + "px";
+    bot.style.left = cxm + "px"; bot.style.top = Math.max(0, host.offsetTop + g.mt + g.ph - bot.offsetHeight - 16) + "px";
+  }
+  function wpLastSet(pm, side, notch) {
+    var isTop = side > 0, box = wpLastBox(isTop), col = wpResolve(isTop ? pm.col.mine : pm.col.theirs);
+    var evs = notch.ev.filter(function (e) { return (e.side > 0) === isTop; }).slice(0, 2);
+    if (!evs.length) return;
+    box.style.setProperty("--c", col);
+    box.innerHTML = evs.map(function (p) {
+      var clock = wpClockLabel(wpRem(pm.doc, p.sid, p.t));
+      return '<div><span class="wl-who">' + escapeHtml(pm.names[p.sid] || "") + "</span> " + escapeHtml(p.label === "latest" ? "scored" : p.label) + " <small>" + (p.pts > 0 ? "+" : "") + p.pts.toFixed(1) + (clock && clock !== "Final" && clock !== "Pregame" ? " \u00b7 " + clock : "") + "</small></div>";
+    }).join("");
+    wpLastPlace();
+  }
+  function wpLastReset(pm, show) {
+    [true, false].forEach(function (isTop) {
+      var box = wpLastBox(isTop);
+      box.hidden = !show;
+      if (!show) return;
+      var who = isTop ? pm.me : pm.t;
+      box.style.setProperty("--c", wpResolve(isTop ? pm.col.mine : pm.col.theirs));
+      box.innerHTML = '<div><span class="wl-who">' + escapeHtml(who.name) + '</span> <span class="wl-none">no scoring play yet</span></div>';
+    });
+    if (show) wpLastPlace();
+  }
+  // The moving line: the cursor, its dot and a small tooltip with the score and the win probability, nothing else.
+  function wpScrubDraw(pm, t) {
+    var svg = document.querySelector("#wp-chart svg.wp-svg"), tip = document.getElementById("wp-tipx");
+    if (!svg || !wpGeom) return;
+    var g = wpGeom, m = pm.model, a = m.at(t), cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph;
+    svg.querySelector(".wp-hov").innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
+    tip.innerHTML = escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "<div><span>" + wpPct(a.p) + "% to win</span> <b style=\"color:" + wpResolve(pm.col.mine) + "\">" + escapeHtml(pm.me.name) + "</b></div>";
+    tip.hidden = false;
+    var host = document.getElementById("wp-chart"), wrap = document.getElementById("wp-chartwrap"), tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, host.offsetLeft + cx - tw / 2)), top = host.offsetTop + cy - th - 12;
+    if (top < host.offsetTop + g.mt + 56) top = host.offsetTop + cy + 14;   // keep clear of the pinned play along the top
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function wpPlayStart(from) {
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (wpPlay.on) { wpPlayStop(); return; }
-    if (pm && wpRotateOn()) wpSheetRender();   // upright phone: turn the sheet on its side and lay the chart out again for it
+    if (pm && Math.min(window.innerWidth, window.innerHeight) <= 700) wpLandMode = true;   // a phone: the sheet stays in landscape from here until it is closed, however it is held
+    if (pm && wpLandMode && wpOrient(true)) { /* laid out again for the turned sheet */ }
     var svg = document.querySelector("#wp-chart svg.wp-svg");
     if (!pm || !svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, W = Number(svg.getAttribute("width")) || g.ml + g.pw + 10, DUR = window.__wpPlayMs || 30000, btn = document.getElementById("wp-replay");
-    var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0, shown = null;
+    var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0;
     var rows = [].slice.call(document.querySelectorAll("#wp-list li[data-t]"));
-    rows.forEach(function (li) { li.classList.add("wp-wait"); });
-    var hov = svg.querySelector(".wp-hov"); if (hov) hov.innerHTML = "";
+    var prog = Math.max(0, Math.min(0.999, Number(from) || 0));
+    // The replay's pace follows the scoring: a quiet stretch is passed quickly, a busy one slowly, and the whole week still takes DUR.
+    // pace[i] is the share of the replay spent by the time the line has reached i / PN of the way across.
+    var PN = 400, pace = [0], sig = 0.03;
+    for (var pi = 1; pi <= PN; pi++) {
+      var px = (pi - 0.5) / PN, wt = 1;
+      for (var qi = 0; qi < notches.length; qi++) { var dx = (px - notches[qi].x) / sig; if (dx > -4 && dx < 4) wt += 5 * Math.exp(-dx * dx / 2); }
+      pace.push(pace[pi - 1] + wt);
+    }
+    for (var pj = 0; pj <= PN; pj++) pace[pj] /= pace[PN];
+    function paceAt(x) { var f = Math.max(0, Math.min(1, x)) * PN, i = Math.min(PN - 1, Math.floor(f)); return pace[i] + (pace[i + 1] - pace[i]) * (f - i); }
+    function xAtPace(e) {
+      var lo = 0, hi = PN;
+      while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (pace[mid] <= e) lo = mid; else hi = mid; }
+      var span = pace[hi] - pace[lo];
+      return (lo + (span > 0 ? (e - pace[lo]) / span : 0)) / PN;
+    }
+    var spent = paceAt(prog);
+    rows.forEach(function (li) { if (m.x(Number(li.getAttribute("data-t"))) > prog) li.classList.add("wp-wait"); });
     document.getElementById("wp-tipx").hidden = true;
     var tick = document.getElementById("wp-ticker");
+    wpLastReset(pm, true);
+    // resuming part way (the phone was turned): the plays so far are already on show
+    while (ni < notches.length && notches[ni].x <= prog) {
+      [1, -1].forEach(function (sd) { if (notches[ni].ev.some(function (e) { return (e.side > 0) === (sd > 0); })) wpLastSet(pm, sd, notches[ni]); });
+      ni++;
+    }
     wpPlay.on = true;
     btn.innerHTML = "&#9632;"; btn.setAttribute("aria-label", "Stop and show the whole week"); btn.title = "Stop";
-    var prog = 0, lastNow = performance.now(), paused = false, queue = [];
+    var lastNow = performance.now(), paused = false, queue = [];
     function frame(now) {
       if (!wpPlay.on) return;
-      if (!paused) prog = Math.min(1, prog + (now - lastNow) / DUR);
-      lastNow = now;
-      var p = prog;
+      if (!paused) { spent = Math.min(1, spent + (now - lastNow) / DUR); prog = spent >= 1 ? 1 : xAtPace(spent); }
+      lastNow = now; wpPlay.prog = prog;
+      var p = prog, tt = wpTAtX(m, p);
       svg.style.clipPath = "inset(0 " + ((1 - (g.ml + p * g.pw) / W) * 100).toFixed(2) + "% 0 0)";
-      var last = null;
-      while (ni < notches.length && notches[ni].x <= p) { last = notches[ni]; ni++; }
-      if (last && last !== shown) { shown = last; wpShowAt(pm, last.t, last); }
-      // the score and odds right now, along the top
-      var at = m.at(wpTAtX(m, p)), tt = wpTAtX(m, p);
+      // each scoring play passed becomes that manager's pinned last play
+      while (ni < notches.length && notches[ni].x <= p) {
+        var nt = notches[ni++];
+        [1, -1].forEach(function (sd) { if (nt.ev.some(function (e) { return (e.side > 0) === (sd > 0); })) wpLastSet(pm, sd, nt); });
+      }
+      wpScrubDraw(pm, tt);
+      // the time and score along the top
+      var at = m.at(tt);
       tick.hidden = false;
       tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span>" + wpPct(at.p) + "% " + escapeHtml(pm.me.name) + "</span>";
       rows.forEach(function (li) {
@@ -8150,7 +8246,7 @@
           [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
           li.classList.add("wp-now");
           // a phone on its side shows the list in a panel beside the chart: keep the newest swing in view there
-          if (window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches && li.scrollIntoView) { try { li.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
+          if ((wpRot || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches) && li.scrollIntoView) { try { li.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
           var mk = svg.querySelector('.wp-mk[data-n="' + li.getAttribute("data-n") + '"]'); if (mk) mk.classList.add("wp-now");
           if (li.classList.contains("has-clip")) queue.push(li);
         }
@@ -8256,8 +8352,8 @@
     btn = btn || document.getElementById("wp-share");
     label = label || btn.textContent;
     if (!pm) return;
-    var s = wpSummary(pm), title = s.title.replace(/&amp;/g, "&") + " \u2013 Week " + pm.win.week, url = wpLinkUrl(pm), story = wpStory(pm).text;
-    var all = story + "\n" + url;
+    var s = wpSummary(pm), title = s.title.replace(/&amp;/g, "&") + " \u2013 Week " + pm.win.week + " \u00b7 Rumble Central", url = wpLinkUrl(pm), story = wpStory(pm).text;
+    var all = story + "\nWatch the replay: " + url;
     window.__wpLink = url; window.__wpText = all;
     var done = function (txt) { btn.textContent = txt; setTimeout(function () { btn.textContent = label; }, 1800); };
     var copy = function () { rbCopyText(all).then(function (ok) { done(ok ? "Copied" : "Couldn\u2019t copy"); }); };
@@ -9120,6 +9216,7 @@
     try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
     var linkMe = params ? rbFindManager(params.get("me")) : null;
     var wl = params ? /^(\d+)\.(\d+)\.(\d+)$/.exec(params.get("wp") || "") : null;
+    if (wl) { document.body.classList.add("solo"); setTimeout(function () { if (!wpOpenKey) wpSoloOff(); }, 25000); }
     if (wl) state.wpLink = { week: Number(wl[1]), me: Number(wl[2]), t: Number(wl[3]), at: params.get("t") != null && isFinite(Number(params.get("t"))) ? Number(params.get("t")) : null };
     var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
     if (me) state.rb.me = Number(me.roster_id);
