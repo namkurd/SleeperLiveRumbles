@@ -76,7 +76,7 @@ def install_routes(page, routes):
     # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
     if not getattr(page, "_sleeper_fallback", False):
         page._sleeper_fallback = True
-        page.add_init_script("window.__wpAuto = false;")   # the chart does not start playing by itself unless a test asks
+        page.add_init_script("window.__wpAuto = false; window.__wpFs = false;")   # the chart does not start playing by itself unless a test asks
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
         page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
@@ -3621,6 +3621,15 @@ def scenario_win_probability(browser):
     page.set_viewport_size({"width": 1280, "height": 760}); page.wait_for_timeout(900)
     dk = page.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'), s = c.querySelector('.wp-side'), ch = document.getElementById('wp-chart').getBoundingClientRect(), sr = s.getBoundingClientRect(); const li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')]; return {cardScroll: c.scrollHeight - c.clientHeight, sideScroll: s.scrollHeight - s.clientHeight, side: sr.left >= ch.right - 2, n: li.length, inside: li.every(l => { const b = l.getBoundingClientRect(), cb = c.getBoundingClientRect(); return b.bottom <= cb.bottom + 1 && b.top >= cb.top; }), chartBottom: ch.bottom, vh: innerHeight}; })()")
     assert dk["cardScroll"] <= 1 and dk["sideScroll"] <= 1 and dk["side"] and dk["n"] == 10 and dk["inside"] and dk["chartBottom"] <= dk["vh"], f"on a desktop the whole replay fits the window: {dk}"
+    # ...and during the replay every game-window label stays whole, inside the chart, and the winner's picture never covers one
+    page.evaluate("window.__wpPlayMs = 4000"); page.click("#wp-replay")
+    for _ in range(7):
+        page.wait_for_timeout(800)
+        lab = page.evaluate("""(() => { const sv = document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect(), L = [...document.querySelectorAll('#wp-chart .wp-wl')].map(t => t.getBoundingClientRect()), pop = document.getElementById('wp-pop');
+          const pr = [...pop.querySelectorAll('img, .wp-pop-av, span')].map(e => e.getBoundingClientRect());
+          return {n: L.length, out: L.filter(r => r.left < sv.left - 1 || r.right > sv.right + 1 || r.bottom > sv.bottom + 1).length, covered: !pop.hidden && L.some(r => pr.some(q => q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top))}; })()""")
+        assert lab["out"] == 0 and not lab["covered"], f"the game windows stay in frame and visible during the replay: {lab}"
+    page.click("#wp-replay") if page.evaluate("document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')") else None
     page.set_viewport_size(vp0); page.wait_for_timeout(600)
     pf = ctx.new_page()
     pf.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -3675,7 +3684,10 @@ def scenario_win_probability(browser):
     assert xs == sorted(xs) and len(set(xs)) >= 3, f"the scrub line moves constantly, not from notch to notch: {xs}"
     # turning the phone does not change the landscape view, and the replay carries on
     vs = pf.viewport_size
-    pf.set_viewport_size({"width": vs["height"], "height": vs["width"]}); pf.wait_for_timeout(900)
+    pf.set_viewport_size({"width": vs["height"], "height": vs["width"]}); pf.wait_for_timeout(40)
+    tfv = pf.evaluate("getComputedStyle(document.querySelector('#wp-sheet .wp-card')).transform")
+    assert tfv in ("none", "matrix(1, 0, 0, 1, 0, 0)"), f"{tfv}: the moment the phone is turned the sheet is already the right way up: no half-turn"
+    pf.wait_for_timeout(900)
     t1 = pf.evaluate("({rot: document.getElementById('wp-sheet').classList.contains('wp-rot'), playing: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop'), w: document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect().width, vw: innerWidth})")
     assert not t1["rot"] and t1["playing"] and t1["w"] < t1["vw"], f"turned to landscape: the natural landscape view, the replay still going: {t1}"
     pf.set_viewport_size(vs); pf.wait_for_timeout(900)
@@ -4030,7 +4042,12 @@ def scenario_past_seasons(browser):
     assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
     # expanding a chart plays it by itself
     pg.evaluate("window.__wpAuto = true"); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
-    pg.click("#scen-blocks .sc-blk:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(1200)
+    pg.click("#scen-blocks .sc-blk:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(30)
+    early = pg.evaluate("({chart: getComputedStyle(document.querySelector('#wp-chart svg.wp-svg')).visibility, sub: getComputedStyle(document.getElementById('wp-sub')).visibility, list: getComputedStyle(document.getElementById('wp-list')).visibility})")
+    assert early == {"chart": "hidden", "sub": "hidden", "list": "hidden"}, f"opening a replay does not flash the finished week or its result: {early}"
+    pg.wait_for_timeout(1200)
+    during = pg.evaluate("({chart: getComputedStyle(document.querySelector('#wp-chart svg.wp-svg')).visibility, sub: getComputedStyle(document.getElementById('wp-sub')).visibility, story: getComputedStyle(document.getElementById('wp-story')).visibility})")
+    assert during == {"chart": "visible", "sub": "hidden", "story": "hidden"}, f"while it plays the line shows but the result stays hidden: {during}"
     assert "Stop" in pg.evaluate("document.getElementById('wp-replay').getAttribute('aria-label')"), "expanding the chart starts the replay by itself"
     pg.evaluate("window.__wpAuto = false"); pg.click("#wp-replay"); pg.wait_for_timeout(300)
     assert pg.evaluate("document.querySelectorAll('#wp-chart .wp-tag').length") == 2, "the two managers are named at the top and bottom of the odds"
