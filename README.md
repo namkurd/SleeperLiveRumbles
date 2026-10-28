@@ -1901,7 +1901,7 @@ Every mini chart has a share button (and the expanded chart a **Share** button).
 picture of the chart, the story of the week (written from the win-probability model: the result, how low the winner got and
 what flipped it, the lead changes) and a link; on a computer the story and link are copied. The link opens that chart for
 whoever gets it, with the week drawing itself in. Tap a moment in the chart, or a play in the list, and the link made after
-that carries `&t=` and opens on that moment. The replay button (↻) plays the week out over 30 seconds: the line draws itself, the tooltip appears at every scoring play it passes, and the ten biggest swings (listed in two columns, 1-5 and 6-10) are uncovered one at a time as the line reaches them; tap it again to stop. Tap a pinned moment's tooltip, or empty space beside the chart, to let go of it.
+that carries `&t=` and opens on that moment. Expanding a chart plays it by itself (a link with a pinned moment opens there instead). The replay button (↻) plays the week out over 30 seconds: the line draws itself, the tooltip appears at every scoring play it passes, and the ten biggest swings (listed in two columns, 1-5 and 6-10) are uncovered one at a time as the line reaches them; tap it again, or tap the chart, to stop. When a swing has a clip that can play in the embed, its video plays muted under its row, the replay waits for it to end, then the video collapses and the week carries on. The top and bottom of the odds axis carry the two managers' pictures and names, and the tooltip names whose odds it shows. Tap a pinned moment's tooltip, or empty space beside the chart, to let go of it.
 
 ### Play clips
 

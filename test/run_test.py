@@ -76,6 +76,7 @@ def install_routes(page, routes):
     # Only once per page: a later install_routes call must not shadow the mocks from an earlier one.
     if not getattr(page, "_sleeper_fallback", False):
         page._sleeper_fallback = True
+        page.add_init_script("window.__wpAuto = false;")   # the chart does not start playing by itself unless a test asks
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
         page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
@@ -3928,7 +3929,8 @@ def scenario_past_seasons(browser):
     pg.route("**/iframe_api", lambda r: r.fulfill(status=200, content_type="text/javascript", body="""
       window.YT = { Player: function (el, o) { var f = document.createElement('iframe'), pv = o.playerVars; f.src = o.host + '/embed/' + o.videoId + '?autoplay=' + pv.autoplay + '&start=' + pv.start + '&end=' + pv.end;
         el.parentNode.replaceChild(f, el); this.destroy = function () { f.remove(); }; var self = this;
-        setTimeout(function () { if (/^bad/.test(o.videoId)) o.events.onError({ data: 150 }); else o.events.onReady({ target: { playVideo: function () {} } }); }, 30); } };
+        window.__lastPV = pv;
+        setTimeout(function () { if (/^bad/.test(o.videoId)) o.events.onError({ data: 150 }); else { o.events.onReady({ target: { playVideo: function () {}, mute: function () {} } }); setTimeout(function () { o.events.onStateChange && o.events.onStateChange({ data: 0 }); }, 400); } }, 30); } };
       setTimeout(function () { window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 0);"""))
     pg.route("**/wp_clips/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))   # (a real week with no clips file is a quiet 404)
     pg.route("**/seasons/2025/wp_clips/week_3.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"v": 1, "week": 3, "clips": clips3})))
@@ -3964,6 +3966,19 @@ def scenario_past_seasons(browser):
     pg.click("#wp-share"); pg.wait_for_timeout(400)
     link = pg.evaluate("window.__wpLink")
     assert "season=2025" in link and re.search(r"wp=3\.\d+\.\d+", link), f"the shared link names the season: {link}"
+    # the replay stops for a swing's clip: it plays muted under its row, then collapses and the week carries on
+    pg.evaluate("window.__wpPlayMs = 3000; window.__wpEvents = []")
+    pg.click("#wp-replay"); pg.wait_for_timeout(9000)
+    ev = pg.evaluate("({events: window.__wpEvents, pv: window.__lastPV, label: document.getElementById('wp-replay').getAttribute('aria-label'), boxes: document.querySelectorAll('#wp-list .wp-clipbox').length, wait: document.querySelectorAll('#wp-list li.wp-wait').length})")
+    assert "clip:start:abc123XYZ00" in ev["events"] and "clip:end" in ev["events"], f"a swing with a playable clip plays it during the replay: {ev}"
+    assert ev["pv"]["mute"] == 1 and ev["pv"]["autoplay"] == 1, f"...muted: {ev}"
+    assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
+    # expanding a chart plays it by itself
+    pg.evaluate("window.__wpAuto = true"); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    pg.click("#scen-blocks .sc-blk:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(1200)
+    assert "Stop" in pg.evaluate("document.getElementById('wp-replay').getAttribute('aria-label')"), "expanding the chart starts the replay by itself"
+    pg.evaluate("window.__wpAuto = false"); pg.click("#wp-replay"); pg.wait_for_timeout(300)
+    assert pg.evaluate("document.querySelectorAll('#wp-chart .wp-tag').length") == 2, "the two managers are named at the top and bottom of the odds"
     # the person who gets the link sees that chart, interactively, with nobody signed in
     fr = ctx.new_page()
     fr.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)

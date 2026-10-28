@@ -1546,13 +1546,22 @@
   .wpm-pct { position: absolute; right: 0; top: 19px; transform: translateY(-50%); width: 54px; text-align: center; font-style: normal; font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .wpm-ap { position: absolute; left: 6px; top: 2px; font-size: 0.56rem; color: var(--text-dim); }
   .sc-blk.sc-done { padding-bottom: 8px; }
-  .wp-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(5,7,12,0.66); display: flex; align-items: center; justify-content: center; padding: 12px; }
+  .wp-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(5,7,12,0.78); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; padding: 12px; }
   .wp-sheet[hidden] { display: none; }
-  .wp-card { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 14px; width: min(860px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 12px 14px 14px; box-shadow: 0 16px 48px rgba(0,0,0,0.55); }
+  .wp-card { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 14px; width: min(1120px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 14px 18px 16px; box-shadow: 0 24px 70px rgba(0,0,0,0.7), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); border-top: 3px solid var(--accent); animation: wp-in 0.28s ease-out; }
+  @keyframes wp-in { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .wp-card { animation: none; } }
   .wp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
-  .wp-title { font-size: 1.05rem; font-weight: 800; } .wp-title small { font-weight: 600; color: var(--text-dim); font-size: 0.74rem; margin-left: 4px; }
+  .wp-title { font-size: 1.3rem; font-weight: 800; } .wp-title small { font-weight: 600; color: var(--text-dim); font-size: 0.74rem; margin-left: 4px; }
   .wp-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
   #wp-share { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .wp-ticker { margin-top: 6px; padding: 5px 9px; border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 12%, var(--panel)); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wp-ticker[hidden] { display: none; } .wp-ticker span { color: var(--text-dim); margin-left: 4px; }
+  @media (max-height: 500px) and (orientation: landscape) { .wp-ticker { display: none; } }
+  .wp-list li.wp-now { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .wp-mk.wp-now { transform-box: fill-box; transform-origin: center; animation: wp-pop 0.9s ease-out; }
+  @keyframes wp-pop { 0% { transform: scale(1); } 35% { transform: scale(1.7); } 100% { transform: scale(1); } }
+  .wp-clipbox.auto { background: #000; border-radius: 8px; padding: 0; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
   @media (max-width: 700px) { .wp-story { font-size: 0.74rem; } .wp-head { flex-wrap: wrap; } .wp-ttl { flex: 1 1 100%; } .wp-btns { flex: 1 1 100%; justify-content: flex-end; } }
   @media (max-height: 500px) and (orientation: landscape) { .wp-story { display: none; } }
@@ -1578,10 +1587,13 @@
   .wp-listh { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
   .wp-listh[hidden] { display: none; }
   .wp-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--panel-border); }
+  /* Every swing takes the same room, so the list never jumps as plays are uncovered: text is cut with an ellipsis, not wrapped to a different height. */
+  .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.6rem; overflow: hidden; box-sizing: border-box; }
+  .wp-col li .wp-ph, .wp-col li .wp-pm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
   .wp-col li:first-child { border-top: 0; }
   .wp-list li { transition: opacity 0.45s; }
   .wp-list li.wp-wait { visibility: hidden; opacity: 0; }
-  @media (max-width: 700px) { .wp-list li { display: grid; grid-template-columns: 22px 1fr; column-gap: 6px; align-items: start; position: relative; } .wp-list li.wp-clipbox { display: block; } .wp-list li > .wp-n { grid-row: 1 / span 2; } .wp-list li > div { grid-column: 2; } .wp-pd { grid-column: 2; } .wp-play { position: absolute; right: 0; top: 6px; } .wp-ph { font-size: 0.74rem; padding-right: 14px; } }
+  @media (max-width: 700px) { .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 5.3rem; } .wp-col li .wp-ph, .wp-col li .wp-pm { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; } .wp-list li { display: grid; grid-template-columns: 22px 1fr; column-gap: 6px; align-items: start; position: relative; } .wp-list li.wp-clipbox { display: block; } .wp-list li > .wp-n { grid-row: 1 / span 2; } .wp-list li > div { grid-column: 2; } .wp-pd { grid-column: 2; } .wp-play { position: absolute; right: 0; top: 6px; } .wp-ph { font-size: 0.74rem; padding-right: 14px; } }
   .wp-list .wp-none { color: var(--text-dim); font-size: 0.76rem; }
   .wp-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 0.7rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
   .wp-col > li > div { flex: 1 1 auto; min-width: 0; }
@@ -1594,7 +1606,7 @@
   #wp-tipx .tt-d div { margin-top: 1px; }
   @media (max-width: 700px) { .wp-body { gap: 8px; } .wp-card { padding: 10px 10px 12px; } }
   @media (max-height: 500px) and (orientation: landscape) {
-    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 8px 10px; overflow: hidden; }
+    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3rem; }
     /* Too short to stack: the chart and the plays share the width instead, so nothing scrolls. */
     .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-chartwrap { flex: 1 1 auto; width: auto; } .wp-side { flex: 0 0 38%; width: auto; max-height: calc(100vh - 76px); overflow: auto; } .wp-list { display: block; } .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
   }
@@ -1856,7 +1868,7 @@
 <div class="wp-sheet" id="wp-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="wp-title">
   <div class="wp-card">
     <div class="wp-head">
-      <div class="wp-ttl"><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div></div>
+      <div class="wp-ttl"><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div><div class="wp-ticker" id="wp-ticker" hidden></div></div>
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
@@ -7476,7 +7488,7 @@
     if (!pm) { if (wpStatus(L.week) === "none") L.gone = true; return; }
     L.key = pm.key;
     if (!L.opened) {
-      L.opened = true; wpOpen(pm.key);
+      L.opened = true; wpOpen(pm.key, { noPlay: L.at != null });
       // the week draws itself in; then the moment the link was made at lights up
       wpReveal().then(function () { if (L.at != null && wpOpenKey === pm.key) { wpPinT = Math.max(0, Math.min(pm.model.end, L.at)); wpShowAt(pm, wpPinT); } });
     }
@@ -7729,6 +7741,14 @@
       placed.push([cx, cy]);
       o += '<g class="wp-mk" data-n="' + mk.rank + '"><circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r + '" fill="' + c + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/><text x="' + cx.toFixed(1) + '" y="' + (cy + 3.6).toFixed(1) + '" text-anchor="middle" font-size="' + (share ? 12 : 10) + '" font-weight="800" fill="#fff">' + mk.rank + "</text></g>";
     });
+    // who the odds belong to: the top of the chart is a win for the first manager, the bottom for the second (their picture and name)
+    [[pm.me, C.mine, mt + 5], [pm.t, C.theirs, mt + ph - 31]].forEach(function (tag, ti) {
+      var who = tag[0], col = tag[1], y = tag[2], r = share ? 13 : 11, nm = String(who.name || ""), tw = nm.length * (share ? 8 : 6.6) + 2 * r + 16, x = ml + 6, url = !share && (scAv || {})[who.rid], cid = "wpf" + k + "_" + ti;
+      o += '<g class="wp-tag"><rect x="' + x + '" y="' + y + '" width="' + tw.toFixed(1) + '" height="' + (2 * r + 6) + '" rx="' + (r + 3) + '" fill="' + wpResolve("var(--panel)") + '" fill-opacity="0.82" stroke="' + col + '" stroke-opacity="0.9"/>' +
+        '<circle cx="' + (x + r + 3) + '" cy="' + (y + r + 3) + '" r="' + r + '" fill="' + col + '" fill-opacity="0.4"/><text x="' + (x + r + 3) + '" y="' + (y + r + 3 + 4) + '" text-anchor="middle" font-size="' + (share ? 13 : 11) + '" font-weight="800" fill="' + C.line + '">' + escapeHtml(nm.charAt(0).toUpperCase()) + "</text>" +
+        (url ? '<clipPath id="' + cid + '"><circle cx="' + (x + r + 3) + '" cy="' + (y + r + 3) + '" r="' + r + '"/></clipPath><image href="' + escapeHtml(url) + '" x="' + (x + 3) + '" y="' + (y + 3) + '" width="' + 2 * r + '" height="' + 2 * r + '" clip-path="url(#' + cid + ')" preserveAspectRatio="xMidYMid slice"/>' : "") +
+        '<text x="' + (x + 2 * r + 9) + '" y="' + (y + r + 3 + 4) + '" font-size="' + (share ? 14 : 11.5) + '" font-weight="700" fill="' + C.line + '">' + escapeHtml(nm) + "</text></g>";
+    });
     o += '<g class="wp-hov"></g>';
     return { svg: o + "</svg>", geom: { ml: ml, mt: mt, pw: pw, ph: ph, W: W, H: H } };
   }
@@ -7811,7 +7831,7 @@
     document.getElementById("wp-sub").innerHTML = s.sub;
     document.getElementById("wp-story").textContent = wpStory(pm).text;
     var land = window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
-    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(Math.max(220, window.innerHeight - 380), Math.max(190, Math.round(W * (W > 700 ? 0.44 : 0.6))));
+    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(Math.max(240, window.innerHeight - 330), Math.max(210, Math.round(W * (W > 700 ? 0.5 : 0.7))));
     var c = wpChartSvg(pm, W, H, false);
     wpGeom = c.geom;
     wrap.innerHTML = c.svg;
@@ -7902,13 +7922,15 @@
     wpClipPlay(box, [c].concat(c.alt || []), 0, 0);
     if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
   }
-  function wpOpen(key) {
+  function wpOpen(key, opts) {
     if (!wpPairs[key]) return;
     if (wpOpenKey !== key) wpPinT = null;
     wpOpenKey = key;
     if (wpPairs[key].done) wpClipsLoad(wpPairs[key].win.week);
     wpSheetRender();
     document.getElementById("wp-close").focus();
+    // Expanding a chart plays the matchup straight away (on a phone in either orientation too); tap the chart or ■ to take over.
+    if (!(opts && opts.noPlay) && window.__wpAuto !== false) setTimeout(function () { if (wpOpenKey === key && !wpPlay.on) wpPlayStart(); }, 400);
   }
   function wpClose() {
     if (state.wpLink && state.wpLink.key === wpOpenKey) {
@@ -7920,7 +7942,7 @@
 
   // What a moment says: when, the win probability and the score. A notch adds the scoring play(s) that happened there.
   function wpTipHtml(pm, t, notch) {
-    var a = pm.model.at(t), h = "<b>" + wpEt(pm.doc.t0 + t * 1000) + "</b> <span>" + wpPct(a.p) + "% to win</span><div>" + escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "</div>";
+    var a = pm.model.at(t), h = "<b>" + wpEt(pm.doc.t0 + t * 1000) + "</b> <span>" + wpPct(a.p) + "% to win</span> <b style=\"color:" + wpResolve(pm.col.mine) + "\">" + escapeHtml(pm.me.name) + "</b><div>" + escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "</div>";
     if (notch) {
       h += '<div class="tt-d">' + notch.ev.slice(0, 4).map(function (p) {
         var clock = wpClockLabel(wpRem(pm.doc, p.sid, p.t));
@@ -7933,7 +7955,8 @@
   // Hover / touch on the expanded chart.
   function wpHover(e) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg");
-    if (!pm || !svg || !wpGeom || wpPlay.on) return;
+    if (!pm || !svg || !wpGeom) return;
+    if (wpPlay.on) { if (e.type === "pointerdown") wpPlayStop(); else return; }
     var r = svg.getBoundingClientRect(), g = wpGeom, m = pm.model;
     var px = e.clientX - r.left;
     if (px < g.ml - 6 || px > g.ml + g.pw + 6) { wpHoverOff(); return; }
@@ -7970,16 +7993,67 @@
   // "Watch the week play out": 30 seconds from kickoff to the last whistle. The line draws itself, the tooltip appears at every notch it
   // passes (the scoring play, the time, the score, the win probability), and the ten biggest swings are uncovered one at a time as the
   // line reaches them. Tap again to stop and see it all.
-  var wpPlay = { raf: 0, on: false };
+  var wpPlay = { raf: 0, on: false, clip: null };
+  // The time (seconds into the timeline) that sits at position x (0..1) along the chart.
+  function wpTAtX(m, x) {
+    var lo = 0, hi = m.T.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (m.x(m.T[mid]) < x) lo = mid + 1; else hi = mid; }
+    return m.T[lo];
+  }
   function wpPlayStop() {
     if (!wpPlay.on) return;
     cancelAnimationFrame(wpPlay.raf); wpPlay.on = false;
+    if (wpPlay.clip) { var stop = wpPlay.clip; wpPlay.clip = null; stop(true); }
     var svg = document.querySelector("#wp-chart svg.wp-svg"), btn = document.getElementById("wp-replay");
     if (svg) svg.style.clipPath = "";
     [].forEach.call(document.querySelectorAll("#wp-list li.wp-wait"), function (li) { li.classList.remove("wp-wait"); });
+    [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
+    document.getElementById("wp-ticker").hidden = true;
     btn.innerHTML = "&#8635;"; btn.setAttribute("aria-label", "Replay the week"); btn.title = "Watch the week play out";
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (pm && wpPinT != null) wpShowAt(pm, wpPinT); else wpHoverOff();
+  }
+  // A swing with a playable clip: its video opens under its row and plays muted; the replay waits until it ends (or cannot play
+  // here, which is quick), then the video is stopped and collapsed and the week carries on.
+  function wpPlayClip(li, done) {
+    var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
+    if (!c) { done(); return; }
+    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false;
+    box.className = "wp-clipbox auto";
+    li.parentNode.insertBefore(box, li.nextSibling);
+    function finish(early) {
+      if (finished) return; finished = true;
+      if (wpPlay.clip === finish) wpPlay.clip = null;
+      clearTimeout(dog);
+      try { if (player) player.destroy(); } catch (x) { /* gone already */ }
+      if (box.parentNode) box.parentNode.removeChild(box);
+      if (window.__wpEvents) window.__wpEvents.push("clip:end");
+      if (!early) done();
+    }
+    wpPlay.clip = finish;
+    function attempt(i) {
+      if (finished) return;
+      if (i >= list.length) { finish(); return; }
+      var cl = list[i], slot = document.createElement("div");
+      box.innerHTML = ""; box.appendChild(slot);
+      clearTimeout(dog); dog = setTimeout(function () { finish(); }, 9000);   // never wait forever for a player that will not start
+      wpYtApi().then(function (YT) {
+        if (finished) return;
+        player = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: cl.id, width: "100%", height: "100%",
+          playerVars: { autoplay: 1, mute: 1, start: Number(cl.s) || 0, end: Number(cl.e) || 15, playsinline: 1, rel: 0, modestbranding: 1, controls: 0 },
+          events: {
+            onReady: function (e) {
+              try { e.target.mute(); e.target.playVideo(); } catch (x) { /* fine */ }
+              clearTimeout(dog); dog = setTimeout(function () { finish(); }, ((Number(cl.e) || 15) - (Number(cl.s) || 0) + 6) * 1000);
+              if (window.__wpEvents) window.__wpEvents.push("clip:start:" + cl.id);
+              if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
+            },
+            onStateChange: function (e) { if (e.data === 0) finish(); },
+            onError: function () { try { player.destroy(); } catch (x) { /* gone already */ } player = null; attempt(i + 1); }
+          } });
+      }, function () { finish(); });
+    }
+    attempt(0);
   }
   function wpPlayStart() {
     var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg");
@@ -7991,18 +8065,39 @@
     rows.forEach(function (li) { li.classList.add("wp-wait"); });
     var hov = svg.querySelector(".wp-hov"); if (hov) hov.innerHTML = "";
     document.getElementById("wp-tipx").hidden = true;
+    var tick = document.getElementById("wp-ticker");
     wpPlay.on = true;
     btn.innerHTML = "&#9632;"; btn.setAttribute("aria-label", "Stop and show the whole week"); btn.title = "Stop";
-    var t0 = performance.now();
+    var prog = 0, lastNow = performance.now(), paused = false, queue = [];
     function frame(now) {
       if (!wpPlay.on) return;
-      var p = Math.min(1, (now - t0) / DUR);
+      if (!paused) prog = Math.min(1, prog + (now - lastNow) / DUR);
+      lastNow = now;
+      var p = prog;
       svg.style.clipPath = "inset(0 " + ((1 - (g.ml + p * g.pw) / W) * 100).toFixed(2) + "% 0 0)";
       var last = null;
       while (ni < notches.length && notches[ni].x <= p) { last = notches[ni]; ni++; }
       if (last && last !== shown) { shown = last; wpShowAt(pm, last.t, last); }
-      rows.forEach(function (li) { if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) li.classList.remove("wp-wait"); });
+      // the score and odds right now, along the top
+      var at = m.at(wpTAtX(m, p)), tt = wpTAtX(m, p);
+      tick.hidden = false;
+      tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span>" + wpPct(at.p) + "% " + escapeHtml(pm.me.name) + "</span>";
+      rows.forEach(function (li) {
+        if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) {
+          li.classList.remove("wp-wait");
+          [].forEach.call(document.querySelectorAll("#wp-list li.wp-now, #wp-chart .wp-mk.wp-now"), function (e) { e.classList.remove("wp-now"); });
+          li.classList.add("wp-now");
+          // a phone on its side shows the list in a panel beside the chart: keep the newest swing in view there
+          if (window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches && li.scrollIntoView) { try { li.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
+          var mk = svg.querySelector('.wp-mk[data-n="' + li.getAttribute("data-n") + '"]'); if (mk) mk.classList.add("wp-now");
+          if (li.classList.contains("has-clip")) queue.push(li);
+        }
+      });
       if (p >= 1) { wpPlayStop(); return; }
+      if (!paused && queue.length) {
+        paused = true;
+        wpPlayClip(queue.shift(), function () { paused = false; lastNow = performance.now(); });
+      }
       wpPlay.raf = requestAnimationFrame(frame);
     }
     wpPlay.raf = requestAnimationFrame(frame);
