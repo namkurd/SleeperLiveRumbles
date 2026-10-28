@@ -1,7 +1,7 @@
 [
   {
     "status": "pre_game",
-    "start_time": 1793390400000,
+    "start_time": 1793476800000,
     "metadata": {
       "away_team": "DET",
       "home_team": "GB",
@@ -11,7 +11,7 @@
   },
   {
     "status": "pre_game",
-    "start_time": 1793390400000,
+    "start_time": 1793476800000,
     "metadata": {
       "away_team": "MIN",
       "home_team": "CHI",
@@ -21,7 +21,7 @@
   },
   {
     "status": "pre_game",
-    "start_time": 1793304000000,
+    "start_time": 1793390400000,
     "metadata": {
       "away_team": "DAL",
       "home_team": "PHI",
@@ -31,7 +31,7 @@
   },
   {
     "status": "pre_game",
-    "start_time": 1793390400000,
+    "start_time": 1793476800000,
     "metadata": {
       "away_team": "SEA",
       "home_team": "ARI",

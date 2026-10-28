@@ -1882,6 +1882,8 @@ Scenarios can show weeks 16, 17 and 18 (the playoffs and NFL week 18) next to th
 `extra_weekly` in the history file, separate from `weekly`, so they never touch the standings, and Scenarios notes them as
 "not counted". Standings and Rumbles count weeks 1-15 only (`LAST_COUNTED_WEEK` in `build_rumbles.py`).
 
+On a portrait phone the standings fit the screen exactly: #, Manager, Rumbles, Last week and Points share the width (Points is centered), and the next column (EPA when it is on, otherwise Rumble %) starts just off screen, reached by swiping sideways. The season picker is a pill with a chevron.
+
 The **Rumble Central** title is a link: it goes back to this season's Actual standings at the current week (from a past season it reloads the live page). The Mine/Best toggle sits right under the header tabs while Scenarios is open.
 
 ### Best matchups

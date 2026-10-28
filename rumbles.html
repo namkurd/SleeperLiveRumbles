@@ -111,7 +111,13 @@
     margin: 0;
   }
   /* The season in the subtitle: reads as text, opens a list. */
-  .season-select { font: inherit; color: var(--text); background: transparent; border: 0; border-bottom: 1px dotted var(--text-dim); border-radius: 0; padding: 0 1px; margin: 0 0 0 -1px; cursor: pointer; }
+  .season-pick { position: relative; display: inline-block; margin-left: 2px; vertical-align: baseline; }
+  .season-pick::after { content: ""; position: absolute; right: 10px; top: 50%; width: 6px; height: 6px; border-right: 2px solid var(--accent-2); border-bottom: 2px solid var(--accent-2); transform: translateY(-72%) rotate(45deg); pointer-events: none; transition: transform 0.15s; }
+  .season-pick:hover::after { transform: translateY(-50%) rotate(45deg); }
+  .season-select { -webkit-appearance: none; appearance: none; font: inherit; font-weight: 700; line-height: 1.45; color: var(--text); cursor: pointer;
+    background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--panel-border)); border-radius: 999px; padding: 0 26px 0 11px; margin: 0; transition: background 0.15s, border-color 0.15s; }
+  .season-select:hover { background: color-mix(in srgb, var(--accent-2) 24%, var(--panel)); border-color: var(--accent-2); }
+  .season-select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
   .season-select option { color: #111; background: #fff; }
   /* A past season is read-only: the live tabs and controls step aside. */
   .toggle-group button.off { opacity: 0.38; cursor: default; }
@@ -670,18 +676,21 @@
        (Rumble %, PF, PA, H2H, Vs. Field) keep their natural, wider width and
        stay reachable by scrolling right, exactly like landscape. */
     table thead th:nth-child(1), table td.rank { width: 24px; min-width: 24px; padding-left: 6px; padding-right: 2px; }
-    #standings-table thead th:nth-child(1), #standings-table td.rank { width: 38px; min-width: 38px; padding-left: 0; padding-right: 3px; }
-    #standings-table thead th:nth-child(2), #standings-table td.manager { left: 38px; }
+    #standings-table thead th:nth-child(1), #standings-table td.rank { width: var(--c1, 38px); min-width: var(--c1, 38px); padding-left: 0; padding-right: 3px; }
+    #standings-table thead th:nth-child(2), #standings-table td.manager { left: var(--c1, 38px); }
     #standings-table .rank-move { width: 1.6em; margin-right: 2px; }
-    table thead th:nth-child(2), table td.manager { width: 108px; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    table thead th:nth-child(3), table td.rumbles { width: 44px; }
-    table thead th:nth-child(4), table td.thisweek { width: 48px; }
+    table thead th:nth-child(2), table td.manager { width: var(--c2, 108px); max-width: var(--c2, 108px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table thead th:nth-child(3), table td.rumbles { width: var(--c3, 44px); }
+    table thead th:nth-child(4), table td.thisweek { width: var(--c4, 48px); }
     /* Widened enough to fit both the number (up to a few digits) and the
        reserved LIVE-badge strip without the two overlapping -- the badge
        itself (~27px incl. border) can't shrink below its own content, so
        the reserved padding-right (inherited from td.thisweek-pts above)
        sets a floor on how far this column can be tightened. */
-    table thead th:nth-child(5), table td.thisweek-pts { width: 86px; }
+    table thead th:nth-child(5), table td.thisweek-pts { width: var(--c5, 86px); }
+    #standings-table thead th:nth-child(-n+5), #standings-table tbody td:nth-child(-n+5) { box-sizing: border-box; }
+    /* The points column is centered (number and heading alike, in the space left of the LIVE strip). */
+    #standings-table thead th:nth-child(5), #standings-table td.thisweek-pts { text-align: center; padding-right: 40px; }
     /* The Manager column's sticky offset is normally a fixed 64px (see
        "thead th:nth-child(2), td.manager" above), matching the Rank
        column's fixed width on desktop -- since Rank shrinks to 44px here,
@@ -3318,12 +3327,12 @@
     var sig = shown + "|" + SEASON_INDEX.map(function (r) { return r.season; }).join(",") + "|" + (ARCHIVE ? String((state.history && state.history.season) || "") : String(currentSeason || ""));
     if (sub.getAttribute("data-sig") === sig) return;
     sub.setAttribute("data-sig", sig);
-    if (!SEASON_INDEX.length) { sub.textContent = "DTF Club \u00b7 " + shown + " season"; return; }
+    if (!SEASON_INDEX.length) { sub.textContent = "DTF Club \u00b7 " + shown; return; }
     var cur = ARCHIVE ? String(SEASON_CURRENT || (Math.max.apply(null, SEASON_INDEX.map(function (r) { return Number(r.season); })) + 1)) : String(currentSeason || "");
-    var opts = [{ v: "", t: cur + " season" }].concat(SEASON_INDEX.map(function (r) { return { v: r.season, t: r.season + " season" }; }));
-    sub.innerHTML = "DTF Club \u00b7 " + '<select id="season-select" class="season-select" aria-label="Season">' + opts.map(function (o) {
+    var opts = [{ v: "", t: cur }].concat(SEASON_INDEX.map(function (r) { return { v: r.season, t: r.season }; }));
+    sub.innerHTML = "DTF Club \u00b7 " + '<span class="season-pick"><select id="season-select" class="season-select" aria-label="Season" title="Switch season">' + opts.map(function (o) {
       return '<option value="' + o.v + '"' + ((ARCHIVE ? o.v === ARCHIVE.season : o.v === "") ? " selected" : "") + ">" + escapeHtml(o.t) + "</option>";
-    }).join("") + "</select>";
+    }).join("") + "</select></span>";
   }
   // Switching seasons is a fresh page load of that season (nothing live carries over), keeping who you are by name.
   document.getElementById("subtitle").addEventListener("change", function (e) {
@@ -5305,7 +5314,19 @@
   }
 
   var PLAYOFF_SPOTS = 6;
+  // Portrait phone: the first five columns (#, Manager, Rumbles, Last week, Points) share the table's visible width exactly, so the next
+  // column (EPA when it is on, else Rumble %) starts just off screen and is reached by scrolling sideways.
+  function fitPortraitColumns() {
+    var c = document.querySelector(".table-scroll"), root = document.documentElement.style, names = ["--c1", "--c2", "--c3", "--c4", "--c5"];
+    var mq = window.matchMedia("(max-width: 640px)");
+    if (!c || !mq.matches || !c.clientWidth) { names.forEach(function (n) { root.removeProperty(n); }); return; }
+    var W = c.clientWidth, base = [34, 100, 58, 48, 84], tot = 324, px = base.map(function (v) { return Math.floor(W * v / tot); });
+    px[4] = W - px[0] - px[1] - px[2] - px[3];
+    names.forEach(function (n, i) { root.setProperty(n, px[i] + "px"); });
+  }
+  window.addEventListener("resize", fitPortraitColumns);
   function render(opts) {
+    requestAnimationFrame(fitPortraitColumns);
     prefsSave();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
     renderWeekSelect();

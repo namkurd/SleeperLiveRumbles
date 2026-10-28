@@ -1636,6 +1636,16 @@ def scenario_mobile_responsive_layout(browser):
         f"horizontal scrolling -- rightmost edge {layout['maxRightOfFirstFiveCols']} exceeds the visible "
         f"container's right edge {layout['containerRight']}"
     )
+    fit = page.evaluate("""() => { const c = document.querySelector('.table-scroll').getBoundingClientRect(), th = id => document.getElementById(id).getBoundingClientRect();
+      const p5 = th('th-points'), next = th('th-pct'), body = document.querySelector('#standings-body td.thisweek-pts');
+      const cs = getComputedStyle(body), hs = getComputedStyle(document.getElementById('th-points'));
+      return {right: c.right, p5right: p5.right, nextLeft: next.left, align: cs.textAlign, halign: hs.textAlign}; }""")
+    assert abs(fit["p5right"] - fit["right"]) <= 1.5 and fit["nextLeft"] >= fit["right"] - 1.5, f"the five columns fill the view exactly and the next one starts off screen: {fit}"
+    assert fit["align"] == "center" and fit["halign"] == "center", f"the points column is centered: {fit}"
+    page.evaluate("document.body.classList.add('epa-on')"); page.wait_for_timeout(200)
+    epa = page.evaluate("(() => { const c = document.querySelector('.table-scroll').getBoundingClientRect(); return {right: c.right, epaLeft: document.getElementById('th-epa').getBoundingClientRect().left, pointsRight: document.getElementById('th-points').getBoundingClientRect().right}; })()")
+    assert epa["epaLeft"] >= epa["right"] - 1.5 and abs(epa["pointsRight"] - epa["right"]) <= 1.5, f"with EPA on it is the first column off screen: {epa}"
+    page.evaluate("document.body.classList.remove('epa-on')")
     assert layout["minBadgeGap"] is not None and layout["minBadgeGap"] > 0, (
         f"the 'Points This Week' LIVE badge must sit closer to the number without actually overlapping it, "
         f"got a minimum gap of {layout['minBadgeGap']}"
@@ -2739,6 +2749,13 @@ def scenario_rumblin_qol(browser):
     assert sorted(cards()) == ["Aidan", "Ben"]
     page.click("#home-link"); page.wait_for_timeout(500)
     assert page.evaluate("document.getElementById('mode-actual').classList.contains('active') && !document.getElementById('standings-view').hidden && document.getElementById('rumblin-view').hidden && document.getElementById('week-select').value === ''"), "the title goes home: this season's Actual standings, current week"
+    page.select_option("#week-select", "1"); page.wait_for_timeout(400)
+    page.click("#mode-custom"); page.wait_for_timeout(300)
+    page.click("#home-link"); page.wait_for_timeout(400)
+    assert page.evaluate("document.getElementById('mode-actual').classList.contains('active') && document.getElementById('week-select').value === '' && !document.getElementById('standings-view').hidden"), "...from Projected (or a past week) too"
+    page.click("#mode-scen"); page.wait_for_timeout(600)
+    page.click("#home-link"); page.wait_for_timeout(400)
+    assert page.evaluate("document.getElementById('mode-actual').classList.contains('active') && !document.getElementById('standings-view').hidden && document.getElementById('scen-mode-row').hidden"), "...and from Scenarios"
 
     # Deep link opens Rumblin' directly as that manager.
     page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
@@ -3837,7 +3854,7 @@ def scenario_past_seasons(browser):
     install_routes(cur, _gameday_base())
     cur.goto(PAGE_URL); cur.wait_for_timeout(2500)
     opts = cur.evaluate("[...document.querySelectorAll('#season-select option')].map(o => o.textContent + (o.selected ? '*' : ''))")
-    assert opts == ["2026 season*", "2025 season", "2024 season", "2023 season", "2022 season", "2021 season"], f"this season and the five before it: {opts}"
+    assert opts == ["2026*", "2025", "2024", "2023", "2022", "2021"], f"this season and the five before it: {opts}"
     with cur.expect_navigation():
         cur.select_option("#season-select", "2023")
     assert "season=2023" in cur.url and "wp=" not in cur.url, cur.url
