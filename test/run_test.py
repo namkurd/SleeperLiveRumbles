@@ -3632,6 +3632,8 @@ def scenario_win_probability(browser):
     pf.click("#wp-replay"); pf.wait_for_timeout(500)
     ps = pf.evaluate("({label: document.getElementById('wp-replay').getAttribute('aria-label'), wait: document.querySelectorAll('#wp-list li.wp-wait').length, clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
     assert "Stop" in ps["label"] and ps["wait"] >= 1 and "inset" in ps["clip"], f"watching the week play out: the line draws, the swings wait their turn: {ps}"
+    rot = pf.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'); return {cls: document.getElementById('wp-sheet').classList.contains('wp-rot'), w: c.offsetWidth, h: c.offsetHeight, vw: innerWidth, vh: innerHeight, tf: getComputedStyle(c).transform}; })()")
+    assert rot["cls"] and rot["w"] == rot["vh"] and rot["h"] == rot["vw"] and rot["tf"].startswith("matrix(0, 1, -1, 0"), f"on an upright phone the replay turns the sheet on its side: {rot}"
     pf.wait_for_timeout(1000)
     mid = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, tip: !document.getElementById('wp-tipx').hidden})")
     assert mid["tip"], "the tooltip shows as the line passes a notch"
@@ -3666,6 +3668,19 @@ def scenario_win_probability(browser):
         tp = friend.evaluate("(() => { const t = document.getElementById('wp-tipx'); return t.hidden ? null : t.textContent; })()")
         if tp: got.append(tp)
     assert any("40 yd catch" in t for t in got), "the person who opens the link can scrub through the timeline"
+    # the play description sits along the top for the manager named at the top of the chart and along the bottom for the other one
+    info = friend.evaluate("""() => { const tags = [...document.querySelectorAll('#wp-chart .wp-tag rect')].map(r => r.getAttribute('stroke'));
+      return {tags, notches: [...document.querySelectorAll('#wp-chart .wp-notch')].map(n => { const r = n.getBoundingClientRect(); return {stroke: n.getAttribute('stroke'), x: r.left + r.width / 2, y: r.top + r.height / 2}; })}; }""")
+    svgb = friend.evaluate("(() => { const r = document.querySelector('#wp-chart svg.wp-svg').getBoundingClientRect(); return {top: r.top, h: r.height}; })()")
+    tops, bottoms = [], []
+    for nt in info["notches"][:60]:
+        friend.mouse.move(nt["x"], nt["y"]); friend.wait_for_timeout(30)
+        tr = friend.evaluate("(() => { const t = document.getElementById('wp-tipx'); if (t.hidden) return null; const r = t.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, plays: t.querySelectorAll('.tt-d div').length}; })()")
+        if not tr or not tr["plays"]: continue
+        (tops if nt["stroke"] == info["tags"][0] else bottoms).append(tr)
+    mid = svgb["top"] + svgb["h"] / 2
+    assert tops and bottoms, f"notches from both managers: {len(tops)} top, {len(bottoms)} bottom"
+    assert all(t["top"] < mid for t in tops) and all(b["bottom"] > mid for b in bottoms), "a play's description stays on its manager's side of the chart, top or bottom"
     friend.keyboard.press("Escape"); friend.wait_for_timeout(300)
     assert friend.evaluate("document.getElementById('wp-sheet').hidden && !location.search.includes('wp=')"), "closing returns to the page and clears the link"
     friend.close()

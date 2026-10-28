@@ -1532,6 +1532,8 @@
   .wpm-axis span:first-child { transform: none; }
   .wpm-share, .wpm-exp { position: absolute; right: 2px; bottom: 15px; width: 18px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.78rem; line-height: 1; cursor: pointer; }
   .wpm-share { right: 22px; }
+  .wpm-exp { background: var(--accent); border-color: var(--accent); color: #1a1108; font-weight: 800; height: 22px; box-shadow: 0 1px 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .wpm-exp:hover { filter: brightness(1.1); }
   .wpm-share:disabled { opacity: 0.5; }
   .wpm-exp-old { position: absolute; right: 12px; bottom: 15px; width: 22px; height: 20px; padding: 0; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--text-dim); font-size: 0.8rem; line-height: 1; cursor: pointer; }
   #wp-tipm { position: fixed; z-index: 70; max-width: min(92vw, 340px); white-space: normal; }
@@ -1589,27 +1591,40 @@
   .wp-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--panel-border); }
   /* Every swing takes the same room, so the list never jumps as plays are uncovered: text is cut with an ellipsis, not wrapped to a different height. */
   .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.6rem; overflow: hidden; box-sizing: border-box; }
-  .wp-col li .wp-ph, .wp-col li .wp-pm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+  .wp-col li .wp-ph, .wp-col li .wp-pm { overflow-wrap: anywhere; }
   .wp-col li:first-child { border-top: 0; }
   .wp-list li { transition: opacity 0.45s; }
   .wp-list li.wp-wait { visibility: hidden; opacity: 0; }
-  @media (max-width: 700px) { .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 5.3rem; } .wp-col li .wp-ph, .wp-col li .wp-pm { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; } .wp-list li { display: grid; grid-template-columns: 22px 1fr; column-gap: 6px; align-items: start; position: relative; } .wp-list li.wp-clipbox { display: block; } .wp-list li > .wp-n { grid-row: 1 / span 2; } .wp-list li > div { grid-column: 2; } .wp-pd { grid-column: 2; } .wp-play { position: absolute; right: 0; top: 6px; } .wp-ph { font-size: 0.74rem; padding-right: 14px; } }
+  @media (max-width: 700px) { .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 5.3rem; } .wp-list li { display: grid; grid-template-columns: 22px 1fr; column-gap: 6px; align-items: start; position: relative; } .wp-list li.wp-clipbox { display: block; } .wp-list li > .wp-n { grid-row: 1 / span 2; } .wp-list li > div { grid-column: 2; } .wp-pd { grid-column: 2; } .wp-play { position: absolute; right: 0; top: 6px; } .wp-ph { font-size: calc(0.74rem * var(--wp-fs, 1)); padding-right: 14px; } }
   .wp-list .wp-none { color: var(--text-dim); font-size: 0.76rem; }
   .wp-n { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 0.7rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
   .wp-col > li > div { flex: 1 1 auto; min-width: 0; }
-  .wp-ph { font-size: 0.8rem; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
-  .wp-pm { font-size: 0.66rem; color: var(--text-dim); line-height: 1.2; }
-  .wp-pd { flex: 0 0 auto; font-size: 0.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .wp-ph { font-size: calc(0.8rem * var(--wp-fs, 1)); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+  .wp-pm { font-size: calc(0.66rem * var(--wp-fs, 1)); color: var(--text-dim); line-height: 1.2; }
+  .wp-pd { flex: 0 0 auto; font-size: calc(0.7rem * var(--wp-fs, 1)); font-weight: 800; font-variant-numeric: tabular-nums; }
   .wp-pd.up { color: var(--good); } .wp-pd.dn { color: var(--bad); }
   .wp-hint { font-size: 0.64rem; color: var(--text-dim); margin: 8px 0 0; }
   #wp-tipx { z-index: 6; }
   #wp-tipx .tt-d div { margin-top: 1px; }
   @media (max-width: 700px) { .wp-body { gap: 8px; } .wp-card { padding: 10px 10px 12px; } }
   @media (max-height: 500px) and (orientation: landscape) {
-    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3rem; }
+    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.7rem; }
     /* Too short to stack: the chart and the plays share the width instead, so nothing scrolls. */
     .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-chartwrap { flex: 1 1 auto; width: auto; } .wp-side { flex: 0 0 38%; width: auto; max-height: calc(100vh - 76px); overflow: auto; } .wp-list { display: block; } .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
   }
+  /* A phone held upright turns the sheet on its side while the matchup plays (the page cannot turn the phone; this lays the sheet out
+     as the landscape view, rotated a quarter turn). Closing it, or really turning the phone, puts it back. */
+  .wp-sheet.wp-rot { padding: 0; align-items: flex-start; justify-content: flex-start; }
+  .wp-sheet.wp-rot .wp-card { position: fixed; top: 0; left: 0; box-sizing: border-box; width: var(--rot-h, 100vh); height: var(--rot-w, 100vw); max-width: none; max-height: none; transform-origin: top left; transform: translateX(var(--rot-w, 100vw)) rotate(90deg); padding: 6px 10px; overflow: hidden; border-radius: 0; border-top-width: 2px; animation: none; }
+  .wp-sheet.wp-rot .wp-title { font-size: 1.02rem; } .wp-sheet.wp-rot .wp-story, .wp-sheet.wp-rot .wp-ticker { display: none; }
+  .wp-sheet.wp-rot .wp-head { flex-wrap: nowrap; } .wp-sheet.wp-rot .wp-ttl { flex: 1 1 auto; } .wp-sheet.wp-rot .wp-btns { flex: 0 0 auto; }
+  .wp-sheet.wp-rot .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-sheet.wp-rot .wp-chartwrap { flex: 1 1 auto; width: auto; }
+  .wp-sheet.wp-rot .wp-side { flex: 0 0 38%; width: auto; max-height: calc(var(--rot-w, 100vw) - 76px); overflow: auto; } .wp-sheet.wp-rot .wp-list { display: block; }
+  .wp-sheet.wp-rot .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-sheet.wp-rot .wp-hint { display: none; } .wp-sheet.wp-rot .wp-sub { font-size: 0.68rem; }
+  .wp-sheet.wp-rot .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.7rem; }
+  .wp-sheet.wp-rot .wp-list li { display: flex; align-items: center; position: static; } .wp-sheet.wp-rot .wp-list li.wp-clipbox { display: block; }
+  .wp-sheet.wp-rot .wp-list li > .wp-n { grid-row: auto; } .wp-sheet.wp-rot .wp-pd { grid-column: auto; flex-basis: auto; padding-left: 0; } .wp-sheet.wp-rot .wp-play { position: static; }
+  .wp-sheet.wp-rot .wp-ph { font-size: calc(0.8rem * var(--wp-fs, 1)); padding-right: 0; }
   @media (prefers-reduced-motion: no-preference) { .wpm-dot { transition: left 0.4s, top 0.4s; } }
 
   .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 4px 14px; margin: 4px 4px 0; }
@@ -6674,7 +6689,15 @@
     chart.addEventListener("pointermove", wpHover);
     chart.addEventListener("pointerdown", wpHover);
     chart.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") wpHoverOff(); });
-    window.addEventListener("resize", function () { if (wpOpenKey) { clearTimeout(rs); rs = setTimeout(wpSheetRender, 120); } });
+    window.addEventListener("resize", function () {
+      if (!wpOpenKey) return;
+      // (a phone's address bar sliding away also "resizes": a replay in progress is left alone)
+      if (wpRot) {
+        if (window.innerWidth > window.innerHeight) wpRotateOff();
+        else { var sh = document.getElementById("wp-sheet"); sh.style.setProperty("--rot-w", window.innerWidth + "px"); sh.style.setProperty("--rot-h", window.innerHeight + "px"); if (wpPlay.on) return; }
+      } else if (wpPlay.on) return;
+      clearTimeout(rs); rs = setTimeout(wpSheetRender, 120);
+    });
   })();
   // R refreshes (unless typing in a field or using a modifier key).
   document.addEventListener("keydown", function (e) {
@@ -7680,7 +7703,7 @@
     return { pm: pm, html: '<div class="sc-wpm" data-wp="' + key + '" role="button" tabindex="0" aria-label="Win probability chart, ' + wpPct(p) + ' percent. Drag across it to see the week; Enter expands it">' + svg +
       '<i class="wpm-dot" style="--x:' + endX.toFixed(1) + "%;top:" + ((1 - p) * 100).toFixed(1) + "%;--c:" + (p >= 0.5 ? col.mine : col.theirs) + '">' + wpFace(p >= 0.5 ? me : t) + '</i><i class="wpm-cur" hidden></i></div>' +
       '<em class="wpm-pct" style="color:' + (p >= 0.5 ? col.mine : col.theirs) + '">' + (pm.done ? (p > 0.5 ? "Won" : p < 0.5 ? "Lost" : "Tied") : wpPct(p) + "%") + "</em>" +
-      '<div class="wpm-axis" aria-hidden="true">' + axis + '</div><button type="button" class="wpm-share" aria-label="Share this chart" title="Share">\u2934</button><button type="button" class="wpm-exp" aria-label="Expand the chart" title="Expand">\u2922</button>' +
+      '<div class="wpm-axis" aria-hidden="true">' + axis + '</div><button type="button" class="wpm-share" aria-label="Share this chart" title="Share">\u2934</button><button type="button" class="wpm-exp" aria-label="Expand the chart" title="Expand and replay the matchup">\u2922</button>' +
       (pm.approx ? '<small class="wpm-ap" title="This week’s play-by-play only partly reconciles to the final scores">approx.</small>' : "") + "</div>" };
   }
 
@@ -7830,8 +7853,8 @@
     document.getElementById("wp-title").innerHTML = s.title + ' <small>Week ' + pm.win.week + "</small>";
     document.getElementById("wp-sub").innerHTML = s.sub;
     document.getElementById("wp-story").textContent = wpStory(pm).text;
-    var land = window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
-    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, window.innerHeight - 84) : Math.min(Math.max(240, window.innerHeight - 330), Math.max(210, Math.round(W * (W > 700 ? 0.5 : 0.7))));
+    var land = wpRot || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
+    var W = Math.max(240, Math.floor(wrap.clientWidth || 320)), H = land ? Math.max(150, (wpRot ? window.innerWidth : window.innerHeight) - 84) : Math.min(Math.max(240, window.innerHeight - 330), Math.max(210, Math.round(W * (W > 700 ? 0.5 : 0.7))));
     var c = wpChartSvg(pm, W, H, false);
     wpGeom = c.geom;
     wrap.innerHTML = c.svg;
@@ -7846,6 +7869,7 @@
     document.getElementById("wp-listh").hidden = !pm.marks.length;
     document.getElementById("wp-listh").textContent = pm.marks.length >= 10 ? "10 biggest swings" : "Biggest swings";
     sheet.hidden = false;
+    wpFitRows();
     if (wpPinT != null) wpShowAt(pm, wpPinT);
   }
   // Official NFL clips for a finished week's biggest plays (wp_clips/week_N.json, found nightly), keyed "<sleeper id>:<seconds>".
@@ -7922,6 +7946,15 @@
     wpClipPlay(box, [c].concat(c.alt || []), 0, 0);
     if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
   }
+  // Every swing keeps the same room and shows all its words: if a play's text needs more height than the row has, the text (not the row)
+  // is made a little smaller until it fits.
+  function wpFitRows() {
+    [].forEach.call(document.querySelectorAll("#wp-list .wp-col li[data-t]"), function (li) {
+      var fs = 1;
+      li.style.removeProperty("--wp-fs");
+      while (li.scrollHeight > li.clientHeight + 1 && fs > 0.6) { fs -= 0.05; li.style.setProperty("--wp-fs", fs.toFixed(2)); }
+    });
+  }
   function wpOpen(key, opts) {
     if (!wpPairs[key]) return;
     if (wpOpenKey !== key) wpPinT = null;
@@ -7938,7 +7971,7 @@
       state.wpLink.gone = true;
       try { var u = new URL(location.href); u.searchParams.delete("wp"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) { /* fine */ }
     }
-    wpPlayStop(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
+    wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
 
   // What a moment says: when, the win probability and the score. A notch adds the scoring play(s) that happened there.
   function wpTipHtml(pm, t, notch) {
@@ -7958,7 +7991,7 @@
     if (!pm || !svg || !wpGeom) return;
     if (wpPlay.on) { if (e.type === "pointerdown") wpPlayStop(); else return; }
     var r = svg.getBoundingClientRect(), g = wpGeom, m = pm.model;
-    var px = e.clientX - r.left;
+    var px = wpRot ? e.clientY - r.top : e.clientX - r.left;   // turned on its side, the chart's x axis runs down the screen
     if (px < g.ml - 6 || px > g.ml + g.pw + 6) { wpHoverOff(); return; }
     var sc = wpScrub(m, pm.notches, Math.max(0, Math.min(1, (px - g.ml) / g.pw)), g.pw, 7);
     if (e.type === "pointerdown") {
@@ -7978,10 +8011,14 @@
     svg.querySelector(".wp-hov").innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
     tip.innerHTML = wpTipHtml(pm, t, notch);
     tip.hidden = false;
-    var wr = document.getElementById("wp-chartwrap").getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
-    var left = Math.max(4, Math.min(wr.width - tw - 4, (r.left - wr.left) + cx - tw / 2)), top = (r.top - wr.top) + cy - th - 12;
-    if (top < 2) top = (r.top - wr.top) + cy + 14;
-    tip.style.left = left + "px"; tip.style.top = top + "px";
+    var wrap = document.getElementById("wp-chartwrap"), tw = tip.offsetWidth, th = tip.offsetHeight;
+    // Always in the same place for the same manager, so it reads steadily: a play by the manager named at the top of the chart is
+    // described along the top, one by the manager at the bottom along the bottom; it still follows the time along the x axis.
+    var host = document.getElementById("wp-chart");   // (an svg element has no offsetLeft/Top of its own)
+    var left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, host.offsetLeft + cx - tw / 2));
+    var below = notch && notch.side < 0, base = host.offsetTop;
+    var top = below ? base + g.mt + g.ph - th - 16 : base + g.mt + 4;
+    tip.style.left = left + "px"; tip.style.top = Math.max(2, top) + "px";
   }
   function wpUnpin() { wpPinT = null; wpHoverOff(); }
   function wpHoverOff() {
@@ -7994,6 +8031,20 @@
   // passes (the scoring play, the time, the score, the win probability), and the ten biggest swings are uncovered one at a time as the
   // line reaches them. Tap again to stop and see it all.
   var wpPlay = { raf: 0, on: false, clip: null };
+  var wpRot = false;   // the sheet is turned on its side (a phone held upright)
+  function wpRotatable() { try { return window.matchMedia("(max-width: 700px) and (orientation: portrait)").matches; } catch (e) { return false; } }
+  function wpRotateOn() {
+    if (wpRot || !wpRotatable()) return false;
+    var sh = document.getElementById("wp-sheet");
+    sh.style.setProperty("--rot-w", window.innerWidth + "px"); sh.style.setProperty("--rot-h", window.innerHeight + "px");
+    sh.classList.add("wp-rot"); wpRot = true;
+    return true;
+  }
+  function wpRotateOff() {
+    if (!wpRot) return;
+    var sh = document.getElementById("wp-sheet");
+    sh.classList.remove("wp-rot"); wpRot = false;
+  }
   // The time (seconds into the timeline) that sits at position x (0..1) along the chart.
   function wpTAtX(m, x) {
     var lo = 0, hi = m.T.length - 1;
@@ -8018,7 +8069,7 @@
   function wpPlayClip(li, done) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
     if (!c) { done(); return; }
-    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false;
+    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false, played = false;
     box.className = "wp-clipbox auto";
     li.parentNode.insertBefore(box, li.nextSibling);
     function finish(early) {
@@ -8034,7 +8085,7 @@
     function attempt(i) {
       if (finished) return;
       if (i >= list.length) { finish(); return; }
-      var cl = list[i], slot = document.createElement("div");
+      var cl = list[i], slot = document.createElement("div"); played = false;
       box.innerHTML = ""; box.appendChild(slot);
       clearTimeout(dog); dog = setTimeout(function () { finish(); }, 9000);   // never wait forever for a player that will not start
       wpYtApi().then(function (YT) {
@@ -8044,11 +8095,20 @@
           events: {
             onReady: function (e) {
               try { e.target.mute(); e.target.playVideo(); } catch (x) { /* fine */ }
-              clearTimeout(dog); dog = setTimeout(function () { finish(); }, ((Number(cl.e) || 15) - (Number(cl.s) || 0) + 6) * 1000);
+              // If playing has not begun within a few seconds (autoplay refused, a slow start), move on rather than sit on a still frame.
+              clearTimeout(dog); dog = setTimeout(function () { finish(); }, 5000);
               if (window.__wpEvents) window.__wpEvents.push("clip:start:" + cl.id);
               if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
             },
-            onStateChange: function (e) { if (e.data === 0) finish(); },
+            onStateChange: function (e) {
+              if (e.data === 0) { finish(); return; }
+              if (e.data === 1 && !played) {
+                // It is playing. The clip is as long as the play (end minus start); stop it ourselves at that point, whatever the player
+                // does at the end (a Short may loop), so it can never run on or repeat.
+                played = true; clearTimeout(dog);
+                dog = setTimeout(function () { try { player.pauseVideo(); } catch (x) { /* fine */ } finish(); }, ((Number(cl.e) || 15) - (Number(cl.s) || 0) + 1) * 1000);
+              }
+            },
             onError: function () { try { player.destroy(); } catch (x) { /* gone already */ } player = null; attempt(i + 1); }
           } });
       }, function () { finish(); });
@@ -8056,9 +8116,11 @@
     attempt(0);
   }
   function wpPlayStart() {
-    var pm = wpOpenKey && wpPairs[wpOpenKey], svg = document.querySelector("#wp-chart svg.wp-svg");
-    if (!pm || !svg || !wpGeom) return;
+    var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (wpPlay.on) { wpPlayStop(); return; }
+    if (pm && wpRotateOn()) wpSheetRender();   // upright phone: turn the sheet on its side and lay the chart out again for it
+    var svg = document.querySelector("#wp-chart svg.wp-svg");
+    if (!pm || !svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, W = Number(svg.getAttribute("width")) || g.ml + g.pw + 10, DUR = window.__wpPlayMs || 30000, btn = document.getElementById("wp-replay");
     var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0, shown = null;
     var rows = [].slice.call(document.querySelectorAll("#wp-list li[data-t]"));
