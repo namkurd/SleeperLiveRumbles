@@ -642,7 +642,8 @@ def run(root: str = HERE, force: bool = False) -> None:
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
-            if (job["recent"] and now_ms - doc["t0"] < 21 * 86400 * 1000) or (not job["recent"] and (force or not done_before)) or (job["recent"] and force):
+            # (a week of the current season is also redone once whenever the matching rules or the channels change)
+            if (job["recent"] and (now_ms - doc["t0"] < 21 * 86400 * 1000 or not done_before)) or (not job["recent"] and (force or not done_before)) or (job["recent"] and force):
                 work.append((d, w, doc, names))
     if not work:
         print("[info] no week needs clips")
