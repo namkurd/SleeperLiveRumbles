@@ -3616,6 +3616,12 @@ def scenario_win_probability(browser):
     page.mouse.down(); page.mouse.up(); page.wait_for_timeout(200)
     page.click("#wp-share"); page.wait_for_timeout(300)
     assert "&t=" in page.evaluate("window.__wpLink"), "the pin is back for the link"
+    # on a desktop window the chart and the ten swings sit side by side and all of it fits without scrolling
+    vp0 = page.viewport_size
+    page.set_viewport_size({"width": 1280, "height": 760}); page.wait_for_timeout(900)
+    dk = page.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'), s = c.querySelector('.wp-side'), ch = document.getElementById('wp-chart').getBoundingClientRect(), sr = s.getBoundingClientRect(); const li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')]; return {cardScroll: c.scrollHeight - c.clientHeight, sideScroll: s.scrollHeight - s.clientHeight, side: sr.left >= ch.right - 2, n: li.length, inside: li.every(l => { const b = l.getBoundingClientRect(), cb = c.getBoundingClientRect(); return b.bottom <= cb.bottom + 1 && b.top >= cb.top; }), chartBottom: ch.bottom, vh: innerHeight}; })()")
+    assert dk["cardScroll"] <= 1 and dk["sideScroll"] <= 1 and dk["side"] and dk["n"] == 10 and dk["inside"] and dk["chartBottom"] <= dk["vh"], f"on a desktop the whole replay fits the window: {dk}"
+    page.set_viewport_size(vp0); page.wait_for_timeout(600)
     pf = ctx.new_page()
     pf.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     pf.on("pageerror", lambda exc: page_errors.append(str(exc)))
@@ -3633,7 +3639,7 @@ def scenario_win_probability(browser):
     pf.click("#wp-replay")
     pf.wait_for_timeout(500)
     ps = pf.evaluate("({label: document.getElementById('wp-replay').getAttribute('aria-label'), wait: document.querySelectorAll('#wp-list li.wp-wait').length, clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
-    assert "Stop" in ps["label"] and ps["wait"] >= 1 and "inset" in ps["clip"], f"watching the week play out: the line draws, the swings wait their turn: {ps}"
+    assert "Stop" in ps["label"] and ps["wait"] >= 1 and "polygon" in ps["clip"], f"watching the week play out: the line draws, the swings wait their turn: {ps}"
     rot = pf.evaluate("(() => { const c = document.querySelector('#wp-sheet .wp-card'); return {cls: document.getElementById('wp-sheet').classList.contains('wp-rot'), w: c.offsetWidth, h: c.offsetHeight, vw: innerWidth, vh: innerHeight, tf: getComputedStyle(c).transform}; })()")
     assert rot["cls"] and rot["w"] == rot["vh"] and rot["h"] == rot["vw"] and rot["tf"].startswith("matrix(0, 1, -1, 0"), f"on an upright phone the replay turns the sheet on its side: {rot}"
     pf.wait_for_timeout(1000)
@@ -3729,7 +3735,7 @@ def scenario_win_probability(browser):
       let hit = false; for (let i = 0; i < labs.length; i++) for (let j = i + 1; j < labs.length; j++) if (labs[i].right > labs[j].left && labs[j].right > labs[i].left) hit = true;
       return {svgW: svg.getBoundingClientRect().width, wrapW: wrap.getBoundingClientRect().width, h: svg.getBoundingClientRect().height, labels: labs.length, overlap: hit, listTop: document.getElementById('wp-list').getBoundingClientRect().top, svgBottom: svg.getBoundingClientRect().bottom}; }""")
     assert wd["svgW"] >= wd["wrapW"] - 2 and wd["svgW"] > 600, f"the chart fills the space it has: {wd}"
-    assert wd["h"] >= 280 and wd["labels"] >= 3 and not wd["overlap"] and wd["listTop"] >= wd["svgBottom"], f"taller on a wide screen, labels apart, plays beneath: {wd}"
+    assert wd["h"] >= 280 and wd["labels"] >= 3 and not wd["overlap"] and wd["svgBottom"] <= 800, f"taller on a wide screen, labels apart, plays beside it, all within the window: {wd}"
     if os.environ.get("SCENSHOT"): wide.screenshot(path="/tmp/sf/wp_wide.png")
     wide.close()
     # escape closes
