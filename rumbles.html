@@ -1558,6 +1558,18 @@
   .wp-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
   #wp-share { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .wp-last { position: absolute; z-index: 4; transform: translateX(-50%); max-width: 74%; min-height: 2.7em; box-sizing: border-box; padding: 4px 9px; border: 1px solid var(--c, var(--panel-border)); border-radius: 8px; background: color-mix(in srgb, var(--panel) 90%, transparent); font-size: 0.78rem; line-height: 1.3; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,0.35); }
+  .wp-clutch { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%; padding: 8px 16px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 12px; background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c, var(--accent)) 28%, transparent), 0 8px 30px rgba(0,0,0,0.55); font-size: 0.9rem; line-height: 1.3; pointer-events: none; animation: wp-clutch-in 0.35s cubic-bezier(.2,1.4,.4,1); }
+  .wp-clutch[hidden], .wp-pop[hidden] { display: none; } .wp-clutch b { display: block; font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c, var(--accent)); } .wp-clutch .wc-who { font-weight: 800; color: var(--c, var(--accent)); } .wp-clutch small { color: var(--text-dim); }
+  @keyframes wp-clutch-in { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+  .wp-pop { position: absolute; z-index: 7; width: 0; height: 0; pointer-events: none; }
+  .wp-pop img, .wp-pop .wp-pop-av { position: absolute; left: -24px; top: -24px; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); background: var(--panel); box-shadow: 0 0 18px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) both; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-sizing: border-box; }
+  .wp-pop i { position: absolute; left: -24px; top: -24px; width: 48px; height: 48px; border-radius: 50%; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; animation: wp-ring 1.1s ease-out 0.15s both; }
+  .wp-pop i + i { animation-delay: 0.45s; }
+  .wp-pop span { position: absolute; top: 28px; left: 0; transform: translateX(-50%); white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: var(--c, var(--accent)); color: #111; font-size: 0.68rem; font-weight: 800; animation: wp-clutch-in 0.4s 0.3s both; }
+  @keyframes wp-pop { 0% { transform: scale(0); } 60% { transform: scale(1.9); } 100% { transform: scale(1.35); } }
+  @keyframes wp-ring { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(4.2); opacity: 0; } }
+  .wp-chartwrap.wp-flash { animation: wp-flash 0.9s ease-out; } @keyframes wp-flash { 0% { box-shadow: inset 0 0 0 0 transparent; } 25% { box-shadow: inset 0 0 40px 6px color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); } 100% { box-shadow: inset 0 0 0 0 transparent; } }
+  @media (prefers-reduced-motion: reduce) { .wp-pop img, .wp-pop i, .wp-pop span, .wp-clutch { animation: none; } }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
@@ -1899,7 +1911,7 @@
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
-      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div></div>
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
       <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
@@ -6555,6 +6567,13 @@
   }
 
   // Standings (Actual / Projected) vs. the Rumblin' cards.
+  // The "swipe" hint only shows while the table really is wider than its panel (a landscape phone usually shows every column).
+  function syncScrollHint() {
+    var sc = document.getElementById("standings-scroll"), h = document.querySelector(".table-panel .scroll-hint");
+    if (sc && h) h.style.display = sc.scrollWidth > sc.clientWidth + 2 ? "block" : "none";
+  }
+  if (window.ResizeObserver) { var rsoT = document.getElementById("standings-table"), rsoS = document.getElementById("standings-scroll"); var rso = new ResizeObserver(syncScrollHint); if (rsoT) rso.observe(rsoT); if (rsoS) rso.observe(rsoS); }
+  window.addEventListener("resize", syncScrollHint);
   function setView(view) {
     state.view = view;
     var rb = view === "rumblin";
@@ -7098,26 +7117,50 @@
       if (b && x[0] - b.b <= WP_SQUEEZE_OVER) b.b = Math.max(b.b, x[1]);
       else blocks.push({ a: x[0], b: x[1] });
     });
-    var off = 0;
+    // How much axis a stretch of game time gets follows how many of these players are in a game: a Thursday-night or 9am game, with few of
+    // them playing, takes proportionally less room than the Sunday afternoon slate. (Two extra "players" keep a thin slate from vanishing.)
+    var gi = [];
+    all.forEach(function (p) {
+      var g = doc.g[doc.tg[doc.tm[p.sid]]];
+      if (g) gi.push([g.ko, g.end != null ? g.end : g.ko + WP_GAME_LEN]);
+    });
+    var cuts = {};
+    blocks.forEach(function (b) { cuts[b.a] = 1; cuts[b.b] = 1; });
+    gi.forEach(function (g) { cuts[g[0]] = 1; cuts[g[1]] = 1; });
+    var cl = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; }), raw = [], secs = 0, rawSum = 0;
     blocks.forEach(function (b, k) {
-      b.off = off;
-      off += (b.b - b.a) + (k < blocks.length - 1 ? WP_SQUEEZE_TO : 0);
+      if (k) raw.push({ a: blocks[k - 1].b, b: b.a, gap: true });
+      for (var ci = 0; ci < cl.length - 1; ci++) {
+        var c0 = cl[ci], c1 = cl[ci + 1];
+        if (c0 < b.a || c1 > b.b) continue;
+        var cnt = 0;
+        gi.forEach(function (g) { if (g[0] <= c0 && g[1] >= c1) cnt++; });
+        var seg = { a: c0, b: c1, w: (c1 - c0) * (cnt + 2) };
+        secs += c1 - c0; rawSum += seg.w; raw.push(seg);
+      }
+    });
+    var unit = rawSum > 0 ? secs / rawSum : 1, segs = [], off = 0;
+    raw.forEach(function (sg) {
+      sg.len = sg.gap ? WP_SQUEEZE_TO : sg.w * unit;
+      sg.off = off; off += sg.len; segs.push(sg);
     });
     var L = Math.max(1, off);
     function comp(t) {
-      for (var k = 0; k < blocks.length; k++) {
-        var b = blocks[k];
-        if (t <= b.b) return k === 0 || t >= b.a ? b.off + Math.max(0, t - b.a) : blocks[k - 1].off + (blocks[k - 1].b - blocks[k - 1].a) + WP_SQUEEZE_TO * (t - blocks[k - 1].b) / (b.a - blocks[k - 1].b);
+      if (!segs.length) return 0;
+      if (t <= segs[0].a) return 0;
+      for (var k = 0; k < segs.length; k++) {
+        var sg = segs[k];
+        if (t <= sg.b) return sg.off + (sg.b > sg.a ? sg.len * (t - sg.a) / (sg.b - sg.a) : 0);
       }
       return L;
     }
+    blocks.forEach(function (b) { b.off = comp(b.a); });
     function x(t) { return Math.max(0, Math.min(1, comp(t) / L)); }
     function tOf(fx) {
       var c = Math.max(0, Math.min(1, fx)) * L;
-      for (var k = 0; k < blocks.length; k++) {
-        var b = blocks[k], len = b.b - b.a;
-        if (c <= b.off + len) return b.a + Math.max(0, c - b.off);
-        if (k < blocks.length - 1 && c < blocks[k + 1].off) return b.b;
+      for (var k = 0; k < segs.length; k++) {
+        var sg = segs[k];
+        if (c <= sg.off + sg.len) return sg.len > 0 ? sg.a + (sg.b - sg.a) * (c - sg.off) / sg.len : sg.a;
       }
       return blocks[blocks.length - 1].b;
     }
@@ -7417,7 +7460,7 @@
     ["rb-feed", "rb-live", "rb-empty"].forEach(function (id) { var e = document.getElementById(id); if (e) e.hidden = true; });
     view.hidden = false;
     rbScenModeUi(true);
-    els.modeScen.classList.add("active"); els.modeRumblin.classList.remove("active");
+    if (state.view === "rumblin") { els.modeScen.classList.add("active"); els.modeRumblin.classList.remove("active"); }
     rb.scenUi = { cur: curOpt, past: pastWeeks, value: showPast != null ? String(showPast) : "" };
     renderWeekSelect();
     rbWeekNote(rb.scenUi);
@@ -7860,6 +7903,7 @@
 
   var wpGeom = null;
   function wpSheetRender() {
+    wpPopHide();
     wpPlayStop();
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     var sheet = document.getElementById("wp-sheet");
@@ -8001,7 +8045,7 @@
       state.wpLink.gone = true;
       try { var u = new URL(location.href); u.searchParams.delete("wp"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) { /* fine */ }
     }
-    wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
+    wpPopHide(); wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
 
   // What a moment says: when, the win probability and the score. A notch adds the scoring play(s) that happened there.
   function wpTipHtml(pm, t, notch) {
@@ -8091,6 +8135,7 @@
   function wpPlayStop() {
     if (!wpPlay.on) return;
     cancelAnimationFrame(wpPlay.raf); wpPlay.on = false;
+    var cl = document.getElementById("wp-clutch"); if (cl) cl.hidden = true;
     if (wpPlay.clip) { var stop = wpPlay.clip; wpPlay.clip = null; stop(true); }
     var svg = document.querySelector("#wp-chart svg.wp-svg"), btn = document.getElementById("wp-replay");
     if (svg) svg.style.clipPath = "";
@@ -8205,6 +8250,44 @@
     left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, left));
     tip.style.left = left + "px"; tip.style.top = top + "px";
   }
+  // The moment that decided it: the last time the lead changed hands, and the scoring play there.
+  function wpClutch(pm) {
+    var m = pm.model, P = m.P, T = m.T, side = 0, at = -1, i;
+    for (i = 0; i < P.length; i++) {
+      var sd = P[i] >= 0.6 ? 1 : P[i] <= 0.4 ? -1 : 0;
+      if (sd && side && sd !== side) at = i;
+      if (sd) side = sd;
+    }
+    if (at < 0) return null;
+    var t = T[at], best = null;
+    pm.notches.forEach(function (n) { var d = Math.abs(n.t - t); if (d <= 240 && (!best || d < best.d)) best = { d: d, n: n }; });
+    return { t: best ? best.n.t : t, x: m.x(best ? best.n.t : t), notch: best ? best.n : null, up: P[at] >= 0.5 };
+  }
+  function wpWinner(pm) {
+    var a = pm.model.at(pm.model.end), mineWins = a.my >= a.th;
+    return { who: mineWins ? pm.me : pm.t, col: wpResolve(mineWins ? pm.col.mine : pm.col.theirs), p: a.p };
+  }
+  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
+  // The winner's picture pops at the end of the line.
+  function wpPop(pm) {
+    var g = wpGeom, host = document.getElementById("wp-chart"), el = document.getElementById("wp-pop");
+    if (!g || !host || !el) return;
+    var w = wpWinner(pm), url = (scAv || {})[w.who.rid], nm = escapeHtml(w.who.name || "");
+    el.style.setProperty("--c", w.col);
+    el.innerHTML = "<i></i><i></i>" + (url ? '<img alt="" src="' + escapeHtml(url) + '">' : '<div class="wp-pop-av">' + escapeHtml(String(w.who.name || "?").charAt(0)) + "</div>") + "<span>" + nm + " wins</span>";
+    el.style.left = (host.offsetLeft + g.ml + g.pw - 18) + "px"; el.style.top = (host.offsetTop + g.mt + (1 - w.p) * g.ph) + "px";
+    el.hidden = false;
+    var wrap = document.getElementById("wp-chartwrap"); wrap.style.setProperty("--c", w.col); wrap.classList.remove("wp-flash"); void wrap.offsetWidth; wrap.classList.add("wp-flash");
+  }
+  // The lead-changing play, up in the middle of the chart for a moment.
+  function wpClutchShow(pm, cl) {
+    var el = document.getElementById("wp-clutch"), n = cl.notch, side = n ? (n.ev[0].side > 0 ? pm.col.mine : pm.col.theirs) : (cl.up ? pm.col.mine : pm.col.theirs);
+    el.style.setProperty("--c", wpResolve(side));
+    var who = cl.up ? pm.me.name : pm.t.name, ev = n && n.ev[0];
+    el.innerHTML = "<b>The lead changes for good</b>" + (ev ? '<span class="wc-who">' + escapeHtml(pm.names[ev.sid] || "") + "</span> " + escapeHtml(ev.label === "latest" ? "scores" : ev.label) + " <small>" + (ev.pts > 0 ? "+" : "") + ev.pts.toFixed(1) + "</small>" : escapeHtml(who) + " takes over");
+    el.hidden = false;
+    var wrap = document.getElementById("wp-chartwrap"); wrap.style.setProperty("--c", wpResolve(side)); wrap.classList.remove("wp-flash"); void wrap.offsetWidth; wrap.classList.add("wp-flash");
+  }
   function wpPlayStart(from) {
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (wpPlay.on) { wpPlayStop(); return; }
@@ -8214,6 +8297,8 @@
     if (!pm || !svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, W = Number(svg.getAttribute("width")) || g.ml + g.pw + 10, DUR = window.__wpPlayMs || 30000, btn = document.getElementById("wp-replay");
     var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0;
+    wpPopHide();
+    var clutch = wpClutch(pm), clutchOn = false, clutchShown = false, hold = 0;
     var rows = [].slice.call(document.querySelectorAll("#wp-list li[data-t]"));
     var prog = Math.max(0, Math.min(0.999, Number(from) || 0));
     // The replay's pace follows the scoring: a quiet stretch is passed quickly, a busy one slowly, and the whole week still takes DUR.
@@ -8222,6 +8307,7 @@
     for (var pi = 1; pi <= PN; pi++) {
       var px = (pi - 0.5) / PN, wt = 1;
       for (var qi = 0; qi < notches.length; qi++) { var dx = (px - notches[qi].x) / sig; if (dx > -4 && dx < 4) wt += 5 * Math.exp(-dx * dx / 2); }
+      if (clutch) { var cdx = (px - clutch.x) / 0.012; if (cdx > -4 && cdx < 4) wt += 40 * Math.exp(-cdx * cdx / 2); }   // the play that decided it gets extra time
       pace.push(pace[pi - 1] + wt);
     }
     for (var pj = 0; pj <= PN; pj++) pace[pj] /= pace[PN];
@@ -8272,7 +8358,14 @@
           if (li.classList.contains("has-clip")) queue.push(li);
         }
       });
-      if (p >= 1) { wpPlayStop(); return; }
+      if (clutch && !clutchShown && p >= clutch.x) { clutchShown = clutchOn = true; wpClutchShow(pm, clutch); }
+      if (clutchOn && p > clutch.x + 0.06) { clutchOn = false; document.getElementById("wp-clutch").hidden = true; }
+      if (p >= 1) {
+        // a beat at the end: the winner's picture pops on the end of the line, then the whole week is shown
+        if (!hold) { hold = now; wpPop(pm); document.getElementById("wp-clutch").hidden = true; }
+        else if (now - hold > 2200) { wpPlayStop(); return; }
+        wpPlay.raf = requestAnimationFrame(frame); return;
+      }
       if (!paused && queue.length) {
         paused = true;
         wpPlayClip(queue.shift(), function () { paused = false; lastNow = performance.now(); });
@@ -8683,8 +8776,7 @@
     var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? pastWeeks[0] : null);
     var scenOn = rb.sub === "scenarios" && !scenBtn.hidden && !scenBtn.disabled;
     scenRow.hidden = !scenOn;
-    els.modeScen.classList.toggle("active", scenOn);
-    els.modeRumblin.classList.toggle("active", !scenOn);
+    if (state.view === "rumblin") { els.modeScen.classList.toggle("active", scenOn); els.modeRumblin.classList.toggle("active", !scenOn); }
     var scenView = document.getElementById("rb-scen-view");
     scenView.hidden = !scenOn;
     grid.style.display = scenOn ? "none" : "";

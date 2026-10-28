@@ -3639,7 +3639,11 @@ def scenario_win_probability(browser):
     pf.wait_for_timeout(1000)
     mid = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, tip: !document.getElementById('wp-tipx').hidden})")
     assert mid["tip"], "the tooltip shows as the line passes a notch"
-    pf.wait_for_timeout(2600)
+    pf.wait_for_timeout(1700)
+    popped = pf.evaluate("({pop: !document.getElementById('wp-pop').hidden, text: document.getElementById('wp-pop').textContent, running: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')})")
+    assert popped["pop"] and "wins" in popped["text"] and popped["running"], f"at the end of the line the winner pops: {popped}"
+    pf.wait_for_timeout(3000)
+    assert not pf.evaluate("document.getElementById('wp-pop').hidden"), "the winner stays on the end of the line after the replay"
     end = pf.evaluate("({wait: document.querySelectorAll('#wp-list li.wp-wait').length, label: document.getElementById('wp-replay').getAttribute('aria-label'), clip: document.querySelector('#wp-chart svg.wp-svg').style.clipPath})")
     assert end["wait"] == 0 and "Replay" in end["label"] and not end["clip"], f"at the end everything is uncovered: {end}"
     pf.evaluate("window.__wpPlayMs = 20000"); pf.click("#wp-replay"); pf.wait_for_timeout(300); pf.click("#wp-replay"); pf.wait_for_timeout(200)
