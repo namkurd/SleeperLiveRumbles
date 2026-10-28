@@ -48,7 +48,7 @@ DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a d
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
 MAX_SEARCHES = 40                            # YouTube searches (100 units each) a run may spend on plays no upload matched
 SEARCH_TOP = 12                              # only a week's biggest plays are worth a search
-MATCHER = 4                                  # bump when the matching rules change: earlier matches are then thrown away and redone
+MATCHER = 5                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
 NICK = {
@@ -289,6 +289,111 @@ def match_chapters(plays: list[dict], recaps: list[dict], cache: dict, t0_ms: fl
             u, sec, text = best
             st = max(0, sec - 2)
             out[p["key"]] = {"id": u["id"], "s": st, "e": st + CLIP_SECONDS, "t": text[:90], "c": (u.get("ch") or "")[:40], "chap": 1}
+    return out
+
+
+# STACKED Fantasy publishes, every week, one film video per player ("Tyler Shough: Every Dropback of 2026 Week 2 | Full Film Compilation")
+# whose chapters are the plays themselves: "Q3 13.07 25y pass to J.Johnson". The player and the week come from the title; the play within
+# the video is found from the quarter, the game clock and the yardage; and the next chapter says where the play ends.
+STACKED_TITLE = re.compile(r"^(?P<name>.+?):\s*Every\s+(?P<kind>[A-Za-z ]+?)\s+of\s+(?P<season>\d{4})\s+Week\s+(?P<week>\d+)", re.I)
+STACKED_PLAY = re.compile(r"\bQ\s*([1-4]|OT)\s+(\d{1,2})[.:](\d{2})\s+(-?\d+)\s*y?\b\s*(.*)", re.I)
+SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+STACKED_TOL = 75      # seconds of game clock a chapter may differ from a play whose yardage it also gives
+STACKED_TOL_PLAIN = 20
+
+
+def name_key(name: str) -> str:
+    return " ".join(w for w in norm(name).split() if w not in SUFFIXES)
+
+
+def stacked_chapter(text: str) -> dict | None:
+    """{elapsed, yds, what} of a chapter like "Q3 13.07 25y pass to J.Johnson": elapsed is seconds of regulation played."""
+    m = STACKED_PLAY.search(text or "")
+    if not m:
+        return None
+    q = 5 if m.group(1).upper() == "OT" else int(m.group(1))
+    left = int(m.group(2)) * 60 + int(m.group(3))
+    return {"elapsed": 3600 + (600 - left) if q == 5 else (q - 1) * 900 + (900 - left), "yds": abs(int(m.group(4))), "what": norm(m.group(5))}
+
+
+def game_elapsed(doc: dict, sid: str, sec: float) -> float | None:
+    """Seconds of game clock played when the timeline's second `sec` came, from the game's clock samples [[sec, permille left], ...]."""
+    team = (doc.get("tm") or {}).get(sid)
+    g = ((doc.get("g") or {}).get((doc.get("tg") or {}).get(team) or "")) or {}
+    clk = g.get("clk") or []
+    if not clk:
+        return None
+    if sec <= clk[0][0]:
+        return 0.0
+    if sec >= clk[-1][0]:
+        return (1000 - clk[-1][1]) * 3.6
+    lo, hi = 0, len(clk) - 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if clk[mid][0] <= sec:
+            lo = mid
+        else:
+            hi = mid
+    (t0, r0), (t1, r1) = clk[lo], clk[hi]
+    return (1000 - (r0 + (r1 - r0) * (sec - t0) / (t1 - t0 or 1))) * 3.6
+
+
+def stacked_videos(uploads: list[dict], season: int, week: int) -> dict[str, list[dict]]:
+    """That week's STACKED film videos by player."""
+    out: dict[str, list[dict]] = {}
+    for u in uploads:
+        if not (u.get("ch") or "").upper().startswith("STACKED"):
+            continue
+        m = STACKED_TITLE.match(u["title"])
+        if m and int(m.group("season")) == season and int(m.group("week")) == week:
+            out.setdefault(name_key(m.group("name")), []).append(u)
+    return out
+
+
+def match_stacked(plays: list[dict], by_player: dict[str, list[dict]], cache: dict, doc: dict) -> dict:
+    """The exact play inside the player's own film video (or, for a quarterback's or runner's, the chapter that names him)."""
+    out = {}
+    vids = [u for us in by_player.values() for u in us]
+    for p in plays:
+        if not p["player"] or p["key"].split(":")[0] not in (doc.get("tm") or {}):
+            continue
+        sid, sec = p["key"].split(":")[0], p["sec"]
+        ev = game_elapsed(doc, sid, sec)
+        if ev is None:
+            continue
+        y, kinds = yards_in(p["label"]), play_kind(p["label"])
+        pk = name_key(p["player"]).split()
+        mention = f"{pk[0][0]} {pk[-1]}" if len(pk) >= 2 else None
+        own = {u["id"] for u in by_player.get(name_key(p["player"]), [])}
+        best = None
+        for u in vids:
+            info = cache["vid"].get(u["id"]) or [0, 0]
+            chaps = (cache.get("chap") or {}).get(u["id"]) or []
+            if not info[1] or not chaps:
+                continue
+            for i, (csec, text) in enumerate(chaps):
+                c = stacked_chapter(text)
+                if not c:
+                    continue
+                if u["id"] not in own and not (mention and re.search(rf"\b{re.escape(mention)}\b", c["what"])):
+                    continue
+                diff = abs(c["elapsed"] - ev)
+                if y is not None:
+                    if c["yds"] != y or diff > STACKED_TOL:
+                        continue
+                elif diff > STACKED_TOL_PLAIN or not (kinds and any(re.search(rf"\b{re.escape(k)}\b", c["what"]) for k in kinds)):
+                    continue
+                score = diff + (0 if u["id"] in own else 8)
+                if best is None or score < best[0]:
+                    best = (score, u, i, csec, text, chaps, info[0])
+        if best:
+            _, u, i, csec, text, chaps, dur = best
+            st = max(0, csec - 1)
+            nxt = chaps[i + 1][0] if i + 1 < len(chaps) else None
+            en = nxt - 0.5 if nxt is not None and 4 <= nxt - st <= 30 else st + 14
+            if dur:
+                en = min(en, dur)
+            out[p["key"]] = {"id": u["id"], "s": st, "e": round(en, 1), "t": text[:90], "c": (u.get("ch") or "STACKED Fantasy")[:40], "chap": 1}
     return out
 
 
@@ -597,6 +702,18 @@ def run(root: str = HERE, force: bool = False) -> None:
         except Exception:  # noqa: BLE001
             have, tried = {}, set()
         plays = plays_by_week[(d, w)]
+        # STACKED's film videos give the exact play and where it ends: they come first and win over anything found another way
+        by_player = stacked_videos(uploads, int(doc.get("season") or 0), w)
+        if by_player:
+            try:
+                fetch_chapters(q, cache, [u["id"] for us in by_player.values() for u in us])
+                st_found = match_stacked(plays, by_player, cache, doc)
+                have.update(st_found)
+                vids_n = [u["id"] for us in by_player.values() for u in us]
+                with_plays = sum(1 for v in vids_n if any(stacked_chapter(t) for _, t in (cache.get("chap", {}).get(v) or [])))
+                print(f"[info] STACKED week {w}: {len(vids_n)} film videos, {with_plays} with play chapters, {len(st_found)} play(s) matched")
+            except QuotaOut as e:
+                print(f"[warn] {e}; STACKED chapters resume on a later run", file=sys.stderr)
         found = match_plays([p for p in plays if p["key"] not in have], uploads, doc["t0"])
         have.update(found)
         results.append((d, w, doc, have, tried, plays, len(found)))

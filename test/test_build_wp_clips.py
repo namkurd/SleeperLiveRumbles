@@ -204,6 +204,30 @@ def test_the_first_search_result_is_taken_when_it_checks_out():
     assert C.match_plays(plays, [desc], T0, loose=True)["1:100"]["id"] == "d", "the description can supply what the title leaves out"
 
 
+def test_stacked_film_chapters_give_the_exact_play_and_where_it_ends():
+    doc = {"t0": T0, "tm": {"1": "KC", "2": "MIA"}, "tg": {"KC": "KC@MIA", "MIA": "KC@MIA"}, "g": {"KC@MIA": {"ko": 0, "end": 10000, "clk": [[0, 1000], [5000, 500], [10000, 0]]}},
+           "ev": [[5900, "1", 6.0, "25 yd TD catch"], [1000, "1", 3.0, "40 yd catch"], [7000, "2", 4.0, "9 yd run"]]}
+    names = {"1": ["Travis Kelce", "TE"], "2": ["Tua Tagovailoa", "QB"]}
+    plays = C.candidate_plays(doc, names)
+    ups = [{"id": "v1", "title": "Travis Kelce: Every Touch of 2026 Week 1 | Full Film Compilation", "ch": "STACKED Fantasy | Film Breakdowns", "pub_ms": T0 + 4e8, "dur": 600, "embeddable": True},
+           {"id": "v2", "title": "Tua Tagovailoa: Every Dropback of 2026 Week 1 | Full Film Compilation", "ch": "STACKED Fantasy | Film Breakdowns", "pub_ms": T0 + 4e8, "dur": 600, "embeddable": True},
+           {"id": "v3", "title": "Travis Kelce: Every Touch of 2026 Week 2 | Full Film Compilation", "ch": "STACKED Fantasy | Film Breakdowns", "pub_ms": T0 + 4e8, "dur": 600, "embeddable": True},
+           {"id": "x", "title": "Travis Kelce: Every Touch of 2026 Week 1", "ch": "Someone Else", "pub_ms": T0, "dur": 600, "embeddable": True}]
+    by = C.stacked_videos(ups, 2026, 1)
+    assert set(by) == {"travis kelce", "tua tagovailoa"} and [u["id"] for u in by["travis kelce"]] == ["v1"], "player and week come from the title, and only STACKED's"
+    cache = {"vid": {"v1": [600, 1], "v2": [600, 1]}, "chap": {
+        "v1": [[10, "Intro"], [100, "Q1 5.00 3y run"], [300, "Q3 9.36 25y pass to T.Kelce"], [320, "Q3 8.50 4y catch"], [400, "Outro"]],
+        "v2": [[10, "Intro"], [200, "Q3 9.40 25y pass to T.Kelce"], [240, "Q3 3.05 9y run"], [250, "Q4 1.00 2y run"]]}}
+    got = C.match_stacked(plays, by, cache, doc)
+    k = got["1:5900"]
+    assert k["id"] == "v1" and k["s"] == 299 and k["e"] == 319.5 and k.get("chap"), f"his own video, from the snap to the next play: {k}"
+    assert "1:1000" not in got, "no chapter has this play's 40 yards"
+    assert got["2:7000"]["id"] == "v2", got
+    cache["vid"]["v1"] = [600, 0]
+    assert C.match_stacked(plays, by, cache, doc)["1:5900"]["id"] == "v2", "a video that cannot be embedded is passed over, and the quarterback's own film (which names him) is used"
+    assert C.stacked_chapter("Q3 13.07 25y pass to J.Johnson") == {"elapsed": 1800 + 113, "yds": 25, "what": "pass to j johnson"}
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
