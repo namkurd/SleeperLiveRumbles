@@ -185,6 +185,25 @@ def test_a_short_naming_only_the_surname_is_found_by_search_but_not_by_title_cra
     assert C.match_plays(plays, other, T0, loose=True) == {}, "another distance is another play"
 
 
+def test_the_first_search_result_is_taken_when_it_checks_out():
+    plays = [p for p in C.candidate_plays(DOC, NAMES) if p["key"] == "1:100"]
+    first = dict(up("top", "Travis Kelce makes the grab #shorts", dur=14), rank=0)
+    got = C.match_plays(plays, [first], T0, loose=True)
+    assert got["1:100"]["id"] == "top", "top result, his full name, no other play, a short clip"
+    assert C.match_plays(plays, [dict(first, rank=1)], T0, loose=True) == {}, "only the first result earns the benefit"
+    assert C.match_plays(plays, [dict(first, title="Kelce makes the grab #shorts")], T0, loose=True) == {}, "a surname alone is not enough"
+    assert C.match_plays(plays, [dict(first, title="Travis Kelce 12 yard touchdown")], T0, loose=True) == {}, "another distance"
+    assert C.match_plays(plays, [dict(first, title="Travis Kelce interception")], T0, loose=True) == {}, "another kind of play"
+    assert C.match_plays(plays, [dict(first, dur=300)], T0, loose=True) == {}, "not a short clip"
+    assert C.match_plays(plays, [dict(first, title="Travis Kelce best plays")], T0, loose=True) == {}, "a compilation"
+    assert C.match_plays(plays, [first], T0) == {}, "the title crawl does not get this leniency"
+    plays[0]["sib"] = True
+    assert C.match_plays(plays, [first], T0, loose=True) == {}, "he had another play like it that week"
+    desc = dict(up("d", "Kelce #shorts", dur=14), rank=3, desc="Travis Kelce 40-yard touchdown for the Chiefs")
+    plays[0]["sib"] = False
+    assert C.match_plays(plays, [desc], T0, loose=True)["1:100"]["id"] == "d", "the description can supply what the title leaves out"
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 

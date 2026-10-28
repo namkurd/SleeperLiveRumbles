@@ -1558,7 +1558,8 @@
   .wp-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
   #wp-share { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .wp-last { position: absolute; z-index: 4; transform: translateX(-50%); max-width: 74%; min-height: 2.7em; box-sizing: border-box; padding: 4px 9px; border: 1px solid var(--c, var(--panel-border)); border-radius: 8px; background: color-mix(in srgb, var(--panel) 90%, transparent); font-size: 0.78rem; line-height: 1.3; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,0.35); }
-  .wp-last[hidden] { display: none; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
+  .wp-last[hidden] { display: none; }
+  @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
   .solo-splash { display: none; position: fixed; inset: 0; z-index: 50; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--bg); color: var(--text-dim); }
   .solo-splash b { font-size: 1.5rem; color: var(--text); }
@@ -1618,7 +1619,7 @@
   #wp-tipx .tt-d div { margin-top: 1px; }
   @media (max-width: 700px) { .wp-body { gap: 8px; } .wp-card { padding: 10px 10px 12px; } }
   @media (max-height: 500px) and (orientation: landscape) {
-    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.7rem; }
+    .wp-sheet { padding: 6px; } .wp-card { max-height: calc(100vh - 12px); padding: 6px 10px; overflow: hidden; border-top-width: 2px; } .wp-title { font-size: 1.02rem; } .wp-col li:not(.wp-clipbox):not(.wp-none) { height: var(--wp-rowh, 3.7rem); padding-top: 1px; padding-bottom: 1px; box-sizing: border-box; }
     /* Too short to stack: the chart and the plays share the width instead, so nothing scrolls. */
     .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-chartwrap { flex: 1 1 auto; width: auto; } .wp-side { flex: 0 0 38%; width: auto; max-height: calc(100vh - 76px); overflow: auto; } .wp-list { display: block; } .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-hint { display: none; } .wp-sub { font-size: 0.68rem; }
   }
@@ -1631,7 +1632,7 @@
   .wp-sheet.wp-rot .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-sheet.wp-rot .wp-chartwrap { flex: 1 1 auto; width: auto; }
   .wp-sheet.wp-rot .wp-side { flex: 0 0 38%; width: auto; max-height: calc(var(--rot-w, 100vw) - 76px); overflow: auto; } .wp-sheet.wp-rot .wp-list { display: block; }
   .wp-sheet.wp-rot .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-sheet.wp-rot .wp-hint { display: none; } .wp-sheet.wp-rot .wp-sub { font-size: 0.68rem; }
-  .wp-sheet.wp-rot .wp-col li:not(.wp-clipbox):not(.wp-none) { height: 3.7rem; }
+  .wp-sheet.wp-rot .wp-col li:not(.wp-clipbox):not(.wp-none) { height: var(--wp-rowh, 3.7rem); padding-top: 1px; padding-bottom: 1px; box-sizing: border-box; }
   .wp-sheet.wp-rot .wp-list li { display: flex; align-items: center; position: static; } .wp-sheet.wp-rot .wp-list li.wp-clipbox { display: block; }
   .wp-sheet.wp-rot .wp-list li > .wp-n { grid-row: auto; } .wp-sheet.wp-rot .wp-pd { grid-column: auto; flex-basis: auto; padding-left: 0; } .wp-sheet.wp-rot .wp-play { position: static; }
   .wp-sheet.wp-rot .wp-ph { font-size: calc(0.8rem * var(--wp-fs, 1)); padding-right: 0; }
@@ -7964,10 +7965,22 @@
   // Every swing keeps the same room and shows all its words: if a play's text needs more height than the row has, the text (not the row)
   // is made a little smaller until it fits.
   function wpFitRows() {
+    // On its side the ten swings share the height of the panel, so all of them show without scrolling
+    var list = document.getElementById("wp-list"), side = list.parentNode, card = document.querySelector(".wp-card");
+    var land = wpRot || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches, rowsN = list.querySelectorAll(".wp-col li[data-t]").length;
+    list.style.removeProperty("--wp-rowh");
+    side.style.maxHeight = "";
+    if (land && rowsN && card) {
+      var top = 0, el = side;
+      while (el && el !== card) { top += el.offsetTop; el = el.offsetParent; }
+      var head = document.getElementById("wp-listh"), avail = card.clientHeight - top - (head.hidden ? 0 : head.offsetHeight + 4) - 8;
+      list.style.setProperty("--wp-rowh", Math.max(22, Math.floor(avail / rowsN)) + "px");
+      side.style.maxHeight = "none";
+    }
     [].forEach.call(document.querySelectorAll("#wp-list .wp-col li[data-t]"), function (li) {
-      var fs = 1;
+      var fs = 1, floor = land ? 0.45 : 0.6;
       li.style.removeProperty("--wp-fs");
-      while (li.scrollHeight > li.clientHeight + 1 && fs > 0.6) { fs -= 0.05; li.style.setProperty("--wp-fs", fs.toFixed(2)); }
+      while (li.scrollHeight > li.clientHeight + 1 && fs > floor) { fs -= 0.05; li.style.setProperty("--wp-fs", fs.toFixed(2)); }
     });
   }
   function wpOpen(key, opts) {
@@ -8181,7 +8194,15 @@
     tip.hidden = false;
     var host = document.getElementById("wp-chart"), wrap = document.getElementById("wp-chartwrap"), tw = tip.offsetWidth, th = tip.offsetHeight;
     var left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, host.offsetLeft + cx - tw / 2)), top = host.offsetTop + cy - th - 12;
-    if (top < host.offsetTop + g.mt + 56) top = host.offsetTop + cy + 14;   // keep clear of the pinned play along the top
+    // never over the two pinned plays: try above the line, below it, in the gap between the boxes, then beside a box
+    var boxes = [wpLastBox(true), wpLastBox(false)].filter(function (b) { return !b.hidden; }).map(function (b) { return { l: b.offsetLeft - b.offsetWidth / 2, r: b.offsetLeft + b.offsetWidth / 2, t: b.offsetTop, b: b.offsetTop + b.offsetHeight }; });
+    function clear(l, t) { return boxes.every(function (b) { return !(l < b.r + 4 && l + tw > b.l - 4 && t < b.b + 4 && t + th > b.t - 4); }); }
+    var gapT = boxes.length ? boxes[0].b + 6 : host.offsetTop + g.mt, gapB = boxes.length > 1 ? boxes[1].t - 6 : host.offsetTop + g.mt + g.ph;
+    var mid = Math.max(gapT, Math.min(gapB - th, host.offsetTop + cy - th / 2));
+    var tries = [[left, top], [left, host.offsetTop + cy + 14], [left, mid]];
+    boxes.forEach(function (b) { tries.push([b.r + 8, mid], [b.l - tw - 8, mid]); });
+    for (var ti = 0; ti < tries.length; ti++) { if (clear(tries[ti][0], tries[ti][1])) { left = tries[ti][0]; top = tries[ti][1]; break; } }
+    left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, left));
     tip.style.left = left + "px"; tip.style.top = top + "px";
   }
   function wpPlayStart(from) {
@@ -9221,6 +9242,9 @@
     var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
     if (me) state.rb.me = Number(me.roster_id);
     prefsRestore();
+    // Opened on its own when no game is live: always the Actual standings for the current week of the current season, whatever was open last time
+    var lv = state.live, liveNow = !!(lv && lv.isLive && lv.hasKickedOff && !lv.weekFinal);
+    if (!ARCHIVE && !liveNow && !linkMe && !wl && !(params && (params.get("tab") || params.get("me")))) { state.mode = "actual"; setView("standings"); }
     if (ARCHIVE && !me) { state.rb.scenBest = true; state.rb.sub = "scenarios"; }   // a past season with nobody picked: its best matchups
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
     if (ARCHIVE && params && params.get("tab") === "scenarios") { if (me) rbEnterMe(); setView("rumblin"); if (me) state.rb.sub = "scenarios"; }

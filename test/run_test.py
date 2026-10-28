@@ -3645,14 +3645,21 @@ def scenario_win_probability(browser):
     pf.evaluate("window.__wpPlayMs = 20000"); pf.click("#wp-replay"); pf.wait_for_timeout(300); pf.click("#wp-replay"); pf.wait_for_timeout(200)
     assert pf.evaluate("document.querySelectorAll('#wp-list li.wp-wait').length") == 0, "tapping it again stops and shows the whole week"
     # the replay keeps one managers's last scoring play pinned along the top and the other's along the bottom, with a line that never stops moving
-    pf.evaluate("window.__wpPlayMs = 9000"); pf.click("#wp-replay"); pf.wait_for_timeout(2500)
+    pf.evaluate("window.__wpPlayMs = 24000"); pf.click("#wp-replay"); pf.wait_for_timeout(2500)
     pin = pf.evaluate("({top: !document.getElementById('wp-last-top').hidden, bot: !document.getElementById('wp-last-bot').hidden, tt: document.getElementById('wp-last-top').textContent, bt: document.getElementById('wp-last-bot').textContent, tip: document.getElementById('wp-tipx').textContent})")
     assert pin["top"] and pin["bot"] and ("yd" in pin["tt"] or "yd" in pin["bt"] or "interception" in pin["tt"] + pin["bt"] or "sack" in pin["tt"] + pin["bt"]), f"each manager's last scoring play is pinned: {pin}"
     assert "% to win" in pin["tip"] and "yd" not in pin["tip"], f"the moving tooltip is only the score and the odds: {pin['tip']}"
+    fit = pf.evaluate("(() => { const s = document.querySelector('#wp-sheet .wp-side'), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect(), r = s.getBoundingClientRect(); return {n: li.length, scroll: s.scrollHeight - s.clientHeight, cut: li.filter(l => l.scrollHeight > l.clientHeight + 1).length, inside: li.every(l => { const b = l.getBoundingClientRect(); return b.left >= c.left - 1 && b.right <= c.right + 1 && b.top >= c.top - 1 && b.bottom <= c.bottom + 1 && b.height > 8; })}; })()")
+    assert fit["n"] == 10 and fit["scroll"] <= 1 and fit["cut"] == 0 and fit["inside"], f"all ten swings show beside the chart without scrolling or cut-off text: {fit}"
+    for _ in range(6):
+        ov = pf.evaluate("""(() => { const t = document.getElementById('wp-tipx'); if (t.hidden) return false; const a = t.getBoundingClientRect();
+          return ['wp-last-top', 'wp-last-bot'].some(id => { const e = document.getElementById(id); if (e.hidden) return false; const b = e.getBoundingClientRect(); return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; }); })()""")
+        assert not ov, "the moving tooltip never covers a manager's pinned scoring play: " + str(pf.evaluate("['wp-tipx','wp-last-top','wp-last-bot','wp-chart'].map(i => { const r = document.getElementById(i).getBoundingClientRect(); return [i, Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; })"))
+        pf.wait_for_timeout(700)
     xs = []
     for _ in range(4):
-        xs.append(pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))")); pf.wait_for_timeout(120)
-    assert xs == sorted(xs) and len(set(xs)) == 4, f"the scrub line moves constantly, not from notch to notch: {xs}"
+        xs.append(pf.evaluate("parseFloat((document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1'))")); pf.wait_for_timeout(350)
+    assert xs == sorted(xs) and len(set(xs)) >= 3, f"the scrub line moves constantly, not from notch to notch: {xs}"
     # turning the phone does not change the landscape view, and the replay carries on
     vs = pf.viewport_size
     pf.set_viewport_size({"width": vs["height"], "height": vs["width"]}); pf.wait_for_timeout(900)

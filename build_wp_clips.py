@@ -48,7 +48,7 @@ DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a d
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
 MAX_SEARCHES = 40                            # YouTube searches (100 units each) a run may spend on plays no upload matched
 SEARCH_TOP = 12                              # only a week's biggest plays are worth a search
-MATCHER = 3                                  # bump when the matching rules change: earlier matches are then thrown away and redone
+MATCHER = 4                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
 NICK = {
@@ -99,10 +99,10 @@ def yards_in(label: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False) -> int:
+def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "") -> int:
     if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
         return 0
-    t = norm(title)
+    t = norm(title + " " + desc)   # a result's description often names the player, team and distance a short title leaves out
     words = t.split()
     ch = norm(channel)
     nicks = NICK.get(team or "", [])
@@ -151,6 +151,42 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
     return s if specific else 0
 
 
+OTHER_KINDS = {"interception": ("interception", "pick", "picks", "intercepts", "int"), "sack": ("sack", "sacks", "sacked"), "fumble": ("fumble", "strip", "recovery"),
+               "touchdown": ("touchdown", "td"), "field goal": ("field goal", "fg")}
+
+
+def first_result_ok(u: dict, p: dict) -> bool:
+    """The top YouTube result for a search made for exactly this play is usually it. Take it when it is a short clip that names the player
+    (with his first name, team or opponent, or from his team's channel), gives no other distance and no other kind of play, and the
+    player has no second play of this kind that week it could equally be."""
+    if not p.get("player") and not p.get("def"):
+        return False
+    if u.get("rank") != 0 or p.get("sib") or not 0 < u.get("dur", 0) <= 60:
+        return False
+    title = u["title"]
+    if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
+        return False
+    t, words, ch = norm(title + " " + u.get("desc", "")), norm(title + " " + u.get("desc", "")).split(), norm(u.get("ch", ""))
+    nicks, opps = NICK.get(p["team"] or "", []), NICK.get(p["opp"] or "", [])
+    team_in = any(n in t for n in nicks) or any(n in ch for n in nicks)
+    if p["player"]:
+        parts = norm(p["player"]).replace(" jr", "").replace(" sr", "").replace(" iii", "").replace(" ii", "").split()
+        if len(parts) < 2 or parts[-1] not in words or not (parts[0] in words or team_in or any(n in t for n in opps)):
+            return False
+    elif not team_in:
+        return False
+    y = yards_in(p["label"])
+    said = [int(x) for x in re.findall(r"\b(\d+) (?:yard|yd)", t)]
+    if y is not None and said and y not in said:
+        return False
+    mine = play_kind(p["label"])
+    if mine:
+        for group, ws in OTHER_KINDS.items():
+            if not any(w in mine for w in ws) and any(re.search(rf"\b{re.escape(w)}\b", t) for w in ws):
+                return False
+    return True
+
+
 def candidate_plays(doc: dict, names: dict) -> list[dict]:
     plays = []
     tm, tg = doc.get("tm") or {}, doc.get("tg") or {}
@@ -191,7 +227,9 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool 
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
-            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose)
+            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""))
+            if s < MIN_SCORE and loose and first_result_ok(u, p):
+                s = MIN_SCORE
             if s >= MIN_SCORE:
                 found.append((s - (3 if u.get("ch") in NO_EMBED_HINT else 0), u))
         if found:
@@ -293,11 +331,11 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
                                 "videoDuration": "short", "regionCode": "US", "key": q.key,
                                 "publishedAfter": at.isoformat().replace("+00:00", "Z"), "publishedBefore": (at + timedelta(days=7)).isoformat().replace("+00:00", "Z")})
     out = []
-    for it in j.get("items", []):
+    for rank, it in enumerate(j.get("items", [])):
         sn = it.get("snippet") or {}
         vid = (it.get("id") or {}).get("videoId")
         if vid and sn.get("publishedAt"):
-            out.append({"id": vid, "title": sn.get("title") or "", "ch": sn.get("channelTitle") or "", "dur": 0, "embeddable": True,
+            out.append({"id": vid, "rank": rank, "desc": sn.get("description") or "", "title": sn.get("title") or "", "ch": sn.get("channelTitle") or "", "dur": 0, "embeddable": True,
                         "pub_ms": datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000})
     return out
 
@@ -584,6 +622,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             break
         d, w, doc, have, tried, plays, n = results[i]
         try:
+            p["sib"] = any(o is not p and o["player"] == p["player"] and o["team"] == p["team"] and play_kind(o["label"])[:1] == play_kind(p["label"])[:1] for o in plays)
             ups = search_clips(q, p, doc["t0"])
             verify(q, cache, [u["id"] for u in ups])
             for u in ups:
