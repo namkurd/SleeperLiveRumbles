@@ -228,6 +228,19 @@ def test_stacked_film_chapters_give_the_exact_play_and_where_it_ends():
     assert C.stacked_chapter("Q3 13.07 25y pass to J.Johnson") == {"elapsed": 1800 + 113, "yds": 25, "what": "pass to j johnson"}
 
 
+def test_a_receiver_without_his_own_video_is_found_in_his_quarterbacks():
+    doc = {"t0": T0, "tm": {"1": "KC", "2": "MIA"}, "tg": {"KC": "KC@MIA", "MIA": "KC@MIA"}, "g": {"KC@MIA": {"ko": 0, "end": 10000, "clk": [[0, 1000], [5000, 500], [10000, 0]]}},
+           "ev": [[5900, "1", 6.0, "TD catch"], [7000, "2", 4.0, "9 yd run"]]}
+    names = {"1": ["Jaxon Smith-Njigba", "WR"], "2": ["Tua Tagovailoa", "QB"]}
+    plays = C.candidate_plays(doc, names)
+    qb = {"id": "q", "title": "Sam Darnold: Every Dropback of 2026 Week 3 | Full Film Compilation", "ch": "STACKED Fantasy | Film Breakdowns", "pub_ms": T0 + 4e8, "dur": 900, "embeddable": True}
+    by = C.stacked_videos([qb], 2026, 3)
+    cache = {"vid": {"q": [900, 1]}, "chap": {"q": [[10, "Intro"], [200, "Q3 9.36 25y pass to J.Smith-Njigba"], [215, "Q3 8.50 4y pass to K.Walker"], [230, "Q4 1.00 2y run"]]}}
+    got = C.match_stacked(plays, by, cache, doc)
+    assert got["1:5900"]["id"] == "q" and got["1:5900"]["s"] == 199 and got["1:5900"]["e"] == 214.5, got
+    assert "pass to K.Walker" not in got["1:5900"]["t"]
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 

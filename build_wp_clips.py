@@ -361,9 +361,13 @@ def match_stacked(plays: list[dict], by_player: dict[str, list[dict]], cache: di
         ev = game_elapsed(doc, sid, sec)
         if ev is None:
             continue
+        lab = p["label"].lower()
         y, kinds = yards_in(p["label"]), play_kind(p["label"])
+        # what a chapter calls this kind of play: a catch is "pass to ..." in the quarterback's film, a carry is "run"
+        kinds = kinds + (["pass", "catch"] if "catch" in lab or "pass" in lab else []) + (["run", "rush", "scramble"] if "run" in lab or "rush" in lab else [])
         pk = name_key(p["player"]).split()
-        mention = f"{pk[0][0]} {pk[-1]}" if len(pk) >= 2 else None
+        # the quarterback's "Every Dropback" film names the receiver ("pass to J.Smith-Njigba"): initial, then the rest of his name
+        mention = (pk[0][0] + " " + " ".join(pk[1:])) if len(pk) >= 2 else None
         own = {u["id"] for u in by_player.get(name_key(p["player"]), [])}
         best = None
         for u in vids:
