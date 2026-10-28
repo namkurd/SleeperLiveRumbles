@@ -1570,6 +1570,10 @@
   @keyframes wp-ring { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(4.2); opacity: 0; } }
   .wp-chartwrap.wp-flash { animation: wp-flash 0.9s ease-out; } @keyframes wp-flash { 0% { box-shadow: inset 0 0 0 0 transparent; } 25% { box-shadow: inset 0 0 40px 6px color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); } 100% { box-shadow: inset 0 0 0 0 transparent; } }
   @media (prefers-reduced-motion: reduce) { .wp-pop img, .wp-pop i, .wp-pop span, .wp-clutch { animation: none; } }
+  .wp-wl { transition: fill 0.25s; transform-box: fill-box; transform-origin: 50% 100%; }
+  .wp-wl.on { fill: var(--accent); font-weight: 800; animation: wp-wlpop 0.6s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes wp-wlpop { 0% { transform: scale(1); } 35% { transform: scale(1.8); } 100% { transform: scale(1.25); } }
+  .wp-bigp { font-size: 1.55em; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
@@ -7792,7 +7796,7 @@
     });
     wpWindowLabels(pm, 0, fs * 0.6 / pw).forEach(function (l, i) {
       var lx = ml + l.x * pw;
-      o += '<line x1="' + lx + '" x2="' + lx + '" y1="' + (mt + ph) + '" y2="' + (mt + ph + 4) + '" stroke="' + C.dim + '"/><text x="' + Math.max(ml, Math.min(lx, ml + pw - 18)) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 && lx < ml + 20 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + escapeHtml(l.text) + "</text>";
+      o += '<line x1="' + lx + '" x2="' + lx + '" y1="' + (mt + ph) + '" y2="' + (mt + ph + 4) + '" stroke="' + C.dim + '"/><text class="wp-wl" data-x="' + l.x + '" x="' + Math.max(ml, Math.min(lx, ml + pw - 18)) + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 && lx < ml + 20 ? "start" : "middle") + '" font-size="' + fs + '" fill="' + C.dim + '">' + escapeHtml(l.text) + "</text>";
     });
     var pts = m.T.map(function (t, i) { return X(t).toFixed(1) + "," + Y(m.P[i]).toFixed(1); });
     var area = "M" + X(m.T[0]).toFixed(1) + "," + Y(0.5) + "L" + pts.join("L") + "L" + X(m.T[m.T.length - 1]).toFixed(1) + "," + Y(0.5) + "Z";
@@ -8136,6 +8140,7 @@
     if (!wpPlay.on) return;
     cancelAnimationFrame(wpPlay.raf); wpPlay.on = false;
     var cl = document.getElementById("wp-clutch"); if (cl) cl.hidden = true;
+    [].forEach.call(document.querySelectorAll("#wp-chart .wp-wl.on"), function (w) { w.classList.remove("on"); }); wpPlay.wl = null;
     if (wpPlay.clip) { var stop = wpPlay.clip; wpPlay.clip = null; stop(true); }
     var svg = document.querySelector("#wp-chart svg.wp-svg"), btn = document.getElementById("wp-replay");
     if (svg) svg.style.clipPath = "";
@@ -8234,8 +8239,9 @@
     var svg = document.querySelector("#wp-chart svg.wp-svg"), tip = document.getElementById("wp-tipx");
     if (!svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, a = m.at(t), cx = g.ml + m.x(t) * g.pw, cy = g.mt + (1 - a.p) * g.ph;
+    var fav = a.p >= 0.5 ? { p: a.p, name: pm.me.name, col: pm.col.mine } : { p: 1 - a.p, name: pm.t.name, col: pm.col.theirs };
     svg.querySelector(".wp-hov").innerHTML = '<line x1="' + cx + '" x2="' + cx + '" y1="' + g.mt + '" y2="' + (g.mt + g.ph) + '" stroke="' + wpResolve("var(--text-dim)") + '" stroke-width="1"/><circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + wpResolve(a.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '" stroke="' + wpResolve("var(--panel)") + '" stroke-width="2"/>';
-    tip.innerHTML = escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "<div><span>" + wpPct(a.p) + "% to win</span> <b style=\"color:" + wpResolve(pm.col.mine) + "\">" + escapeHtml(pm.me.name) + "</b></div>";
+    tip.innerHTML = escapeHtml(pm.me.name) + " <b>" + a.my.toFixed(1) + "</b> \u2013 <b>" + a.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + "<div><span class=\"wp-bigp\" style=\"color:" + wpResolve(fav.col) + "\">" + wpPct(fav.p) + "%</span> to win <b style=\"color:" + wpResolve(fav.col) + "\">" + escapeHtml(fav.name) + "</b></div>";
     tip.hidden = false;
     var host = document.getElementById("wp-chart"), wrap = document.getElementById("wp-chartwrap"), tw = tip.offsetWidth, th = tip.offsetHeight;
     var left = Math.max(4, Math.min(wrap.clientWidth - tw - 4, host.offsetLeft + cx - tw / 2)), top = host.offsetTop + cy - th - 12;
@@ -8297,7 +8303,7 @@
     if (!pm || !svg || !wpGeom) return;
     var g = wpGeom, m = pm.model, W = Number(svg.getAttribute("width")) || g.ml + g.pw + 10, DUR = window.__wpPlayMs || 30000, btn = document.getElementById("wp-replay");
     var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0;
-    wpPopHide();
+    wpPopHide(); wpPlay.wl = null;
     var clutch = wpClutch(pm), clutchOn = false, clutchShown = false, hold = 0;
     var rows = [].slice.call(document.querySelectorAll("#wp-list li[data-t]"));
     var prog = Math.max(0, Math.min(0.999, Number(from) || 0));
@@ -8343,10 +8349,18 @@
         [1, -1].forEach(function (sd) { if (nt.ev.some(function (e) { return (e.side > 0) === (sd > 0); })) wpLastSet(pm, sd, nt); });
       }
       wpScrubDraw(pm, tt);
+      // the game window most recently passed is lit (with a pop as the line reaches it) until the next one starts
+      var wls = [].slice.call(svg.querySelectorAll(".wp-wl")), wcur = null;
+      wls.forEach(function (w) { if (Number(w.getAttribute("data-x")) <= p + 0.0005) wcur = w; });
+      if (wcur !== wpPlay.wl) {
+        if (wpPlay.wl) wpPlay.wl.classList.remove("on");
+        if (wcur) { wcur.classList.remove("on"); void wcur.getBoundingClientRect(); wcur.classList.add("on"); }
+        wpPlay.wl = wcur;
+      }
       // the time and score along the top
       var at = m.at(tt);
       tick.hidden = false;
-      tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span>" + wpPct(at.p) + "% " + escapeHtml(pm.me.name) + "</span>";
+      tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span class=\"wp-bigp\" style=\"color:" + wpResolve(at.p >= 0.5 ? pm.col.mine : pm.col.theirs) + "\">" + wpPct(at.p >= 0.5 ? at.p : 1 - at.p) + "% " + escapeHtml(at.p >= 0.5 ? pm.me.name : pm.t.name) + "</span>";
       rows.forEach(function (li) {
         if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) {
           li.classList.remove("wp-wait");
