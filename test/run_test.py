@@ -3628,6 +3628,9 @@ def scenario_win_probability(browser):
       return {n: li.length, cardBottom: c.bottom, vh: innerHeight, side: [Math.round(sr.top), Math.round(sr.bottom)], scroll: s.scrollHeight - s.clientHeight, st: s.scrollTop, rows: li.map(l => { const b = l.getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; }), head: document.getElementById('wp-listh').getBoundingClientRect().top}; })()""")
     assert ph["n"] == 10 and ph["scroll"] <= 1 and all(r[1] <= ph["side"][1] + 1 and r[1] - r[0] >= 18 for r in ph["rows"]) and ph["cardBottom"] <= ph["vh"] + 1, f"on a phone in landscape all ten swings show without scrolling: {ph}"
     page.set_viewport_size({"width": 1280, "height": 760}); page.wait_for_timeout(700)
+    mk = page.evaluate("""(() => { const n = [...document.querySelectorAll('#wp-chart .wp-notch')].map(l => parseFloat(l.getAttribute('x1'))), m = [...document.querySelectorAll('#wp-chart .wp-mk circle')].map(c => parseFloat(c.getAttribute('cx')));
+      return {marks: m.length, off: m.map(x => Math.min(...n.map(v => Math.abs(v - x))))}; })()""")
+    assert mk["marks"] >= 3 and sum(1 for v in mk["off"] if v > 2.0) <= 1, f"each numbered swing marker sits at its play's notch (a stat correction has no notch): {mk}"
     # ...and during the replay every game-window label stays whole, inside the chart, and the winner's picture never covers one
     page.evaluate("window.__wpPlayMs = 4000"); page.click("#wp-replay")
     for _ in range(7):

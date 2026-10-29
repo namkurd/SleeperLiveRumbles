@@ -7232,7 +7232,7 @@
       var top = c.ev.slice().sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); })[0];
       var p0 = model.at(c.t0 - 1).p, p1 = model.at(c.t1).p, a = model.at(c.t1);
       var label = top.label === "scoring adjustment" ? "stat correction" : top.label;
-      return { t: c.t1, t0: c.t0, p0: p0, p1: p1, d: p1 - p0, sid: top.sid, tt: top.t, who: names[top.sid] || "", label: label, pts: top.pts, side: top.side, n: c.ev.length, my: a.my, th: a.th };
+      return { t: top.t, t1: c.t1, t0: c.t0, p0: p0, p1: p1, pp: model.at(top.t).p, d: p1 - p0, sid: top.sid, tt: top.t, who: names[top.sid] || "", label: label, pts: top.pts, side: top.side, n: c.ev.length, my: a.my, th: a.th };
     });
     var min = opts.min != null ? opts.min : 0.10, max = opts.max || 5;
     var big = out.filter(function (m) { return Math.abs(m.d) >= min; }).sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); }).slice(0, max);
@@ -7841,10 +7841,10 @@
       var nx = (ml + n.x * pw).toFixed(1);
       o += '<line class="wp-notch" data-i="' + i + '" x1="' + nx + '" x2="' + nx + '" y1="' + (mt + ph - (share ? 10 : 8)) + '" y2="' + (mt + ph) + '" stroke="' + (n.side > 0 ? C.mine : C.theirs) + '" stroke-width="' + (share ? 2 : 1.6) + '"/>';
     });
-    // numbered markers on the biggest swings
+    // numbered markers on the biggest swings: each sits on the line at its own play (the same x as that play's notch), not at the end of the run of plays around it
     var placed = [];
     pm.marks.forEach(function (mk) {
-      var r = share ? 11 : 9, cx = X(mk.t), y0 = Y(mk.p1), cy = y0, c = mk.d >= 0 ? C.mine : C.theirs;
+      var r = share ? 11 : 9, cx = X(mk.t), y0 = Y(mk.pp != null ? mk.pp : mk.p1), cy = y0, c = mk.d >= 0 ? C.mine : C.theirs;
       // Numbered badges that would sit on top of each other are nudged apart: the nearest clear spot above or below.
       var clear = function (y) { return y >= mt + r && y <= mt + ph - r && !placed.some(function (q) { return Math.hypot(q[0] - cx, q[1] - y) < 2 * r + 1; }); };
       if (!clear(cy)) {
