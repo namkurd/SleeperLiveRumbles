@@ -3987,7 +3987,27 @@ def scenario_past_seasons(browser):
     bm = pg.evaluate("""() => ({best: document.getElementById('sm-best').classList.contains('active'), n: document.querySelectorAll('#scen-blocks .sc-blk.best').length, week: document.getElementById('week-select').value,
       h2h: [...document.querySelectorAll('#scen-blocks .sc-blk.best .sc-chip')].map(c => c.textContent.slice(0, 3)), charts: document.querySelectorAll('#scen-blocks .sc-blk.best .sc-wpm svg').length,
       why: (document.querySelector('#scen-blocks .sc-blk.best .sc-why') || {}).textContent, who: document.getElementById('rb-who').hidden})""")
-    assert bm["best"] and bm["who"] and bm["n"] == 10 and bm["week"] == "15" and bm["charts"] == 10, f"a past season opens on its ten best matchups of the last counted week: {bm}"
+    assert bm["week"] == "17" and bm["who"], f"a past season's Scenarios opens on its finals: {bm}"
+    fin0 = pg.evaluate("({blocks: document.querySelectorAll('#scen-blocks .sc-blk.playoff').length, champ: [...document.querySelectorAll('#scen-blocks .sc-blk.champ')].map(b => b.querySelector('.sc-bh b').textContent), gold: getComputedStyle(document.querySelector('#scen-blocks .sc-blk.champ')).borderTopColor})")
+    assert fin0["blocks"] == 3 and fin0["champ"] == ["Haan"] and fin0["gold"] != "rgba(0, 0, 0, 0)", f"the finals: three head-to-heads, the title game in gold: {fin0}"
+    pg.select_option("#week-select", "15"); pg.wait_for_timeout(2500)
+    bm = pg.evaluate("""() => ({best: document.getElementById('sm-best').classList.contains('active'), n: document.querySelectorAll('#scen-blocks .sc-blk.best').length, week: document.getElementById('week-select').value, charts: document.querySelectorAll('#scen-blocks .sc-blk.best .sc-wpm svg').length, who: document.getElementById('rb-who').hidden,
+      h2h: [...document.querySelectorAll('#scen-blocks .sc-blk.best .sc-chip')].map(c => c.textContent.slice(0, 3)), why: (document.querySelector('#scen-blocks .sc-blk.best .sc-why') || {}).textContent})""")
+    assert bm["best"] and bm["who"] and bm["n"] == 10 and bm["week"] == "15" and bm["charts"] == 10, f"a regular week still shows its ten best matchups: {bm}"
+    # the playoff weeks are the Semifinals and the Finals: only those head-to-heads, marked, with no Mine / Best
+    wk = pg.evaluate("[...document.querySelectorAll('#week-select option')].map(o => o.textContent)")
+    assert wk[:3] == ["Exhibition", "Finals", "Semifinals"], f"the playoff weeks are renamed (and week 18 is the Exhibition): {wk[:4]}"
+    pg.select_option("#week-select", "16"); pg.wait_for_timeout(2500)
+    sf = pg.evaluate("""() => ({blocks: document.querySelectorAll('#scen-blocks .sc-blk').length, playoff: document.querySelectorAll('#scen-blocks .sc-blk.playoff.h2h').length, chips: [...document.querySelectorAll('#scen-blocks .sc-chip.po')].map(c => c.textContent),
+      toggle: getComputedStyle(document.getElementById('scen-mode')).display === 'none', tag: !document.getElementById('scen-po').hidden, names: [...document.querySelectorAll('#scen-blocks .sc-bh > div:first-child > b')].map(b => b.textContent), charts: document.querySelectorAll('#scen-blocks .sc-wpm svg').length,
+      strip: getComputedStyle(document.getElementById('rb-strip')).display, note: document.getElementById('scen-weeks').textContent})""")
+    assert sf["blocks"] == 2 and sf["playoff"] == 2 and sf["chips"] == ["Semifinal", "Semifinal"] and sf["toggle"] and sf["tag"], f"only the two semifinal head-to-heads, marked, with no Mine / Best: {sf}"
+    assert sf["names"] == ["Aidan", "Ankit", "Haan", "Joe"] and sf["charts"] == 2 and sf["strip"] == "none", f"2025: Aidan over Ankit, Haan over Joe, and no other team's scenarios: {sf}"
+    pg.select_option("#week-select", "17"); pg.wait_for_timeout(2500)
+    fn = pg.evaluate("""() => ({chips: [...document.querySelectorAll('#scen-blocks .sc-chip.po')].map(c => c.textContent), names: [...document.querySelectorAll('#scen-blocks .sc-bh > div:first-child > b')].map(b => b.textContent), why: [...document.querySelectorAll('#scen-blocks .sc-why')].map(b => b.textContent)})""")
+    assert fn["chips"] == ["Final", "Final", "Final"] and fn["names"] == ["Haan", "Steven", "Haan", "Aidan", "Steven", "Aidan"] and "Title game" in fn["why"][0] and "Three-team" in fn["why"][2], f"a three-team final: the champion against each of the other two, and those two against each other: {fn}"
+    pg.select_option("#week-select", "15"); pg.wait_for_timeout(2000)
+    assert pg.evaluate("getComputedStyle(document.getElementById('scen-mode')).display !== 'none' && document.getElementById('scen-po').hidden && document.querySelectorAll('#scen-blocks .sc-blk.best').length === 10"), "a regular week brings the Mine / Best toggle and its matchups back"
     assert set(bm["h2h"]) <= {"H2H", "Fie"} and bm["why"], f"each says H2H or Field, and why it is good: {bm}"
     first = pg.evaluate("document.querySelector('#scen-blocks .sc-blk.best b').textContent + '|' + document.querySelector('#scen-blocks .sc-blk.best .sc-hl').textContent")
     pg.select_option("#week-select", "3"); pg.wait_for_timeout(2500)
@@ -4006,7 +4026,7 @@ def scenario_past_seasons(browser):
       opts: [...document.querySelectorAll('#week-select option')].map(o => o.textContent), val: document.getElementById('week-select').value,
       blocks: [...document.querySelectorAll('#rb-scen-view .sc-blk')].map(b => ({who: b.querySelector('.sc-bh b').textContent, hl: b.querySelector('.sc-hl').textContent, chart: !!b.querySelector('.sc-wpm svg polyline'), pct: (b.querySelector('.wpm-pct') || {}).textContent})),
       hidden: ['rb-inplay', 'rb-matchup', 'rb-density'].map(i => getComputedStyle(document.getElementById(i)).display)})""")
-    assert sc["view"] and sc["tab"] and sc["opts"][0] == "Week 18" and sc["val"] == "18" and len(sc["opts"]) == 18, f"all 18 weeks (16-18 are viewable extras), latest first: {sc['opts'][:3]}"
+    assert sc["view"] and sc["tab"] and sc["opts"][0] == "Exhibition" and sc["val"] == "18" and len(sc["opts"]) == 18, f"all 18 weeks (16-18 are viewable extras), latest first: {sc['opts'][:3]}"
     assert pg.evaluate("document.getElementById('scen-weeks').hidden === false") and "not counted" in pg.inner_text("#scen-weeks"), "extra weeks say they are not counted"
     for wk in ("17", "16", "18"):
         pg.select_option("#week-select", wk); pg.wait_for_timeout(1500)

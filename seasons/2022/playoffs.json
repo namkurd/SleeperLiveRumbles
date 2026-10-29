@@ -1,0 +1,37 @@
+{
+ "v": 1,
+ "season": 2022,
+ "weeks": {
+  "16": {
+   "label": "Semifinals",
+   "short": "Semifinal",
+   "games": [
+    {
+     "w": "Ben",
+     "l": "Haan",
+     "ws": 125.9,
+     "ls": 84.0
+    },
+    {
+     "w": "Aidan",
+     "l": "Alex",
+     "ws": 155.1,
+     "ls": 93.6
+    }
+   ]
+  },
+  "17": {
+   "label": "Finals",
+   "short": "Final",
+   "games": [
+    {
+     "w": "Ben",
+     "l": "Aidan",
+     "ws": 97.4,
+     "ls": 87.0,
+     "champ": true
+    }
+   ]
+  }
+ }
+}

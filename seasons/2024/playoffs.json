@@ -1,0 +1,51 @@
+{
+ "v": 1,
+ "season": 2024,
+ "weeks": {
+  "16": {
+   "label": "Semifinals",
+   "short": "Semifinal",
+   "games": [
+    {
+     "w": "Aidan",
+     "l": "Haan",
+     "ws": 153.0,
+     "ls": 146.0
+    },
+    {
+     "w": "Alex",
+     "l": "Joe",
+     "ws": 173.0,
+     "ls": 135.0
+    }
+   ]
+  },
+  "17": {
+   "label": "Finals",
+   "short": "Final",
+   "games": [
+    {
+     "w": "Alex",
+     "l": "Aidan",
+     "ws": 186.0,
+     "ls": 166.0,
+     "champ": true
+    },
+    {
+     "w": "Alex",
+     "l": "Ben",
+     "ws": 186.0,
+     "ls": 154.0
+    },
+    {
+     "w": "Aidan",
+     "l": "Ben",
+     "ws": 166.0,
+     "ls": 154.0,
+     "other": true
+    }
+   ],
+   "three": true
+  }
+ }
+}

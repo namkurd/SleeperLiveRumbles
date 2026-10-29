@@ -1753,6 +1753,10 @@
   /* A head-to-head Rumble (worth 9) glows in the accent; a Field one stays plain. No extra room: it is the block's own edge. */
   .scen-mode-row { display: flex; justify-content: flex-end; margin: -2px 0 10px; }
   .scen-mode-row[hidden] { display: none; }
+  .toggle-group.scen-mode[hidden] { display: none; }
+  .scen-po { padding: 7px 16px; border-radius: 999px; border: 1.5px solid var(--accent); color: var(--accent); font-weight: 800; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); } .scen-po[hidden] { display: none; }
+  .sc-chip.po { background: var(--accent); color: #111; } .sc-chip.gold { background: var(--gold); color: #111; }
+  .sc-blk.h2h.champ, .sc-blk.champ { border-color: var(--gold); border-width: 2px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 55%, transparent), 0 0 26px -2px color-mix(in srgb, var(--gold) 70%, transparent); } .sc-blk.playoff .sc-hl { font-size: 0.95rem; }
   .sc-rk { display: inline-block; min-width: 1.6em; font-size: 0.7rem; font-weight: 800; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .sc-why { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; line-height: 1.3; }
   .sc-blk.best .sc-gap b { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1784,7 +1788,7 @@
     </div>
   </header>
 
-  <div class="scen-mode-row" id="scen-mode-row" hidden><div class="toggle-group scen-mode" id="scen-mode" role="group" aria-label="Scenarios view"><button type="button" id="sm-mine">Mine</button><button type="button" id="sm-best">Best</button></div></div>
+  <div class="scen-mode-row" id="scen-mode-row" hidden><div class="toggle-group scen-mode" id="scen-mode" role="group" aria-label="Scenarios view"><button type="button" id="sm-mine">Mine</button><button type="button" id="sm-best">Best</button></div><span class="scen-po" id="scen-po" hidden>Playoffs</span></div>
 
   <div class="status-row" style="margin-bottom:12px;">
     <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text" class="pill-full">Checking status…</span><span id="status-text-short" class="pill-short">Checking…</span></span>
@@ -3446,6 +3450,23 @@
       }
     });
   }
+  // A past season's playoff head-to-heads (seasons/<year>/playoffs.json, from the league's own records): Semifinals and Finals.
+  function loadPlayoffs() {
+    if (!ARCHIVE) return null;
+    return fetchJson(DATA_BASE + "playoffs.json").then(function (d) { ARCHIVE.playoffs = (d && d.weeks) || null; }, function () { ARCHIVE.playoffs = null; });
+  }
+  // The playoff week's record ({label, short, games, three}) when this past season has one for that week.
+  function rbPlayoffInfo(week) {
+    return ARCHIVE && ARCHIVE.playoffs && week != null ? ARCHIVE.playoffs[String(week)] || null : null;
+  }
+  // 18 is the exhibition week once a season has its playoffs on file.
+  function wpWeekName(week) { var po = rbPlayoffInfo(week); return po ? po.label : (ARCHIVE && ARCHIVE.playoffs && Number(week) === 18 ? "Exhibition" : "Week " + week); }
+  // A past season opens on its finals.
+  function rbFinalsWeek(pastWeeks) {
+    var w = null;
+    Object.keys((ARCHIVE && ARCHIVE.playoffs) || {}).forEach(function (k) { if (ARCHIVE.playoffs[k].short === "Final" && pastWeeks.indexOf(Number(k)) >= 0) w = Number(k); });
+    return w;
+  }
   function loadHistory() {
     state.historyError = null;
     return fetchJson(HISTORY_URL)
@@ -4903,12 +4924,12 @@
     // On the Scenarios tab the same picker chooses which week's Scenarios to show (this week, or a finished one).
     var su = state.view === "rumblin" && state.rb && ((state.rb.mode === "me" && state.rb.sub === "scenarios") || (state.rb.scenBest && state.rb.sub === "scenarios")) ? state.rb.scenUi : null;
     if (su) {
-      var ssig = "s:" + (su.cur ? "c" : "") + "|" + su.past.join(",");
+      var ssig = "s:" + (su.cur ? "c" : "") + "|" + su.past.join(",") + (ARCHIVE && ARCHIVE.playoffs ? "|po" : "");
       sel.disabled = (su.cur ? 1 : 0) + su.past.length < 2;
       els.weekSelectWrap.classList.toggle("is-disabled", sel.disabled);
       els.weekSelectWrap.title = "";
       if (sel.getAttribute("data-weeks") !== ssig) {
-        sel.innerHTML = (su.cur ? '<option value="">' + (ARCHIVE ? "Final" : "Current") + "</option>" : "") + su.past.map(function (w) { return '<option value="' + w + '">Week ' + w + "</option>"; }).join("");
+        sel.innerHTML = (su.cur ? '<option value="">' + (ARCHIVE ? "Final" : "Current") + "</option>" : "") + su.past.map(function (w) { return '<option value="' + w + '">' + wpWeekName(w) + "</option>"; }).join("");
         sel.setAttribute("data-weeks", ssig);
       }
       sel.value = su.value;
@@ -7368,7 +7389,8 @@
     var counted = ((state.history && state.history.weeks_completed) || []).map(Number);
     var extra = ui.value !== "" && counted.indexOf(Number(ui.value)) < 0;
     box.hidden = !extra;
-    box.textContent = extra ? "Playoff week: not counted in the standings" : "";
+    var po = extra ? rbPlayoffInfo(ui.value) : null;
+    box.textContent = extra ? (po ? po.label + ": the playoff head-to-heads, not counted in the standings" : (wpWeekName(ui.value) === "Exhibition" ? "Exhibition: not counted in the standings" : "Playoff week: not counted in the standings")) : "";
   }
   // A finished week as the same team shape the live view uses: final points, the starters, and who each team played.
   function rbPastTeams(week) {
@@ -7477,6 +7499,40 @@
     });
     return { list: picked, missing: missing, total: out.length + missing };
   }
+  // The playoff head-to-heads of a past season's Semifinals or Finals week: only those games, in the H2H glow, each marked Semifinal or Final.
+  // (A three-team final is the champion against each of the other two.) No Mine / Best here: it is just the Playoffs.
+  function rbPlayoffUi(on) {
+    document.getElementById("scen-mode").hidden = !!on;
+    document.getElementById("scen-po").hidden = !on;
+    if (on) document.getElementById("scen-mode-row").hidden = false;
+  }
+  function rbRenderPlayoffs(week) {
+    var po = rbPlayoffInfo(week), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
+    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
+    var legend = document.querySelector(".rb-legend"); if (legend) legend.style.display = "none";
+    document.getElementById("rb-grid").style.display = "none";
+    ["rb-feed", "rb-live", "rb-empty"].forEach(function (id) { var e = document.getElementById(id); if (e) e.hidden = true; });
+    view.hidden = false;
+    rbPlayoffUi(true);
+    if (state.view === "rumblin") { els.modeScen.classList.add("active"); els.modeRumblin.classList.remove("active"); }
+    var teams = rbPastTeams(week), win = { key: "wk" + week, clusters: [], cur: 0, week: week, past: true }, byName = {};
+    teams.forEach(function (t) { byName[t.name] = t; });
+    var html = po.games.map(function (g) {
+      var a = byName[g.w], b = byName[g.l];
+      if (!a || !b) return "";
+      var cols = rbPairCols(a, b), mini = wpMiniHtml(win, a, b, cols), cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
+      var note = g.other ? "Three-team final: the other two teams, head-to-head" : po.three ? "Three-team final: " + g.w + " against " + g.l : g.champ ? g.w + " is the champion" : g.w + " advanced";
+      if (g.champ && po.three) note = "Title game: " + g.w + " is the champion over " + g.l;
+      return '<section class="sc-blk h2h playoff' + (g.champ ? " champ" : "") + '"><div class="sc-bh"><div><b style="color:' + cA + '">' + escapeHtml(a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(b.name) + '</b> <span class="sc-chip po">' + escapeHtml(g.other ? "Final" : po.short) + '</span> <span class="sc-chip h2h">H2H</span>' + (g.champ ? ' <span class="sc-chip gold">\u{1F3C6} Champion</span>' : "") +
+        '<div class="sc-hl">' + Number(g.ws).toFixed(1) + " \u2013 " + Number(g.ls).toFixed(1) + '</div><div class="sc-why">' + escapeHtml(note) + "</div></div>" +
+        '<div class="sc-gap ok"><span>Margin</span><b>' + (g.ws - g.ls).toFixed(1) + '</b><em class="sc-wp ok">' + escapeHtml(g.w) + " won</em></div></div>" + mini.html + "</section>";
+    }).join("");
+    box.innerHTML = html || '<div class="rb-live-empty">No playoff games on file for this week.</div>';
+    scAvatars(); wpMiniOff();
+    wpSheetKeep();
+    rbStickOffset();
+  }
   function rbScenModeUi(best) {
     document.getElementById("sm-best").classList.toggle("active", best);
     document.getElementById("sm-mine").classList.toggle("active", !best);
@@ -7490,7 +7546,7 @@
     var pastWeeks = rbScenPastWeeks(curOpt ? liveWk : null);
     var picked = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
     var fallback = pastWeeks.filter(function (w) { return counted.indexOf(w) >= 0; })[0];
-    var showPast = picked != null ? picked : (!curOpt ? (fallback != null ? fallback : pastWeeks[0]) : null);
+    var showPast = picked != null ? picked : (!curOpt ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : fallback != null ? fallback : pastWeeks[0]) : null);
     var grid = document.getElementById("rb-grid"), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
     ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
     var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
@@ -7503,6 +7559,7 @@
     rb.scenUi = { cur: curOpt, past: pastWeeks, value: showPast != null ? String(showPast) : "" };
     renderWeekSelect();
     rbWeekNote(rb.scenUi);
+    if (showPast != null && rbPlayoffInfo(showPast)) { rbRenderPlayoffs(showPast); return; }
     var teams, win;
     if (showPast != null) { teams = rbPastTeams(showPast); win = { key: "wk" + showPast, clusters: [], cur: 0, week: showPast, past: true }; }
     else if (curOpt) {
@@ -7956,7 +8013,7 @@
     if (!pm) { sheet.hidden = true; return; }
     var s = wpSummary(pm), wrap = document.getElementById("wp-chart");
     sheet.hidden = false;   // measure the real width: a hidden sheet has none
-    document.getElementById("wp-title").innerHTML = s.title + ' <small>Week ' + pm.win.week + "</small>";
+    document.getElementById("wp-title").innerHTML = s.title + ' <small>' + wpWeekName(pm.win.week) + "</small>";
     document.getElementById("wp-sub").innerHTML = s.sub;
     document.getElementById("wp-story").textContent = wpStory(pm).text;
     var land = wpRot || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches, desk = wpDesk();
@@ -8847,6 +8904,7 @@
     var rb = state.rb;
     // Best matchups needs no manager and no live cards: it has the page to itself.
     var ctlBox = document.querySelector(".rb-controls"), scenRow = document.getElementById("scen-mode-row");
+    rbPlayoffUi(false);
     if (rb.scenBest && rb.sub === "scenarios") { scenRow.hidden = false; rbRenderBest(); return; }
     scenRow.hidden = true;
     ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = ""; });
@@ -8906,7 +8964,7 @@
     scenBtn.classList.toggle("active", rb.sub === "scenarios");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
     var pickedPast = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
-    var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? pastWeeks[0] : null);
+    var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : pastWeeks[0]) : null);
     var scenOn = rb.sub === "scenarios" && !scenBtn.hidden && !scenBtn.disabled;
     scenRow.hidden = !scenOn;
     if (state.view === "rumblin") { els.modeScen.classList.toggle("active", scenOn); els.modeRumblin.classList.toggle("active", !scenOn); }
@@ -8968,6 +9026,7 @@
       rb.scenUi = { cur: !!(curWin || scenWait), past: pastWeeks, value: showPast != null ? String(showPast) : "" };
       renderWeekSelect();
       rbWeekNote(rb.scenUi);
+      if (pastMode && rbPlayoffInfo(showPast)) { rbRenderPlayoffs(showPast); rb.scenDone = true; prefsSave(); return; }
       // A different "me" starts a fresh set of followed opponents.
       if (scenMeT && rb.scenMe !== scenMeT.rid) { rb.scenMe = scenMeT.rid; rb.scenSel = null; rb.scenSelDone = null; }
       var scenAvail = rbScenAvail(scenTeams, scenMeT);
@@ -9756,6 +9815,7 @@
       [els.modeCustom, els.modeRumblin].forEach(function (b) { b.classList.add("off"); b.title = "Live tabs are for the current season"; b.setAttribute("aria-disabled", "true"); });
     })
     .then(loadHistory)
+    .then(loadPlayoffs)
     .then(function () { return ARCHIVE ? null : loadLive(); })
     .then(function () { rbInit(); return state.epaOn ? epaLoad(true) : null; })
     .then(render)

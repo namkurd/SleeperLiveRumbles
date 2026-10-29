@@ -1,0 +1,51 @@
+{
+ "v": 1,
+ "season": 2025,
+ "weeks": {
+  "16": {
+   "label": "Semifinals",
+   "short": "Semifinal",
+   "games": [
+    {
+     "w": "Aidan",
+     "l": "Ankit",
+     "ws": 149.0,
+     "ls": 136.0
+    },
+    {
+     "w": "Haan",
+     "l": "Joe",
+     "ws": 156.0,
+     "ls": 154.0
+    }
+   ]
+  },
+  "17": {
+   "label": "Finals",
+   "short": "Final",
+   "games": [
+    {
+     "w": "Haan",
+     "l": "Steven",
+     "ws": 202.0,
+     "ls": 177.0,
+     "champ": true
+    },
+    {
+     "w": "Haan",
+     "l": "Aidan",
+     "ws": 202.0,
+     "ls": 120.0
+    },
+    {
+     "w": "Steven",
+     "l": "Aidan",
+     "ws": 177.0,
+     "ls": 120.0,
+     "other": true
+    }
+   ],
+   "three": true
+  }
+ }
+}

@@ -1895,6 +1895,14 @@ and the lead changes so far), and counts a head-to-head game for more, since it 
 the reason, and each says **H2H** or **Field**. No team appears more than three times. It follows the header week picker,
 this week or any finished one, and works for past seasons too. A head-to-head block has an orange outline in both views.
 
+### Playoffs in past seasons
+
+For 2021 onward the Scenarios week picker names the playoff weeks **Semifinals** (week 16) and **Finals** (week 17). Those weeks show only the
+league's actual playoff head-to-heads (from `seasons/<year>/playoffs.json`), each in the H2H glow with a Semifinal or Final chip and the
+win-probability chart; there is no Mine / Best toggle (a "Playoffs" tag takes its place) and no other team's scenarios. A three-team final is
+the champion against each of the other two. `import_playoffs.py` writes those files from the league's own playoff records
+(`namkurd/sleepersheet`, `data/playoffs_history.json`; Sleeper's brackets never matched the custom playoffs).
+
 ### Sharing a chart
 
 Every mini chart has a share button (and the expanded chart a **Share** button). One tap hands the phone's share sheet the

@@ -1,0 +1,51 @@
+{
+ "v": 1,
+ "season": 2023,
+ "weeks": {
+  "16": {
+   "label": "Semifinals",
+   "short": "Semifinal",
+   "games": [
+    {
+     "w": "Joe",
+     "l": "Ryan",
+     "ws": 156.0,
+     "ls": 123.0
+    },
+    {
+     "w": "Ankit",
+     "l": "Jake",
+     "ws": 163.0,
+     "ls": 129.0
+    }
+   ]
+  },
+  "17": {
+   "label": "Finals",
+   "short": "Final",
+   "games": [
+    {
+     "w": "Ankit",
+     "l": "Joe",
+     "ws": 158.0,
+     "ls": 152.0,
+     "champ": true
+    },
+    {
+     "w": "Ankit",
+     "l": "Steven",
+     "ws": 158.0,
+     "ls": 146.0
+    },
+    {
+     "w": "Joe",
+     "l": "Steven",
+     "ws": 152.0,
+     "ls": 146.0,
+     "other": true
+    }
+   ],
+   "three": true
+  }
+ }
+}
