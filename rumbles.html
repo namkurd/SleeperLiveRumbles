@@ -220,7 +220,11 @@
     font-family: inherit;
     cursor: pointer;
     /* Fixed width so the picker is the same size in Actual and Projected (whose option labels are longer). */
-    width: 6.1rem; max-width: 100%; text-overflow: ellipsis;
+    width: 5.8rem; max-width: 100%; text-overflow: ellipsis;
+    /* The picker draws its own chevron, tucked just inside the right edge, instead of the browser's (which floats away from the text). */
+    -webkit-appearance: none; appearance: none; padding-right: 24px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%23f08a3c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center; background-size: 11px 7px;
   }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -627,7 +631,7 @@
     /* Week picker and all four tabs share one line. */
     header .controls { width: 100%; flex-wrap: nowrap; gap: 6px; }
     header .week-select-wrap { flex: 0 0 auto; }
-    header .week-select { width: 5.3rem; padding: 7px 4px 7px 10px; font-size: 0.72rem; }
+    header .week-select { width: 5.3rem; padding: 7px 20px 7px 10px; font-size: 0.72rem; background-position: right 7px center; background-size: 10px 6px; }
     header .toggle-group { flex: 1 1 auto; min-width: 0; justify-content: space-between; padding: 2px; font-size: 0.72rem; }
     header .toggle-group button { padding: 6px 6px; flex: 1 1 auto; white-space: nowrap; }
     .status-row { gap: 8px; flex-wrap: nowrap; }
