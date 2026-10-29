@@ -4110,8 +4110,9 @@ def scenario_past_seasons(browser):
     assert "clip:start:abc123XYZ00" in ev["events"] and "clip:end" in ev["events"], f"a swing with a playable clip plays it during the replay: {ev}"
     assert ev["pv"]["mute"] == 1 and ev["pv"]["autoplay"] == 1, f"...muted: {ev}"
     assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
-    gb = pg.evaluate("[...document.querySelectorAll('#wp-list .wp-play')].map(e => getComputedStyle(e).animationName).filter(n => n !== 'wp-glow').length")
-    assert gb == 0, f"every play button glows the same way, whether or not its clip is known to play here: {gb}"
+    gb = pg.evaluate("({ok: document.querySelectorAll('#wp-list .wp-play.ok').length, okEmb: document.querySelectorAll('#wp-list li[data-emb=\"1\"]').length, bad: document.querySelectorAll('#wp-list .wp-play.bad').length, glow: [...document.querySelectorAll('#wp-list .wp-play')].every(e => getComputedStyle(e).animationName === 'wp-glow'), green: [...document.querySelectorAll('#wp-list .wp-play.ok')].every(e => getComputedStyle(e).color === 'rgb(46, 204, 113)'), orange: [...document.querySelectorAll('#wp-list .wp-play:not(.ok)')].every(e => getComputedStyle(e).color !== 'rgb(46, 204, 113)')})")
+    assert gb["ok"] >= 1 and gb["ok"] == gb["okEmb"] and gb["bad"] >= 1, f"clips proven to play here are marked, and so are those that cannot: {gb}"
+    assert gb["glow"] and gb["green"] and gb["orange"], f"green glowing = plays in the page; orange glowing = opens on YouTube: {gb}"
     if pg.evaluate("document.getElementById('wp-rosters').hidden"): pg.evaluate("document.getElementById('wp-rosters-btn').click()"); pg.wait_for_timeout(300)
     assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "the Rosters button shows the cards"
     pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(300)

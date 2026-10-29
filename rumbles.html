@@ -1642,6 +1642,8 @@
   .wp-list li:hover .wp-play, .wp-list li:focus-visible .wp-play { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 80%, transparent); background: color-mix(in srgb, var(--accent) 28%, transparent); }
   .wp-probe { position: fixed; left: -400px; top: 0; width: 160px; height: 90px; overflow: hidden; pointer-events: none; opacity: 0; }
   .wp-clipfloat.pending { opacity: 0; pointer-events: none; } li.wp-clipbox.pending { height: 0; overflow: hidden; opacity: 0; margin: 0; padding: 0; }
+  /* green: proven to play inside the page; orange: opens on YouTube (blocked from embedding, or not checked yet). Both glow. */
+  .wp-play.ok { --accent: #2ecc71; color: #2ecc71; }
   .wp-clipnote a, .wp-find a, .wp-xlink { color: var(--accent); }
   @keyframes wp-glow { 0%, 100% { box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 75%, transparent); } }
   @media (prefers-reduced-motion: reduce) { .wp-play { animation: none; } }
