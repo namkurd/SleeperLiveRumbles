@@ -4024,7 +4024,7 @@ def scenario_past_seasons(browser):
       window.YT = { Player: function (el, o) { var f = document.createElement('iframe'), pv = o.playerVars; f.src = o.host + '/embed/' + o.videoId + '?autoplay=' + pv.autoplay + '&start=' + pv.start + '&end=' + pv.end;
         el.parentNode.replaceChild(f, el); this.destroy = function () { f.remove(); }; var self = this;
         window.__lastPV = pv;
-        setTimeout(function () { if (/^bad/.test(o.videoId)) o.events.onError({ data: 150 }); else { o.events.onReady({ target: { playVideo: function () {}, mute: function () {} } }); setTimeout(function () { o.events.onStateChange && o.events.onStateChange({ data: 0 }); }, 400); } }, 30); } };
+        setTimeout(function () { if (/^bad/.test(o.videoId)) o.events.onError({ data: 150 }); else if (window.__ytHold) { o.events.onReady({ target: { playVideo: function () {}, mute: function () {} } }); } else { o.events.onReady({ target: { playVideo: function () {}, mute: function () {} } }); setTimeout(function () { o.events.onStateChange && o.events.onStateChange({ data: 0 }); }, 400); } }, 30); } };
       setTimeout(function () { window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 0);"""))
     pg.route("**/wp_clips/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))   # (a real week with no clips file is a quiet 404)
     pg.route("**/seasons/2025/wp_clips/week_3.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"v": 1, "week": 3, "clips": clips3})))
@@ -4077,6 +4077,15 @@ def scenario_past_seasons(browser):
         if os.environ.get("SCENSHOT"): pg.screenshot(path=f"/tmp/sf/wp_{vw}x{vh}.png")
         assert sf["n"] == 10 and sf["hidden"] == 0 and sf["scroll"] <= 1 and sf["cut"] == 0, f"all ten swings in view and none of their text cut off at {vw}x{vh}: {sf}"
     pg.set_viewport_size({"width": 1280, "height": 720}); pg.wait_for_timeout(600)
+    # a phone that refuses to autoplay (Low Power Mode): the replay waits on the clip for a tap on the player (or Skip) instead of passing it by
+    pg.evaluate("window.__ytHold = true; window.__wpTouch = true; window.__wpPlayMs = 3000; window.__wpEvents = []")
+    pg.click("#wp-replay")
+    pg.wait_for_selector(".wp-clipbox .wp-tapnote", timeout=15000)
+    held = pg.evaluate("({controls: window.__lastPV.controls, running: document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')})")
+    assert held["controls"] == 1 and held["running"], f"the player keeps its controls on a phone and the replay waits: {held}"
+    pg.click(".wp-clipbox .wp-tapnote button"); pg.wait_for_timeout(300)
+    assert "clip:end" in pg.evaluate("window.__wpEvents"), "Skip carries on past the clip"
+    pg.evaluate("window.__ytHold = false; window.__wpTouch = undefined; window.__wpPlayMs = 20000"); pg.click("#wp-replay"); pg.wait_for_timeout(300)
     # expanding a chart plays it by itself
     pg.evaluate("window.__wpAuto = true"); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     pg.click("#scen-blocks .sc-blk:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(30)

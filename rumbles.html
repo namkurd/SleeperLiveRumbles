@@ -1587,6 +1587,7 @@
   .wp-proj .wp-proj-av { position: relative; width: 52px; height: 52px; margin: 0 auto 6px; } .wp-proj img, .wp-proj .wp-proj-i { position: absolute; inset: 0; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; background: var(--panel); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-shadow: 0 0 16px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) 0.1s both; }
   .wp-proj i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; animation: wp-ring-s 1.2s ease-out 0.25s both; z-index: -1; } @keyframes wp-ring-s { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.3); opacity: 0; } }
   .wp-proj .wp-proj-n { font-size: 1.25rem; font-weight: 800; color: var(--c, var(--accent)); line-height: 1.1; } .wp-proj .wp-proj-d { font-size: 0.82rem; color: var(--text); margin-top: 3px; } .wp-proj .wp-proj-d strong { font-size: 1.15em; color: var(--c, var(--accent)); }
+  .wp-tapnote { margin-top: 4px; font-size: 0.72rem; font-weight: 700; color: var(--accent); } .wp-tapnote span { font-weight: 400; color: var(--text-dim); } .wp-tapnote button { margin-left: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
   .wp-xlink { display: block; margin-top: 3px; font-size: 0.7rem; color: var(--accent); text-decoration: none; } .wp-xlink:hover { text-decoration: underline; }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
@@ -8219,7 +8220,7 @@
   function wpPlayClip(li, done) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
     if (!c) { done(); return; }
-    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false, played = false;
+    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false, played = false, touch = window.__wpTouch === true || (!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && window.__wpTouch !== false);
     box.className = "wp-clipbox auto";
     li.parentNode.insertBefore(box, li.nextSibling);
     function finish(early) {
@@ -8241,12 +8242,22 @@
       wpYtApi().then(function (YT) {
         if (finished) return;
         player = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: cl.id, width: "100%", height: "100%",
-          playerVars: { autoplay: 1, mute: 1, start: Number(cl.s) || 0, end: Number(cl.e) || 15, playsinline: 1, rel: 0, modestbranding: 1, controls: 0 },
+          playerVars: { autoplay: 1, mute: 1, start: Number(cl.s) || 0, end: Number(cl.e) || 15, playsinline: 1, rel: 0, modestbranding: 1, controls: touch ? 1 : 0 },
           events: {
             onReady: function (e) {
               try { e.target.mute(); e.target.playVideo(); } catch (x) { /* fine */ }
               // If playing has not begun within a few seconds (autoplay refused, a slow start), move on rather than sit on a still frame.
-              clearTimeout(dog); dog = setTimeout(function () { finish(); }, 5000);
+              // On a phone the player keeps its own controls: when the phone refuses to autoplay (Low Power Mode does) the replay waits here for a tap
+              // on the player's play button (or Skip) instead of moving on past a clip nobody saw.
+              clearTimeout(dog);
+              dog = setTimeout(function () {
+                if (!touch || played) { finish(); return; }
+                var note = document.createElement("div"); note.className = "wp-tapnote";
+                note.innerHTML = 'Tap \u25b6 to watch this play <span>(your phone is not allowing autoplay)</span> <button type="button">Skip</button>';
+                note.querySelector("button").onclick = function () { finish(); };
+                box.appendChild(note);
+                clearTimeout(dog); dog = setTimeout(function () { finish(); }, 40000);
+              }, touch ? 2800 : 5000);
               if (window.__wpEvents) window.__wpEvents.push("clip:start:" + cl.id);
               if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (x) { /* fine */ } }
             },
