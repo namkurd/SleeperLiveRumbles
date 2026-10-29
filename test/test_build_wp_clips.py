@@ -286,9 +286,16 @@ def test_backup_qb_joins_the_lineup():
     import build_epa
     lineups = {"1": {"6": [["5849", -0.18], ["DAL", 2.03]], "7": [["1", 5.0]]}}
     names = {}
-    hist = {"qb_adjustments": [
+    hist = {"season": 2026, "qb_adjustments": [
         {"week": 1, "roster_id": 6, "confidence": "confirmed", "backup_qbs": [{"player_id": "3161", "name": "Carson Wentz", "points": 19.47}]},
         {"week": 1, "roster_id": 7, "confidence": "possible", "backup_qbs": [{"player_id": "9", "name": "X", "points": 3.0}]}]}
     assert build_epa.add_backup_qbs(lineups, names, hist) == 1
     assert lineups["1"]["6"][-1] == ["3161", 19.47] and names["3161"] == ["Carson Wentz", "QB"] and len(lineups["1"]["7"]) == 1
     assert build_epa.add_backup_qbs(lineups, names, hist) == 0, "added once"
+
+
+def test_backup_qbs_only_from_2026():
+    import build_epa
+    lineups = {"1": {"6": [["1", 1.0]]}}
+    hist = {"season": 2025, "qb_adjustments": [{"week": 1, "roster_id": 6, "confidence": "confirmed", "backup_qbs": [{"player_id": "3", "name": "B", "points": 5}]}]}
+    assert build_epa.add_backup_qbs(lineups, {}, hist) == 0 and len(lineups["1"]["6"]) == 1

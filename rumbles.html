@@ -1564,7 +1564,8 @@
   #wp-share { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .wp-last { position: absolute; z-index: 4; transform: translateX(-50%); max-width: 47%; min-height: 2.7em; box-sizing: border-box; padding: 4px 9px; border: 1px solid var(--c, var(--panel-border)); border-radius: 8px; background: color-mix(in srgb, var(--panel) 90%, transparent); font-size: 0.78rem; line-height: 1.3; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,0.35); }
   .wp-clutch { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%; padding: 8px 16px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 12px; background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c, var(--accent)) 28%, transparent), 0 8px 30px rgba(0,0,0,0.55); font-size: 0.9rem; line-height: 1.3; pointer-events: none; animation: wp-clutch-in 0.35s cubic-bezier(.2,1.4,.4,1); }
-  .wp-clutch[hidden], .wp-pop[hidden] { display: none; } .wp-clutch b { display: block; font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c, var(--accent)); } .wp-clutch .wc-who { font-weight: 800; color: var(--c, var(--accent)); } .wp-clutch small { color: var(--text-dim); }
+  .wp-repl { top: 34%; border-color: #ef4444; white-space: nowrap; } .wp-repl b { display: inline; font-size: 0.8rem; letter-spacing: 0.06em; color: var(--text); } .wp-repl .wp-plus { color: #ef4444; font-weight: 900; margin-right: 6px; }
+  .wp-clutch[hidden], .wp-pop[hidden], .wp-repl[hidden] { display: none; } .wp-clutch b { display: block; font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c, var(--accent)); } .wp-clutch .wc-who { font-weight: 800; color: var(--c, var(--accent)); } .wp-clutch small { color: var(--text-dim); }
   @keyframes wp-clutch-in { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
   .wp-pop { position: absolute; z-index: 7; width: 0; height: 0; pointer-events: none; }
   .wp-pop img, .wp-pop .wp-pop-av { position: absolute; left: -24px; top: -24px; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); background: var(--panel); box-shadow: 0 0 18px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) both; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-sizing: border-box; }
@@ -1980,7 +1981,7 @@
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-rosters-btn" class="refresh-btn" title="Both starting rosters with their points">Rosters</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
-      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div class="wp-rosters" id="wp-rosters" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-repl" class="wp-clutch wp-repl" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div class="wp-rosters" id="wp-rosters" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
       <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
@@ -7759,7 +7760,7 @@
   function wpSheetKeep() { if (wpOpenKey) { if (wpPairs[wpOpenKey]) { if (!wpPlay.on) wpSheetRender(); } else wpClose(); } }
   function wpPlayers(team) {
     return (team.players || []).filter(function (p) { return !p.replacement || p.fromFile; }).map(function (p) {
-      return { sid: String(p.player_id), pos: p.position, name: wpShortName(p), full: p.name, act: num(p.actual), team: p.team || null };
+      return { sid: String(p.player_id), pos: p.position, name: wpShortName(p), full: p.name, act: num(p.actual), team: p.team || null, repl: !!p.fromFile };
     });
   }
   // The recording lags by up to a minute (and the page reads Sleeper every 30 seconds), so fold what the page can see
@@ -8589,7 +8590,7 @@
     pm._slotc.forEach(function (w) { if (w.t <= t + 1) col = w.col; });
     return col;
   }
-  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var ro = document.getElementById("wp-rosters"); if (ro) ro.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
+  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var rp = document.getElementById("wp-repl"); if (rp) rp.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var ro = document.getElementById("wp-rosters"); if (ro) ro.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
   // The winner's picture pops at the end of the line.
   function wpPop(pm) {
     var g = wpGeom, host = document.getElementById("wp-chart"), el = document.getElementById("wp-pop");
@@ -8628,7 +8629,8 @@
     var g = wpGeom, m = pm.model, W = Number(svg.getAttribute("width")) || g.ml + g.pw + 10, DUR = window.__wpPlayMs || 30000, btn = document.getElementById("wp-replay");
     var notches = pm.notches.slice().sort(function (a, b) { return a.x - b.x; }), ni = 0;
     wpPopHide(); wpPlay.wl = null;
-    var clutch = wpClutch(pm), clutchOn = false, clutchShown = false, hold = 0;
+    var clutch = wpClutch(pm), clutchOn = false, clutchShown = false, hold = 0, replShown = false, replSids = {};
+    pm.mine.concat(pm.theirs).forEach(function (q) { if (q.repl) replSids[q.sid] = true; });
     var rows = [].slice.call(document.querySelectorAll("#wp-list li[data-t]"));
     var prog = Math.max(0, Math.min(0.999, Number(from) || 0));
     // The replay's pace follows the scoring: a quiet stretch is passed quickly, a busy one slowly, and the whole week still takes DUR.
@@ -8677,6 +8679,12 @@
       // each scoring play passed becomes that manager's pinned last play
       while (ni < notches.length && notches[ni].x <= p) {
         var nt = notches[ni++];
+        // a backup QB's first scoring play: the league credits it to the roster whose starter was ruled out
+        if (!replShown && nt.ev.some(function (e) { return replSids[e.sid]; })) {
+          replShown = true; var rp = document.getElementById("wp-repl");
+          rp.innerHTML = '<b><span class="wp-plus">\u271a</span>QB Injury Replacement!</b>'; rp.hidden = false;
+          setTimeout(function () { rp.hidden = true; }, 2400);
+        }
         [1, -1].forEach(function (sd) { if (nt.ev.some(function (e) { return (e.side > 0) === (sd > 0); })) wpLastSet(pm, sd, nt); });
       }
       wpScrubDraw(pm, tt, true);

@@ -153,6 +153,8 @@ def add_backup_qbs(lineups: dict, names: dict, history: dict) -> int:
     "qb_adjustments", confirmed ones). Sleeper's own starters list leaves the backup out, so the lineup is one player
     short of the official score; the backup is added after the starters, once."""
     added = 0
+    if int(history.get("season") or 0) < 2026:   # the league's backup-QB rule starts with the 2026 season
+        return 0
     for adj in history.get("qb_adjustments") or []:
         if adj.get("confidence") != "confirmed":
             continue
