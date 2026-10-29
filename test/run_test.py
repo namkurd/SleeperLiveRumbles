@@ -4118,6 +4118,8 @@ def scenario_past_seasons(browser):
     assert gb["glow"] and gb["green"] and gb["orange"], f"green glowing = plays in the page; orange glowing = opens on YouTube: {gb}"
     if pg.evaluate("document.getElementById('wp-rosters').hidden"): pg.evaluate("document.getElementById('wp-rosters-btn').click()"); pg.wait_for_timeout(300)
     assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "the Rosters button shows the cards"
+    pg.set_viewport_size({"width": 1281, "height": 761}); pg.wait_for_timeout(700); pg.set_viewport_size({"width": 1280, "height": 760}); pg.wait_for_timeout(700)
+    assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "the roster cards stay up through a re-layout until they are closed"
     pg.evaluate("document.querySelector('#wp-list li.has-clip .wp-play').click()"); pg.wait_for_timeout(300)
     assert pg.evaluate("document.getElementById('wp-rosters').hidden && document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length === 1"), "picking a swing while the roster cards are up swaps them for the clip"
     pg.evaluate("document.querySelector('#wp-list li.has-clip .wp-play').click()"); pg.wait_for_timeout(150)

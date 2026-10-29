@@ -8046,7 +8046,9 @@
     return Math.max(260, card.clientHeight - top - 22);
   }
   function wpSheetRender() {
+    var roEl = document.getElementById("wp-rosters"), roKeep = !!roEl && !roEl.hidden && roEl.getAttribute("data-key") === wpOpenKey && !wpPlay.on;   // the roster cards stay up until closed (a data refresh must not take them away)
     wpPopHide();
+    if (roKeep) roEl.hidden = false;
     wpPlayStop();
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     var sheet = document.getElementById("wp-sheet");
@@ -8249,7 +8251,7 @@
     if (wpOpenKey !== key) wpPinT = null;
     wpOpenKey = key;
     if (wpPairs[key].done) wpClipsLoad(wpPairs[key].win.week);
-    wpSheetRender(); wpReplayBtn(wpPairs[key]);
+    wpClipsClear(); wpSheetRender(); wpReplayBtn(wpPairs[key]);
     document.getElementById("wp-sheet").classList.add("wp-open");
     document.getElementById("wp-close").focus();
     // Expanding a chart plays the matchup straight away (on a phone in either orientation too); tap the chart or ■ to take over.
@@ -8268,7 +8270,7 @@
       state.wpLink.gone = true;
       try { var u = new URL(location.href); u.searchParams.delete("wp"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) { /* fine */ }
     }
-    document.getElementById("wp-sheet").classList.remove("wp-open"); wpUnblind(); wpPopHide(); wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
+    document.getElementById("wp-sheet").classList.remove("wp-open"); wpClipsClear(); wpUnblind(); wpPopHide(); wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
 
   // What a moment says: when, the win probability and the score. A notch adds the scoring play(s) that happened there.
   function wpTipHtml(pm, t, notch) {
@@ -8570,7 +8572,7 @@
     el.innerHTML = '<div class="wp-ro-h"><b>Starting rosters' + (pm.done ? " \u00b7 final" : "") + '</b><button type="button" class="wp-ro-x" aria-label="Close rosters">&times;</button></div><div class="rb-grid compact rb-compact">' + card(pm.me, wpResolve(pm.col.mine), meWins && pm.done) + card(pm.t, wpResolve(pm.col.theirs), !meWins && pm.done) + "</div>";
     if (pm.done) { var wc = el.querySelectorAll(".rb-card")[meWins ? 0 : 1].querySelector(".rb-chips"); if (wc) wc.insertAdjacentHTML("beforeend", '<span class="rb-you">WINNER</span>'); }
     el.querySelector(".wp-ro-x").onclick = function () { el.hidden = true; };
-    el.scrollTop = 0; el.hidden = false;
+    el.scrollTop = 0; el.hidden = false; el.setAttribute("data-key", wpOpenKey || "");
     // never taller than the chart it sits on: the cards shrink to fit
     var gr = el.querySelector(".rb-grid"), room = el.clientHeight - el.querySelector(".wp-ro-h").offsetHeight - 14;
     gr.style.zoom = "";
