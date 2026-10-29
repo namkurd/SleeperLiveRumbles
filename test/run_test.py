@@ -4110,9 +4110,13 @@ def scenario_past_seasons(browser):
     assert "clip:start:abc123XYZ00" in ev["events"] and "clip:end" in ev["events"], f"a swing with a playable clip plays it during the replay: {ev}"
     assert ev["pv"]["mute"] == 1 and ev["pv"]["autoplay"] == 1, f"...muted: {ev}"
     assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
-    gb = pg.evaluate("({ok: document.querySelectorAll('#wp-list .wp-play.ok').length, bad: document.querySelectorAll('#wp-list .wp-play.bad').length, okEmb: [...document.querySelectorAll('#wp-list li[data-emb=\"1\"]')].length})")
-    assert gb["ok"] >= 1 and gb["ok"] == gb["okEmb"], f"a clip proven to play here has a green play button: {gb}"
-    assert gb["bad"] >= 1, f"a swing whose every clip refuses embedding loses the glow: {gb}"
+    gb = pg.evaluate("[...document.querySelectorAll('#wp-list .wp-play')].map(e => getComputedStyle(e).animationName).filter(n => n !== 'wp-glow').length")
+    assert gb == 0, f"every play button glows the same way, whether or not its clip is known to play here: {gb}"
+    if pg.evaluate("document.getElementById('wp-rosters').hidden"): pg.evaluate("document.getElementById('wp-rosters-btn').click()"); pg.wait_for_timeout(300)
+    assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "the Rosters button shows the cards"
+    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(300)
+    assert pg.evaluate("document.getElementById('wp-rosters').hidden && document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length === 1"), "picking a swing while the roster cards are up swaps them for the clip"
+    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(150)
     sidefit = pg.evaluate("""(() => { const s = document.querySelector('#wp-sheet .wp-side'), sr = s.getBoundingClientRect(), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect();
       return {n: li.length, st: s.scrollTop, scroll: s.scrollHeight - s.clientHeight, vp: [innerWidth, innerHeight], hidden: li.filter(l => { const b = l.getBoundingClientRect(); return b.bottom > sr.bottom + 1 || b.top < sr.top - 1 || b.bottom > c.bottom + 1; }).length, head: document.getElementById('wp-listh').getBoundingClientRect().top >= sr.top - 1}; })()""")
     assert sidefit["n"] == 10 and sidefit["hidden"] == 0 and sidefit["st"] == 0 and sidefit["head"], f"after the replay (and its clips) all ten swings are in view: {sidefit}"
