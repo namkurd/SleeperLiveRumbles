@@ -1579,7 +1579,7 @@
   .wp-bigp { font-size: 1.55em; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; }
   /* While a replay is about to start or is playing, the result stays out of sight: the title's score line, the story, and (before it starts) the chart and the swings. */
   .wp-blind #wp-sub, .wp-blind #wp-story { visibility: hidden; } .wp-prep #wp-chart svg, .wp-prep #wp-list, .wp-prep #wp-listh { visibility: hidden; }
-  .wp-read { position: absolute; z-index: 5; box-sizing: border-box; text-align: center; white-space: nowrap; padding: 3px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); font-size: 0.85rem; font-variant-numeric: tabular-nums; pointer-events: none; overflow: hidden; text-overflow: ellipsis; } .wp-read[hidden] { display: none; } .wp-read span { margin-left: 4px; }
+  .wp-read { position: absolute; z-index: 5; box-sizing: border-box; text-align: center; white-space: nowrap; padding: 3px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); font-size: 0.85rem; font-variant-numeric: tabular-nums; pointer-events: none; overflow: hidden; text-overflow: ellipsis; } .wp-read[hidden] { display: none; } .wp-read span { margin-left: 4px; } .wp-read .wp-rn { margin-left: 0; font-weight: 600; } .wp-read .wp-rn b { font-weight: 800; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-read { font-size: 0.72rem; padding: 2px 8px; } }
   .wp-sheet.wp-rot .wp-read { font-size: 0.72rem; padding: 2px 8px; }
   .wp-proj { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 86%; padding: 12px 22px 14px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c, var(--accent)) 26%, transparent), 0 14px 44px rgba(0,0,0,0.6); pointer-events: none; animation: wp-clutch-in 0.45s cubic-bezier(.2,1.4,.4,1) both; }
@@ -1596,6 +1596,7 @@
   .wp-ro-x { border: 1px solid var(--panel-border); background: transparent; color: var(--text); border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 1rem; line-height: 1; }
   /* a finished week has only actual points: no projection column or line, and no season record (a past week has none on file) */
   .wp-rosters .rb-p, .wp-rosters .rb-season, .wp-rosters td.rb-proj, .wp-rosters th:nth-child(3), .wp-rosters tfoot td:nth-child(3), .wp-rosters .rb-epa { display: none; }
+  .wp-rosters .rb-table .pos-badge { display: inline-flex !important; align-items: center; justify-content: center; min-width: 2.2em; margin-right: 4px; font-size: 0.56rem; }
   .wp-rosters .rb-table tr .rb-n, .wp-rosters .rb-table tr .pos-badge, .wp-rosters .rb-table tr td.rb-act, .wp-rosters .rb-table tr td.rb-proj { opacity: 1 !important; color: var(--text); }
   .wp-rosters .rb-table tr.rb-off .rb-meta { opacity: 0.7; }
   .wp-rosters { padding: 5px 6px 6px; } .wp-ro-h { margin-bottom: 4px; } .wp-ro-x { width: 24px; height: 24px; font-size: 0.9rem; }
@@ -1617,6 +1618,9 @@
   .wp-mk.wp-now { transform-box: fill-box; transform-origin: center; animation: wp-pop 0.9s ease-out; }
   @keyframes wp-pop { 0% { transform: scale(1); } 35% { transform: scale(1.7); } 100% { transform: scale(1); } }
   .wp-clipbox.auto { background: #000; border-radius: 8px; padding: 0; }
+  .wp-clipfloat { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(80%, 520px); background: var(--panel); border-radius: 10px; border: 1px solid var(--panel-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); padding: 0; }
+  .wp-clipfloat .wp-clipbox, .wp-clipfloat .wp-clipbox.auto { padding: 0; background: transparent; } .wp-clipfloat .wp-clipfail, .wp-clipfloat .wp-tapnote, .wp-clipfloat .wp-xlink, .wp-clipfloat .wp-find { padding: 8px 10px; color: var(--text); }
+  .wp-clipx { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; z-index: 2; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
   @media (max-width: 700px) { .wp-story { font-size: 0.74rem; } .wp-head { flex-wrap: wrap; } .wp-ttl { flex: 1 1 100%; } .wp-btns { flex: 1 1 100%; justify-content: flex-end; } }
   @media (max-height: 500px) and (orientation: landscape) { .wp-story { display: none; } }
@@ -1633,9 +1637,13 @@
   .wp-list li[data-ck] { cursor: pointer; flex-wrap: wrap; }
   .wp-find { padding: 4px 0 8px; font-size: 0.76rem; color: var(--text-dim); }
   .wp-find a { color: var(--accent); font-weight: 700; margin-right: 12px; }
-  .wp-play { flex: none; font-size: 0.7rem; color: var(--accent); opacity: 0.9; }
+  /* the play button of a swing that has a clip: a lit, softly pulsing button so it reads as something to press */
+  .wp-play { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.7em; height: 1.7em; padding-left: 0.12em; box-sizing: border-box; border-radius: 50%; font-size: 0.7rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent); text-shadow: 0 0 6px var(--accent); box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 55%, transparent); animation: wp-glow 2.4s ease-in-out infinite; }
+  .wp-list li:hover .wp-play, .wp-list li:focus-visible .wp-play { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 80%, transparent); background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  @keyframes wp-glow { 0%, 100% { box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 75%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .wp-play { animation: none; } }
   .wp-list li.wp-clipbox { display: block; padding: 4px 0 8px; border-top: 0; }
-  .wp-clipbox > div:not(.wp-clipfail) { aspect-ratio: 16 / 9; }
+  .wp-clipbox > div:not(.wp-clipfail):not(.wp-find):not(.wp-tapnote) { aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
   .wp-clipfail { padding: 10px 12px; border-radius: 8px; background: var(--panel-border); font-size: 0.78rem; }
   .wp-clipfail a { color: var(--accent); font-weight: 700; }
   .wp-clipbox iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
@@ -8087,7 +8095,7 @@
     return "https://www.youtube.com/watch?v=" + encodeURIComponent(c.id) + (c.s ? "&t=" + Number(c.s) + "s" : "");
   }
   function wpClipPlay(box, list, i, tries) {
-    var c = list[i], slot = document.createElement("div"), exact = list[0].x || list[0];
+    var c = list[i], slot = document.createElement("div"), exact = list[0].x || list[0], started = false;
     box.innerHTML = ""; box.appendChild(slot);
     // when a film video (STACKED's) names the exact play but cannot play here, the clip that can play comes with a link to the exact moment
     if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; box.appendChild(xa); }
@@ -8100,23 +8108,50 @@
       var pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: c.id, width: "100%", height: "100%",
         playerVars: { autoplay: 1, start: Number(c.s) || 0, end: Number(c.e) || 15, playsinline: 1, rel: 0, modestbranding: 1 },
         events: { onReady: function (e) { try { e.target.playVideo(); } catch (x) { /* autoplay may need a tap */ } },
+          onStateChange: function (ev) { if (ev && (ev.data === 1 || ev.data === 3)) started = true; },
           onError: function (ev) { try { pl.destroy(); } catch (x) { /* gone already */ } if (box.parentNode) next(ev && ev.data); } } });
+      // a player that shows only a black box (it can happen) still gets a way out
+      setTimeout(function () {
+        if (started || !box.parentNode || box.querySelector(".wp-clipfail, .wp-clipnote")) return;
+        var n = document.createElement("div"); n.className = "wp-tapnote wp-clipnote";
+        n.innerHTML = 'Not loading? <a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube \u2197</a>';
+        box.appendChild(n);
+      }, 6000);
     }, function () {
       // no player API (blocked or offline): a plain embed, which cannot report a refusal
       box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(c.id) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1&start=" + (Number(c.s) || 0) + "&end=" + (Number(c.e) || 15) +
         '" title="Play highlight" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
     });
   }
+  // Beside the chart (a phone on its side, a desktop window) a playing clip floats over the chart instead of squeezing the ten swings; stacked, it opens under its row.
+  function wpSideMode() { return wpRot || wpDesk() || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches; }
+  function wpClipMount(li) {
+    var box = document.createElement("div");
+    if (wpSideMode()) {
+      var fl = document.createElement("div");
+      fl.className = "wp-clipfloat"; box.className = "wp-clipbox auto";
+      var x = document.createElement("button"); x.type = "button"; x.className = "wp-clipx"; x.setAttribute("aria-label", "Close the clip"); x.innerHTML = "&times;";
+      x.onclick = function () { wpClipsClear(); };
+      fl.appendChild(box); fl.appendChild(x);
+      document.getElementById("wp-chartwrap").appendChild(fl);
+      return { root: fl, box: box };
+    }
+    box = document.createElement("li"); box.className = "wp-clipbox";
+    li.parentNode.insertBefore(box, li.nextSibling);
+    return { root: box, box: box };
+  }
+  function wpClipsClear() {
+    [].forEach.call(document.querySelectorAll("#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat"), function (b) { b.parentNode.removeChild(b); });
+    [].forEach.call(document.querySelectorAll("#wp-list li[aria-expanded=true]"), function (l) { l.setAttribute("aria-expanded", "false"); });
+  }
   function wpClipToggle(li) {
     if (!li) return;
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
     if (pm && li.getAttribute("data-t") != null) { wpPinT = Number(li.getAttribute("data-t")); wpShowAt(pm, wpPinT); }
-    var list = document.getElementById("wp-list"), open = li.nextElementSibling && li.nextElementSibling.classList.contains("wp-clipbox");
-    Array.prototype.forEach.call(list.querySelectorAll(".wp-clipbox"), function (b) { b.previousElementSibling.setAttribute("aria-expanded", "false"); b.parentNode.removeChild(b); });
+    var list = document.getElementById("wp-list"), open = li.getAttribute("aria-expanded") === "true";
+    wpClipsClear();
     if (open) return;
-    var box = document.createElement("li");
-    box.className = "wp-clipbox";
-    li.parentNode.insertBefore(box, li.nextSibling);
+    var mount = wpClipMount(li), box = mount.box;
     li.setAttribute("aria-expanded", "true");
     if (!c) {
       // No clip on file: a search for the play, in the app the person prefers
@@ -8294,15 +8329,14 @@
   function wpPlayClip(li, done) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
     if (!c) { done(); return; }
-    var list = [c].concat(c.alt || []), box = document.createElement("li"), player = null, dog = 0, finished = false, played = false, touch = window.__wpTouch === true || (!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && window.__wpTouch !== false);
+    var list = [c].concat(c.alt || []), mount = wpClipMount(li), box = mount.box, player = null, dog = 0, finished = false, played = false, touch = window.__wpTouch === true || (!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && window.__wpTouch !== false);
     box.className = "wp-clipbox auto";
-    li.parentNode.insertBefore(box, li.nextSibling);
     function finish(early) {
       if (finished) return; finished = true;
       if (wpPlay.clip === finish) wpPlay.clip = null;
       clearTimeout(dog);
       try { if (player) player.destroy(); } catch (x) { /* gone already */ }
-      if (box.parentNode) box.parentNode.removeChild(box);
+      if (mount.root.parentNode) mount.root.parentNode.removeChild(mount.root);
       if (window.__wpEvents) window.__wpEvents.push("clip:end");
       if (!early) done();
     }
@@ -8468,6 +8502,20 @@
     gr.style.zoom = "";
     if (gr.scrollHeight > room && room > 60) gr.style.zoom = (room / gr.scrollHeight).toFixed(3);
   }
+  // The colour of the game window the replay is in, from the same palette the Rumblin' cards use for kickoff times (one colour per window, in order).
+  function wpSlotColor(pm, t) {
+    if (!pm._slotc) {
+      var ws = (pm.windows || []).slice().sort(function (a, b) { return a.t - b.t; }), byLabel = {}, n = 0;
+      pm._slotc = ws.map(function (w) {
+        var lab = wpWinLabel(pm.doc.t0 + w.t * 1000);
+        if (!(lab in byLabel)) byLabel[lab] = TOOLTIP_TIMESLOT_PALETTE[n++ % TOOLTIP_TIMESLOT_PALETTE.length];
+        return { t: w.t, col: byLabel[lab] };
+      });
+    }
+    var col = pm._slotc.length ? pm._slotc[0].col : "var(--text)";
+    pm._slotc.forEach(function (w) { if (w.t <= t + 1) col = w.col; });
+    return col;
+  }
   function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var ro = document.getElementById("wp-rosters"); if (ro) ro.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
   // The winner's picture pops at the end of the line.
   function wpPop(pm) {
@@ -8572,7 +8620,8 @@
       // the time and score along the top
       var at = m.at(tt);
       tick.hidden = false;
-      tick.innerHTML = "<b>" + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + "</b> " + escapeHtml(pm.me.name) + " <b>" + at.my.toFixed(1) + "</b> \u2013 <b>" + at.th.toFixed(1) + "</b> " + escapeHtml(pm.t.name) + " <span class=\"wp-bigp\" style=\"color:" + wpResolve(at.p >= 0.5 ? pm.col.mine : pm.col.theirs) + "\">" + wpPct(at.p >= 0.5 ? at.p : 1 - at.p) + "% " + escapeHtml(at.p >= 0.5 ? pm.me.name : pm.t.name) + "</span>";
+      var cm = wpResolve(pm.col.mine), cth = wpResolve(pm.col.theirs);
+      tick.innerHTML = '<b style="color:' + wpSlotColor(pm, tt) + '">' + escapeHtml(wpEt(pm.doc.t0 + tt * 1000)) + '</b> <span class="wp-rn" style="color:' + cm + '">' + escapeHtml(pm.me.name) + ' <b>' + at.my.toFixed(1) + '</b></span> \u2013 <span class="wp-rn" style="color:' + cth + '"><b>' + at.th.toFixed(1) + '</b> ' + escapeHtml(pm.t.name) + '</span> <span class="wp-bigp" style="color:' + wpResolve(at.p >= 0.5 ? pm.col.mine : pm.col.theirs) + '">' + wpPct(at.p >= 0.5 ? at.p : 1 - at.p) + "% " + escapeHtml(at.p >= 0.5 ? pm.me.name : pm.t.name) + "</span>";
       wpLastPlace();
       rows.forEach(function (li) {
         if (li.classList.contains("wp-wait") && m.x(Number(li.getAttribute("data-t"))) <= p) {

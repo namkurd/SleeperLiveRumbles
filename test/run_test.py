@@ -3641,6 +3641,8 @@ def scenario_win_probability(browser):
         if os.environ.get("SCENSHOT") and _ == 3: page.screenshot(path="/tmp/sf/wp_desk_replay.png")
         cen = page.evaluate("""(() => { const t = document.getElementById('wp-read'), a = document.getElementById('wp-last-top').getBoundingClientRect(), b = document.getElementById('wp-last-bot').getBoundingClientRect(); if (t.hidden) return null;
           const r = document.createRange(); r.selectNodeContents(t); const c = r.getBoundingClientRect(); return {text: (c.left + c.right) / 2, plays: (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2}; })()""")
+        cc = page.evaluate("""(() => { const r = document.getElementById('wp-read'); if (r.hidden) return null; const g = e => getComputedStyle(e).color, ns = [...r.querySelectorAll('.wp-rn')]; return {time: g(r.querySelector('b')), base: g(r), names: ns.map(g)}; })()""")
+        assert cc is None or (cc["time"] != cc["base"] and len(cc["names"]) == 2 and cc["names"][0] != cc["names"][1]), f"the time takes its game window's colour and each manager their own: {cc}"
         assert cen is None or abs(cen["text"] - cen["plays"]) <= 8, f"the time, score and odds line is centred over the two pinned plays: {cen}"
         assert lab["out"] == 0 and not lab["covered"], f"the game windows stay in frame and visible during the replay: {lab}"
     page.click("#wp-replay") if page.evaluate("document.getElementById('wp-replay').getAttribute('aria-label').includes('Stop')") else None
@@ -4023,6 +4025,8 @@ def scenario_past_seasons(browser):
     assert ro["shown"] and ro["cards"] == 2 and all(n >= 9 for n in ro["rows"]) and ro["foot"] and ro["compact"] and ro["winners"] >= 1 and all(re.match(r"^\d+\.\d\d$", v) for v in ro["totals"]), f"both starting rosters with points and totals: {ro}"
     fitc = pg.evaluate("""(() => { const o = document.getElementById('wp-rosters'), c = document.getElementById('wp-chartwrap'), ob = o.getBoundingClientRect(), cb = c.getBoundingClientRect(), g = o.querySelector('.rb-grid').getBoundingClientRect(), n = o.querySelector('.rb-table tr:not(.rb-bench-h) .rb-n');
       return {inChart: o.parentNode === c, within: ob.left >= cb.left - 1 && ob.right <= cb.right + 1 && ob.top >= cb.top - 1 && ob.bottom <= cb.bottom + 1, gridBottom: g.bottom - cb.bottom, opacity: n ? getComputedStyle(n).opacity : null}; })()""")
+    pos0 = pg.evaluate("[...document.querySelectorAll('#wp-rosters .rb-card')].map(c => [...c.querySelectorAll('tbody .pos-badge')].filter(b => getComputedStyle(b).display !== 'none').length)")
+    assert all(n >= 9 for n in pos0), f"each starter shows his position: {pos0}"
     assert fitc["inChart"] and fitc["within"] and fitc["gridBottom"] <= 1 and fitc["opacity"] == "1", f"the rosters lie over the chart, no taller than it, and are not greyed: {fitc}"
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     assert pg.evaluate("document.getElementById('wp-rosters').hidden && !document.getElementById('wp-sheet').hidden"), "Escape closes the rosters first, not the chart"
@@ -4112,6 +4116,14 @@ def scenario_past_seasons(browser):
         if os.environ.get("SCENSHOT"): pg.screenshot(path=f"/tmp/sf/wp_{vw}x{vh}.png")
         assert sf["n"] == 10 and sf["hidden"] == 0 and sf["scroll"] <= 1 and sf["cut"] == 0, f"all ten swings in view and none of their text cut off at {vw}x{vh}: {sf}"
     pg.set_viewport_size({"width": 1280, "height": 720}); pg.wait_for_timeout(600)
+    # beside the chart a clip floats over the chart instead of squeezing the ten swings
+    pg.set_viewport_size({"width": 1280, "height": 760}); pg.wait_for_timeout(900)
+    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(700)
+    fl = pg.evaluate("""(() => { const f = document.querySelector('#wp-chartwrap .wp-clipfloat'), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')]; return {float: !!f, inList: document.querySelectorAll('#wp-list .wp-clipbox').length, rows: li.filter(l => l.getBoundingClientRect().height >= 20).length, n: li.length, glow: getComputedStyle(document.querySelector('#wp-list .wp-play')).boxShadow !== 'none'}; })()""")
+    assert fl["float"] and fl["inList"] == 0 and fl["rows"] == fl["n"] and fl["glow"], f"a clip floats over the chart and the swings keep their room; the play buttons glow: {fl}"
+    pg.evaluate("document.querySelector('.wp-clipx').click()"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.querySelectorAll('.wp-clipfloat').length") == 0, "the clip closes"
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(700)
     # a phone that refuses to autoplay (Low Power Mode): the replay waits on the clip for a tap on the player (or Skip) instead of passing it by
     pg.evaluate("window.__ytHold = true; window.__wpTouch = true; window.__wpPlayMs = 3000; window.__wpEvents = []")
     pg.click("#wp-replay")
