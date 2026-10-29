@@ -48,7 +48,7 @@ DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a d
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
 MAX_SEARCHES = 40                            # YouTube searches (100 units each) a run may spend on plays no upload matched
 SEARCH_TOP = 12                              # only a week's biggest plays are worth a search
-STACKED_VER = 2                              # bump when how a STACKED clip is cut changes: every week redoes just those clips once
+STACKED_VER = 3                              # bump when how a STACKED clip is cut changes: every week redoes just those clips once
 MATCHER = 5                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
@@ -549,6 +549,13 @@ def crawl(q: Quota, cache: dict, playlists: list[str], since_ms: float, windows:
     complete = True
     for pl in playlists:
         c = cache["pl"].setdefault(pl, {"items": {}, "newest": 0, "token": None, "back": False, "ch": ""})
+        # A channel first read back only as far as then needed (this season's last weeks) must be read further back once earlier weeks
+        # are being worked on: `since` remembers how far back it has been read (older caches: the oldest upload kept stands in for it).
+        reached = c.get("since")
+        if reached is None and c["items"]:
+            reached = min(v[0] for v in c["items"].values()) * 1000
+        if c["back"] and reached is not None and reached > since_ms + 14 * 86400 * 1000:
+            c["back"], c["token"] = False, None
 
         def page(token):
             """(in-window uploads, next token, newest and oldest publish time on the page)"""
@@ -583,6 +590,7 @@ def crawl(q: Quota, cache: dict, playlists: list[str], since_ms: float, windows:
                     c["token"] = nxt
                     if lo < since_ms or not nxt:
                         c["back"] = True
+                        c["since"] = since_ms
                         break
         except QuotaOut as e:
             print(f"[warn] {e}; the crawl continues on the next run", file=sys.stderr)

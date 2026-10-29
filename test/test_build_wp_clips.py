@@ -105,6 +105,25 @@ def test_crawl_resumes_after_quota_and_picks_up_new_uploads():
     assert "vNew" in cache["pl"]["P"]["items"] and q.left == 9, "a later run reads only the new page"
 
 
+def test_a_channel_read_only_part_way_back_is_read_further_when_earlier_weeks_need_it():
+    from datetime import datetime, timezone, timedelta
+    base = datetime(2026, 10, 10, tzinfo=timezone.utc)
+    vids = [(f"v{i}", base - timedelta(days=i * 3)) for i in range(12)]
+
+    class Q(C.Quota):
+        def get(self, url, params):
+            self.left -= 1
+            tok = int(params.get("pageToken") or 0)
+            return {"items": [{"snippet": {"publishedAt": t.isoformat().replace("+00:00", "Z"), "title": "t" + v, "channelTitle": "Ch", "resourceId": {"videoId": v}}} for v, t in vids[tok:tok + 4]],
+                    "nextPageToken": str(tok + 4) if tok + 4 < len(vids) else None}
+    cache, win = {"pl": {}, "vid": {}}, [(0, 1e18)]
+    recent = (base - timedelta(days=7)).timestamp() * 1000
+    assert C.crawl(Q(20), cache, ["P"], recent, win) is True and len(cache["pl"]["P"]["items"]) < 12, "first only this season's recent weeks"
+    assert C.crawl(Q(20), cache, ["P"], 0, win) is True and len(cache["pl"]["P"]["items"]) == 12, "then the earlier weeks are read too"
+    old = {"pl": {"P": {"items": {"v0": [int(base.timestamp()), "t"]}, "newest": base.timestamp() * 1000, "token": None, "back": True, "ch": "Ch"}}, "vid": {}}
+    assert C.crawl(Q(20), old, ["P"], 0, win) is True and len(old["pl"]["P"]["items"]) == 12, "a cache from before this was tracked is read further back as well"
+
+
 def test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates():
     plays = [p for p in C.candidate_plays(DOC, NAMES) if p["key"] == "1:100"]
     ups = [dict(up("nfl", "Travis Kelce 40-yard touchdown | Chiefs vs. Dolphins"), ch="NFL"),

@@ -4021,6 +4021,9 @@ def scenario_past_seasons(browser):
     ro = pg.evaluate("""(() => { const e = document.getElementById('wp-rosters'); return {shown: !e.hidden, cards: e.querySelectorAll('.rb-card').length, rows: [...e.querySelectorAll('.rb-card')].map(c => c.querySelectorAll('tbody tr').length), foot: [...e.querySelectorAll('.rb-card tfoot td')].length > 0,
       winners: e.querySelectorAll('.rb-you').length, totals: [...e.querySelectorAll('.rb-a')].map(a => a.textContent.trim()), compact: !!e.querySelector('.rb-grid.compact')}; })()""")
     assert ro["shown"] and ro["cards"] == 2 and all(n >= 9 for n in ro["rows"]) and ro["foot"] and ro["compact"] and ro["winners"] >= 1 and all(re.match(r"^\d+\.\d\d$", v) for v in ro["totals"]), f"both starting rosters with points and totals: {ro}"
+    fitc = pg.evaluate("""(() => { const o = document.getElementById('wp-rosters'), c = document.getElementById('wp-chartwrap'), ob = o.getBoundingClientRect(), cb = c.getBoundingClientRect(), g = o.querySelector('.rb-grid').getBoundingClientRect(), n = o.querySelector('.rb-table tr:not(.rb-bench-h) .rb-n');
+      return {inChart: o.parentNode === c, within: ob.left >= cb.left - 1 && ob.right <= cb.right + 1 && ob.top >= cb.top - 1 && ob.bottom <= cb.bottom + 1, gridBottom: g.bottom - cb.bottom, opacity: n ? getComputedStyle(n).opacity : null}; })()""")
+    assert fitc["inChart"] and fitc["within"] and fitc["gridBottom"] <= 1 and fitc["opacity"] == "1", f"the rosters lie over the chart, no taller than it, and are not greyed: {fitc}"
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     assert pg.evaluate("document.getElementById('wp-rosters').hidden && !document.getElementById('wp-sheet').hidden"), "Escape closes the rosters first, not the chart"
     pg.evaluate("window.__wpPlayMs = 2500; document.getElementById('wp-replay').click()"); pg.wait_for_timeout(5600)

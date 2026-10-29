@@ -1596,6 +1596,9 @@
   .wp-ro-x { border: 1px solid var(--panel-border); background: transparent; color: var(--text); border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 1rem; line-height: 1; }
   /* a finished week has only actual points: no projection column or line, and no season record (a past week has none on file) */
   .wp-rosters .rb-p, .wp-rosters .rb-season, .wp-rosters td.rb-proj, .wp-rosters th:nth-child(3), .wp-rosters tfoot td:nth-child(3), .wp-rosters .rb-epa { display: none; }
+  .wp-rosters .rb-table tr .rb-n, .wp-rosters .rb-table tr .pos-badge, .wp-rosters .rb-table tr td.rb-act, .wp-rosters .rb-table tr td.rb-proj { opacity: 1 !important; color: var(--text); }
+  .wp-rosters .rb-table tr.rb-off .rb-meta { opacity: 0.7; }
+  .wp-rosters { padding: 5px 6px 6px; } .wp-ro-h { margin-bottom: 4px; } .wp-ro-x { width: 24px; height: 24px; font-size: 0.9rem; }
   .wp-rosters .rb-grid { grid-template-columns: 1fr 1fr; gap: 8px; --rb-cardw: 150px; } .wp-rosters .rb-card { min-width: 0; }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
@@ -1961,8 +1964,8 @@
       <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-rosters-btn" class="refresh-btn" title="Both starting rosters with their points">Rosters</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
-      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
-      <div class="wp-rosters" id="wp-rosters" hidden></div><div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
+      <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div class="wp-rosters" id="wp-rosters" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
+      <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
 </div>
@@ -8450,11 +8453,20 @@
     var el = document.getElementById("wp-rosters");
     if (!pm || !el || !pm.me.players || !pm.t.players) return;
     var a = pm.model.at(pm.model.end), meWins = a.my >= a.th;
+    // the lineup top to bottom: quarterbacks and superflex, running backs, receivers, flex, tight end, kicker, defense
+    var POS_RANK = { QB: 0, RB: 1, WR: 2, TE: 4, K: 5, DEF: 6 };
+    function slotRank(p) { return p.slot && TOOLTIP_SLOT_ORDER.indexOf(p.slot) !== -1 ? TOOLTIP_SLOT_ORDER.indexOf(p.slot) : (POS_RANK[p.position] != null ? POS_RANK[p.position] : 7); }
+    function ordered(t) { var c = Object.assign({}, t); c.players = t.players.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return slotRank(a.p) - slotRank(b.p) || a.i - b.i; }).map(function (x) { return x.p; }); return c; }
+    pm = { me: ordered(pm.me), t: ordered(pm.t), model: pm.model, done: pm.done, col: pm.col };
     function card(t, col, win) { return '<div class="rb-card' + (win ? " me" : "") + '" style="--c:' + col + '">' + rbCardHtml(t) + "</div>"; }
     el.innerHTML = '<div class="wp-ro-h"><b>Starting rosters' + (pm.done ? " \u00b7 final" : "") + '</b><button type="button" class="wp-ro-x" aria-label="Close rosters">&times;</button></div><div class="rb-grid compact rb-compact">' + card(pm.me, wpResolve(pm.col.mine), meWins && pm.done) + card(pm.t, wpResolve(pm.col.theirs), !meWins && pm.done) + "</div>";
     if (pm.done) { var wc = el.querySelectorAll(".rb-card")[meWins ? 0 : 1].querySelector(".rb-chips"); if (wc) wc.insertAdjacentHTML("beforeend", '<span class="rb-you">WINNER</span>'); }
     el.querySelector(".wp-ro-x").onclick = function () { el.hidden = true; };
     el.scrollTop = 0; el.hidden = false;
+    // never taller than the chart it sits on: the cards shrink to fit
+    var gr = el.querySelector(".rb-grid"), room = el.clientHeight - el.querySelector(".wp-ro-h").offsetHeight - 14;
+    gr.style.zoom = "";
+    if (gr.scrollHeight > room && room > 60) gr.style.zoom = (room / gr.scrollHeight).toFixed(3);
   }
   function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var ro = document.getElementById("wp-rosters"); if (ro) ro.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
   // The winner's picture pops at the end of the line.
