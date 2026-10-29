@@ -4016,6 +4016,18 @@ def scenario_past_seasons(browser):
     pg.select_option("#week-select", "15"); pg.wait_for_timeout(1500)
     pg.click("#scen-blocks .sc-blk.best:nth-of-type(1) .sc-wpm .wpm-exp"); pg.wait_for_timeout(1200)
     assert pg.evaluate("!document.getElementById('wp-sheet').hidden && /vs\\./.test(document.getElementById('wp-title').textContent)"), "a best matchup expands like any other"
+    # the two starting rosters, as their compact Rumblin' cards, over the chart: from the button, and when a replay has run out
+    pg.evaluate("document.getElementById('wp-rosters-btn').click()"); pg.wait_for_timeout(400)
+    ro = pg.evaluate("""(() => { const e = document.getElementById('wp-rosters'); return {shown: !e.hidden, cards: e.querySelectorAll('.rb-card').length, rows: [...e.querySelectorAll('.rb-card')].map(c => c.querySelectorAll('tbody tr').length), foot: [...e.querySelectorAll('.rb-card tfoot td')].length > 0,
+      winners: e.querySelectorAll('.rb-you').length, totals: [...e.querySelectorAll('.rb-a')].map(a => a.textContent.trim()), compact: !!e.querySelector('.rb-grid.compact')}; })()""")
+    assert ro["shown"] and ro["cards"] == 2 and all(n >= 9 for n in ro["rows"]) and ro["foot"] and ro["compact"] and ro["winners"] >= 1 and all(re.match(r"^\d+\.\d\d$", v) for v in ro["totals"]), f"both starting rosters with points and totals: {ro}"
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.getElementById('wp-rosters').hidden && !document.getElementById('wp-sheet').hidden"), "Escape closes the rosters first, not the chart"
+    pg.evaluate("window.__wpPlayMs = 2500; document.getElementById('wp-replay').click()"); pg.wait_for_timeout(5600)
+    assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "when the replay has run out the rosters come up"
+    pg.evaluate("document.querySelector('.wp-ro-x').click()"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.getElementById('wp-rosters').hidden"), "and close again"
+    pg.evaluate("window.__wpPlayMs = 20000")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     pg.select_option("#week-select", "18"); pg.wait_for_timeout(600)
     assert pg.evaluate("(() => { const r = document.getElementById('scen-mode-row'); return !r.hidden && r.nextElementSibling.classList.contains('status-row') && r.previousElementSibling.tagName === 'HEADER'; })()"), "the Mine/Best toggle sits right below the header's tabs"

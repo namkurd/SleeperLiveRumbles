@@ -263,7 +263,7 @@
   .epa-toggle:hover, .epa-toggle:focus-visible { opacity: 1; }
   .epa-toggle[aria-pressed="true"] { opacity: 1; color: var(--accent); border-color: var(--accent); }
   @media (min-width: 900px) { .epa-toggle { position: fixed; left: 14px; bottom: 14px; margin: 0; z-index: 30; } }
-  #rumblin-view .rb-table th.rb-epa, #rumblin-view .rb-table td.rb-epa { width: 2.6rem; font-size: 0.7rem; padding-left: 2px; padding-right: 2px; }
+  :is(#rumblin-view, #wp-rosters) .rb-table th.rb-epa, :is(#rumblin-view, #wp-rosters) .rb-table td.rb-epa { width: 2.6rem; font-size: 0.7rem; padding-left: 2px; padding-right: 2px; }
   .howto-tooltip {
     position: fixed;
     z-index: 50;
@@ -1274,11 +1274,11 @@
   .rb-tot { text-align: right; }
   .rb-tot .rb-a { font-size: 1.12rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .rb-tot .rb-p { font-size: 0.68rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-  #rumblin-view table.rb-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.76rem; }
-  #rumblin-view .rb-table th { position: static; background: none; box-shadow: none; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; text-align: center; padding: 1px 4px; border: 0; width: auto; min-width: 0; }
-  #rumblin-view .rb-table td { position: static; background: none; box-shadow: none; padding: 3px 4px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; width: auto; min-width: 0; }
-  #rumblin-view .rb-table td.rb-nm { text-align: left; padding-left: 13px; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 62%; }
-  #rumblin-view .rb-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--row-alt) 70%, transparent); }
+  :is(#rumblin-view, #wp-rosters) table.rb-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.76rem; }
+  :is(#rumblin-view, #wp-rosters) .rb-table th { position: static; background: none; box-shadow: none; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; text-align: center; padding: 1px 4px; border: 0; width: auto; min-width: 0; }
+  :is(#rumblin-view, #wp-rosters) .rb-table td { position: static; background: none; box-shadow: none; padding: 3px 4px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; width: auto; min-width: 0; }
+  :is(#rumblin-view, #wp-rosters) .rb-table td.rb-nm { text-align: left; padding-left: 13px; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 62%; }
+  :is(#rumblin-view, #wp-rosters) .rb-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--row-alt) 70%, transparent); }
   /* Name shrinks (with an ellipsis) before the game time does. */
   .rb-nmwrap { display: flex; align-items: baseline; min-width: 0; }
   .rb-nmwrap .pos-badge { flex-shrink: 0; align-self: center; }
@@ -1289,7 +1289,7 @@
   .rb-meta { flex-shrink: 0; color: var(--text-dim); font-size: 0.64rem; margin-left: 5px; white-space: nowrap; }
   .rb-meta .rb-ms { display: none; }
   /* Time/score/Final sits right beside the actual points, in a fixed spot, so names get the whole name column. */
-  #rumblin-view .rb-table td.rb-act { text-align: right; }
+  :is(#rumblin-view, #wp-rosters) .rb-table td.rb-act { text-align: right; }
   td.rb-act .rb-meta { display: inline-block; min-width: 2.4em; text-align: right; margin: 0 6px 0 0; vertical-align: baseline; }
   .rb-n .nl, .rb-n .nk { display: none; }
   .nk { display: none; }
@@ -1322,9 +1322,9 @@
   .rb-table tr.rb-outrow td.rb-act { color: var(--text); }
   .rb-table td.rb-proj { color: var(--text-dim); }
   /* One fixed row height for every starter, so cards line up whether or not a player is live. */
-  #rumblin-view .rb-table tbody tr:not(.rb-bench-h) td { height: 1.95em; }
+  :is(#rumblin-view, #wp-rosters) .rb-table tbody tr:not(.rb-bench-h) td { height: 1.95em; }
   .rb-table .pos-badge { min-width: 2.4em; margin-right: 5px; font-size: 0.58rem; }
-  #rumblin-view .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
+  :is(#rumblin-view, #wp-rosters) .rb-table tr.rb-bench-h td { text-align: left; padding: 5px 13px 2px; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); border-top: 1px dashed var(--panel-border); }
   .rb-table tfoot td { border-top: 1px solid var(--panel-border) !important; font-weight: 700; padding: 5px 4px 7px; }
   .rb-table tfoot td.rb-nm { color: var(--text-dim); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
   .rb-grid.compact { --rb-cardw: 190px; }
@@ -1368,7 +1368,7 @@
     .rb-grid.compact .rb-season b { font-size: 0.72rem; }
     .rb-grid.compact .rb-season small { display: inline; font-size: 0.52rem; }
     .rb-grid.compact .rb-season small::before { content: "\00b7  "; }
-    #rumblin-view .rb-compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
+    :is(#rumblin-view, #wp-rosters) .rb-compact .rb-table td.rb-nm { padding-left: 9px; width: 75%; }
     .rb-compact .rb-table .pos-badge { display: none; }
     .rb-compact .rb-table td.rb-proj, .rb-compact .rb-table tfoot td:nth-child(3) { display: none; }
     .rb-grid.totals { --rb-cardw: 150px; }
@@ -1589,6 +1589,14 @@
   .wp-proj .wp-proj-n { font-size: 1.25rem; font-weight: 800; color: var(--c, var(--accent)); line-height: 1.1; } .wp-proj .wp-proj-d { font-size: 0.82rem; color: var(--text); margin-top: 3px; } .wp-proj .wp-proj-d strong { font-size: 1.15em; color: var(--c, var(--accent)); }
   .wp-tapnote { margin-top: 4px; font-size: 0.72rem; font-weight: 700; color: var(--accent); } .wp-tapnote span { font-weight: 400; color: var(--text-dim); } .wp-tapnote button { margin-left: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
   .wp-xlink { display: block; margin-top: 3px; font-size: 0.7rem; color: var(--accent); text-decoration: none; } .wp-xlink:hover { text-decoration: underline; }
+  .wp-rosters { position: absolute; inset: 0; z-index: 12; box-sizing: border-box; padding: 8px 8px 10px; overflow: auto; border-radius: 10px; background: color-mix(in srgb, var(--panel) 97%, transparent); border: 1px solid var(--panel-border); animation: wp-fadein 0.35s ease-out both; }
+  @keyframes wp-fadein { from { opacity: 0; } to { opacity: 1; } }
+  .wp-rosters[hidden] { display: none; }
+  .wp-ro-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; } .wp-ro-h b { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); }
+  .wp-ro-x { border: 1px solid var(--panel-border); background: transparent; color: var(--text); border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 1rem; line-height: 1; }
+  /* a finished week has only actual points: no projection column or line, and no season record (a past week has none on file) */
+  .wp-rosters .rb-p, .wp-rosters .rb-season, .wp-rosters td.rb-proj, .wp-rosters th:nth-child(3), .wp-rosters tfoot td:nth-child(3), .wp-rosters .rb-epa { display: none; }
+  .wp-rosters .rb-grid { grid-template-columns: 1fr 1fr; gap: 8px; --rb-cardw: 150px; } .wp-rosters .rb-card { min-width: 0; }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
@@ -1612,7 +1620,7 @@
   .wp-btns { display: flex; gap: 6px; flex-shrink: 0; }
   .wp-btns button { min-width: 34px; padding: 6px 11px; }
   @media (max-width: 700px) { .wp-btns button { padding: 5px 9px; font-size: 0.72rem; } .wp-title small { display: block; margin: 1px 0 0; } }
-  .wp-body { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+  .wp-body { display: flex; flex-direction: column; gap: 10px; align-items: stretch; position: relative; }
   .wp-chartwrap { position: relative; flex: 0 0 auto; width: 100%; min-width: 0; touch-action: pan-y; }
   .wp-chartwrap svg { display: block; max-width: 100%; }
   .wp-side { width: 100%; min-width: 0; }
@@ -1950,11 +1958,11 @@
   <div class="wp-card">
     <div class="wp-head">
       <div class="wp-ttl"><a class="wp-brand" id="wp-brand" href="rumbles.html" hidden>Rumble Central &rsaquo;</a><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div><div class="wp-ticker" id="wp-ticker" hidden></div></div>
-      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
+      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-rosters-btn" class="refresh-btn" title="Both starting rosters with their points">Rosters</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
       <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
-      <div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
+      <div class="wp-rosters" id="wp-rosters" hidden></div><div class="wp-side"><div class="wp-listh" id="wp-listh">Biggest swings</div><div class="wp-list" id="wp-list"></div><p class="wp-hint">Notches along the bottom are scoring plays. Hover or drag across the chart for the score and win probability at any moment; stop on a notch to see the play.</p></div>
     </div>
   </div>
 </div>
@@ -6775,8 +6783,14 @@
     });
     document.getElementById("wp-share").addEventListener("click", function () { wpShare(); });
     document.getElementById("wp-replay").addEventListener("click", function () { wpPlayStart(); });
+    document.getElementById("wp-rosters-btn").addEventListener("click", function () {
+      var pm = wpOpenKey && wpPairs[wpOpenKey], el = document.getElementById("wp-rosters");
+      if (!pm) return;
+      if (!el.hidden) { el.hidden = true; return; }
+      wpPlayStop(); wpRostersShow(pm);
+    });
     document.getElementById("wp-sheet").addEventListener("click", function (e) { if (e.target.id === "wp-sheet") wpClose(); });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && wpOpenKey) wpClose(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && wpOpenKey) { var ro = document.getElementById("wp-rosters"); if (ro && !ro.hidden) ro.hidden = true; else wpClose(); } });
     chart.addEventListener("pointermove", wpHover);
     chart.addEventListener("pointerdown", wpHover);
     chart.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") wpHoverOff(); });
@@ -8431,7 +8445,18 @@
     el.hidden = false;
     var wrap = document.getElementById("wp-chartwrap"); wrap.style.setProperty("--c", col); wrap.classList.remove("wp-flash"); void wrap.offsetWidth; wrap.classList.add("wp-flash");
   }
-  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
+  // Both starting rosters as their compact Rumblin' cards for that week, laid over the chart once a replay has run out (or from the Rosters button).
+  function wpRostersShow(pm) {
+    var el = document.getElementById("wp-rosters");
+    if (!pm || !el || !pm.me.players || !pm.t.players) return;
+    var a = pm.model.at(pm.model.end), meWins = a.my >= a.th;
+    function card(t, col, win) { return '<div class="rb-card' + (win ? " me" : "") + '" style="--c:' + col + '">' + rbCardHtml(t) + "</div>"; }
+    el.innerHTML = '<div class="wp-ro-h"><b>Starting rosters' + (pm.done ? " \u00b7 final" : "") + '</b><button type="button" class="wp-ro-x" aria-label="Close rosters">&times;</button></div><div class="rb-grid compact rb-compact">' + card(pm.me, wpResolve(pm.col.mine), meWins && pm.done) + card(pm.t, wpResolve(pm.col.theirs), !meWins && pm.done) + "</div>";
+    if (pm.done) { var wc = el.querySelectorAll(".rb-card")[meWins ? 0 : 1].querySelector(".rb-chips"); if (wc) wc.insertAdjacentHTML("beforeend", '<span class="rb-you">WINNER</span>'); }
+    el.querySelector(".wp-ro-x").onclick = function () { el.hidden = true; };
+    el.scrollTop = 0; el.hidden = false;
+  }
+  function wpPopHide() { var e = document.getElementById("wp-pop"); if (e) e.hidden = true; var pj = document.getElementById("wp-proj"); if (pj) pj.hidden = true; var ro = document.getElementById("wp-rosters"); if (ro) ro.hidden = true; var rd = document.getElementById("wp-read"); if (rd) rd.hidden = true; var c = document.getElementById("wp-clutch"); if (c) c.hidden = true; }
   // The winner's picture pops at the end of the line.
   function wpPop(pm) {
     var g = wpGeom, host = document.getElementById("wp-chart"), el = document.getElementById("wp-pop");
@@ -8553,7 +8578,7 @@
       if (p >= 1) {
         // a beat at the end: the winner's picture pops on the end of the line, then the whole week is shown
         if (!hold) { hold = now; wpPop(pm); document.getElementById("wp-clutch").hidden = true; }
-        else if (now - hold > 2200) { wpPlayStop(); return; }
+        else if (now - hold > 2200) { wpPlayStop(); if (pm.done) wpRostersShow(pm); return; }
         wpPlay.raf = requestAnimationFrame(frame); return;
       }
       if (!paused && queue.length) {
