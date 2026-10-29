@@ -401,6 +401,25 @@ def match_stacked(plays: list[dict], by_player: dict[str, list[dict]], cache: di
     return out
 
 
+def is_stacked(clip: dict | None) -> bool:
+    return bool(clip) and (clip.get("c") or "").upper().startswith("STACKED")
+
+
+def merge_stacked(base: dict | None, stacked: dict, embed: bool) -> dict:
+    """The clip kept for a play that has an exact STACKED chapter: with embedding allowed it plays first and the other clip is its
+    fallback; otherwise the clip that can play stays first and the exact moment is carried as `x` (a link, and the "Watch on YouTube" target)."""
+    if not base or is_stacked(base):
+        return stacked
+    core = {k: v for k, v in base.items() if k not in ("alt", "x")}
+    if embed:
+        out = dict(stacked)
+        out["alt"] = [core] + list(base.get("alt") or [])
+        return out
+    out = dict(base)
+    out["x"] = {k: v for k, v in stacked.items() if k != "chap"}
+    return out
+
+
 def video_id(ref: str) -> str | None:
     m = re.search(r"(?:v=|youtu\.be/|embed/|shorts/)([\w-]{11})", ref or "") or re.fullmatch(r"([\w-]{11})", (ref or "").strip())
     return m.group(1) if m else None
@@ -686,6 +705,10 @@ def run(root: str = HERE, force: bool = False) -> None:
             u["embeddable"] = False   # not looked up yet (quota): not offered until it has been
     # an archived week is only marked done once every channel has been read all the way back
     wsig = sig if complete else "partial"
+    try:
+        stacked_embed = bool(json.load(open(os.path.join(root, "clip_channels.json"))).get("stackedEmbed"))
+    except Exception:  # noqa: BLE001
+        stacked_embed = False
     manual = []
     try:
         manual = json.load(open(os.path.join(root, "clips_manual.json")))
@@ -707,20 +730,22 @@ def run(root: str = HERE, force: bool = False) -> None:
         except Exception:  # noqa: BLE001
             have, tried = {}, set()
         plays = plays_by_week[(d, w)]
-        # STACKED's film videos give the exact play and where it ends: they come first and win over anything found another way
+        found = match_plays([p for p in plays if p["key"] not in have or is_stacked(have[p["key"]])], uploads, doc["t0"])
+        have.update(found)
+        # STACKED's film videos give the exact play and where it ends. Their uploads often refuse to play inside another site, so unless
+        # clip_channels.json says "stackedEmbed": true the clip that does play stays first and the exact moment rides along as a link.
         by_player = stacked_videos(uploads, int(doc.get("season") or 0), w)
         if by_player:
             try:
                 fetch_chapters(q, cache, [u["id"] for us in by_player.values() for u in us])
                 st_found = match_stacked(plays, by_player, cache, doc)
-                have.update(st_found)
+                for k, sc in st_found.items():
+                    have[k] = merge_stacked(have.get(k), sc, stacked_embed)
                 vids_n = [u["id"] for us in by_player.values() for u in us]
                 with_plays = sum(1 for v in vids_n if any(stacked_chapter(t) for _, t in (cache.get("chap", {}).get(v) or [])))
                 print(f"[info] STACKED week {w}: {len(vids_n)} film videos, {with_plays} with play chapters, {len(st_found)} play(s) matched")
             except QuotaOut as e:
                 print(f"[warn] {e}; STACKED chapters resume on a later run", file=sys.stderr)
-        found = match_plays([p for p in plays if p["key"] not in have], uploads, doc["t0"])
-        have.update(found)
         results.append((d, w, doc, have, tried, plays, len(found)))
     # chapters of longer highlight videos for the plays no short clip covered
     try:

@@ -241,6 +241,18 @@ def test_a_receiver_without_his_own_video_is_found_in_his_quarterbacks():
     assert "pass to K.Walker" not in got["1:5900"]["t"]
 
 
+def test_a_stacked_clip_that_cannot_embed_rides_along_as_a_link():
+    st = {"id": "S", "s": 99, "e": 110, "t": "Q3 9.36 25y pass", "c": "STACKED Fantasy | Film Breakdowns", "chap": 1}
+    nfl = {"id": "N", "s": 0, "e": 15, "t": "Kelce 25 yard TD", "c": "NFL", "alt": [{"id": "T", "s": 0, "e": 15, "t": "x", "c": "Team"}]}
+    out = C.merge_stacked(nfl, st, False)
+    assert out["id"] == "N" and out["x"]["id"] == "S" and out["x"]["s"] == 99 and "chap" not in out["x"] and out["alt"][0]["id"] == "T", out
+    assert C.merge_stacked(None, st, False) == st, "with nothing else to play, the STACKED clip is the clip (the page falls back to its link)"
+    on = C.merge_stacked(nfl, st, True)
+    assert on["id"] == "S" and [a["id"] for a in on["alt"]] == ["N", "T"] and "alt" not in on["alt"][0], on
+    assert C.merge_stacked(C.merge_stacked(nfl, st, False), st, False)["x"]["id"] == "S", "merging again changes nothing"
+    assert C.is_stacked(st) and not C.is_stacked(nfl)
+
+
 def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 

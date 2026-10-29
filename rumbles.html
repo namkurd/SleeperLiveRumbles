@@ -1583,6 +1583,7 @@
   .wp-proj .wp-proj-av { position: relative; width: 52px; height: 52px; margin: 0 auto 6px; } .wp-proj img, .wp-proj .wp-proj-i { position: absolute; inset: 0; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; background: var(--panel); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-shadow: 0 0 16px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) 0.1s both; }
   .wp-proj i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; animation: wp-ring-s 1.2s ease-out 0.25s both; z-index: -1; } @keyframes wp-ring-s { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.3); opacity: 0; } }
   .wp-proj .wp-proj-n { font-size: 1.25rem; font-weight: 800; color: var(--c, var(--accent)); line-height: 1.1; } .wp-proj .wp-proj-d { font-size: 0.82rem; color: var(--text); margin-top: 3px; } .wp-proj .wp-proj-d strong { font-size: 1.15em; color: var(--c, var(--accent)); }
+  .wp-xlink { display: block; margin-top: 3px; font-size: 0.7rem; color: var(--accent); text-decoration: none; } .wp-xlink:hover { text-decoration: underline; }
   .wp-last[hidden] { display: none; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-last { max-width: 38%; font-size: 0.7rem; } } .wp-sheet.wp-rot .wp-last { max-width: 38%; font-size: 0.7rem; } .wp-last .wl-who { font-weight: 800; color: var(--c); } .wp-last small { color: var(--text-dim); font-size: 0.9em; } .wp-last .wl-none { color: var(--text-dim); }
   /* A shared matchup link opens just that matchup, full screen: the app is out of the way, and "Rumble Central" leads into it. */
@@ -8007,18 +8008,20 @@
     return "https://www.youtube.com/watch?v=" + encodeURIComponent(c.id) + (c.s ? "&t=" + Number(c.s) + "s" : "");
   }
   function wpClipPlay(box, list, i, tries) {
-    var c = list[i], slot = document.createElement("div");
+    var c = list[i], slot = document.createElement("div"), exact = list[0].x || list[0];
     box.innerHTML = ""; box.appendChild(slot);
-    function giveUp() {
-      box.innerHTML = '<div class="wp-clipfail">This clip can\u2019t play here. <a href="' + escapeHtml(wpClipLink(list[0])) + '" target="_blank" rel="noopener">Watch on YouTube</a></div>';
+    // when a film video (STACKED's) names the exact play but cannot play here, the clip that can play comes with a link to the exact moment
+    if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; box.appendChild(xa); }
+    function giveUp(code) {
+      box.innerHTML = '<div class="wp-clipfail">This clip can\u2019t play here. <a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube</a>' + (code ? " <small>(error " + escapeHtml(String(code)) + ")</small>" : "") + "</div>";
     }
-    function next() { if (i + 1 < list.length) wpClipPlay(box, list, i + 1, tries); else giveUp(); }
+    function next(code) { if (i + 1 < list.length) wpClipPlay(box, list, i + 1, tries); else giveUp(code); }
     wpYtApi().then(function (YT) {
       if (!box.parentNode) return;
       var pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: c.id, width: "100%", height: "100%",
         playerVars: { autoplay: 1, start: Number(c.s) || 0, end: Number(c.e) || 15, playsinline: 1, rel: 0, modestbranding: 1 },
         events: { onReady: function (e) { try { e.target.playVideo(); } catch (x) { /* autoplay may need a tap */ } },
-          onError: function () { try { pl.destroy(); } catch (x) { /* gone already */ } if (box.parentNode) next(); } } });
+          onError: function (ev) { try { pl.destroy(); } catch (x) { /* gone already */ } if (box.parentNode) next(ev && ev.data); } } });
     }, function () {
       // no player API (blocked or offline): a plain embed, which cannot report a refusal
       box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(c.id) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1&start=" + (Number(c.s) || 0) + "&end=" + (Number(c.e) || 15) +
