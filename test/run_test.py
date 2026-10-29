@@ -4077,7 +4077,7 @@ def scenario_past_seasons(browser):
     played, failed = None, None
     for i in range(nclip):
         pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(500)
-        st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-clipfail a') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
+        st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-clipfail a, #wp-list .wp-clipnote a') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
         assert st["n"] == 1, "one clip open at a time"
         played = played or (st["src"] if st["src"] else None)
         failed = failed or (st["link"] if st["link"] else None)

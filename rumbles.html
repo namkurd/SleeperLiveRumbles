@@ -8099,17 +8099,20 @@
     box.innerHTML = ""; box.appendChild(slot);
     // when a film video (STACKED's) names the exact play but cannot play here, the clip that can play comes with a link to the exact moment
     if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; box.appendChild(xa); }
+    // the last candidate keeps YouTube's own player box (and its Watch on YouTube button); a small line below links the exact moment
     function giveUp(code) {
-      box.innerHTML = '<div class="wp-clipfail">This clip can\u2019t play here. <a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube</a>' + (code ? " <small>(error " + escapeHtml(String(code)) + ")</small>" : "") + "</div>";
+      if (box.querySelector(".wp-clipnote")) return;
+      var n = document.createElement("div"); n.className = "wp-tapnote wp-clipnote";
+      n.innerHTML = '<a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube \u2197</a>' + (code ? " <small>(error " + escapeHtml(String(code)) + ")</small>" : "");
+      box.appendChild(n);
     }
-    function next(code) { if (i + 1 < list.length) wpClipPlay(box, list, i + 1, tries); else giveUp(code); }
     wpYtApi().then(function (YT) {
       if (!box.parentNode) return;
       var pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: c.id, width: "100%", height: "100%",
         playerVars: { autoplay: 1, start: Number(c.s) || 0, end: Number(c.e) || 15, playsinline: 1, rel: 0, modestbranding: 1 },
         events: { onReady: function (e) { try { e.target.playVideo(); } catch (x) { /* autoplay may need a tap */ } },
           onStateChange: function (ev) { if (ev && (ev.data === 1 || ev.data === 3)) started = true; },
-          onError: function (ev) { try { pl.destroy(); } catch (x) { /* gone already */ } if (box.parentNode) next(ev && ev.data); } } });
+          onError: function (ev) { if (!box.parentNode) return; if (i + 1 < list.length) { try { pl.destroy(); } catch (x) { /* gone already */ } wpClipPlay(box, list, i + 1, tries); } else giveUp(ev && ev.data); } } });
       // a player that shows only a black box (it can happen) still gets a way out
       setTimeout(function () {
         if (started || !box.parentNode || box.querySelector(".wp-clipfail, .wp-clipnote")) return;
