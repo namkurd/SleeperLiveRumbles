@@ -1619,7 +1619,9 @@
   @keyframes wp-pop { 0% { transform: scale(1); } 35% { transform: scale(1.7); } 100% { transform: scale(1); } }
   .wp-clipbox.auto { background: #000; border-radius: 8px; padding: 0; }
   .wp-clipfloat { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(80%, 520px); background: var(--panel); border-radius: 10px; border: 1px solid var(--panel-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); padding: 0; }
-  .wp-clipfloat .wp-xlink { position: absolute; left: 0; top: 100%; margin-top: 4px; padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--panel-border); white-space: nowrap; }
+  .wp-clipfloat .wp-clipcap { position: absolute; left: 0; top: 100%; margin-top: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .wp-clipfloat .wp-clipcap > * { padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--panel-border); white-space: nowrap; margin: 0; }
+  .wp-clipfloat.err { width: min(94%, 600px); } .wp-clipfloat.err .wp-clipbox iframe { aspect-ratio: auto; height: 300px; }
   .wp-clipfloat .wp-clipbox, .wp-clipfloat .wp-clipbox.auto { padding: 0; background: transparent; } .wp-clipfloat .wp-clipfail, .wp-clipfloat .wp-tapnote, .wp-clipfloat .wp-xlink, .wp-clipfloat .wp-find { padding: 8px 10px; color: var(--text); }
   .wp-clipx { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; z-index: 2; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
@@ -1649,7 +1651,7 @@
   @keyframes wp-glow { 0%, 100% { box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 75%, transparent); } }
   @media (prefers-reduced-motion: reduce) { .wp-play { animation: none; } }
   .wp-list li.wp-clipbox { display: block; padding: 4px 0 8px; border-top: 0; }
-  .wp-clipbox > div:not(.wp-clipfail):not(.wp-find):not(.wp-tapnote) { aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
+  .wp-clipbox > div:not(.wp-clipfail):not(.wp-find):not(.wp-tapnote):not(.wp-clipcap) { aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
   .wp-clipfail { padding: 10px 12px; border-radius: 8px; background: var(--panel-border); font-size: 0.78rem; }
   .wp-clipfail a { color: var(--accent); font-weight: 700; }
   .wp-clipbox iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
@@ -8159,10 +8161,11 @@
     return "https://www.youtube.com/watch?v=" + encodeURIComponent(c.id) + (c.s ? "&t=" + Number(c.s) + "s" : "");
   }
   function wpClipPlay(box, list, i, tries) {
-    var c = list[i], slot = document.createElement("div"), exact = list[0].x || list[0], started = false;
+    var c = list[i], slot = document.createElement("div"), exact = list[0].x || list[0], started = false, failed = false;
     box.innerHTML = ""; box.appendChild(slot);
     // when a film video (STACKED's) names the exact play but cannot play here, the clip that can play comes with a link to the exact moment
-    if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; box.appendChild(xa); }
+    var cap = document.createElement("div"); cap.className = "wp-clipcap"; box.appendChild(cap);   // credit and notes live here, never over the player
+    if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; cap.appendChild(xa); }
     // the last candidate keeps YouTube's own player box, which carries its own Watch on YouTube button
     function giveUp() { /* nothing to add */ }
     wpYtApi().then(function (YT) {
@@ -8171,13 +8174,17 @@
         playerVars: { autoplay: 1, start: Number(c.s) || 0, end: Number(c.e) || 15, playsinline: 1, rel: 0, modestbranding: 1 },
         events: { onReady: function (e) { try { e.target.playVideo(); } catch (x) { /* autoplay may need a tap */ } },
           onStateChange: function (ev) { if (ev && (ev.data === 1 || ev.data === 3)) started = true; },
-          onError: function (ev) { if (!box.parentNode) return; if (i + 1 < list.length) { try { pl.destroy(); } catch (x) { /* gone already */ } wpClipPlay(box, list, i + 1, tries); } else giveUp(ev && ev.data); } } });
+          onError: function (ev) {
+            if (!box.parentNode) return;
+            if (i + 1 < list.length) { try { pl.destroy(); } catch (x) { /* gone already */ } wpClipPlay(box, list, i + 1, tries); }
+            else { failed = true; var nn = cap.querySelector(".wp-clipnote"); if (nn) nn.remove(); if (box.parentNode.classList) box.parentNode.classList.add("err"); box.classList.add("err"); }   // YouTube's own message and button get the room they need
+          } } });
       // a player that shows only a black box (it can happen) still gets a way out
       setTimeout(function () {
-        if (started || !box.parentNode || box.querySelector(".wp-clipfail, .wp-clipnote")) return;
+        if (started || failed || !box.parentNode || box.querySelector(".wp-clipfail, .wp-clipnote")) return;
         var n = document.createElement("div"); n.className = "wp-tapnote wp-clipnote";
         n.innerHTML = 'Not loading? <a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube \u2197</a>';
-        box.appendChild(n);
+        cap.appendChild(n);
       }, 6000);
     }, function () {
       // no player API (blocked or offline): a plain embed, which cannot report a refusal
