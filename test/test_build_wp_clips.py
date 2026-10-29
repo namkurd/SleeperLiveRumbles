@@ -220,7 +220,7 @@ def test_stacked_film_chapters_give_the_exact_play_and_where_it_ends():
         "v2": [[10, "Intro"], [200, "Q3 9.40 25y pass to T.Kelce"], [240, "Q3 3.05 9y run"], [250, "Q4 1.00 2y run"]]}}
     got = C.match_stacked(plays, by, cache, doc)
     k = got["1:5900"]
-    assert k["id"] == "v1" and k["s"] == 299 and k["e"] == 319.5 and k.get("chap"), f"his own video, from the snap to the next play: {k}"
+    assert k["id"] == "v1" and k["s"] == 301 and k["e"] == 319.5 and k.get("chap"), f"his own video, from a second into the chapter to the next play: {k}"
     assert "1:1000" not in got, "no chapter has this play's 40 yards"
     assert got["2:7000"]["id"] == "v2", got
     cache["vid"]["v1"] = [600, 0]
@@ -237,7 +237,7 @@ def test_a_receiver_without_his_own_video_is_found_in_his_quarterbacks():
     by = C.stacked_videos([qb], 2026, 3)
     cache = {"vid": {"q": [900, 1]}, "chap": {"q": [[10, "Intro"], [200, "Q3 9.36 25y pass to J.Smith-Njigba"], [215, "Q3 8.50 4y pass to K.Walker"], [230, "Q4 1.00 2y run"]]}}
     got = C.match_stacked(plays, by, cache, doc)
-    assert got["1:5900"]["id"] == "q" and got["1:5900"]["s"] == 199 and got["1:5900"]["e"] == 214.5, got
+    assert got["1:5900"]["id"] == "q" and got["1:5900"]["s"] == 201 and got["1:5900"]["e"] == 214.5, got
     assert "pass to K.Walker" not in got["1:5900"]["t"]
 
 

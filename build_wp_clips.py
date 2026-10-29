@@ -48,6 +48,7 @@ DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a d
 BUDGET = 6500                               # YouTube API units a run may spend (the free daily quota is 10,000)
 MAX_SEARCHES = 40                            # YouTube searches (100 units each) a run may spend on plays no upload matched
 SEARCH_TOP = 12                              # only a week's biggest plays are worth a search
+STACKED_VER = 2                              # bump when how a STACKED clip is cut changes: every week redoes just those clips once
 MATCHER = 5                                  # bump when the matching rules change: earlier matches are then thrown away and redone
 SKIP = re.compile(r"scoring adjustment|^latest$|^$|points?,? .*allowed|-and-out|-down stop|extra point|^\d+-pt|tackle for loss", re.I)
 
@@ -392,7 +393,7 @@ def match_stacked(plays: list[dict], by_player: dict[str, list[dict]], cache: di
                     best = (score, u, i, csec, text, chaps, info[0])
         if best:
             _, u, i, csec, text, chaps, dur = best
-            st = max(0, csec - 1)
+            st = csec + 1   # a second into the chapter: the lead-in before the snap is cut
             nxt = chaps[i + 1][0] if i + 1 < len(chaps) else None
             en = nxt - 0.5 if nxt is not None and 4 <= nxt - st <= 30 else st + 14
             if dur:
@@ -657,7 +658,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
                 old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
-                done_before = old.get("chs") == sig and old.get("mv") == MATCHER
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -790,7 +791,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "chs": wsig, "mv": MATCHER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))

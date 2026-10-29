@@ -1907,7 +1907,7 @@ that carries `&t=` and opens on that moment. On a phone held upright, the replay
 ### Play clips
 
 
-STACKED Fantasy's film videos are the first source tried: each week they publish one per player ("Tyler Shough: Every Dropback of 2026 Week 2 | Full Film Compilation") whose chapters are the plays ("Q3 13.07 25y pass to J.Johnson"). The player and week come from the title; the play is found from the quarter, game clock and yardage (the page's own timeline gives each scoring play's game clock); the clip runs from the snap to the next chapter. Anything found this way replaces a match from any other source. The nightly log prints a `STACKED week N` line saying how many videos had play chapters and how many plays matched.
+STACKED Fantasy's film videos are the first source tried: each week they publish one per player ("Tyler Shough: Every Dropback of 2026 Week 2 | Full Film Compilation") whose chapters are the plays ("Q3 13.07 25y pass to J.Johnson"). The player and week come from the title; the play is found from the quarter, game clock and yardage (the page's own timeline gives each scoring play's game clock); the clip runs from one second into the chapter to the next chapter. Anything found this way replaces a match from any other source. The nightly log prints a `STACKED week N` line saying how many videos had play chapters and how many plays matched.
 In a finished week's expanded chart, each of the "biggest swings" can be tapped (or its number on the chart). If it has an
 official highlight, YouTube's own player opens under it and plays 15 seconds (`start`/`end` on the embed; nothing is
 downloaded or re-hosted). Some uploads refuse to play outside YouTube (the NFL's own often do); the player reports it and
