@@ -4111,6 +4111,8 @@ def scenario_past_seasons(browser):
     assert "clip:start:abc123XYZ00" in ev["events"] and "clip:end" in ev["events"], f"a swing with a playable clip plays it during the replay: {ev}"
     assert ev["pv"]["mute"] == 1 and ev["pv"]["autoplay"] == 1, f"...muted: {ev}"
     assert "Replay" in ev["label"] and ev["boxes"] == 0 and ev["wait"] == 0, f"...and the replay finished with every video collapsed: {ev}"
+    assert pg.evaluate("/H2H, 10 Rumbles|Field, 1 Rumble/.test(document.getElementById('wp-sub').textContent)") if pg.evaluate("!!document.getElementById('wp-sub')") else True, "the matchup says how many Rumbles it is worth"
+    assert pg.evaluate("[...document.querySelectorAll('#rb-scen-view .sc-blk .sc-bh')].every(h => !/ pts?\\b/.test(h.textContent))"), "the badges count Rumbles, not points"
     gb = pg.evaluate("({ok: document.querySelectorAll('#wp-list .wp-play.ok').length, okEmb: document.querySelectorAll('#wp-list li[data-emb=\"1\"]').length, bad: document.querySelectorAll('#wp-list .wp-play.bad').length, glow: [...document.querySelectorAll('#wp-list .wp-play')].every(e => getComputedStyle(e).animationName === 'wp-glow'), green: [...document.querySelectorAll('#wp-list .wp-play.ok')].every(e => getComputedStyle(e).color === 'rgb(46, 204, 113)'), orange: [...document.querySelectorAll('#wp-list .wp-play:not(.ok)')].every(e => getComputedStyle(e).color !== 'rgb(46, 204, 113)')})")
     assert gb["ok"] >= 1 and gb["ok"] == gb["okEmb"] and gb["bad"] >= 1, f"clips proven to play here are marked, and so are those that cannot: {gb}"
     assert gb["glow"] and gb["green"] and gb["orange"], f"green glowing = plays in the page; orange glowing = opens on YouTube: {gb}"

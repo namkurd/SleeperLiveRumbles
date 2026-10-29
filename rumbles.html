@@ -1579,7 +1579,7 @@
   .wp-bigp { font-size: 1.55em; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; }
   /* While a replay is about to start or is playing, the result stays out of sight: the title's score line, the story, and (before it starts) the chart and the swings. */
   .wp-blind #wp-sub, .wp-blind #wp-story { visibility: hidden; } .wp-prep #wp-chart svg, .wp-prep #wp-list, .wp-prep #wp-listh { visibility: hidden; }
-  .wp-read { position: absolute; z-index: 5; box-sizing: border-box; text-align: center; white-space: nowrap; padding: 3px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); font-size: 0.85rem; font-variant-numeric: tabular-nums; pointer-events: none; overflow: hidden; text-overflow: ellipsis; } .wp-read[hidden] { display: none; } .wp-read span { margin-left: 4px; } .wp-read .wp-rn { margin-left: 0; font-weight: 600; } .wp-read .wp-rn b { font-weight: 800; }
+  .wp-read { position: absolute; z-index: 5; box-sizing: border-box; text-align: center; white-space: nowrap; padding: 3px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent-2) 14%, var(--panel)); font-size: 0.85rem; font-variant-numeric: tabular-nums; pointer-events: none; overflow: hidden; } .wp-read[hidden] { display: none; } .wp-read span { margin-left: 4px; } .wp-read .wp-rn { margin-left: 0; font-weight: 600; } .wp-read .wp-rn b { font-weight: 800; }
   @media (max-height: 500px) and (orientation: landscape) { .wp-read { font-size: 0.72rem; padding: 2px 8px; } }
   .wp-sheet.wp-rot .wp-read { font-size: 0.72rem; padding: 2px 8px; }
   .wp-proj { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 86%; padding: 12px 22px 14px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c, var(--accent)) 26%, transparent), 0 14px 44px rgba(0,0,0,0.6); pointer-events: none; animation: wp-clutch-in 0.45s cubic-bezier(.2,1.4,.4,1) both; }
@@ -1619,6 +1619,7 @@
   @keyframes wp-pop { 0% { transform: scale(1); } 35% { transform: scale(1.7); } 100% { transform: scale(1); } }
   .wp-clipbox.auto { background: #000; border-radius: 8px; padding: 0; }
   .wp-clipfloat { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(80%, 520px); background: var(--panel); border-radius: 10px; border: 1px solid var(--panel-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); padding: 0; }
+  .wp-clipfloat .wp-xlink { position: absolute; left: 0; top: 100%; margin-top: 4px; padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--panel-border); white-space: nowrap; }
   .wp-clipfloat .wp-clipbox, .wp-clipfloat .wp-clipbox.auto { padding: 0; background: transparent; } .wp-clipfloat .wp-clipfail, .wp-clipfloat .wp-tapnote, .wp-clipfloat .wp-xlink, .wp-clipfloat .wp-find { padding: 8px 10px; color: var(--text); }
   .wp-clipx { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; z-index: 2; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
@@ -7491,7 +7492,7 @@
         wp = Math.max(1, Math.min(99, wp));
         var wpTxt = over ? (gap > 0.004 ? "Won" : gap < -0.004 ? "Lost" : "Tied") : lockedUp ? "Clinched" : lockedOut ? "Out of reach" : wp + "% to win";
         if (over) wp = gap > 0.004 ? 100 : gap < -0.004 ? 0 : 50;
-        blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + (h2h ? " h2h" : "") + '"' + (decided ? ' data-decided="1"' : "") + '><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 9 pts" : "Field · 1 pt") + '</span>' +
+        blocks.push('<section class="sc-blk' + (settled ? " sc-done" : "") + (h2h ? " h2h" : "") + '"' + (decided ? ' data-decided="1"' : "") + '><div class="sc-bh"><div><span class="sc-vs">vs.</span> <b style="color:' + col + '">' + escapeHtml(t.name) + '</b> <span class="sc-chip' + (h2h ? " h2h" : "") + '">' + (h2h ? "H2H · 10 Rumbles" : "Field · 1 Rumble") + '</span>' +
           '<div class="sc-hl" title="' + escapeHtml(text) + '">' + escapeHtml(text) + "</div></div>" +
           '<div class="sc-gap ' + cls + '"><span>' + label + "</span><b>" + fl("sc:" + me.rid + ":" + t.rid + ":gap", gap === 0 ? "0.00" : Math.abs(gap).toFixed(2)) + '</b><em class="sc-wp ' + (wp >= 55 ? "ok" : wp <= 45 ? "bad" : "even") + '" title="Rough chance you win this Rumble, from the gap and what the remaining players are projected to add">' + wpTxt + "</em></div></div>" +
           mini.html +
@@ -7613,7 +7614,7 @@
       var cols = rbPairCols(r.a, r.b), mini = wpMiniHtml(win, r.a, r.b, cols), pm = r.pm, last = pm.model.at(pm.model.end);
       var cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
       var verdict = pm.done ? (last.my > last.th + 0.004 ? r.a.name + " won" : last.th > last.my + 0.004 ? r.b.name + " won" : "Tied") : "Live";
-      return '<section class="sc-blk best' + (r.h2h ? " h2h" : "") + '"><div class="sc-bh"><div><span class="sc-rk">#' + (i + 1) + '</span><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip' + (r.h2h ? " h2h" : "") + '">' + (r.h2h ? "H2H · 9 pts" : "Field · 1 pt") + "</span>" +
+      return '<section class="sc-blk best' + (r.h2h ? " h2h" : "") + '"><div class="sc-bh"><div><span class="sc-rk">#' + (i + 1) + '</span><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip' + (r.h2h ? " h2h" : "") + '">' + (r.h2h ? "H2H · 10 Rumbles" : "Field · 1 Rumble") + "</span>" +
         '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + escapeHtml(r.it.why.join(" \u00b7 ")) + "</div></div>" +
         '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + "</section>";
     }).join("");
@@ -7974,7 +7975,7 @@
     var me = pm.me, t = pm.t, last = pm.model.at(pm.model.end), gap = last.my - last.th, h2h = t.rid === me.opp;
     var scores = escapeHtml(me.name) + " " + last.my.toFixed(2) + " – " + last.th.toFixed(2) + " " + escapeHtml(t.name);
     var verdict = pm.done ? (gap > 0.004 ? "You won" : gap < -0.004 ? "You lost" : "A tie") : wpPct(pm.pEnd) + "% to win";
-    return { title: escapeHtml(me.name) + " vs. " + escapeHtml(t.name), sub: scores + " · " + verdict + " · " + (h2h ? "H2H, 9 pts" : "Field, 1 pt") + (pm.approx ? " · approximate" : "") };
+    return { title: escapeHtml(me.name) + " vs. " + escapeHtml(t.name), sub: scores + " · " + verdict + " · " + (h2h ? "H2H, 10 Rumbles" : "Field, 1 Rumble") + (pm.approx ? " · approximate" : "") };
   }
 
   // How many times the lead changed hands (a side counts as ahead above 60% or below 40%, so a wobble around 50% is not a change).
@@ -8160,13 +8161,8 @@
     box.innerHTML = ""; box.appendChild(slot);
     // when a film video (STACKED's) names the exact play but cannot play here, the clip that can play comes with a link to the exact moment
     if (list[0].x) { var xa = document.createElement("a"); xa.className = "wp-xlink"; xa.href = wpClipLink(list[0].x); xa.target = "_blank"; xa.rel = "noopener"; xa.textContent = "Exact play on " + String(list[0].x.c || "YouTube").split("|")[0].trim() + " \u2197"; box.appendChild(xa); }
-    // the last candidate keeps YouTube's own player box (and its Watch on YouTube button); a small line below links the exact moment
-    function giveUp(code) {
-      if (box.querySelector(".wp-clipnote")) return;
-      var n = document.createElement("div"); n.className = "wp-tapnote wp-clipnote";
-      n.innerHTML = '<a href="' + escapeHtml(wpClipLink(exact)) + '" target="_blank" rel="noopener">Watch on YouTube \u2197</a>' + (code ? " <small>(error " + escapeHtml(String(code)) + ")</small>" : "");
-      box.appendChild(n);
-    }
+    // the last candidate keeps YouTube's own player box, which carries its own Watch on YouTube button
+    function giveUp() { /* nothing to add */ }
     wpYtApi().then(function (YT) {
       if (!box.parentNode) return;
       var pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: c.id, width: "100%", height: "100%",
@@ -8459,6 +8455,8 @@
     // along the very top: the time, score and odds, centred, and under it the two managers' last plays side by side (first manager left)
     var x0 = host.offsetLeft + g.ml + 6, avail = g.ml + g.pw + host.offsetLeft - x0 - 4, each = Math.max(80, Math.floor(avail / 2) - 4), y0 = host.offsetTop + g.mt + 2;
     rd.style.left = x0 + "px"; rd.style.width = (2 * each + 8) + "px"; rd.style.top = y0 + "px";
+    // the names are never cut off: the line shrinks to fit its width
+    rd.style.fontSize = ""; if (!rd.hidden) { var rfs = parseFloat(getComputedStyle(rd).fontSize) || 14; while (rd.scrollWidth > rd.clientWidth + 1 && rfs > 7) { rfs -= 0.5; rd.style.fontSize = rfs + "px"; } }
     var y = y0 + (rd.hidden ? 0 : rd.offsetHeight + 4);
     [top, bot].forEach(function (b, i) { b.style.transform = "none"; b.style.maxWidth = each + "px"; b.style.width = each + "px"; b.style.left = (x0 + i * (each + 8)) + "px"; b.style.top = y + "px"; });
     // the first manager's name tag sits just under all of it
