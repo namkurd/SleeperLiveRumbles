@@ -1640,6 +1640,10 @@
   /* the play button of a swing that has a clip: a lit, softly pulsing button so it reads as something to press */
   .wp-play { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.7em; height: 1.7em; padding-left: 0.12em; box-sizing: border-box; border-radius: 50%; font-size: 0.7rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent); text-shadow: 0 0 6px var(--accent); box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 55%, transparent); animation: wp-glow 2.4s ease-in-out infinite; }
   .wp-list li:hover .wp-play, .wp-list li:focus-visible .wp-play { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 80%, transparent); background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  .wp-probe { position: fixed; left: -400px; top: 0; width: 160px; height: 90px; overflow: hidden; pointer-events: none; opacity: 0; }
+  .wp-clipfloat.pending { opacity: 0; pointer-events: none; } li.wp-clipbox.pending { height: 0; overflow: hidden; opacity: 0; margin: 0; padding: 0; }
+  .wp-play.ok { --accent: #2ecc71; color: #2ecc71; } .wp-play.bad { animation: none; box-shadow: none; opacity: 0.55; }
+  .wp-clipnote a, .wp-find a, .wp-xlink { color: var(--accent); }
   @keyframes wp-glow { 0%, 100% { box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 75%, transparent); } }
   @media (prefers-reduced-motion: reduce) { .wp-play { animation: none; } }
   .wp-list li.wp-clipbox { display: block; padding: 4px 0 8px; border-top: 0; }
@@ -8059,6 +8063,7 @@
     sheet.hidden = false;
     wpFitRows();
     if (wpPinT != null) wpShowAt(pm, wpPinT);
+    wpProbeRows();
   }
   // Official NFL clips for a finished week's biggest plays (wp_clips/week_N.json, found nightly), keyed "<sleeper id>:<seconds>".
   var wpClips = {};
@@ -8090,6 +8095,57 @@
       setTimeout(function () { if (!(window.YT && window.YT.Player)) { wpYtLoad = null; reject(new Error("player api timeout")); } }, 8000);
     });
     return wpYtLoad;
+  }
+  // Which clips will play inside the page: each is tried once in a hidden player (an owner that blocks embedding answers with an error), and the answer is kept.
+  var wpEmbed = (function () { try { return JSON.parse(localStorage.getItem("rumbles.embed") || "{}") || {}; } catch (e) { return {}; } })(), wpProbeQ = Promise.resolve();
+  function wpEmbedSave() { try { localStorage.setItem("rumbles.embed", JSON.stringify(wpEmbed)); } catch (e) { /* fine */ } }
+  function wpProbe(id) {
+    if (wpEmbed[id] != null) return Promise.resolve(wpEmbed[id] === 1);
+    return new Promise(function (resolve) {
+      wpYtApi().then(function (YT) {
+        var holder = document.createElement("div"), slot = document.createElement("div"), pl = null, settled = false, timer;
+        holder.className = "wp-probe"; holder.appendChild(slot); document.body.appendChild(holder);
+        function end(ok) {
+          if (settled) return; settled = true; clearTimeout(timer);
+          if (ok != null) { wpEmbed[id] = ok ? 1 : 0; wpEmbedSave(); }
+          try { if (pl) pl.destroy(); } catch (x) { /* gone */ }
+          if (holder.parentNode) holder.parentNode.removeChild(holder);
+          resolve(ok == null ? null : !!ok);
+        }
+        timer = setTimeout(function () { end(null); }, 8000);
+        pl = new YT.Player(slot, { host: "https://www.youtube-nocookie.com", videoId: id, width: "160", height: "90", playerVars: { autoplay: 0, playsinline: 1 },
+          events: { onReady: function () { setTimeout(function () { end(true); }, 1500); }, onError: function () { end(false); } } });
+      }, function () { resolve(null); });
+    });
+  }
+  // known-bad candidates are left out (all bad: kept, so the player's own message and link still show); on a replay an unproven clip is not trusted
+  function wpClipOrder(list, replay) {
+    var good = list.filter(function (c) { return wpEmbed[c.id] === 1; }), unk = list.filter(function (c) { return wpEmbed[c.id] == null; });
+    var out = good.concat(replay ? [] : unk);
+    return out.length ? out : (replay ? [] : list);
+  }
+  function wpRowState(li) {
+    var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
+    var pl = li.querySelector(".wp-play"); if (!c || !pl) return;
+    var l = [c].concat(c.alt || []), ok = l.some(function (x) { return wpEmbed[x.id] === 1; }), bad = l.every(function (x) { return wpEmbed[x.id] === 0; });
+    pl.classList.toggle("ok", ok); pl.classList.toggle("bad", bad);
+    li.setAttribute("data-emb", ok ? "1" : bad ? "0" : "");
+  }
+  function wpProbeRows() {
+    var key = wpOpenKey;
+    [].slice.call(document.querySelectorAll("#wp-list li.has-clip")).sort(function (a, b) { return Number(a.getAttribute("data-t")) - Number(b.getAttribute("data-t")); }).forEach(function (li) {   // in the order a replay reaches them
+      var pm = wpPairs[key], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
+      if (!c) return;
+      wpRowState(li);
+      [c].concat(c.alt || []).forEach(function (x) {
+        wpProbeQ = wpProbeQ.then(function () {
+          if (wpOpenKey !== key || wpEmbed[x.id] != null) return;
+          var row = li.getAttribute("data-emb");
+          if (row === "1") return;   // one that plays is enough for this row
+          return wpProbe(x.id).then(function () { if (wpOpenKey === key) wpRowState(li); });
+        });
+      });
+    });
   }
   function wpClipLink(c) {
     return "https://www.youtube.com/watch?v=" + encodeURIComponent(c.id) + (c.s ? "&t=" + Number(c.s) + "s" : "");
@@ -8163,7 +8219,7 @@
         '<a href="https://x.com/search?q=' + q + '&f=video" target="_blank" rel="noopener">X</a></div>';
       return;
     }
-    wpClipPlay(box, [c].concat(c.alt || []), 0, 0);
+    wpClipPlay(box, wpClipOrder([c].concat(c.alt || []), false), 0, 0);
     if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
   }
   // Every swing keeps the same room and shows all its words: if a play's text needs more height than the row has, the text (not the row)
@@ -8332,8 +8388,10 @@
   function wpPlayClip(li, done) {
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
     if (!c) { done(); return; }
-    var list = [c].concat(c.alt || []), mount = wpClipMount(li), box = mount.box, player = null, dog = 0, finished = false, played = false, touch = window.__wpTouch === true || (!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && window.__wpTouch !== false);
+    var list = wpClipOrder([c].concat(c.alt || []), true), mount = wpClipMount(li), box = mount.box, player = null, dog = 0, finished = false, played = false, touch = window.__wpTouch === true || (!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && window.__wpTouch !== false);
     box.className = "wp-clipbox auto";
+    mount.root.classList.add("pending");   // out of sight until the clip is actually playing: a video that cannot play here never flashes its error panel
+    function reveal() { mount.root.classList.remove("pending"); }
     function finish(early) {
       if (finished) return; finished = true;
       if (wpPlay.clip === finish) wpPlay.clip = null;
@@ -8363,6 +8421,7 @@
               clearTimeout(dog);
               dog = setTimeout(function () {
                 if (!touch || played) { finish(); return; }
+                reveal();
                 var note = document.createElement("div"); note.className = "wp-tapnote";
                 note.innerHTML = 'Tap \u25b6 to watch this play <span>(your phone is not allowing autoplay)</span> <button type="button">Skip</button>';
                 note.querySelector("button").onclick = function () { finish(); };
@@ -8377,7 +8436,7 @@
               if (e.data === 1 && !played) {
                 // It is playing. The clip is as long as the play (end minus start); stop it ourselves at that point, whatever the player
                 // does at the end (a Short may loop), so it can never run on or repeat.
-                played = true; clearTimeout(dog);
+                played = true; clearTimeout(dog); reveal();
                 dog = setTimeout(function () { try { player.pauseVideo(); } catch (x) { /* fine */ } finish(); }, ((Number(cl.e) || 15) - (Number(cl.s) || 0) + 1) * 1000);
               }
             },
