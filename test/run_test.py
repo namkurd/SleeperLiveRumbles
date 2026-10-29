@@ -4080,23 +4080,24 @@ def scenario_past_seasons(browser):
     assert nclip >= 3, f"the biggest swings that have a clip show a play button: {nclip}"
     played, failed = None, None
     for i in range(nclip):
-        pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(500)
+        pg.click(f"#wp-list li.has-clip >> nth={i} >> .wp-play"); pg.wait_for_timeout(500)
         st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-clipfail a, #wp-list .wp-clipnote a') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
         assert st["n"] == 1, "one clip open at a time"
         played = played or (st["src"] if st["src"] else None)
         failed = failed or (st["link"] if st["link"] else None)
-        pg.click(f"#wp-list li.has-clip >> nth={i}"); pg.wait_for_timeout(150)
+        pg.click(f"#wp-list li.has-clip >> nth={i} >> .wp-play"); pg.wait_for_timeout(150)
         assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") == 0, "tapping it again closes it"
     assert played and "youtube-nocookie.com/embed/abc123XYZ00" in played and "autoplay=1" in played and "start=0" in played and "end=15" in played, f"a refused clip falls through to the next one, playing at once: {played}"
     nof = pg.evaluate("document.querySelectorAll('#wp-list li.no-clip').length")
     if nof:
         pg.click("#wp-list li.no-clip >> nth=0"); pg.wait_for_timeout(200)
-        fl_ = pg.evaluate("[...document.querySelectorAll('#wp-list .wp-find a')].map(a => a.href)")
-        assert len(fl_) == 2 and "youtube.com/results?search_query=" in fl_[0] and "x.com/search" in fl_[1] and "week" in fl_[0], f"a play with no clip offers a search: {fl_}"
-        pg.click("#wp-list li.no-clip >> nth=0"); pg.wait_for_timeout(100)
+        assert pg.evaluate("document.querySelectorAll('#wp-list .wp-find, #wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length") == 0, "a play with no clip just goes to that play: no search box, no video"
+        assert pg.evaluate("!document.getElementById('wp-tipx').hidden"), "...it shows that moment on the scrubber"
     assert failed is None or "youtube.com/watch?v=badOnly0000" in failed, f"a play with nothing that will play here links to YouTube: {failed}"
     pg.evaluate("document.querySelector('#wp-chart .wp-mk').dispatchEvent(new MouseEvent('click', {bubbles: true}))"); pg.wait_for_timeout(200)
-    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox').length") <= 1, "tapping a numbered mark on the chart opens its clip too"
+    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length") == 0, "tapping a numbered mark on the chart only goes to that play, no video"
+    pg.click("#wp-list li.has-clip >> nth=0 >> .wp-ph"); pg.wait_for_timeout(200)
+    assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length") == 0, "tapping a swing's row only goes to that play; the play button opens the video"
     pg.evaluate("(document.querySelector('#wp-list .wp-clipbox') || {remove(){}}).remove()")
     assert any(a.startswith("Sun 1pm") for a in sh["axis"]), f"kickoff windows on its axis: {sh['axis']}"
     pg.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true})")
@@ -4115,9 +4116,9 @@ def scenario_past_seasons(browser):
     assert gb["glow"] and gb["green"] and gb["orange"], f"green glowing = plays in the page; orange glowing = opens on YouTube: {gb}"
     if pg.evaluate("document.getElementById('wp-rosters').hidden"): pg.evaluate("document.getElementById('wp-rosters-btn').click()"); pg.wait_for_timeout(300)
     assert pg.evaluate("!document.getElementById('wp-rosters').hidden"), "the Rosters button shows the cards"
-    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(300)
+    pg.evaluate("document.querySelector('#wp-list li.has-clip .wp-play').click()"); pg.wait_for_timeout(300)
     assert pg.evaluate("document.getElementById('wp-rosters').hidden && document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length === 1"), "picking a swing while the roster cards are up swaps them for the clip"
-    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(150)
+    pg.evaluate("document.querySelector('#wp-list li.has-clip .wp-play').click()"); pg.wait_for_timeout(150)
     sidefit = pg.evaluate("""(() => { const s = document.querySelector('#wp-sheet .wp-side'), sr = s.getBoundingClientRect(), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')], c = document.querySelector('#wp-sheet .wp-card').getBoundingClientRect();
       return {n: li.length, st: s.scrollTop, scroll: s.scrollHeight - s.clientHeight, vp: [innerWidth, innerHeight], hidden: li.filter(l => { const b = l.getBoundingClientRect(); return b.bottom > sr.bottom + 1 || b.top < sr.top - 1 || b.bottom > c.bottom + 1; }).length, head: document.getElementById('wp-listh').getBoundingClientRect().top >= sr.top - 1}; })()""")
     assert sidefit["n"] == 10 and sidefit["hidden"] == 0 and sidefit["st"] == 0 and sidefit["head"], f"after the replay (and its clips) all ten swings are in view: {sidefit}"
@@ -4130,7 +4131,7 @@ def scenario_past_seasons(browser):
     pg.set_viewport_size({"width": 1280, "height": 720}); pg.wait_for_timeout(600)
     # beside the chart a clip floats over the chart instead of squeezing the ten swings
     pg.set_viewport_size({"width": 1280, "height": 760}); pg.wait_for_timeout(900)
-    pg.evaluate("document.querySelector('#wp-list li.has-clip').click()"); pg.wait_for_timeout(700)
+    pg.evaluate("document.querySelector('#wp-list li.has-clip .wp-play').click()"); pg.wait_for_timeout(700)
     fl = pg.evaluate("""(() => { const f = document.querySelector('#wp-chartwrap .wp-clipfloat'), li = [...document.querySelectorAll('#wp-list .wp-col li[data-t]')]; return {float: !!f, inList: document.querySelectorAll('#wp-list .wp-clipbox').length, rows: li.filter(l => l.getBoundingClientRect().height >= 20).length, n: li.length, glow: getComputedStyle(document.querySelector('#wp-list .wp-play')).boxShadow !== 'none'}; })()""")
     assert fl["float"] and fl["inList"] == 0 and fl["rows"] == fl["n"] and fl["glow"], f"a clip floats over the chart and the swings keep their room; the play buttons glow: {fl}"
     pg.evaluate("document.querySelector('.wp-clipx').click()"); pg.wait_for_timeout(200)

@@ -6789,13 +6789,17 @@
       var keep = e.target.closest && e.target.closest(".wp-btns, #wp-list, #wp-chart svg");
       if (onTip || !keep) { wpUnpin(); if (onTip) { e.stopPropagation(); e.preventDefault(); } }
     }, true);
-    document.getElementById("wp-list").addEventListener("click", function (e) { wpClipToggle(e.target.closest && e.target.closest("li[data-ck]")); });
+    // a row (or its number, or its dot on the chart) takes the scrubber to that play; only its play button opens the video
+    document.getElementById("wp-list").addEventListener("click", function (e) {
+      var li = e.target.closest && e.target.closest("li[data-ck]");
+      if (e.target.closest && e.target.closest(".wp-play")) wpClipToggle(li); else wpScrubTo(li);
+    });
     document.getElementById("wp-list").addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { var li = e.target.closest && e.target.closest("li[data-ck]"); if (li) { e.preventDefault(); wpClipToggle(li); } }
+      if (e.key === "Enter" || e.key === " ") { var li = e.target.closest && e.target.closest("li[data-ck]"); if (li) { e.preventDefault(); if (e.target.closest && e.target.closest(".wp-play")) wpClipToggle(li); else wpScrubTo(li); } }
     });
     chart.addEventListener("click", function (e) {
       var g = e.target.closest && e.target.closest(".wp-mk");
-      if (g) wpClipToggle(document.querySelector('#wp-list li[data-ck][data-n="' + g.getAttribute("data-n") + '"]'));
+      if (g) wpScrubTo(document.querySelector('#wp-list li[data-ck][data-n="' + g.getAttribute("data-n") + '"]'));
     });
     document.getElementById("wp-share").addEventListener("click", function () { wpShare(); });
     document.getElementById("wp-replay").addEventListener("click", function () { wpPlayStart(); });
@@ -8055,7 +8059,7 @@
     var list = pm.marks.map(function (mk) {
       var l = wpMarkLine(pm, mk);
       var clip = wpClipFor(pm.win.week, mk);
-      return '<li' + ' class="' + (clip ? "has-clip" : "no-clip") + '" data-ck="' + escapeHtml(mk.sid + ":" + mk.tt) + '" data-q="' + escapeHtml((mk.who || "") + " " + String(mk.label || "").replace(/\s*,.*$/, "") + " week " + pm.win.week + " " + ((state.history && state.history.season) || "")) + '" data-n="' + mk.rank + '" data-t="' + mk.t + '" tabindex="0" role="button" aria-expanded="false" title="' + (clip ? "Watch the play" : "Find this play online") + '"' + '><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div>' + (clip ? '<span class="wp-play" aria-hidden="true">\u25b6</span>' : "") + '<span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
+      return '<li' + ' class="' + (clip ? "has-clip" : "no-clip") + '" data-ck="' + escapeHtml(mk.sid + ":" + mk.tt) + '" data-q="' + escapeHtml((mk.who || "") + " " + String(mk.label || "").replace(/\s*,.*$/, "") + " week " + pm.win.week + " " + ((state.history && state.history.season) || "")) + '" data-n="' + mk.rank + '" data-t="' + mk.t + '" tabindex="0" role="button" aria-expanded="false" title="Show this play on the chart"' + '><b class="wp-n" style="background:' + (mk.d >= 0 ? pm.col.mine : pm.col.theirs) + '">' + mk.rank + '</b><div><div class="wp-ph">' + escapeHtml(l.head) + "</div><div class=\"wp-pm\">" + escapeHtml(l.meta) + " · " + l.sw + '</div></div>' + (clip ? '<span class="wp-play" role="button" tabindex="0" aria-label="Watch the play" title="Watch the play">\u25b6</span>' : "") + '<span class="wp-pd ' + (l.up ? "up" : "dn") + '">' + l.from + "% → " + l.to + "%</span></li>";
     });
     var half = Math.ceil(pm.marks.length / 2), rowsHtml = pm.marks.map(function (mk, i) { return list[i]; });
     document.getElementById("wp-list").innerHTML = pm.marks.length ? '<ol class="wp-col">' + rowsHtml.slice(0, half).join("") + '</ol><ol class="wp-col">' + rowsHtml.slice(half).join("") + "</ol>" : '<ol class="wp-col"><li class="wp-none">No single play moved the win probability by 10 points or more.</li></ol>';
@@ -8204,6 +8208,10 @@
     [].forEach.call(document.querySelectorAll("#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat"), function (b) { b.parentNode.removeChild(b); });
     [].forEach.call(document.querySelectorAll("#wp-list li[aria-expanded=true]"), function (l) { l.setAttribute("aria-expanded", "false"); });
   }
+  function wpScrubTo(li) {
+    var pm = wpOpenKey && wpPairs[wpOpenKey];
+    if (pm && li && li.getAttribute("data-t") != null) { wpPinT = Number(li.getAttribute("data-t")); wpShowAt(pm, wpPinT); }
+  }
   function wpClipToggle(li) {
     if (!li) return;
     var pm = wpOpenKey && wpPairs[wpOpenKey], d = pm && wpClips[pm.win.week], c = d && d.clips[li.getAttribute("data-ck")];
@@ -8212,15 +8220,9 @@
     wpClipsClear();
     if (open) return;
     var roEl = document.getElementById("wp-rosters"); if (roEl) roEl.hidden = true;   // the roster cards give way to the clip
+    if (!c) return;   // (only a swing with a clip has a play button)
     var mount = wpClipMount(li), box = mount.box;
     li.setAttribute("aria-expanded", "true");
-    if (!c) {
-      // No clip on file: a search for the play, in the app the person prefers
-      var q = encodeURIComponent(li.getAttribute("data-q") || "");
-      box.innerHTML = '<div class="wp-find">No clip on file. Search: <a href="https://www.youtube.com/results?search_query=' + q + '" target="_blank" rel="noopener">YouTube</a>' +
-        '<a href="https://x.com/search?q=' + q + '&f=video" target="_blank" rel="noopener">X</a></div>';
-      return;
-    }
     wpClipPlay(box, wpClipOrder([c].concat(c.alt || []), false), 0, 0);
     if (box.scrollIntoView) { try { box.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* fine */ } }
   }
