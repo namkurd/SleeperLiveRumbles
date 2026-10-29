@@ -148,6 +148,27 @@ def lineups_for(weeks_done: list[int], previous: dict, league_id: str | None = N
     return lineups, names, slots
 
 
+def add_backup_qbs(lineups: dict, names: dict, history: dict) -> int:
+    """The league credits a backup QB's points to a roster whose starting QB was ruled out (rumbles_history.json
+    "qb_adjustments", confirmed ones). Sleeper's own starters list leaves the backup out, so the lineup is one player
+    short of the official score; the backup is added after the starters, once."""
+    added = 0
+    for adj in history.get("qb_adjustments") or []:
+        if adj.get("confidence") != "confirmed":
+            continue
+        row = (lineups.get(str(adj.get("week"))) or {}).get(str(adj.get("roster_id")))
+        if row is None:
+            continue
+        for b in adj.get("backup_qbs") or []:
+            pid = str(b.get("player_id"))
+            if any(r[0] == pid for r in row):
+                continue
+            row.append([pid, round(float(b.get("points") or 0), 2)])
+            names.setdefault(pid, [b.get("name") or pid, "QB"])
+            added += 1
+    return added
+
+
 def id_crosswalk() -> dict[str, str]:
     """gsis id -> Sleeper id. The community crosswalk first, Sleeper's own gsis_id as a fallback."""
     out: dict[str, str] = {}
@@ -200,6 +221,10 @@ def build_season(season: int, league_id: str, weeks_done: list[int], out_path: s
         for k in ("lineups", "names", "slots"):
             if k in previous:
                 out[k] = previous[k]
+    try:
+        add_backup_qbs(out.get("lineups") or {}, out.setdefault("names", {}), json.load(open(os.path.join(HERE, "rumbles_history.json"))))
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] backup QBs skipped ({e})", file=sys.stderr)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as fh:
         json.dump(out, fh, separators=(",", ":"))

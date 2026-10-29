@@ -280,3 +280,15 @@ if __name__ == "__main__":
     test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
     test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_run_end_to_end_with_a_fake_youtube(); test_chapters_in_a_longer_highlight_video(); test_a_short_naming_only_the_surname_is_found_by_search_but_not_by_title_crawl(); test_duration_parse()
     print("ALL build_wp_clips.py UNIT TESTS PASSED")
+
+
+def test_backup_qb_joins_the_lineup():
+    import build_epa
+    lineups = {"1": {"6": [["5849", -0.18], ["DAL", 2.03]], "7": [["1", 5.0]]}}
+    names = {}
+    hist = {"qb_adjustments": [
+        {"week": 1, "roster_id": 6, "confidence": "confirmed", "backup_qbs": [{"player_id": "3161", "name": "Carson Wentz", "points": 19.47}]},
+        {"week": 1, "roster_id": 7, "confidence": "possible", "backup_qbs": [{"player_id": "9", "name": "X", "points": 3.0}]}]}
+    assert build_epa.add_backup_qbs(lineups, names, hist) == 1
+    assert lineups["1"]["6"][-1] == ["3161", 19.47] and names["3161"] == ["Carson Wentz", "QB"] and len(lineups["1"]["7"]) == 1
+    assert build_epa.add_backup_qbs(lineups, names, hist) == 0, "added once"

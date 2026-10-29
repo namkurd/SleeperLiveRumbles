@@ -4812,11 +4812,13 @@
     var L = state.epa && state.epa.lineups && state.epa.lineups[String(week)];
     if (!L) return null;
     var names = state.epa.names || {}, slots = state.epa.slots || [], by = {};
+    var nStart = slots.filter(function (sl) { return sl !== "BN" && sl !== "IR" && sl !== "TAXI"; }).length;
     Object.keys(L).forEach(function (rid) {
       var list = (L[rid] || []).map(function (e, i) {
-        var nm = names[e[0]] || [e[0], ""];
+        var nm = names[e[0]] || [e[0], ""], extra = nStart > 0 && i >= nStart;   // after the starters: a backup QB whose points the league credited
         return { player_id: e[0], name: nm[0], short_name: null, position: nm[1] || null, actual: round2(num(e[1])), proj: 0, played: true,
-          injury_status: null, team: null, game_status: "complete", game_start_ms: null, slot: slots[i] || null };
+          injury_status: null, team: null, game_status: "complete", game_start_ms: null, slot: extra ? null : (slots[i] || null),
+          replacement: extra ? "confirmed" : undefined, fromFile: extra };
       });
       list.sort(function (a, b) { return tooltipSlotRank(a.slot) - tooltipSlotRank(b.slot); });
       by[rid] = list;
@@ -7754,7 +7756,7 @@
   }
   function wpSheetKeep() { if (wpOpenKey) { if (wpPairs[wpOpenKey]) { if (!wpPlay.on) wpSheetRender(); } else wpClose(); } }
   function wpPlayers(team) {
-    return (team.players || []).filter(function (p) { return !p.replacement; }).map(function (p) {
+    return (team.players || []).filter(function (p) { return !p.replacement || p.fromFile; }).map(function (p) {
       return { sid: String(p.player_id), pos: p.position, name: wpShortName(p), full: p.name, act: num(p.actual), team: p.team || null };
     });
   }
@@ -8553,7 +8555,7 @@
     var a = pm.model.at(pm.model.end), meWins = a.my >= a.th;
     // the lineup top to bottom: quarterbacks and superflex, running backs, receivers, flex, tight end, kicker, defense
     var POS_RANK = { QB: 0, RB: 1, WR: 2, TE: 4, K: 5, DEF: 6 };
-    function slotRank(p) { return p.slot && TOOLTIP_SLOT_ORDER.indexOf(p.slot) !== -1 ? TOOLTIP_SLOT_ORDER.indexOf(p.slot) : (POS_RANK[p.position] != null ? POS_RANK[p.position] : 7); }
+    function slotRank(p) { if (p.replacement) return 99; return p.slot && TOOLTIP_SLOT_ORDER.indexOf(p.slot) !== -1 ? TOOLTIP_SLOT_ORDER.indexOf(p.slot) : (POS_RANK[p.position] != null ? POS_RANK[p.position] : 7); }
     function ordered(t) { var c = Object.assign({}, t); c.players = t.players.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return slotRank(a.p) - slotRank(b.p) || a.i - b.i; }).map(function (x) { return x.p; }); return c; }
     pm = { me: ordered(pm.me), t: ordered(pm.t), model: pm.model, done: pm.done, col: pm.col };
     function card(t, col, win) { return '<div class="rb-card' + (win ? " me" : "") + '" style="--c:' + col + '">' + rbCardHtml(t) + "</div>"; }
