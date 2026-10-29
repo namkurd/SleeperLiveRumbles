@@ -8183,7 +8183,7 @@
     if (wpOpenKey !== key) wpPinT = null;
     wpOpenKey = key;
     if (wpPairs[key].done) wpClipsLoad(wpPairs[key].win.week);
-    wpSheetRender();
+    wpSheetRender(); wpReplayBtn(wpPairs[key]);
     document.getElementById("wp-sheet").classList.add("wp-open");
     document.getElementById("wp-close").focus();
     // Expanding a chart plays the matchup straight away (on a phone in either orientation too); tap the chart or ■ to take over.
@@ -8540,9 +8540,17 @@
     el.hidden = false;
     var wrap = document.getElementById("wp-chartwrap"); wrap.style.setProperty("--c", wpResolve(side)); wrap.classList.remove("wp-flash"); void wrap.offsetWidth; wrap.classList.add("wp-flash");
   }
+  // A week still in progress replays only up to the present; one that has not started (nothing scored yet) has nothing to replay.
+  function wpCanReplay(pm) { return !!pm && (pm.done || pm.notches.length > 0 || (pm.me.act + pm.t.act) > 0); }
+  function wpReplayBtn(pm) {
+    var b = document.getElementById("wp-replay"); if (!b) return;
+    var ok = wpCanReplay(pm);
+    b.disabled = !ok; b.title = ok ? "Watch the week play out" : "Nothing to replay yet: this week has not started";
+  }
   function wpPlayStart(from) {
     var pm = wpOpenKey && wpPairs[wpOpenKey];
     if (wpPlay.on) { wpPlayStop(); return; }
+    if (pm && !wpCanReplay(pm)) { wpReplayBtn(pm); wpUnblind(); return; }
     if (pm && Math.min(window.innerWidth, window.innerHeight) <= 700) { if (!wpLandMode) wpLockLandscape(); wpLandMode = true; }   // a phone: the sheet stays in landscape from here until it is closed, however it is held
     if (pm && wpLandMode && wpOrient(true)) { /* laid out again for the turned sheet */ }
     var svg = document.querySelector("#wp-chart svg.wp-svg");
@@ -8555,9 +8563,9 @@
     var prog = Math.max(0, Math.min(0.999, Number(from) || 0));
     // The replay's pace follows the scoring: a quiet stretch is passed quickly, a busy one slowly, and the whole week still takes DUR.
     // pace[i] is the share of the replay spent by the time the line has reached i / PN of the way across.
-    var PN = 400, pace = [0], sig = 0.03;
+    var PN = 400, pace = [0], sig = 0.03, LIM = pm.done ? 1 : Math.max(0.02, Math.min(1, m.x(m.end)));   // LIM: how far across the chart the replay goes
     for (var pi = 1; pi <= PN; pi++) {
-      var px = (pi - 0.5) / PN, wt = 1;
+      var px = (pi - 0.5) / PN, wt = px > LIM ? 0 : 1;
       for (var qi = 0; qi < notches.length; qi++) { var dx = (px - notches[qi].x) / sig; if (dx > -4 && dx < 4) wt += 5 * Math.exp(-dx * dx / 2); }
       if (clutch) { var cdx = (px - clutch.x) / 0.012; if (cdx > -4 && cdx < 4) wt += 40 * Math.exp(-cdx * cdx / 2); }   // the play that decided it gets extra time
       pace.push(pace[pi - 1] + wt);
@@ -8592,7 +8600,7 @@
         if (introAt == null) { introAt = now; wpProjShow(pm); }
         else if (now - introAt > INTRO) { intro = false; document.getElementById("wp-proj").hidden = true; lastNow = now; }
       }
-      if (!paused && !intro) { spent = Math.min(1, spent + (now - lastNow) / DUR); prog = spent >= 1 ? 1 : xAtPace(spent); }
+      if (!paused && !intro) { spent = Math.min(1, spent + (now - lastNow) / DUR); prog = spent >= 1 ? LIM : Math.min(LIM, xAtPace(spent)); }
       lastNow = now; wpPlay.prog = prog;
       var p = prog, tt = wpTAtX(m, p);
       { var cx0 = (g.ml + p * g.pw).toFixed(1), cy0 = (g.mt + g.ph + 2).toFixed(1); svg.style.clipPath = "polygon(0 0, " + cx0 + "px 0, " + cx0 + "px " + cy0 + "px, 100% " + cy0 + "px, 100% 100%, 0 100%)"; }   // the line is uncovered as it goes; the time labels below it are always there
@@ -8639,9 +8647,9 @@
       });
       if (clutch && !clutchShown && p >= clutch.x) { clutchShown = clutchOn = true; wpClutchShow(pm, clutch); }
       if (clutchOn && p > clutch.x + 0.06) { clutchOn = false; document.getElementById("wp-clutch").hidden = true; }
-      if (p >= 1) {
+      if (p >= LIM - 1e-9) {
         // a beat at the end: the winner's picture pops on the end of the line, then the whole week is shown
-        if (!hold) { hold = now; wpPop(pm); document.getElementById("wp-clutch").hidden = true; }
+        if (!hold) { hold = now; if (pm.done) wpPop(pm); document.getElementById("wp-clutch").hidden = true; }
         else if (now - hold > 2200) { wpPlayStop(); if (pm.done) wpRostersShow(pm); return; }
         wpPlay.raf = requestAnimationFrame(frame); return;
       }
