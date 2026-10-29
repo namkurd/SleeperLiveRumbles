@@ -2744,6 +2744,7 @@ def scenario_rumblin_qol(browser):
     assert "(2)" in label, f"In Play label should carry a count, got {label!r}"
     assert page.is_visible(".rb-legend")
     page.reload(); page.wait_for_timeout(2500)
+    assert page.evaluate("document.getElementById('scen-mode-row').hidden"), "no Mine / Best toggle on the Actual view after a reload"
     page.click("#mode-rumblin"); page.wait_for_timeout(300)
     page.click("#rb-me"); page.wait_for_timeout(300)
     assert not page.is_visible("#rb-who") and active("#rb-me") and active("#rb-matchup"), "saved me skips the picker"

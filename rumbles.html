@@ -7529,7 +7529,7 @@
   function rbPlayoffUi(on) {
     document.getElementById("scen-mode").hidden = !!on;
     document.getElementById("scen-po").hidden = !on;
-    if (on) document.getElementById("scen-mode-row").hidden = false;
+    if (on) document.getElementById("scen-mode-row").hidden = state.view !== "rumblin";
   }
   function rbRenderPlayoffs(week) {
     var po = rbPlayoffInfo(week), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
@@ -8994,7 +8994,7 @@
     // Best matchups needs no manager and no live cards: it has the page to itself.
     var ctlBox = document.querySelector(".rb-controls"), scenRow = document.getElementById("scen-mode-row");
     rbPlayoffUi(false);
-    if (rb.scenBest && rb.sub === "scenarios") { scenRow.hidden = false; rbRenderBest(); return; }
+    if (rb.scenBest && rb.sub === "scenarios") { scenRow.hidden = state.view !== "rumblin"; rbRenderBest(); return; }
     scenRow.hidden = true;
     ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = ""; });
     if (ctlBox) ctlBox.style.display = "";
@@ -9055,7 +9055,7 @@
     var pickedPast = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
     var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : pastWeeks[0]) : null);
     var scenOn = rb.sub === "scenarios" && !scenBtn.hidden && !scenBtn.disabled;
-    scenRow.hidden = !scenOn;
+    scenRow.hidden = !scenOn || state.view !== "rumblin";
     if (state.view === "rumblin") { els.modeScen.classList.toggle("active", scenOn); els.modeRumblin.classList.toggle("active", !scenOn); }
     var scenView = document.getElementById("rb-scen-view");
     scenView.hidden = !scenOn;
