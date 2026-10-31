@@ -539,6 +539,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 SCRAPE_VER = 1                               # bump to search every unmatched play again
 SCRAPE_MAX = 600                             # plays searched on the site per run
 SCRAPE_SECONDS = 30 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
+SCRAPE_PLAYS = 30                            # a week's biggest plays searched on the site
 SCRAPE_TOP = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
 SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter
@@ -815,7 +816,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
                 old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
-                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone")
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -946,7 +947,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     scraped_n = 0
     scrape_started = time.time()
     gaps2 = sorted(((0 if results[i][0] == root else 1, -p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results)
-                    for p in plays[:SEARCH_TOP] if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
+                    for p in plays[:SCRAPE_PLAYS] if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
     BATCH = 12
     stop = False
     for b0 in range(0, len(gaps2), BATCH):
@@ -1009,7 +1010,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in plays[:SEARCH_TOP]), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in plays[:SCRAPE_PLAYS]), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))
