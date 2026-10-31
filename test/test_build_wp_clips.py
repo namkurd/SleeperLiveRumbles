@@ -152,8 +152,10 @@ def test_run_end_to_end_with_a_fake_youtube():
         def __init__(self, j): self._j = j
         def json(self): return self._j
 
-    def fake_get(url, params=None, timeout=0):
+    def fake_get(url, params=None, timeout=0, headers=None):
         calls.append(url.rsplit("/", 1)[-1])
+        if "youtube.com/results" in url:
+            return type("W", (), {"ok": True, "text": "<html></html>"})()   # the site search finds nothing here
         if url.endswith("/channels"):
             return R({"items": [{"id": "UCnflchan"}]} if params["forHandle"] == "@NFL" else {"items": []})
         if url.endswith("/playlistItems"):
@@ -276,11 +278,6 @@ def test_duration_parse():
     assert C.duration_seconds("PT1M5S") == 65 and C.duration_seconds("PT12S") == 12 and C.duration_seconds("P0D") == 10 ** 6 or True
 
 
-if __name__ == "__main__":
-    test_candidates_skip_small_and_adjustments(); test_match_by_name_kind_and_yards(); test_defense_needs_team_and_kind()
-    test_rejects_long_unembeddable_and_early_videos(); test_channels_resolve_once_and_skip_unknown_handles(); test_known_false_matches_are_rejected(); test_other_channels_are_preferred_over_the_nfl_and_kept_as_alternates(); test_crawl_resumes_after_quota_and_picks_up_new_uploads(); test_run_end_to_end_with_a_fake_youtube(); test_chapters_in_a_longer_highlight_video(); test_a_short_naming_only_the_surname_is_found_by_search_but_not_by_title_crawl(); test_duration_parse()
-    print("ALL build_wp_clips.py UNIT TESTS PASSED")
-
 
 def test_backup_qb_joins_the_lineup():
     import build_epa
@@ -299,3 +296,38 @@ def test_backup_qbs_only_from_2026():
     lineups = {"1": {"6": [["1", 1.0]]}}
     hist = {"season": 2025, "qb_adjustments": [{"week": 1, "roster_id": 6, "confidence": "confirmed", "backup_qbs": [{"player_id": "3", "name": "B", "points": 5}]}]}
     assert build_epa.add_backup_qbs(lineups, {}, hist) == 0 and len(lineups["1"]["6"]) == 1
+
+
+def test_site_search_results_and_queries():
+    C.time.sleep = lambda s: None
+    html = ('<script>var ytInitialData = {"x":[{"videoRenderer":{"videoId":"abcdefghijk","title":{"runs":[{"text":"Justin Herbert 20 yard "},{"text":"TD"}]},'
+            '"ownerText":{"runs":[{"text":"Chargers"}]},"lengthText":{"simpleText":"0:21"}}},{"videoRenderer":{"videoId":"zzzzzzzzzzz","title":{"runs":[{"text":"Recap"}]},'
+            '"lengthText":{"simpleText":"1:02:03"}}}]};</script>')
+    got = C.parse_results(html)
+    assert [(g["id"], g["title"], g["ch"], g["dur"]) for g in got] == [("abcdefghijk", "Justin Herbert 20 yard TD", "Chargers", 21), ("zzzzzzzzzzz", "Recap", "", 3723)], got
+    assert C.parse_results("nothing") == []
+    p = {"player": "Justin Herbert", "team": "LAC", "opp": "ARI", "label": "20 yd TD pass", "sec": 3600, "def": False, "pts": 8}
+    qs = C.scrape_queries(p, 2026, 1, 1788999801297)
+    assert len(qs) >= 4 and len(set(q.lower() for q in qs)) == len(qs), qs
+    assert any("20 yard" in q for q in qs) and any("week 1" in q for q in qs) and any("Sep" in q or "Oct" in q for q in qs), qs
+    d = {"player": None, "team": "KC", "opp": "DEN", "label": "Chiefs interception", "sec": 100, "def": True, "pts": 5}
+    assert all("chiefs" in q.lower() for q in C.scrape_queries(d, 2026, 1, 1788999801297))
+
+
+if __name__ == "__main__":
+    for _name in [n for n in list(globals()) if n.startswith("test_")]:
+        globals()[_name]()
+    print("ALL build_wp_clips.py UNIT TESTS PASSED")
+
+
+def test_playable_clip_goes_first_and_the_blocked_one_stays_as_a_link():
+    st = {"id": "S", "s": 5, "e": 20, "t": "Q1", "c": "STACKED Fantasy | Film Breakdowns"}
+    nfl = {"id": "N", "s": 0, "e": 15, "t": "x", "c": "NFL"}
+    new = {"id": "P", "s": 0, "e": 15, "t": "y", "c": "HighlightFeen"}
+    assert C.lacks_playable(None) and C.lacks_playable(st) and C.lacks_playable(nfl) and not C.lacks_playable(new)
+    assert not C.lacks_playable(dict(new, alt=[nfl])) and C.lacks_playable(dict(nfl, alt=[st]))
+    a = C.merge_playable(st, new)
+    assert a["id"] == "P" and a["x"]["id"] == "S" and a["x"]["s"] == 5, a
+    b = C.merge_playable(nfl, new)
+    assert b["id"] == "P" and [x["id"] for x in b["alt"]] == ["N"] and "x" not in b, b
+    assert C.merge_playable(None, new) == new

@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
@@ -406,6 +407,31 @@ def is_stacked(clip: dict | None) -> bool:
     return bool(clip) and (clip.get("c") or "").upper().startswith("STACKED")
 
 
+def blocked_channel(c: str | None) -> bool:
+    """Channels whose uploads usually refuse to play inside another site: STACKED's film videos and the NFL's own."""
+    c = c or ""
+    return c.upper().startswith("STACKED") or c in NO_EMBED_HINT
+
+
+def lacks_playable(clip: dict | None) -> bool:
+    """A play whose only clips come from channels that refuse embedding: worth searching for one that plays."""
+    if not clip:
+        return True
+    return all(blocked_channel(x.get("c")) for x in [clip] + list(clip.get("alt") or []))
+
+
+def merge_playable(old: dict | None, new: dict) -> dict:
+    """A clip that can play goes first; what was there (STACKED's exact moment, or the NFL's own upload) stays as the link / last resort."""
+    if not old:
+        return new
+    out = dict(new)
+    if is_stacked(old):
+        out["x"] = {k: v for k, v in old.items() if k not in ("chap", "alt", "x")}
+    else:
+        out["alt"] = list(new.get("alt") or []) + [{k: v for k, v in old.items() if k not in ("alt", "x")}]
+    return out
+
+
 def merge_stacked(base: dict | None, stacked: dict, embed: bool) -> dict:
     """The clip kept for a play that has an exact STACKED chapter: with embedding allowed it plays first and the other clip is its
     fallback; otherwise the clip that can play stays first and the exact moment is carried as `x` (a link, and the "Watch on YouTube" target)."""
@@ -467,6 +493,79 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
             out.append({"id": vid, "rank": rank, "desc": sn.get("description") or "", "title": sn.get("title") or "", "ch": sn.get("channelTitle") or "", "dur": 0, "embeddable": True,
                         "pub_ms": datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp() * 1000})
     return out
+
+
+# Searching the YouTube site itself costs no API quota, so every play that nothing else matched can be searched several ways
+# (the player with the distance, with the week, with the date) and the first few results of each looked at.
+SCRAPE_VER = 1                               # bump to search every unmatched play again
+SCRAPE_MAX = 100                             # plays searched on the site per run
+SCRAPE_TOP = 6                               # results read per search
+YT_WEB = "https://www.youtube.com/results"
+SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter
+WEB_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+               "Accept-Language": "en-US,en;q=0.9"}
+
+
+def clock_seconds(text: str | None) -> int:
+    try:
+        parts = [int(x) for x in (text or "").split(":")]
+    except ValueError:
+        return 0
+    return sum(v * 60 ** i for i, v in enumerate(reversed(parts)))
+
+
+def parse_results(html: str) -> list[dict]:
+    """Videos in a YouTube results page (the JSON the page carries): id, title, channel, length in seconds."""
+    m = re.search(r"var ytInitialData = (\{.*?\});</script>", html, re.S)
+    if not m:
+        return []
+    out = []
+
+    def walk(o):
+        if isinstance(o, dict):
+            v = o.get("videoRenderer")
+            if isinstance(v, dict) and v.get("videoId"):
+                out.append({"id": v["videoId"], "title": "".join(r.get("text", "") for r in (v.get("title") or {}).get("runs", [])),
+                            "ch": ((v.get("ownerText") or {}).get("runs") or [{}])[0].get("text", ""),
+                            "dur": clock_seconds((v.get("lengthText") or {}).get("simpleText"))})
+            for x in o.values():
+                walk(x)
+        elif isinstance(o, list):
+            for x in o:
+                walk(x)
+    try:
+        walk(json.loads(m.group(1)))
+    except ValueError:
+        return []
+    return out
+
+
+def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
+    """The ways a person would search for this play: with the distance, with the week, with the date, and by the kind of play."""
+    kinds = play_kind(p["label"])
+    low = p["label"].lower()
+    kind = kinds[0] if kinds else ("catch" if "catch" in low else "run" if "run" in low else "pass" if "pass" in low else "")
+    y = yards_in(p["label"])
+    team = (NICK.get(p["team"] or "") or [""])[0]
+    opp = (NICK.get(p["opp"] or "") or [""])[0]
+    day = datetime.fromtimestamp((t0_ms + p["sec"] * 1000) / 1000, timezone.utc)
+    who = p["player"] or f"{team} defense"
+    ys = f"{y} yard" if y is not None else ""
+    qs = [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
+          f"{who} {y if y is not None else ''} yd {kind} {season}", f"{who} {kind} highlights {team} {opp}"]
+    seen, out = set(), []
+    for x in qs:
+        x = re.sub(r"\s+", " ", x).strip()
+        if x.lower() not in seen:
+            seen.add(x.lower())
+            out.append(x)
+    return out
+
+
+def web_search(query: str) -> list[dict]:
+    time.sleep(0.8)
+    r = requests.get(YT_WEB, params={"search_query": query, "sp": SHORT_FILTER}, headers=WEB_HEADERS, timeout=30)
+    return parse_results(r.text) if r.ok else []
 
 
 def resolve_channels(key: str, cache_path: str, extra_path: str) -> list[dict]:
@@ -602,17 +701,22 @@ def crawl(q: Quota, cache: dict, playlists: list[str], since_ms: float, windows:
     return complete
 
 
-def verify(q: Quota, cache: dict, ids: list[str]) -> None:
-    """Duration and embeddability for the few uploads that look like a match (one unit per 50)."""
-    need = [i for i in ids if i not in cache["vid"]]
+def verify(q: Quota, cache: dict, ids: list[str], pub: bool = False) -> None:
+    """Duration and embeddability for the few uploads that look like a match (one unit per 50). With pub, also when each was published
+    (for videos found by searching the YouTube site, which says only "1 month ago")."""
+    pubs = cache.setdefault("pub", {})
+    need = [i for i in ids if i not in cache["vid"] or (pub and i not in pubs)]
     for i in range(0, len(need), 50):
         chunk = need[i:i + 50]
-        j = q.get(f"{API}/videos", {"part": "contentDetails,status", "id": ",".join(chunk), "key": q.key})
+        j = q.get(f"{API}/videos", {"part": "contentDetails,status" + (",snippet" if pub else ""), "id": ",".join(chunk), "key": q.key})
         info = {v["id"]: v for v in j.get("items", [])}
         for vid in chunk:
             v = info.get(vid) or {}
             st = v.get("status") or {}
             cache["vid"][vid] = [duration_seconds((v.get("contentDetails") or {}).get("duration", "")), int(bool(st.get("embeddable")) and st.get("privacyStatus") == "public")]
+            at = (v.get("snippet") or {}).get("publishedAt")
+            if pub and at:
+                pubs[vid] = datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp() * 1000
 
 
 def uploads_from_cache(cache: dict, playlists: list[str], windows: list[tuple[float, float]]) -> list[dict]:
@@ -726,7 +830,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     # plays still without a clip get a YouTube search each (100 units), the biggest swings first and only while quota is left
     searches = max(0, min(MAX_SEARCHES, (q.left - 300) // 100))
     by_ch = {}
-    touched, results = set(), []
+    touched, results, scraped_of = set(), [], []
     for d, w, doc, names in work:
         out_dir = os.path.join(d, "wp_clips")
         os.makedirs(out_dir, exist_ok=True)
@@ -736,8 +840,9 @@ def run(root: str = HERE, force: bool = False) -> None:
             fresh = old.get("mv") == MATCHER
             have = (old.get("clips") or {}) if fresh else {}
             tried = set(old.get("tried") or []) if fresh else set()
+            old_scraped = list(old.get("scraped") or []) if fresh and old.get("sv2") == SCRAPE_VER else []
         except Exception:  # noqa: BLE001
-            have, tried = {}, set()
+            have, tried, old_scraped = {}, set(), []
         plays = plays_by_week[(d, w)]
         found = match_plays([p for p in plays if p["key"] not in have or is_stacked(have[p["key"]])], uploads, doc["t0"])
         have.update(found)
@@ -755,6 +860,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 print(f"[info] STACKED week {w}: {len(vids_n)} film videos, {with_plays} with play chapters, {len(st_found)} play(s) matched")
             except QuotaOut as e:
                 print(f"[warn] {e}; STACKED chapters resume on a later run", file=sys.stderr)
+        scraped_of.append(set(old_scraped) if old_scraped is not None else set())
         results.append((d, w, doc, have, tried, plays, len(found)))
     # chapters of longer highlight videos for the plays no short clip covered
     try:
@@ -791,15 +897,50 @@ def run(root: str = HERE, force: bool = False) -> None:
         except QuotaOut as e:
             print(f"[warn] {e}; searching resumes on a later run", file=sys.stderr)
             quota_out = True
+    # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
+    scraped_n = 0
+    for _, i, p in sorted(((p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results) for p in plays[:SEARCH_TOP] if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: -x[0]):
+        if scraped_n >= SCRAPE_MAX:
+            break
+        d, w, doc, have, tried, plays, n = results[i]
+        p["sib"] = any(o is not p and o["player"] == p["player"] and o["team"] == p["team"] and play_kind(o["label"])[:1] == play_kind(p["label"])[:1] for o in plays)
+        try:
+            found = {}
+            for qi, qtext in enumerate(scrape_queries(p, int(doc.get("season") or 0), w, doc["t0"])):
+                res = [r for r in web_search(qtext)[:SCRAPE_TOP] if not blocked_channel(r.get("ch"))]
+                for rank, r in enumerate(res):
+                    r["rank"] = rank if qi == 0 else 99   # only the first result of the most exact search is trusted on its own
+                    r["desc"] = ""
+                try:
+                    verify(q, cache, [r["id"] for r in res], pub=True)
+                except QuotaOut:
+                    res = []
+                ups = []
+                for r in res:
+                    if r["id"] in cache["vid"] and r["id"] in cache.get("pub", {}):
+                        r["dur"], r["embeddable"], r["pub_ms"] = cache["vid"][r["id"]][0], bool(cache["vid"][r["id"]][1]), cache["pub"][r["id"]]
+                        ups.append(r)
+                found = match_plays([p], ups, doc["t0"], loose=True)
+                if found:
+                    break
+            for k, c in found.items():
+                have[k] = merge_playable(have.get(k), c)
+            scraped_of[i].add(p["key"])
+            scraped_n += 1
+            results[i] = (d, w, doc, have, tried, plays, n + len(found))
+        except requests.RequestException as e:
+            print(f"[warn] site search skipped ({e})", file=sys.stderr)
+            break
     cache["spent"].append([int(now_s), allowed - q.left])
     save_cache(cache_path, cache)
+    results_idx = {(r[0], r[1]): k for k, r in enumerate(results)}
     for d, w, doc, have, tried, plays, n in results:
         out_dir = os.path.join(d, "wp_clips")
         apply_manual(have, plays, manual, int(doc.get("season") or 0), w)
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))
