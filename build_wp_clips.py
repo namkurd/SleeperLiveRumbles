@@ -499,6 +499,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 # (the player with the distance, with the week, with the date) and the first few results of each looked at.
 SCRAPE_VER = 1                               # bump to search every unmatched play again
 SCRAPE_MAX = 300                             # plays searched on the site per run
+SCRAPE_SECONDS = 30 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_TOP = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
 SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter
@@ -899,15 +900,18 @@ def run(root: str = HERE, force: bool = False) -> None:
             quota_out = True
     # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
     scraped_n = 0
+    scrape_started = time.time()
     for _, i, p in sorted(((p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results) for p in plays[:SEARCH_TOP] if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: -x[0]):
-        if scraped_n >= SCRAPE_MAX:
+        if scraped_n >= SCRAPE_MAX or time.time() - scrape_started > SCRAPE_SECONDS:
             break
         d, w, doc, have, tried, plays, n = results[i]
         p["sib"] = any(o is not p and o["player"] == p["player"] and o["team"] == p["team"] and play_kind(o["label"])[:1] == play_kind(p["label"])[:1] for o in plays)
         try:
             found = {}
             for qi, qtext in enumerate(scrape_queries(p, int(doc.get("season") or 0), w, doc["t0"])):
-                res = [r for r in web_search(qtext)[:SCRAPE_TOP] if not blocked_channel(r.get("ch"))]
+                # a video already used for a different play of this week is not it (two plays at one instant may share one)
+                taken = {c["id"] for k, c in have.items() if k != p["key"] and k.split(":")[-1] != str(p["sec"]) and not blocked_channel(c.get("c"))}
+                res = [r for r in web_search(qtext)[:SCRAPE_TOP] if not blocked_channel(r.get("ch")) and r["id"] not in taken]
                 for rank, r in enumerate(res):
                     r["rank"] = rank if qi == 0 else 99   # only the first result of the most exact search is trusted on its own
                     r["desc"] = ""
