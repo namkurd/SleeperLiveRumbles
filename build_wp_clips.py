@@ -498,7 +498,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 # Searching the YouTube site itself costs no API quota, so every play that nothing else matched can be searched several ways
 # (the player with the distance, with the week, with the date) and the first few results of each looked at.
 SCRAPE_VER = 1                               # bump to search every unmatched play again
-SCRAPE_MAX = 100                             # plays searched on the site per run
+SCRAPE_MAX = 300                             # plays searched on the site per run
 SCRAPE_TOP = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
 SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter

@@ -51,6 +51,7 @@ jobs:
 
       - name: Run build_wp_clips.py (short official highlights for each week's biggest plays, from the NFL's YouTube channel)
         run: python build_wp_clips.py
+        timeout-minutes: 50
         continue-on-error: true
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API }}
