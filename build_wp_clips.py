@@ -432,6 +432,44 @@ def merge_playable(old: dict | None, new: dict) -> dict:
     return out
 
 
+def dedupe_clips(have: dict, plays: list[dict]) -> int:
+    """One video for several different plays of a week is right for at most one of them. A playable clip kept for more than one play
+    stays only where its title gives that play's distance; otherwise it is taken off, back to the STACKED moment (or nothing)."""
+    info = {p["key"]: p for p in plays}
+    uses: dict[str, set] = {}
+    for k, c in have.items():
+        for x in [c] + list(c.get("alt") or []):
+            if not blocked_channel(x.get("c")):
+                uses.setdefault(x["id"], set()).add(k.split(":")[-1])
+
+    def fine(k: str, x: dict) -> bool:
+        if blocked_channel(x.get("c")) or len(uses.get(x["id"], ())) < 2:
+            return True
+        y = yards_in((info.get(k) or {}).get("label") or "")
+        return y is not None and re.search(rf"\b{y}\b", x.get("t", "")) is not None
+    dropped = 0
+    for k, c in list(have.items()):
+        allc = [c] + list(c.get("alt") or [])
+        keep = [x for x in allc if fine(k, x)]
+        if len(keep) == len(allc):
+            continue
+        dropped += len(allc) - len(keep)
+        if not keep:
+            if c.get("x"):
+                have[k] = dict(c["x"])
+            else:
+                del have[k]
+            continue
+        new = {a: b for a, b in keep[0].items() if a not in ("alt", "x")}
+        alts = [{a: b for a, b in x.items() if a not in ("alt", "x")} for x in keep[1:]]
+        if alts:
+            new["alt"] = alts
+        if c.get("x"):
+            new["x"] = c["x"]
+        have[k] = new
+    return dropped
+
+
 def merge_stacked(base: dict | None, stacked: dict, embed: bool) -> dict:
     """The clip kept for a play that has an exact STACKED chapter: with embedding allowed it plays first and the other clip is its
     fallback; otherwise the clip that can play stays first and the exact moment is carried as `x` (a link, and the "Watch on YouTube" target)."""
@@ -940,6 +978,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     results_idx = {(r[0], r[1]): k for k, r in enumerate(results)}
     for d, w, doc, have, tried, plays, n in results:
         out_dir = os.path.join(d, "wp_clips")
+        dedupe_clips(have, plays)
         apply_manual(have, plays, manual, int(doc.get("season") or 0), w)
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1

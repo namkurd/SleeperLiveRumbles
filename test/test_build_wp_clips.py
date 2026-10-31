@@ -331,3 +331,18 @@ def test_playable_clip_goes_first_and_the_blocked_one_stays_as_a_link():
     b = C.merge_playable(nfl, new)
     assert b["id"] == "P" and [x["id"] for x in b["alt"]] == ["N"] and "x" not in b, b
     assert C.merge_playable(None, new) == new
+
+
+def test_one_video_is_not_kept_for_two_different_plays():
+    st = {"id": "S", "s": 5, "e": 20, "t": "Q1", "c": "STACKED Fantasy | Film Breakdowns"}
+    vid = {"id": "V", "s": 0, "e": 15, "t": "Drake Maye touchdown vs Bills", "c": "Patriots"}
+    other = {"id": "W", "s": 0, "e": 15, "t": "Drake Maye 34 yard touchdown", "c": "Patriots"}
+    plays = [{"key": "1:100", "label": "34 yd TD pass"}, {"key": "1:900", "label": "3 yd TD run"}, {"key": "1:50", "label": "34 yd TD pass"}]
+    have = {"1:100": dict(vid, x=st), "1:900": dict(vid), "1:50": dict(other, alt=[dict(vid)])}
+    n = C.dedupe_clips(have, plays)
+    assert n == 3, n
+    assert have["1:100"]["id"] == "S", "back to the STACKED moment"
+    assert "1:900" not in have, "nothing left for the 3-yard run"
+    assert have["1:50"]["id"] == "W" and "alt" not in have["1:50"], have["1:50"]
+    one = {"1:7": dict(vid)}
+    assert C.dedupe_clips(one, plays) == 0 and "1:7" in one, "a video used once stays"
