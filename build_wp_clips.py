@@ -660,6 +660,11 @@ class Quota:
             raise QuotaOut("budget for this run is spent")
         self.left -= 1
         r = requests.get(url, params=params, timeout=30)
+        for wait in (5, 20, 60):   # too many requests at once: wait and ask again
+            if r.status_code != 429:
+                break
+            time.sleep(wait)
+            r = requests.get(url, params=params, timeout=30)
         if r.status_code == 403 and "quota" in r.text.lower():
             raise QuotaOut("YouTube daily quota is spent")
         if not r.ok:
@@ -975,7 +980,9 @@ def run(root: str = HERE, force: bool = False) -> None:
                     r["desc"] = ""
                 try:
                     verify(q, cache, [r["id"] for r in res], pub=True)
-                except QuotaOut:
+                except (QuotaOut, requests.RequestException) as e:
+                    print(f"[warn] {e}; the site search stops here and carries on next run", file=sys.stderr)
+                    stop = True
                     res = []
                 ups = []
                 for r in res:
@@ -985,6 +992,8 @@ def run(root: str = HERE, force: bool = False) -> None:
                 found = match_plays([p], ups, doc["t0"], loose=True)
                 if found:
                     break
+            if stop:
+                break   # (this play is searched again next run)
             for k, c in found.items():
                 have[k] = merge_playable(have.get(k), c)
             scraped_of[i].add(p["key"])
