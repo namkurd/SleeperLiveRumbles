@@ -3733,8 +3733,8 @@ def scenario_win_probability(browser):
     page.evaluate("""(() => { window.__sent = null; Object.defineProperty(navigator, 'share', {value: async (d) => { window.__sent = d; }, configurable: true});
       Object.defineProperty(navigator, 'canShare', {value: () => true, configurable: true}); })()""")
     page.click("#rb-scen-view .sc-blk:nth-of-type(2) .wpm-share"); page.wait_for_timeout(1500)
-    sent = page.evaluate("window.__sent && {files: (window.__sent.files || []).map(f => f.type), text: window.__sent.text}")
-    assert sent and sent["files"] == ["image/png"] and "wp=2." in sent["text"] and ("beat" in sent["text"] or "leads" in sent["text"] or "trails" in sent["text"]), f"one share: picture, story, link: {sent}"
+    sent = page.evaluate("window.__sent && {files: (window.__sent.files || []).length, text: window.__sent.text, url: window.__sent.url}")
+    assert sent and sent["files"] == 0 and "wp=2." in sent["url"] and ("beat" in sent["text"] or "leads" in sent["text"] or "trails" in sent["text"]), f"one share: the story and the link that replays it (no picture to push the link out): {sent}"
     assert page.evaluate("document.getElementById('wp-sheet').hidden"), "sharing from the small chart does not open the big one"
     page.evaluate("Object.defineProperty(navigator, 'share', {value: undefined, configurable: true}); Object.defineProperty(navigator, 'canShare', {value: undefined, configurable: true})")
     page.click("#rb-scen-view .sc-blk:nth-of-type(2) .sc-wpm .wpm-exp"); page.wait_for_timeout(600)
@@ -3768,6 +3768,7 @@ def scenario_win_probability(browser):
     assert all(t["top"] < mid for t in tops) and all(b["bottom"] > mid for b in bottoms), "a play's description stays on its manager's side of the chart, top or bottom"
     friend.keyboard.press("Escape"); friend.wait_for_timeout(300)
     assert friend.evaluate("document.getElementById('wp-sheet').hidden && !location.search.includes('wp=')"), "closing returns to the page and clears the link"
+    assert friend.evaluate("document.getElementById('mode-scen').classList.contains('active') && !document.getElementById('rumblin-view').hidden"), "...and lands in that matchup's Scenarios in Rumble Central"
     friend.close()
     # on a wide screen the chart uses the whole width of the card (it once measured itself while hidden and stayed narrow)
     wide = browser.new_page(viewport={"width": 1280, "height": 800}, timezone_id="UTC")

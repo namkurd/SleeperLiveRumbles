@@ -1978,7 +1978,7 @@
   <div class="wp-card">
     <div class="wp-head">
       <div class="wp-ttl"><a class="wp-brand" id="wp-brand" href="rumbles.html" hidden>Rumble Central &rsaquo;</a><div class="wp-title" id="wp-title"></div><div class="wp-sub" id="wp-sub"></div><div class="wp-story" id="wp-story"></div><div class="wp-ticker" id="wp-ticker" hidden></div></div>
-      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-rosters-btn" class="refresh-btn" title="Both starting rosters with their points">Rosters</button><button type="button" id="wp-share" class="refresh-btn" title="Share the picture, what happened and a link that opens this chart so anyone can scrub through the week">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
+      <div class="wp-btns"><button type="button" id="wp-replay" class="refresh-btn" aria-label="Replay the week" title="Watch the week play out">&#8635;</button><button type="button" id="wp-rosters-btn" class="refresh-btn" title="Both starting rosters with their points">Rosters</button><button type="button" id="wp-share" class="refresh-btn" title="Share a link that opens this matchup in Rumble Central and replays it">Share</button><button type="button" id="wp-close" class="refresh-btn" aria-label="Close">&times;</button></div>
     </div>
     <div class="wp-body">
       <div class="wp-chartwrap" id="wp-chartwrap"><div id="wp-chart"></div><div id="wp-tipx" class="trend-tip" hidden></div><div id="wp-last-top" class="wp-last" hidden></div><div id="wp-last-bot" class="wp-last" hidden></div><div id="wp-read" class="wp-read" hidden></div><div id="wp-proj" class="wp-proj" hidden></div><div id="wp-repl" class="wp-clutch wp-repl" hidden></div><div id="wp-clutch" class="wp-clutch" hidden></div><div class="wp-rosters" id="wp-rosters" hidden></div><div id="wp-pop" class="wp-pop" hidden></div></div>
@@ -8268,6 +8268,13 @@
     if (state.wpLink && state.wpLink.key === wpOpenKey) {
       // Closed the shared chart: the page carries on as normal, and a reload no longer reopens it.
       state.wpLink.gone = true;
+      // ...in Rumble Central's Scenarios for that manager and week, so the person lands in the app and not on a bare page
+      try {
+        var Ls = state.wpLink, rbs = state.rb, past = ((state.history && state.history.weeks_completed) || []).indexOf(Ls.week) >= 0;
+        if (rbs.me == null || rbs.me !== Ls.me) rbs.me = Ls.me;
+        rbs.mode = "me"; rbs.sub = "scenarios"; rbs.scenBest = false; rbs.scenWeek = past ? Ls.week : null;
+        setView("rumblin");
+      } catch (e) { /* the page carries on as it was */ }
       try { var u = new URL(location.href); u.searchParams.delete("wp"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) { /* fine */ }
     }
     document.getElementById("wp-sheet").classList.remove("wp-open"); wpClipsClear(); wpUnblind(); wpPopHide(); wpPlayStop(); wpRotateOff(); wpOpenKey = null; wpPinT = null; document.getElementById("wp-sheet").hidden = true; document.getElementById("wp-tipx").hidden = true; }
@@ -8834,20 +8841,17 @@
     label = label || btn.textContent;
     if (!pm) return;
     var s = wpSummary(pm), title = s.title.replace(/&amp;/g, "&") + " \u2013 Week " + pm.win.week + " \u00b7 Rumble Central", url = wpLinkUrl(pm), story = wpStory(pm).text;
-    var all = story + "\nWatch the replay: " + url;
+    var all = story + "\nWatch the replay: " + url;   // (copied where there is no share sheet)
     window.__wpLink = url; window.__wpText = all;
     var done = function (txt) { btn.textContent = txt; setTimeout(function () { btn.textContent = label; }, 1800); };
     var copy = function () { rbCopyText(all).then(function (ok) { done(ok ? "Copied" : "Couldn\u2019t copy"); }); };
     if (!navigator.share) { copy(); return; }
-    var name = "win-probability-week-" + pm.win.week + "-" + String(pm.t.name).toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png";
+    // The link is what is shared: it opens Rumble Central on this matchup and replays it on arrival, so the whole thing can be played with.
+    // (A picture sent along with it makes many apps drop the link, so none is attached.)
     btn.disabled = true;
-    wpSharePng(pm).then(function (blob) {
-      var file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: title, text: all });
-      return navigator.share({ title: title, text: story, url: url });
-    }).catch(function (e) {
+    navigator.share({ title: title, text: story, url: url }).catch(function (e) {
       if (e && e.name === "AbortError") return;   // cancelled
-      return navigator.share({ title: title, text: story, url: url }).catch(function () { /* cancelled */ });
+      copy();
     }).then(function () { btn.disabled = false; });
   }
   function rbPlayerRow(p, bench, struck) {
