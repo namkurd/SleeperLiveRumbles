@@ -853,7 +853,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                     cand.add(u["id"])
     try:
         verify(q, cache, sorted(cand))
-    except QuotaOut as e:
+    except (QuotaOut, requests.RequestException) as e:
         print(f"[warn] {e}; some clips will be checked on the next run", file=sys.stderr)
         complete = False
     for u in uploads:
@@ -903,7 +903,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 vids_n = [u["id"] for us in by_player.values() for u in us]
                 with_plays = sum(1 for v in vids_n if any(stacked_chapter(t) for _, t in (cache.get("chap", {}).get(v) or [])))
                 print(f"[info] STACKED week {w}: {len(vids_n)} film videos, {with_plays} with play chapters, {len(st_found)} play(s) matched")
-            except QuotaOut as e:
+            except (QuotaOut, requests.RequestException) as e:
                 print(f"[warn] {e}; STACKED chapters resume on a later run", file=sys.stderr)
         scraped_of.append(set(old_scraped) if old_scraped is not None else set())
         results.append((d, w, doc, have, tried, plays, len(found)))
@@ -919,7 +919,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             m = match_chapters([p for p in plays[:SEARCH_TOP * 2] if p["key"] not in have], recaps, cache, doc["t0"])
             have.update(m)
             results[i] = (d, w, doc, have, tried, plays, n + len(m))
-    except QuotaOut as e:
+    except (QuotaOut, requests.RequestException) as e:
         print(f"[warn] {e}; chapters resume on a later run", file=sys.stderr)
     # searches go to the biggest plays across all the weeks being worked on
     gaps = sorted(((p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results) for p in plays[:SEARCH_TOP] if p["key"] not in have and p["key"] not in tried), key=lambda x: -x[0])
@@ -939,7 +939,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             tried.add(p["key"])
             searches -= 1
             results[i] = (d, w, doc, have, tried, plays, n + len(m))
-        except QuotaOut as e:
+        except (QuotaOut, requests.RequestException) as e:
             print(f"[warn] {e}; searching resumes on a later run", file=sys.stderr)
             quota_out = True
     # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
