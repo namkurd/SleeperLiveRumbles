@@ -79,6 +79,7 @@ def install_routes(page, routes):
         page.add_init_script("window.__wpAuto = false; window.__wpFs = false; window.__wpIntroMs = 0;")   # the chart does not start playing by itself unless a test asks
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
+        page.route(lambda url: "ytimg.com" in url, lambda route: route.fulfill(status=200, content_type="image/gif", body=bytes.fromhex("47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b")))   # a video's thumbnail: one pixel
         page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
         page.route(lambda url: "sleeper.app" in url or "raw.githubusercontent.com" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
@@ -92,7 +93,7 @@ def install_routes(page, routes):
     # local static server and 404 naturally.
     def block_other(route):
         route.abort()
-    page.route(lambda url: "127.0.0.1" not in url and "sleeper.app" not in url and "sleepercdn.com" not in url, block_other)
+    page.route(lambda url: "127.0.0.1" not in url and "sleeper.app" not in url and "sleepercdn.com" not in url and "ytimg.com" not in url, block_other)
 
 
 def get_table_rows(page):
@@ -4082,7 +4083,7 @@ def scenario_past_seasons(browser):
     played, failed = None, None
     for i in range(nclip):
         pg.click(f"#wp-list li.has-clip >> nth={i} >> .wp-play"); pg.wait_for_timeout(500)
-        st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-clipfail a, #wp-list .wp-clipnote a') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
+        st = pg.evaluate("({src: (document.querySelector('#wp-list .wp-clipbox iframe') || {}).src || '', link: (document.querySelector('#wp-list .wp-thumb, #wp-chartwrap .wp-thumb') || {}).href || '', n: document.querySelectorAll('#wp-list .wp-clipbox').length})")
         assert st["n"] == 1, "one clip open at a time"
         played = played or (st["src"] if st["src"] else None)
         failed = failed or (st["link"] if st["link"] else None)
@@ -4094,7 +4095,7 @@ def scenario_past_seasons(browser):
         pg.click("#wp-list li.no-clip >> nth=0"); pg.wait_for_timeout(200)
         assert pg.evaluate("document.querySelectorAll('#wp-list .wp-find, #wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length") == 0, "a play with no clip just goes to that play: no search box, no video"
         assert pg.evaluate("!document.getElementById('wp-tipx').hidden"), "...it shows that moment on the scrubber"
-    assert failed is None or "youtube.com/watch?v=badOnly0000" in failed, f"a play with nothing that will play here links to YouTube: {failed}"
+    assert failed and "youtube.com/watch?v=badOnly0000" in failed, f"a play with nothing that will play here shows its thumbnail, linking to YouTube: {failed}"
     pg.evaluate("document.querySelector('#wp-chart .wp-mk').dispatchEvent(new MouseEvent('click', {bubbles: true}))"); pg.wait_for_timeout(200)
     assert pg.evaluate("document.querySelectorAll('#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat').length") == 0, "tapping a numbered mark on the chart only goes to that play, no video"
     pg.click("#wp-list li.has-clip >> nth=0 >> .wp-ph"); pg.wait_for_timeout(200)

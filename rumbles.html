@@ -1622,7 +1622,6 @@
   .wp-clipfloat { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(80%, 520px); background: var(--panel); border-radius: 10px; border: 1px solid var(--panel-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); padding: 0; }
   .wp-clipfloat .wp-clipcap { position: absolute; left: 0; top: 100%; margin-top: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
   .wp-clipfloat .wp-clipcap > * { padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--panel-border); white-space: nowrap; margin: 0; }
-  .wp-clipfloat.err { width: min(94%, 600px); } .wp-clipfloat.err .wp-clipbox iframe { aspect-ratio: auto; height: 300px; }
   .wp-clipfloat .wp-clipbox, .wp-clipfloat .wp-clipbox.auto { padding: 0; background: transparent; } .wp-clipfloat .wp-clipfail, .wp-clipfloat .wp-tapnote, .wp-clipfloat .wp-xlink, .wp-clipfloat .wp-find { padding: 8px 10px; color: var(--text); }
   .wp-clipx { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; z-index: 2; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
@@ -1648,6 +1647,10 @@
   .wp-clipfloat.pending { opacity: 0; pointer-events: none; } li.wp-clipbox.pending { height: 0; overflow: hidden; opacity: 0; margin: 0; padding: 0; }
   /* green: proven to play inside the page; orange: opens on YouTube (blocked from embedding, or not checked yet). Both glow. */
   .wp-play.ok { --accent: #2ecc71; color: #2ecc71; }
+  .wp-thumb { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #000; text-decoration: none; }
+  .wp-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.85; }
+  .wp-thumb-play { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 3.2em; height: 3.2em; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; display: flex; align-items: center; justify-content: center; padding-left: 0.2em; box-sizing: border-box; font-size: 1.1rem; }
+  .wp-thumb-cta { position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 10px; text-align: center; font-weight: 700; font-size: 0.8rem; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,0.85)); }
   .wp-clipnote a, .wp-find a, .wp-xlink { color: var(--accent); }
   @keyframes wp-glow { 0%, 100% { box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 75%, transparent); } }
   @media (prefers-reduced-motion: reduce) { .wp-play { animation: none; } }
@@ -8180,7 +8183,16 @@
           onError: function (ev) {
             if (!box.parentNode) return;
             if (i + 1 < list.length) { try { pl.destroy(); } catch (x) { /* gone already */ } wpClipPlay(box, list, i + 1, tries); }
-            else { failed = true; var nn = cap.querySelector(".wp-clipnote"); if (nn) nn.remove(); if (box.parentNode.classList) box.parentNode.classList.add("err"); box.classList.add("err"); }   // YouTube's own message and button get the room they need
+            else {
+              // nothing here will play: the video's own picture with a button to YouTube, at the exact moment (YouTube's own error panel
+              // links to the start of the video)
+              failed = true; try { pl.destroy(); } catch (x) { /* gone already */ }
+              var nn = cap.querySelector(".wp-clipnote"); if (nn) nn.remove();
+              box.innerHTML = "";
+              var th = document.createElement("a"); th.className = "wp-thumb"; th.href = wpClipLink(exact); th.target = "_blank"; th.rel = "noopener";
+              th.innerHTML = '<img alt="" src="https://i.ytimg.com/vi/' + encodeURIComponent(exact.id) + '/hqdefault.jpg"><span class="wp-thumb-play">\u25b6</span><span class="wp-thumb-cta">Watch on YouTube \u2197</span>';
+              box.appendChild(th); box.appendChild(cap);
+            }
           } } });
       // a player that shows only a black box (it can happen) still gets a way out
       setTimeout(function () {
