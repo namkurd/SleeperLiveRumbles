@@ -376,3 +376,19 @@ def test_a_defensive_clip_must_name_its_defender():
     C.prune_defense(have, [p])
     assert "DAL:1" not in have
     assert C.score_title(saints["t"], None, "DAL", "NO", p["label"], True, "New Orleans Saints", True, "", p["actor"]) == 0
+
+
+def test_new_search_pieces():
+    html = ('<script>var ytInitialData = {"x":[{"videoRenderer":{"videoId":"abcdefghijk","title":{"runs":[{"text":"Cardinals vs Chargers highlights"}]},'
+            '"ownerText":{"runs":[{"text":"Some Creator","navigationEndpoint":{"browseEndpoint":{"browseId":"UCabc123"}}}]},"lengthText":{"simpleText":"5:57"}}}]};</script>')
+    got = C.parse_results(html)
+    assert got[0]["chid"] == "UCabc123" and got[0]["dur"] == 357, got
+    # a chapter list inside a recap names the play
+    cache = {"vid": {"R": [600, 1]}, "chap": {"R": [[30, "Justin Herbert 20-yard touchdown pass"], [90, "other"], [150, "more"]]}}
+    p = {"key": "k:1", "sec": 100, "player": "Justin Herbert", "team": "LAC", "opp": "ARI", "label": "20 yd TD pass", "def": False}
+    t0 = 1_000_000_000_000
+    m = C.match_chapters([p], [{"id": "R", "title": "Cardinals vs Chargers highlights", "ch": "Chargers", "pub_ms": t0 + 3600_000}], cache, t0)
+    assert m["k:1"]["id"] == "R" and m["k:1"]["s"] == 28 and m["k:1"].get("chap") == 1, m
+    # 14 days for a searched-for play, 7 for a crawled one
+    up = {"id": "U", "title": "Justin Herbert 20 yard touchdown pass vs Cardinals", "ch": "X", "dur": 20, "embeddable": True, "pub_ms": t0 + 100_000 + 10 * 86400 * 1000, "desc": "", "rank": 0}
+    assert C.match_plays([p], [up], t0 - 100_000 + 0, loose=True) and not C.match_plays([p], [up], t0 - 100_000 + 0, loose=False)

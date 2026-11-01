@@ -274,7 +274,7 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool 
         at = t0_ms + p["sec"] * 1000
         found = []
         for u in uploads:
-            if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
+            if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + (14 if loose else 7) * 86400 * 1000:
                 continue
             s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""), p.get("actor"))
             if s < MIN_SCORE and loose and first_result_ok(u, p):
@@ -620,8 +620,11 @@ SCRAPE_VER = 1                               # bump to search every unmatched pl
 SCRAPE_MAX = 600                             # plays searched on the site per run
 SCRAPE_SECONDS = 30 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_DEF = 10                              # ...and this many of its defensive plays
-SCRAPE_PLAYS = 30                            # a week's biggest plays searched on the site
-SCRAPE_TOP = 6                               # results read per search
+SCRAPE_PLAYS = 45                            # a week's biggest plays searched on the site
+DISCOVERED_MAX = 40                          # channels found by the site search that are crawled in full
+RECAP_SECONDS = 15 * 60                      # time the recap-video pass may take per run
+SCRAPE_TOP = 12                              # results read per search
+SCRAPE_TOP_OLD = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
 SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter
 WEB_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
@@ -649,6 +652,7 @@ def parse_results(html: str) -> list[dict]:
             if isinstance(v, dict) and v.get("videoId"):
                 out.append({"id": v["videoId"], "title": "".join(r.get("text", "") for r in (v.get("title") or {}).get("runs", [])),
                             "ch": ((v.get("ownerText") or {}).get("runs") or [{}])[0].get("text", ""),
+                            "chid": ((((v.get("ownerText") or {}).get("runs") or [{}])[0].get("navigationEndpoint") or {}).get("browseEndpoint") or {}).get("browseId", ""),
                             "dur": clock_seconds((v.get("lengthText") or {}).get("simpleText"))})
             for x in o.values():
                 walk(x)
@@ -708,9 +712,12 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
 WEB_FAILS: list[int] = []   # status codes of site searches that did not answer, for the log
 
 
-def web_search(query: str) -> list[dict]:
+def web_search(query: str, short: bool = True) -> list[dict]:
     time.sleep(0.3)
-    r = requests.get(YT_WEB, params={"search_query": query, "sp": SHORT_FILTER}, headers=WEB_HEADERS, timeout=30)
+    params = {"search_query": query}
+    if short:
+        params["sp"] = SHORT_FILTER
+    r = requests.get(YT_WEB, params=params, headers=WEB_HEADERS, timeout=30)
     if not r.ok:
         WEB_FAILS.append(r.status_code)
         return []
@@ -927,7 +934,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
                 old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
-                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS + SCRAPE_DEF
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS + SCRAPE_DEF and old.get("rc")
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -951,6 +958,10 @@ def run(root: str = HERE, force: bool = False) -> None:
         return
     q = Quota(allowed)
     q.key = key
+    # channels whose videos the site search kept finding for plays (3 or more clips) are read in full from now on, like the team channels
+    for cid, cnt in sorted((cache.get("disc") or {}).items(), key=lambda kv: -kv[1])[:DISCOVERED_MAX]:
+        if cnt >= 3 and cid.startswith("UC") and "UU" + cid[2:] not in playlists:
+            playlists.append("UU" + cid[2:])
     complete = crawl(q, cache, playlists, min(a for a, _ in windows), windows)
     uploads = uploads_from_cache(cache, playlists, windows)
     print(f"[info] {len(uploads)} uploads in the windows of {len(work)} week(s); crawl {'complete' if complete else 'to be continued'}; {allowed - q.left} API units used")
@@ -987,7 +998,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     # plays still without a clip get a YouTube search each (100 units), the biggest swings first and only while quota is left
     searches = max(0, min(MAX_SEARCHES, (q.left - 300) // 100))
     by_ch = {}
-    touched, results, scraped_of = set(), [], []
+    touched, results, scraped_of, rc_of = set(), [], [], []
     for d, w, doc, names in work:
         out_dir = os.path.join(d, "wp_clips")
         os.makedirs(out_dir, exist_ok=True)
@@ -998,8 +1009,9 @@ def run(root: str = HERE, force: bool = False) -> None:
             have = (old.get("clips") or {}) if fresh else {}
             tried = set(old.get("tried") or []) if fresh else set()
             old_scraped = list(old.get("scraped") or []) if fresh and old.get("sv2") == SCRAPE_VER else []
+            old_rc = bool(old.get("rc")) if fresh and old.get("sv2") == SCRAPE_VER else False
         except Exception:  # noqa: BLE001
-            have, tried, old_scraped = {}, set(), []
+            have, tried, old_scraped, old_rc = {}, set(), [], False
         plays = plays_by_week[(d, w)]
         found = match_plays([p for p in plays if p["key"] not in have or is_stacked(have[p["key"]])], uploads, doc["t0"])
         have.update(found)
@@ -1018,6 +1030,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             except (QuotaOut, requests.RequestException) as e:
                 print(f"[warn] {e}; STACKED chapters resume on a later run", file=sys.stderr)
         scraped_of.append(set(old_scraped) if old_scraped is not None else set())
+        rc_of.append(bool(old_rc))
         results.append((d, w, doc, have, tried, plays, len(found)))
     # chapters of longer highlight videos for the plays no short clip covered
     try:
@@ -1059,6 +1072,48 @@ def run(root: str = HERE, force: bool = False) -> None:
     for d, w, doc, have, tried, plays, n in results:
         dedupe_clips(have, plays)
         prune_defense(have, plays)
+    # game highlight videos with chapters (a team's or a network's recap lists its plays by time): found on the site, read through the API,
+    # and the plays still without a clip that a chapter names are cut out of them
+    recap_started = time.time()
+    for i, (d, w, doc, have, tried, plays, n) in enumerate(results):
+        if rc_of[i] or time.time() - recap_started > RECAP_SECONDS:
+            continue
+        gaps_i = [p for p in scrape_pool(plays) if lacks_playable(have.get(p["key"]))]
+        if not gaps_i:
+            rc_of[i] = True
+            continue
+        games = [g for g in (doc.get("g") or {}) if "@" in g]
+        season = int(doc.get("season") or 0)
+
+        def recap_fetch(g):
+            a, h = g.split("@")
+            na, nh = (NICK.get(a) or [""])[0], (NICK.get(h) or [""])[0]
+            if not (na and nh):
+                return []
+            try:
+                return [r for r in web_search(f"{na} vs {nh} highlights week {w} {season}", short=False)[:6]
+                        if not blocked_channel(r.get("ch")) and re.search(r"highlight|recap", r["title"], re.I) and 150 <= r["dur"] <= 2400
+                        and na in norm(r["title"]) and nh in norm(r["title"])]   # both teams named: it is this game
+            except requests.RequestException:
+                return []
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                found_r = [r for lst in pool.map(recap_fetch, games) for r in lst]
+            ids = list(dict.fromkeys(r["id"] for r in found_r))
+            if ids:
+                verify(q, cache, ids, pub=True)
+                fetch_chapters(q, cache, ids)
+            recaps = [{"id": r["id"], "title": r["title"], "ch": r["ch"], "pub_ms": cache.get("pub", {}).get(r["id"], 0)} for r in found_r if r["id"] in cache.get("pub", {})]
+            if recaps:
+                m = match_chapters(gaps_i, recaps, cache, doc["t0"])
+                for k, c in m.items():
+                    have[k] = merge_playable(have.get(k), c)
+                results[i] = (d, w, doc, have, tried, plays, n + len(m))
+            rc_of[i] = True
+        except (QuotaOut, requests.RequestException) as e:
+            print(f"[warn] {e}; recap videos resume on a later run", file=sys.stderr)
+            break
+    print(f"[info] recap videos: {sum(rc_of)} of {len(rc_of)} weeks looked at")
     # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
     scraped_n = 0
     scrape_started = time.time()
@@ -1109,6 +1164,10 @@ def run(root: str = HERE, force: bool = False) -> None:
                         ups.append(r)
                 found = match_plays([p], ups, doc["t0"], loose=True)
                 if found:
+                    for c_ in found.values():   # the creator behind a find is remembered: from 3 finds on, the whole channel is crawled
+                        chid = next((r.get("chid") for r in ups if r["id"] == c_["id"]), "")
+                        if chid:
+                            cache.setdefault("disc", {})[chid] = cache["disc"].get(chid, 0) + 1
                     break
             if stop:
                 break   # (this play is searched again next run)
@@ -1129,7 +1188,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS + SCRAPE_DEF, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in scrape_pool(plays)), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS + SCRAPE_DEF, "rc": int(rc_of[results_idx[(d, w)]]), "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in scrape_pool(plays)), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))
