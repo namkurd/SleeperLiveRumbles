@@ -1072,110 +1072,114 @@ def run(root: str = HERE, force: bool = False) -> None:
     for d, w, doc, have, tried, plays, n in results:
         dedupe_clips(have, plays)
         prune_defense(have, plays)
-    # game highlight videos with chapters (a team's or a network's recap lists its plays by time): found on the site, read through the API,
-    # and the plays still without a clip that a chapter names are cut out of them
-    recap_started = time.time()
-    for i, (d, w, doc, have, tried, plays, n) in enumerate(results):
-        if rc_of[i] or time.time() - recap_started > RECAP_SECONDS:
-            continue
-        gaps_i = [p for p in scrape_pool(plays) if lacks_playable(have.get(p["key"]))]
-        if not gaps_i:
-            rc_of[i] = True
-            continue
-        games = [g for g in (doc.get("g") or {}) if "@" in g]
-        season = int(doc.get("season") or 0)
-
-        def recap_fetch(g):
-            a, h = g.split("@")
-            na, nh = (NICK.get(a) or [""])[0], (NICK.get(h) or [""])[0]
-            if not (na and nh):
-                return []
-            try:
-                return [r for r in web_search(f"{na} vs {nh} highlights week {w} {season}", short=False)[:6]
-                        if not blocked_channel(r.get("ch")) and re.search(r"highlight|recap", r["title"], re.I) and 150 <= r["dur"] <= 2400
-                        and na in norm(r["title"]) and nh in norm(r["title"])]   # both teams named: it is this game
-            except requests.RequestException:
-                return []
-        try:
-            with ThreadPoolExecutor(max_workers=6) as pool:
-                found_r = [r for lst in pool.map(recap_fetch, games) for r in lst]
-            ids = list(dict.fromkeys(r["id"] for r in found_r))
-            if ids:
-                verify(q, cache, ids, pub=True)
-                fetch_chapters(q, cache, ids)
-            recaps = [{"id": r["id"], "title": r["title"], "ch": r["ch"], "pub_ms": cache.get("pub", {}).get(r["id"], 0)} for r in found_r if r["id"] in cache.get("pub", {})]
-            if recaps:
-                m = match_chapters(gaps_i, recaps, cache, doc["t0"])
-                for k, c in m.items():
-                    have[k] = merge_playable(have.get(k), c)
-                results[i] = (d, w, doc, have, tried, plays, n + len(m))
-            rc_of[i] = True
-        except (QuotaOut, requests.RequestException) as e:
-            print(f"[warn] {e}; recap videos resume on a later run", file=sys.stderr)
-            break
-    print(f"[info] recap videos: {sum(rc_of)} of {len(rc_of)} weeks looked at")
-    # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
     scraped_n = 0
-    scrape_started = time.time()
-    gaps2 = sorted(((0 if results[i][0] == root else 1, -p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results)
-                    for p in scrape_pool(plays) if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
-    BATCH = 12
-    stop = False
-    print(f"[info] site search: {len(gaps2)} plays to search")
-    for b0 in range(0, len(gaps2), BATCH):
-        if stop or scraped_n >= SCRAPE_MAX or time.time() - scrape_started > SCRAPE_SECONDS:
-            break
-        batch = gaps2[b0:b0 + BATCH]
+    try:
+        # game highlight videos with chapters (a team's or a network's recap lists its plays by time): found on the site, read through the API,
+        # and the plays still without a clip that a chapter names are cut out of them
+        recap_started = time.time()
+        for i, (d, w, doc, have, tried, plays, n) in enumerate(results):
+            if rc_of[i] or time.time() - recap_started > RECAP_SECONDS:
+                continue
+            gaps_i = [p for p in scrape_pool(plays) if lacks_playable(have.get(p["key"]))]
+            if not gaps_i:
+                rc_of[i] = True
+                continue
+            games = [g for g in (doc.get("g") or {}) if "@" in g]
+            season = int(doc.get("season") or 0)
 
-        def fetch(item):
-            _, _, i, p = item
-            d, w, doc, *_ = results[i]
-            try:
-                return [web_search(qt)[:SCRAPE_TOP] for qt in scrape_queries(p, int(doc.get("season") or 0), w, doc["t0"])]
-            except requests.RequestException:
-                return None
-        with ThreadPoolExecutor(max_workers=6) as pool:   # the searches of a batch run side by side
-            fetched = list(pool.map(fetch, batch))
-        for (_, _, i, p), lists in zip(batch, fetched):
-            if lists is None:
-                print("[warn] site search skipped (request failed)", file=sys.stderr)
-                stop = True
-                break
-            d, w, doc, have, tried, plays, n = results[i]
-            p["sib"] = any(o is not p and o["player"] == p["player"] and o["team"] == p["team"] and play_kind(o["label"])[:1] == play_kind(p["label"])[:1] for o in plays)
-            found = {}
-            for qi, raw in enumerate(lists):
-                # a video already used for a different play of this week is not it (two plays at one instant may share one)
-                taken = {c["id"] for k, c in have.items() if k != p["key"] and k.split(":")[-1] != str(p["sec"]) and not blocked_channel(c.get("c"))}
-                res = [r for r in raw if not blocked_channel(r.get("ch")) and r["id"] not in taken]
-                for rank, r in enumerate(res):
-                    r["rank"] = rank if qi == 0 else 99   # only the first result of the most exact search is trusted on its own
-                    r["desc"] = ""
+            def recap_fetch(g):
+                a, h = g.split("@")
+                na, nh = (NICK.get(a) or [""])[0], (NICK.get(h) or [""])[0]
+                if not (na and nh):
+                    return []
                 try:
-                    verify(q, cache, [r["id"] for r in res], pub=True)
-                except (QuotaOut, requests.RequestException) as e:
-                    print(f"[warn] {e}; the site search stops here and carries on next run", file=sys.stderr)
+                    return [r for r in web_search(f"{na} vs {nh} highlights week {w} {season}", short=False)[:6]
+                            if not blocked_channel(r.get("ch")) and re.search(r"highlight|recap", r["title"], re.I) and 150 <= r["dur"] <= 2400
+                            and na in norm(r["title"]) and nh in norm(r["title"])]   # both teams named: it is this game
+                except requests.RequestException:
+                    return []
+            try:
+                with ThreadPoolExecutor(max_workers=6) as pool:
+                    found_r = [r for lst in pool.map(recap_fetch, games) for r in lst]
+                ids = list(dict.fromkeys(r["id"] for r in found_r))
+                if ids:
+                    verify(q, cache, ids, pub=True)
+                    fetch_chapters(q, cache, ids)
+                recaps = [{"id": r["id"], "title": r["title"], "ch": r["ch"], "pub_ms": cache.get("pub", {}).get(r["id"], 0)} for r in found_r if r["id"] in cache.get("pub", {})]
+                if recaps:
+                    m = match_chapters(gaps_i, recaps, cache, doc["t0"])
+                    for k, c in m.items():
+                        have[k] = merge_playable(have.get(k), c)
+                    results[i] = (d, w, doc, have, tried, plays, n + len(m))
+                rc_of[i] = True
+            except (QuotaOut, requests.RequestException) as e:
+                print(f"[warn] {e}; recap videos resume on a later run", file=sys.stderr)
+                break
+        print(f"[info] recap videos: {sum(rc_of)} of {len(rc_of)} weeks looked at")
+        # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
+        scrape_started = time.time()
+        gaps2 = sorted(((0 if results[i][0] == root else 1, -p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results)
+                        for p in scrape_pool(plays) if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
+        BATCH = 12
+        stop = False
+        print(f"[info] site search: {len(gaps2)} plays to search")
+        for b0 in range(0, len(gaps2), BATCH):
+            if stop or scraped_n >= SCRAPE_MAX or time.time() - scrape_started > SCRAPE_SECONDS:
+                break
+            batch = gaps2[b0:b0 + BATCH]
+
+            def fetch(item):
+                _, _, i, p = item
+                d, w, doc, *_ = results[i]
+                try:
+                    return [web_search(qt)[:SCRAPE_TOP] for qt in scrape_queries(p, int(doc.get("season") or 0), w, doc["t0"])]
+                except requests.RequestException:
+                    return None
+            with ThreadPoolExecutor(max_workers=6) as pool:   # the searches of a batch run side by side
+                fetched = list(pool.map(fetch, batch))
+            for (_, _, i, p), lists in zip(batch, fetched):
+                if lists is None:
+                    print("[warn] site search skipped (request failed)", file=sys.stderr)
                     stop = True
-                    res = []
-                ups = []
-                for r in res:
-                    if r["id"] in cache["vid"] and r["id"] in cache.get("pub", {}):
-                        r["dur"], r["embeddable"], r["pub_ms"] = cache["vid"][r["id"]][0], bool(cache["vid"][r["id"]][1]), cache["pub"][r["id"]]
-                        ups.append(r)
-                found = match_plays([p], ups, doc["t0"], loose=True)
-                if found:
-                    for c_ in found.values():   # the creator behind a find is remembered: from 3 finds on, the whole channel is crawled
-                        chid = next((r.get("chid") for r in ups if r["id"] == c_["id"]), "")
-                        if chid:
-                            cache.setdefault("disc", {})[chid] = cache["disc"].get(chid, 0) + 1
                     break
-            if stop:
-                break   # (this play is searched again next run)
-            for k, c in found.items():
-                have[k] = merge_playable(have.get(k), c)
-            scraped_of[i].add(p["key"])
-            scraped_n += 1
-            results[i] = (d, w, doc, have, tried, plays, n + len(found))
+                d, w, doc, have, tried, plays, n = results[i]
+                p["sib"] = any(o is not p and o["player"] == p["player"] and o["team"] == p["team"] and play_kind(o["label"])[:1] == play_kind(p["label"])[:1] for o in plays)
+                found = {}
+                for qi, raw in enumerate(lists):
+                    # a video already used for a different play of this week is not it (two plays at one instant may share one)
+                    taken = {c["id"] for k, c in have.items() if k != p["key"] and k.split(":")[-1] != str(p["sec"]) and not blocked_channel(c.get("c"))}
+                    res = [r for r in raw if not blocked_channel(r.get("ch")) and r["id"] not in taken]
+                    for rank, r in enumerate(res):
+                        r["rank"] = rank if qi == 0 else 99   # only the first result of the most exact search is trusted on its own
+                        r["desc"] = ""
+                    try:
+                        verify(q, cache, [r["id"] for r in res], pub=True)
+                    except (QuotaOut, requests.RequestException) as e:
+                        print(f"[warn] {e}; the site search stops here and carries on next run", file=sys.stderr)
+                        stop = True
+                        res = []
+                    ups = []
+                    for r in res:
+                        if r["id"] in cache["vid"] and r["id"] in cache.get("pub", {}):
+                            r["dur"], r["embeddable"], r["pub_ms"] = cache["vid"][r["id"]][0], bool(cache["vid"][r["id"]][1]), cache["pub"][r["id"]]
+                            ups.append(r)
+                    found = match_plays([p], ups, doc["t0"], loose=True)
+                    if found:
+                        for c_ in found.values():   # the creator behind a find is remembered: from 3 finds on, the whole channel is crawled
+                            chid = next((r.get("chid") for r in ups if r["id"] == c_["id"]), "")
+                            if chid:
+                                disc = cache.setdefault("disc", {})
+                                disc[chid] = disc.get(chid, 0) + 1
+                        break
+                if stop:
+                    break   # (this play is searched again next run)
+                for k, c in found.items():
+                    have[k] = merge_playable(have.get(k), c)
+                scraped_of[i].add(p["key"])
+                scraped_n += 1
+                results[i] = (d, w, doc, have, tried, plays, n + len(found))
+    except Exception as e:  # noqa: BLE001 - whatever else goes wrong here, the clips found so far are still saved
+        print(f"[warn] site search / recap videos stopped early ({type(e).__name__}: {e})", file=sys.stderr)
     print(f"[info] site search: {scraped_n} plays searched, {len(WEB_FAILS)} searches without results" + (f" (statuses {sorted(set(WEB_FAILS))})" if WEB_FAILS else ""))
     cache["spent"].append([int(now_s), allowed - q.left])
     save_cache(cache_path, cache)
