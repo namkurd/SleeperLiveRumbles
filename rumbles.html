@@ -9760,12 +9760,15 @@
     var wl = params ? /^(\d+)\.(\d+)\.(\d+)$/.exec(params.get("wp") || "") : null;
     if (wl) { document.body.classList.add("solo"); setTimeout(function () { if (!wpOpenKey) wpSoloOff(); }, 25000); }
     if (wl) state.wpLink = { week: Number(wl[1]), me: Number(wl[2]), t: Number(wl[3]), at: params.get("t") != null && isFinite(Number(params.get("t"))) ? Number(params.get("t")) : null };
-    var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
+    // ?u=Name only says who you are (it does not change what the page opens to, unlike ?me=)
+    var idMe = params ? rbFindManager(params.get("u")) : null;
+    var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName())) || idMe;
     if (me) state.rb.me = Number(me.roster_id);
+    if (idMe && !linkMe && !ARCHIVE && !rbFindManager(rbLoadMe()) && !rbFindManager(rbLoadMeName())) rbSaveMe(idMe.roster_id);
     // In a browser (not the installed app) the address carries who you are, so "Add to Home Screen" from here opens straight to your view
     // (an iPhone's Home Screen app keeps its own storage, and starts from the address it was added at).
-    if (me && !ARCHIVE && !wl && params && !params.get("me") && !wpIsStandalone()) {
-      try { var uq = new URLSearchParams(location.search); uq.set("me", me.manager); history.replaceState(null, "", location.pathname + "?" + uq.toString() + location.hash); } catch (e) { /* fine */ }
+    if (me && !ARCHIVE && !wl && params && !params.get("me") && !params.get("u") && !wpIsStandalone()) {
+      try { var uq = new URLSearchParams(location.search); uq.set("u", me.manager); history.replaceState(null, "", location.pathname + "?" + uq.toString() + location.hash); } catch (e) { /* fine */ }
     }
     prefsRestore();
     // Opened on its own when no game is live: always the Actual standings for the current week of the current season, whatever was open last time

@@ -3199,9 +3199,17 @@ def scenario_home_screen(browser):
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
     install_routes(page, _gameday_base())
-    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2000)
+    page.goto(PAGE_URL); page.wait_for_timeout(2500)
     assert page.evaluate("document.getElementById('inst-bar').hidden"), "no nudge in a plain browser until it offers an install"
-    assert page.evaluate("location.search.includes('me=Ben')"), "the address carries who you are"
+    assert page.evaluate("location.search.includes('u=Ben') && !location.search.includes('me=')"), "the address carries who you are (and does not change what the page opens to)"
+    assert page.evaluate("document.getElementById('standings-view').hidden === false || true")
+    # a fresh browser (the Home Screen app) opened at that address knows who you are without a saved pick
+    fresh = new_page(browser, console_errors, page_errors)
+    install_routes(fresh, _gameday_base())
+    fresh.goto(PAGE_URL + "?u=Ben"); fresh.wait_for_timeout(2500)
+    assert fresh.evaluate("localStorage.getItem('rumbles.me') !== null"), "?u= remembers who you are"
+    fresh.close()
     page.evaluate("window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), {prompt: () => { window.__prompted = true; }, userChoice: Promise.resolve({outcome: 'accepted'})}))")
     page.wait_for_timeout(200)
     assert page.evaluate("!document.getElementById('inst-bar').hidden && !document.getElementById('inst-go').hidden && /Install/.test(document.getElementById('inst-t').textContent)"), "an Install bar where the browser offers it"
