@@ -346,3 +346,21 @@ def test_one_video_is_not_kept_for_two_different_plays():
     assert have["1:50"]["id"] == "W" and "alt" not in have["1:50"], have["1:50"]
     one = {"1:7": dict(vid)}
     assert C.dedupe_clips(one, plays) == 0 and "1:7" in one, "a video used once stays"
+
+
+def test_defensive_plays_name_their_defender():
+    assert C.actor_of("interception (T. Watt)") == "T. Watt"
+    assert C.actor_of("fumble recovery (T. Settle), sack (K. Chaisson)") == "T. Settle|K. Chaisson"
+    assert C.actor_of("interception") is None and C.actor_of("3 points, 187 yards allowed") is None
+    names = {"PIT": ["Pittsburgh Steelers", "DEF"], "9": ["A Player", "WR"]}
+    doc = {"tm": {"PIT": "PIT"}, "tg": {"PIT": "ATL@PIT"}, "ev": [[100, "PIT", 3.2, "interception return TD (T. Watt)"], [200, "PIT", 2.0, "sack (D. Stills)"], [300, "9", 1.0, "3 yd catch"]]}
+    ps = C.candidate_plays(doc, names)
+    assert [(p["def"], p["player"], p["team"], p["opp"], p["actor"]) for p in ps] == [(True, None, "PIT", "ATL", "T. Watt"), (True, None, "PIT", "ATL", "D. Stills")], ps
+    p = ps[0]
+    # a title naming the defender is a match; the same title naming someone else is not
+    assert C.score_title("T.J. Watt pick six vs Falcons", None, "PIT", "ATL", p["label"], True, "Bleacher Report", True, "", p["actor"]) >= C.MIN_SCORE
+    assert C.score_title("Sam Darnold throws a pick six", None, "PIT", "ATL", p["label"], True, "Bleacher Report", True, "", p["actor"]) == 0
+    assert C.scrape_pool([dict(p, def_=1)] * 0) == []
+    many = [{"def": False, "key": str(i)} for i in range(40)] + [{"def": True, "key": "d%d" % i} for i in range(15)]
+    pool = C.scrape_pool(many)
+    assert len(pool) == C.SCRAPE_PLAYS + C.SCRAPE_DEF and sum(1 for x in pool if x["def"]) == C.SCRAPE_DEF

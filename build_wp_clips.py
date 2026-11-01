@@ -44,6 +44,7 @@ HANDLES = ["@NFL", "@NFLonFOX", "@NFLNetwork", "@ESPN", "@BleacherReport", "@Hou
 CLIP_SECONDS = 15
 MAX_DURATION = 120                           # a highlight of one play, not a recap
 MIN_POINTS = 2.5
+MIN_DEF_POINTS = 1.9                         # an interception or a sack is a smaller number of points but a big play
 MAX_PLAYS = 150
 MIN_SCORE = 7
 DAILY_UNITS = 8500                          # of YouTube's 10,000 free units a day, what all runs together may use
@@ -80,7 +81,7 @@ def play_kind(label: str) -> list[str]:
     l = label.lower()
     out = []
     if "interception" in l or "pick" in l:
-        out += ["interception", "pick", "int", "picks", "intercepts"]
+        out += ["interception", "pick", "int", "picks", "intercepts", "picked", "pick six", "pick 6"]
     elif "td" in l:
         out += ["touchdown", "td"]
     if "sack" in l:
@@ -97,12 +98,18 @@ NOT_A_PLAY = re.compile(r"\b(game|games|highlights|best plays|recap|every|all|we
                         r"pregame|talks|says|speaks|celly|celebration|film|breakdown|season|career|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns", re.I)
 
 
+def actor_of(label: str) -> str | None:
+    """The defender a defensive play names, "interception (T. Watt)" -> "T. Watt"."""
+    names = re.findall(r"\(([^()]+)\)\s*(?:,|$)", label or "")
+    return "|".join(n.strip() for n in names) if names else None
+
+
 def yards_in(label: str) -> int | None:
     m = re.search(r"(\d+) yd", label)
     return int(m.group(1)) if m else None
 
 
-def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "") -> int:
+def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "", actor: str | None = None) -> int:
     if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
         return 0
     t = norm(title + " " + desc)   # a result's description often names the player, team and distance a short title leaves out
@@ -128,9 +135,15 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
         need_yards = not backed
         s += 5 if first else 4
     else:
-        if not (team_in_title or own_channel):
-            return 0       # a D/ST has no name to find, so its team has to be in the title or the channel
-        s += 3             # (what a player's name would have been worth)
+        # a defensive play names its defender: his surname in the title is as good as a player's name (with his team, his opponent or
+        # his first initial); without a name the team has to be in the title or the channel
+        a_in = any(len(x.split()) > 0 and x.split()[-1] in words and len(x.split()[-1]) > 2 for x in (norm(a) for a in (actor or "").split("|")) if x)
+        if a_in and (team_in_title or own_channel or any(n in t for n in opps) or loose):
+            s += 5
+        elif not (team_in_title or own_channel):
+            return 0
+        else:
+            s += 3             # (what a player's name would have been worth)
     if team_in_title or own_channel:
         s += 2
     if any(n in t for n in opps):
@@ -177,7 +190,8 @@ def first_result_ok(u: dict, p: dict) -> bool:
         if len(parts) < 2 or parts[-1] not in words or not (parts[0] in words or team_in or any(n in t for n in opps)):
             return False
     elif not team_in:
-        return False
+        if not any(x.split() and len(x.split()[-1]) > 2 and x.split()[-1] in words for x in (norm(a) for a in (p.get("actor") or "").split("|")) if x):
+            return False
     y = yards_in(p["label"])
     said = [int(x) for x in re.findall(r"\b(\d+) (?:yard|yd)", t)]
     if y is not None and said and y not in said:
@@ -194,22 +208,28 @@ def candidate_plays(doc: dict, names: dict) -> list[dict]:
     plays = []
     tm, tg = doc.get("tm") or {}, doc.get("tg") or {}
     for sec, sid, pts, label in doc.get("ev") or []:
-        if abs(pts) < MIN_POINTS or SKIP.search(label or ""):
+        d_st = sid in NICK or ((names.get(sid) or [None, ""])[1] == "DEF")
+        if abs(pts) < (MIN_DEF_POINTS if d_st else MIN_POINTS) or SKIP.search(label or ""):
             continue
-        team = tm.get(sid)
+        team = tm.get(sid) or (sid if sid in NICK else None) or (sid if sid in NICK else None)
         game = tg.get(team) if team else None
         opp = None
         if game and "@" in game:
             a, h = game.split("@")
             opp = h if team == a else a
         nm = (names.get(sid) or [None])[0]
-        is_def = not nm and sid in NICK
+        # a D/ST is keyed by its team abbreviation (and the names file lists it as a "DEF" with the team's full name)
+        is_def = sid in NICK or ((names.get(sid) or [None, ""])[1] == "DEF")
+        if is_def:
+            nm = None
         if not nm and not is_def:
             continue
         plays.append({"key": f"{sid}:{sec}", "sec": sec, "player": None if is_def else nm, "team": team or (sid if is_def else None),
-                      "opp": opp, "label": label, "pts": abs(pts), "def": is_def})
+                      "opp": opp, "label": label, "pts": abs(pts), "def": is_def, "actor": actor_of(label) if is_def else None})
     plays.sort(key=lambda p: -p["pts"])
-    return plays[:MAX_PLAYS]
+    # the cap keeps the biggest plays, plus the biggest defensive ones (a pick or a sack scores few points but is a highlight)
+    keep = plays[:MAX_PLAYS]
+    return keep + [p for p in plays[MAX_PLAYS:] if p["def"]][:30]
 
 
 # The NFL's own channel often forbids embedding outside YouTube ("blocked it from display on this website") even where the API says
@@ -222,6 +242,13 @@ def clip_of(u: dict) -> dict:
     return {"id": u["id"], "s": 0, "e": min(CLIP_SECONDS, u["dur"]) if u["dur"] > 0 else CLIP_SECONDS, "t": u["title"][:90], "c": u.get("ch", "")[:40]}
 
 
+def scrape_pool(plays: list[dict]) -> list[dict]:
+    """The plays searched on the site: a week's biggest, and its biggest defensive plays (which score fewer points)."""
+    top = plays[:SCRAPE_PLAYS]
+    ids = {id(p) for p in top}
+    return top + [p for p in plays if p["def"] and id(p) not in ids][:SCRAPE_DEF]
+
+
 def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool = False) -> dict:
     out = {}
     for p in plays:
@@ -230,7 +257,7 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool 
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
-            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""))
+            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""), p.get("actor"))
             if s < MIN_SCORE and loose and first_result_ok(u, p):
                 s = MIN_SCORE
             if s >= MIN_SCORE:
@@ -285,7 +312,7 @@ def match_chapters(plays: list[dict], recaps: list[dict], cache: dict, t0_ms: fl
             if not info[1] or info[0] > 3600 or u["pub_ms"] < at or u["pub_ms"] > at + 7 * 86400 * 1000:
                 continue
             for sec, text in (cache.get("chap", {}).get(u["id"]) or []):
-                sc = score_title(text, p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", "") + " " + u["title"])
+                sc = score_title(text, p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", "") + " " + u["title"], actor=p.get("actor"))
                 if sc > best_s:
                     best, best_s = (u, sec, text), sc
         if best and best_s >= MIN_SCORE:
@@ -539,6 +566,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 SCRAPE_VER = 1                               # bump to search every unmatched play again
 SCRAPE_MAX = 600                             # plays searched on the site per run
 SCRAPE_SECONDS = 30 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
+SCRAPE_DEF = 10                              # ...and this many of its defensive plays
 SCRAPE_PLAYS = 30                            # a week's biggest plays searched on the site
 SCRAPE_TOP = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
@@ -590,9 +618,15 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
     team = (NICK.get(p["team"] or "") or [""])[0]
     opp = (NICK.get(p["opp"] or "") or [""])[0]
     day = datetime.fromtimestamp((t0_ms + p["sec"] * 1000) / 1000, timezone.utc)
-    who = p["player"] or f"{team} defense"
+    actor = (p.get("actor") or "").split("|")[0]
+    who = p["player"] or actor or f"{team} defense"
     ys = f"{y} yard" if y is not None else ""
-    qs = [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
+    if actor and not p["player"]:   # a defensive play is searched by the defender, as a title would name him
+        kind = {"interception return TD": "pick six", "fumble return TD": "fumble return touchdown"}.get(re.sub(r"\s*\(.*$", "", p["label"]), kind)
+        extra = [f"{actor} {kind} {opp} week {week}", f"{team} {actor} {kind} {season}"]
+    else:
+        extra = []
+    qs = extra + [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
           f"{who} {y if y is not None else ''} yd {kind} {season}", f"{who} {kind} highlights {team} {opp}"]
     seen, out = set(), []
     for x in qs:
@@ -816,7 +850,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
                 old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
-                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS + SCRAPE_DEF
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -850,7 +884,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         plays_by_week[(d, w)] = candidate_plays(doc, names)
         for p in plays_by_week[(d, w)]:
             for u in uploads:
-                if u["pub_ms"] >= doc["t0"] + p["sec"] * 1000 and u["pub_ms"] <= doc["t0"] + p["sec"] * 1000 + 7 * 86400 * 1000 and score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u["ch"]) >= MIN_SCORE:
+                if u["pub_ms"] >= doc["t0"] + p["sec"] * 1000 and u["pub_ms"] <= doc["t0"] + p["sec"] * 1000 + 7 * 86400 * 1000 and score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u["ch"], actor=p.get("actor")) >= MIN_SCORE:
                     cand.add(u["id"])
     try:
         verify(q, cache, sorted(cand))
@@ -947,7 +981,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     scraped_n = 0
     scrape_started = time.time()
     gaps2 = sorted(((0 if results[i][0] == root else 1, -p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results)
-                    for p in plays[:SCRAPE_PLAYS] if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
+                    for p in scrape_pool(plays) if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
     BATCH = 12
     stop = False
     for b0 in range(0, len(gaps2), BATCH):
@@ -1010,7 +1044,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in plays[:SCRAPE_PLAYS]), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS + SCRAPE_DEF, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in scrape_pool(plays)), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))

@@ -170,6 +170,14 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
             if pts:
                 out.append((sid, pts, label, team or pos))
 
+    def who(*cols: str) -> str:
+        """The defender named in the play ("T. Watt"), so a defensive play says who made it."""
+        for c in cols:
+            n = (row.get(c) or "").strip()
+            if n:
+                return " (" + re.sub(r"^((?:[A-Z][a-z]?\.)+)(?=[A-Za-z])", r"\1 ", n) + ")"
+        return ""
+
     def add_def(team: str, pts: float, label: str) -> None:
         if team and pts:
             out.append((team, pts, label, team))
@@ -190,7 +198,7 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
 
     if ptype == "pass":
         if row.get("sack") == "1":
-            add_def(deft, sc(scoring, "sack"), "sack")
+            add_def(deft, sc(scoring, "sack"), "sack" + who("sack_player_name", "half_sack_1_player_name"))
             add(row.get("passer_player_id"), sc(scoring, "pass_sack"), "sacked")
         else:
             complete = row.get("complete_pass") == "1"
@@ -208,9 +216,9 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
                 add(row.get("receiver_player_id"), sc(scoring, "rec_tgt"), "")
             if row.get("interception") == "1":
                 add(row.get("passer_player_id"), sc(scoring, "pass_int"), "interception")
-                add_def(deft, sc(scoring, "int") + num(row, "return_yards") * sc(scoring, "int_ret_yd"), "interception")
+                add_def(deft, sc(scoring, "int") + num(row, "return_yards") * sc(scoring, "int_ret_yd"), "interception" + who("interception_player_name"))
                 if td and td_team == deft:
-                    add_def(deft, sc(scoring, "def_td"), "interception return TD")
+                    add_def(deft, sc(scoring, "def_td"), "interception return TD" + who("interception_player_name"))
                     add(row.get("passer_player_id"), sc(scoring, "pass_int_td"), "pick-six")
     elif ptype == "run":
         ry = num(row, "rushing_yards")
@@ -226,17 +234,17 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         else:
             add(row.get("kicker_player_id"), sc(scoring, "fgmiss"), f"missed {int(dist)} yd field goal")
             if res == "blocked":
-                add_def(deft, sc(scoring, "blk_kick"), "blocked kick")
+                add_def(deft, sc(scoring, "blk_kick"), "blocked kick" + who("blocked_player_name"))
     elif ptype == "extra_point":
         if row.get("extra_point_result") == "good":
             add(row.get("kicker_player_id"), sc(scoring, "xpm"), "extra point")
         else:
             add(row.get("kicker_player_id"), sc(scoring, "xpmiss"), "missed extra point")
             if row.get("extra_point_result") == "blocked":
-                add_def(deft, sc(scoring, "blk_kick"), "blocked kick")
+                add_def(deft, sc(scoring, "blk_kick"), "blocked kick" + who("blocked_player_name"))
     elif ptype == "punt":
         if row.get("punt_blocked") == "1":
-            add_def(deft, sc(scoring, "blk_kick"), "blocked punt")
+            add_def(deft, sc(scoring, "blk_kick"), "blocked punt" + who("blocked_player_name"))
         # a drive that ends in a punt after three plays without a first down
         if row.get("fixed_drive_result") == "Punt" and num(row, "drive_play_count") <= THREE_AND_OUT_PLAYS and num(row, "drive_first_downs") == 0:
             add_def(deft, sc(scoring, "def_3_and_out"), "3-and-out")
@@ -245,22 +253,22 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         add_def(deft, sc(scoring, "def_4_and_stop"), "4th-down stop")
     if ptype in ("pass", "run"):
         if row.get("tackled_for_loss") == "1":
-            add_def(deft, sc(scoring, "tkl_loss"), "tackle for loss")
+            add_def(deft, sc(scoring, "tkl_loss"), "tackle for loss" + who("tackle_for_loss_1_player_name"))
         if row.get("qb_hit") == "1" and ptype == "pass":
-            add_def(deft, sc(scoring, "qb_hit"), "QB hit")
+            add_def(deft, sc(scoring, "qb_hit"), "QB hit" + who("qb_hit_1_player_name"))
         if row.get("fumble") == "1":
             add(row.get("fumbled_1_player_id"), sc(scoring, "fum"), "fumble")
             if team_of(row.get("forced_fumble_player_1_team") or "") == deft:
-                add_def(deft, sc(scoring, "ff"), "forced fumble")
+                add_def(deft, sc(scoring, "ff"), "forced fumble" + who("forced_fumble_player_1_player_name"))
     # Fumbles and safeties can happen on any scrimmage play; returns on kicks.
     if ptype in ("pass", "run") and row.get("fumble_lost") == "1":
         add(row.get("fumbled_1_player_id"), sc(scoring, "fum_lost"), "fumble lost")
         if team_of(row.get("fumble_recovery_1_team") or "") == deft:
-            add_def(deft, sc(scoring, "fum_rec"), "fumble recovery")
+            add_def(deft, sc(scoring, "fum_rec"), "fumble recovery" + who("fumble_recovery_1_player_name"))
             if td and td_team == deft:
-                add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), "fumble return TD")
+                add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), "fumble return TD" + who("fumble_recovery_1_player_name"))
     if row.get("safety") == "1":
-        add_def(deft, sc(scoring, "safe"), "safety")
+        add_def(deft, sc(scoring, "safe"), "safety" + who("safety_player_name"))
     if ptype in ("kickoff", "punt") and row.get("fumble") == "1":
         # a fumble on a kick: the unit that forced it, and the unit that recovered it
         if row.get("forced_fumble_player_1_team"):
