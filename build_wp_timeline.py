@@ -218,7 +218,7 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
                 add(row.get("passer_player_id"), sc(scoring, "pass_int"), "interception")
                 add_def(deft, sc(scoring, "int") + num(row, "return_yards") * sc(scoring, "int_ret_yd"), "interception" + who("interception_player_name"))
                 if td and td_team == deft:
-                    add_def(deft, sc(scoring, "def_td"), "interception return TD" + who("interception_player_name"))
+                    add_def(deft, sc(scoring, "def_td"), ("%d yd " % num(row, "return_yards") if num(row, "return_yards") > 0 else "") + "interception return TD" + who("interception_player_name"))
                     add(row.get("passer_player_id"), sc(scoring, "pass_int_td"), "pick-six")
     elif ptype == "run":
         ry = num(row, "rushing_yards")
@@ -266,7 +266,7 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         if team_of(row.get("fumble_recovery_1_team") or "") == deft:
             add_def(deft, sc(scoring, "fum_rec"), "fumble recovery" + who("fumble_recovery_1_player_name"))
             if td and td_team == deft:
-                add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), "fumble return TD" + who("fumble_recovery_1_player_name"))
+                add_def(deft, sc(scoring, "def_td") + sc(scoring, "fum_rec_td"), ("%d yd " % num(row, "return_yards") if num(row, "return_yards") > 0 else "") + "fumble return TD" + who("fumble_recovery_1_player_name"))
     if row.get("safety") == "1":
         add_def(deft, sc(scoring, "safe"), "safety" + who("safety_player_name"))
     if ptype in ("kickoff", "punt") and row.get("fumble") == "1":
@@ -281,8 +281,10 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         add(rs, num(row, "return_yards") * sc(scoring, "pr_yd" if ptype == "punt" else "kr_yd"), "")
     if ptype in ("kickoff", "punt") and td and row.get("return_touchdown") == "1":
         rt = row.get("punt_returner_player_id") or row.get("kickoff_returner_player_id")
-        add(rt, sc(scoring, "st_td"), "return TD", team=td_team)
-        add_def(td_team, sc(scoring, "def_st_td"), "return TD")
+        ry = int(num(row, "return_yards"))
+        what = ("%d yd " % ry if ry > 0 else "") + ("punt" if ptype == "punt" else "kickoff") + " return TD"
+        add(rt, sc(scoring, "st_td"), what, team=td_team)
+        add_def(td_team, sc(scoring, "def_st_td"), what + who("punt_returner_player_name" if ptype == "punt" else "kickoff_returner_player_name"))
     return out
 
 

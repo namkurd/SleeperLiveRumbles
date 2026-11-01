@@ -65,6 +65,14 @@ NICK = {
 }
 
 
+# A team's channel is named for the team ("Pittsburgh Steelers"): a search that says so puts its own upload of a big play first.
+CITY = {"ARI": "Arizona", "ATL": "Atlanta", "BAL": "Baltimore", "BUF": "Buffalo", "CAR": "Carolina", "CHI": "Chicago", "CIN": "Cincinnati",
+        "CLE": "Cleveland", "DAL": "Dallas", "DEN": "Denver", "DET": "Detroit", "GB": "Green Bay", "HOU": "Houston", "IND": "Indianapolis",
+        "JAX": "Jacksonville", "JAC": "Jacksonville", "KC": "Kansas City", "LV": "Las Vegas", "LAC": "Los Angeles", "LAR": "Los Angeles", "LA": "Los Angeles",
+        "MIA": "Miami", "MIN": "Minnesota", "NE": "New England", "NO": "New Orleans", "NYG": "New York", "NYJ": "New York", "PHI": "Philadelphia",
+        "PIT": "Pittsburgh", "SF": "San Francisco", "SEA": "Seattle", "TB": "Tampa Bay", "TEN": "Tennessee", "WAS": "Washington", "WSH": "Washington"}
+
+
 def norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
     s = re.sub(r"['\u2019]s\b", "", s.lower())   # "Kelce's" is Kelce
@@ -80,10 +88,19 @@ def play_kind(label: str) -> list[str]:
     """Words a title is likely to use for this kind of play."""
     l = label.lower()
     out = []
+    ret_td = "return td" in l   # a touchdown scored on a return: a pick six, a scoop and score, a kick or punt returned all the way
     if "interception" in l or "pick" in l:
-        out += ["interception", "pick", "int", "picks", "intercepts", "picked", "pick six", "pick 6"]
+        out += ["interception", "pick", "int", "picks", "intercepts", "picked"]
+        if ret_td:
+            out += ["pick six", "pick 6", "touchdown", "td", "house", "defensive touchdown"]
     elif "td" in l:
         out += ["touchdown", "td"]
+    if "kickoff return" in l:
+        out += ["kickoff return", "kick return", "kickoff", "kick six", "return", "returns", "returned", "house"]
+    if "punt return" in l:
+        out += ["punt return", "punt", "return", "returns", "returned", "house"]
+    if "fumble return" in l:
+        out += ["scoop and score", "scoop score", "fumble return", "house", "defensive touchdown"]
     if "sack" in l:
         out += ["sack", "sacks", "sacked"]
     if "fumble" in l:
@@ -614,6 +631,19 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
     kinds = play_kind(p["label"])
     low = p["label"].lower()
     kind = kinds[0] if kinds else ("catch" if "catch" in low else "run" if "run" in low else "pass" if "pass" in low else "")
+    colloquial = []
+    if "kickoff return td" in low:
+        kind = "kickoff return touchdown"
+        colloquial = ["kick return td", "kick six"]
+    elif "punt return td" in low:
+        kind = "punt return touchdown"
+        colloquial = ["punt return td", "to the house"]
+    elif "interception return td" in low:
+        kind = "pick six"
+        colloquial = ["interception return touchdown", "pick 6"]
+    elif "fumble return td" in low:
+        kind = "fumble return touchdown"
+        colloquial = ["scoop and score", "fumble recovery touchdown"]
     y = yards_in(p["label"])
     team = (NICK.get(p["team"] or "") or [""])[0]
     opp = (NICK.get(p["opp"] or "") or [""])[0]
@@ -622,10 +652,12 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
     who = p["player"] or actor or f"{team} defense"
     ys = f"{y} yard" if y is not None else ""
     if actor and not p["player"]:   # a defensive play is searched by the defender, as a title would name him
-        kind = {"interception return TD": "pick six", "fumble return TD": "fumble return touchdown"}.get(re.sub(r"\s*\(.*$", "", p["label"]), kind)
         extra = [f"{actor} {kind} {opp} week {week}", f"{team} {actor} {kind} {season}"]
     else:
         extra = []
+    if colloquial and CITY.get(p["team"] or "") and team:
+        extra.append(f"{CITY[p['team']]} {team.title()} {who} {kind}")   # the team's own channel
+    extra += [f"{who} {c} {opp}" for c in colloquial] + [f"{team} {c} {ys} {season}" for c in colloquial[:1]]
     qs = extra + [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
           f"{who} {y if y is not None else ''} yd {kind} {season}", f"{who} {kind} highlights {team} {opp}"]
     seen, out = set(), []
@@ -634,7 +666,7 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
         if x.lower() not in seen:
             seen.add(x.lower())
             out.append(x)
-    return out
+    return out[:7]
 
 
 def web_search(query: str) -> list[dict]:
