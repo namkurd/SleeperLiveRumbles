@@ -364,3 +364,15 @@ def test_defensive_plays_name_their_defender():
     many = [{"def": False, "key": str(i)} for i in range(40)] + [{"def": True, "key": "d%d" % i} for i in range(15)]
     pool = C.scrape_pool(many)
     assert len(pool) == C.SCRAPE_PLAYS + C.SCRAPE_DEF and sum(1 for x in pool if x["def"]) == C.SCRAPE_DEF
+
+
+def test_a_defensive_clip_must_name_its_defender():
+    p = {"key": "DAL:1", "def": True, "actor": "K. Turpin", "label": "60 yd punt return TD (K. Turpin)", "team": "DAL", "opp": "NO", "player": None}
+    saints = {"id": "A", "s": 0, "e": 15, "t": "Alvin Kamara's INSANE BALANCE on 4th TD vs. Cowboys", "c": "New Orleans Saints"}
+    right = {"id": "B", "s": 0, "e": 15, "t": "KaVontae Turpin punt return touchdown vs Saints", "c": "Dallas Cowboys"}
+    have = {"DAL:1": dict(saints, alt=[right])}
+    assert C.prune_defense(have, [p]) == 1 and have["DAL:1"]["id"] == "B" and "alt" not in have["DAL:1"], have
+    have = {"DAL:1": dict(saints)}
+    C.prune_defense(have, [p])
+    assert "DAL:1" not in have
+    assert C.score_title(saints["t"], None, "DAL", "NO", p["label"], True, "New Orleans Saints", True, "", p["actor"]) == 0

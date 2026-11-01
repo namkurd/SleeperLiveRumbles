@@ -157,6 +157,8 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
         a_in = any(len(x.split()) > 0 and x.split()[-1] in words and len(x.split()[-1]) > 2 for x in (norm(a) for a in (actor or "").split("|")) if x)
         if a_in and (team_in_title or own_channel or any(n in t for n in opps) or loose):
             s += 5
+        elif actor:
+            return 0       # the play names its defender and the title does not: it is another play of that team
         elif not (team_in_title or own_channel):
             return 0
         else:
@@ -206,7 +208,7 @@ def first_result_ok(u: dict, p: dict) -> bool:
         parts = norm(p["player"]).replace(" jr", "").replace(" sr", "").replace(" iii", "").replace(" ii", "").split()
         if len(parts) < 2 or parts[-1] not in words or not (parts[0] in words or team_in or any(n in t for n in opps)):
             return False
-    elif not team_in:
+    elif p.get("actor") or not team_in:
         if not any(x.split() and len(x.split()[-1]) > 2 and x.split()[-1] in words for x in (norm(a) for a in (p.get("actor") or "").split("|")) if x):
             return False
     y = yards_in(p["label"])
@@ -496,6 +498,40 @@ def dedupe_clips(have: dict, plays: list[dict]) -> int:
     for k, c in list(have.items()):
         allc = [c] + list(c.get("alt") or [])
         keep = [x for x in allc if fine(k, x)]
+        if len(keep) == len(allc):
+            continue
+        dropped += len(allc) - len(keep)
+        if not keep:
+            if c.get("x"):
+                have[k] = dict(c["x"])
+            else:
+                del have[k]
+            continue
+        new = {a: b for a, b in keep[0].items() if a not in ("alt", "x")}
+        alts = [{a: b for a, b in x.items() if a not in ("alt", "x")} for x in keep[1:]]
+        if alts:
+            new["alt"] = alts
+        if c.get("x"):
+            new["x"] = c["x"]
+        have[k] = new
+    return dropped
+
+
+def prune_defense(have: dict, plays: list[dict]) -> int:
+    """A clip for a defensive play that names its defender must name him too (the title or the description): a title that only
+    names the team could be any of that team's plays."""
+    info = {p["key"]: p for p in plays}
+    dropped = 0
+    for k, c in list(have.items()):
+        p = info.get(k)
+        if not p or not p.get("def") or not p.get("actor") or blocked_channel(c.get("c")) and not c.get("alt"):
+            continue
+        sur = [x.split()[-1] for x in (norm(a) for a in p["actor"].split("|")) if x.split() and len(x.split()[-1]) > 2]
+
+        def named(x: dict) -> bool:
+            return blocked_channel(x.get("c")) or any(w in norm(x.get("t", "")).split() for w in sur)
+        allc = [c] + list(c.get("alt") or [])
+        keep = [x for x in allc if named(x)]
         if len(keep) == len(allc):
             continue
         dropped += len(allc) - len(keep)
@@ -1072,6 +1108,7 @@ def run(root: str = HERE, force: bool = False) -> None:
     for d, w, doc, have, tried, plays, n in results:
         out_dir = os.path.join(d, "wp_clips")
         dedupe_clips(have, plays)
+        prune_defense(have, plays)
         apply_manual(have, plays, manual, int(doc.get("season") or 0), w)
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
