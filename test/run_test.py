@@ -3161,7 +3161,7 @@ def _gameday_base():
 
 def scenario_gameday_helpers(browser):
     print("\n" + "=" * 70)
-    print("SCENARIO: Gameday helpers (landing, since-you-last-looked, next kickoff)")
+    print("SCENARIO: Gameday helpers (landing, next kickoff)")
     print("=" * 70)
     console_errors, page_errors = [], []
     page = new_page(browser, console_errors, page_errors)
@@ -3172,13 +3172,10 @@ def scenario_gameday_helpers(browser):
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
     assert page.evaluate("!document.getElementById('rumblin-view').hidden"), "game day + known manager lands in Rumblin'"
     assert page.evaluate("document.getElementById('rb-me').classList.contains('active')"), "...on their own view"
-    # Points moved while away -> banner with the change, dismissible.
-    page.add_init_script("localStorage.setItem('rumbles.seen', JSON.stringify({ts: Date.now() - 300000, week: 2, acts: Object.fromEntries([1,2,3,4,5,6,7,8,9,10,11,12].map(r => [r, 0])), pl: {}}))")
+    # (no "since you last looked" banner any more)
+    page.add_init_script("localStorage.setItem('rumbles.seen', JSON.stringify({ts: Date.now() - 300000, week: 2, acts: {}, pl: {}}))")
     page.goto(PAGE_URL); page.wait_for_timeout(2500)
-    aw = page.evaluate("(() => { const b = document.getElementById('rb-away'); return {vis: !b.hidden, txt: b.textContent}; })()")
-    assert aw["vis"] and "Since you last looked" in aw["txt"] and "You +" in aw["txt"], f"away banner: {aw}"
-    page.click("#rb-away button"); page.wait_for_timeout(200)
-    assert page.evaluate("document.getElementById('rb-away').hidden"), "banner dismisses"
+    assert page.evaluate("!document.getElementById('rb-away') && !/Since you last looked/.test(document.body.textContent)"), "no away banner"
     page.close()
 
     # Nobody live: the next kickoff and a countdown replace the dead space.

@@ -122,7 +122,7 @@
   /* A past season is read-only: the live tabs and controls step aside. */
   .toggle-group button.off { opacity: 0.38; cursor: default; }
   body.archive #refresh-btn, body.archive #status-actions #refresh-btn, body.archive #rb-density, body.archive .rb-controls > .rb-view-group:not(#rb-sub), body.archive #rb-inplay, body.archive #rb-matchup,
-  body.archive #rb-note, body.archive .rb-legend, body.archive #rb-next, body.archive #rb-away { display: none !important; }
+  body.archive #rb-note, body.archive .rb-legend, body.archive #rb-next { display: none !important; }
   .status-row {
     display: flex;
     align-items: center;
@@ -1206,12 +1206,7 @@
   .rb-chip.scen-dec { opacity: 0.6; }
   .rb-chip.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
   .rb-chip.me { box-shadow: 0 0 0 1px var(--c); }
-  .rb-away { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--panel-border)); background: color-mix(in srgb, var(--accent-2) 9%, var(--panel)); border-radius: 10px; font-size: 0.8rem; line-height: 1.35; }
-  .rb-away[hidden], .rb-next[hidden] { display: none; }
-  .rb-away .aw-b { flex: 1; min-width: 0; }
-  .rb-away b.gain { color: var(--good); } .rb-away b.loss { color: var(--bad); }
-  .rb-away small { color: var(--text-dim); }
-  .rb-away button { flex-shrink: 0; border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .rb-next[hidden] { display: none; }
   .rb-next { margin: 0 0 8px; padding: 7px 10px; border: 1px dashed var(--panel-border); border-radius: 10px; color: var(--text-dim); font-size: 0.8rem; }
   .rb-next b { color: var(--text); }
   .rb-note { color: var(--text-dim); font-size: 0.74rem; margin: -4px 0 10px; }
@@ -1831,7 +1826,6 @@
 
   <!-- Rumblin': side-by-side live matchup cards for any managers. -->
   <div id="rumblin-view" hidden>
-    <div class="rb-away" id="rb-away" hidden></div>
     <div class="rb-next" id="rb-next" hidden></div>
     <div class="rb-strip" id="rb-strip" aria-label="Managers by projected score"></div>
     <div class="rb-controls">
@@ -7551,7 +7545,7 @@
   }
   function rbRenderPlayoffs(week) {
     var po = rbPlayoffInfo(week), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
-    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    ["rb-strip", "rb-note", "rb-next"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
     var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
     var legend = document.querySelector(".rb-legend"); if (legend) legend.style.display = "none";
     document.getElementById("rb-grid").style.display = "none";
@@ -7591,7 +7585,7 @@
     var fallback = pastWeeks.filter(function (w) { return counted.indexOf(w) >= 0; })[0];
     var showPast = picked != null ? picked : (!curOpt ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : fallback != null ? fallback : pastWeeks[0]) : null);
     var grid = document.getElementById("rb-grid"), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
-    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    ["rb-strip", "rb-note", "rb-next"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
     var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
     var legend = document.querySelector(".rb-legend"); if (legend) legend.style.display = "none";
     grid.style.display = "none";
@@ -9100,7 +9094,7 @@
     rbPlayoffUi(false);
     if (rb.scenBest && rb.sub === "scenarios") { scenRow.hidden = state.view !== "rumblin"; rbRenderBest(); return; }
     scenRow.hidden = true;
-    ["rb-strip", "rb-note", "rb-next", "rb-away"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = ""; });
+    ["rb-strip", "rb-note", "rb-next"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = ""; });
     if (ctlBox) ctlBox.style.display = "";
     rbScenModeUi(false);
     var teams = ARCHIVE ? rbArchiveTeams() : rbTeams();
@@ -9731,70 +9725,8 @@
     state.prefsReady = true;
   }
 
-  // ---- Gameday helpers: "since you last looked", the next-kickoff line, and where the page opens ----
-  var SEEN_KEY = "rumbles.seen", AWAY_MIN_MS = 45000, AWAY_SHOW_MS = 4 * 60 * 1000;
-  function seenSnap() {
-    var teams = rbTeams();
-    if (!teams.length || !state.live) return null;
-    var acts = {}, pl = {};
-    teams.forEach(function (t) {
-      acts[t.rid] = t.act; pl[t.rid] = {};
-      t.players.forEach(function (p) { pl[t.rid][p.player_id + (p.replacement ? ":r" : "")] = [num(p.actual), p.short_name || p.name]; });
-    });
-    return { ts: Date.now(), week: state.live.week, acts: acts, pl: pl };
-  }
-  function seenSave() {
-    var s = seenSnap();
-    if (!s) return;
-    state.seenMem = s;
-    try { localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch (e) { /* storage blocked: fine */ }
-  }
-  function seenLoad() {
-    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "null"); } catch (e) { return null; }
-  }
-  function awayAgo(ms) {
-    var m = Math.round(ms / 60000);
-    return m < 1 ? "moments" : m < 60 ? m + " min" : Math.round(m / 6) / 10 + " hr";
-  }
-  function signed(n) { return (n > 0 ? "+" : "−") + Math.abs(n).toFixed(2); }
-  // Points that moved while the page was in the background, for you first, then the biggest movers.
-  function showAway() {
-    var box = document.getElementById("rb-away"), from = state.awayFrom;
-    if (!box) return;
-    if (!from || !state.live || from.week !== state.live.week) { box.hidden = true; return; }
-    var now = Date.now();
-    if (now - from.ts < AWAY_MIN_MS) { return; }
-    if (!state.awayShownAt) state.awayShownAt = now;
-    if (now - state.awayShownAt > AWAY_SHOW_MS) { state.awayFrom = null; state.awayShownAt = 0; box.hidden = true; return; }
-    var teams = rbTeams(), rows = [];
-    teams.forEach(function (t) {
-      var d = Math.round((t.act - (from.acts[t.rid] != null ? from.acts[t.rid] : t.act)) * 100) / 100;
-      if (Math.abs(d) < 0.005) return;
-      var who = [], old = from.pl[t.rid] || {};
-      t.players.forEach(function (p) {
-        var k = p.player_id + (p.replacement ? ":r" : ""), pd = Math.round((num(p.actual) - (old[k] ? old[k][0] : num(p.actual))) * 100) / 100;
-        if (Math.abs(pd) >= 0.005) who.push({ n: p.short_name || p.name, d: pd });
-      });
-      who.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
-      rows.push({ rid: t.rid, name: t.name, d: d, who: who.slice(0, 3), me: t.rid === state.rb.me });
-    });
-    if (!rows.length) { box.hidden = true; return; }
-    rows.sort(function (a, b) { return (b.me ? 1 : 0) - (a.me ? 1 : 0) || Math.abs(b.d) - Math.abs(a.d); });
-    var parts = rows.slice(0, 4).map(function (r) {
-      var det = r.who.length ? ' <small>(' + r.who.map(function (w) { return escapeHtml(w.n) + " " + signed(w.d); }).join(", ") + ")</small>" : "";
-      return '<span class="aw-t"><b class="' + (r.d > 0 ? "gain" : "loss") + '">' + escapeHtml(r.me ? "You" : r.name) + " " + signed(r.d) + "</b>" + det + "</span>";
-    });
-    box.innerHTML = '<div class="aw-b"><small>Since you last looked (' + awayAgo(now - from.ts) + ')</small><br>' + parts.join(" · ") +
-      (rows.length > 4 ? ' <small>+' + (rows.length - 4) + " more</small>" : "") + '</div><button type="button" aria-label="Dismiss" title="Dismiss">&times;</button>';
-    box.hidden = false;
-    box.querySelector("button").onclick = function () { state.awayFrom = null; state.awayShownAt = 0; box.hidden = true; };
-  }
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { seenSave(); state.awayFrom = null; state.awayShownAt = 0; }
-    else if (state.seenMem) state.awayFrom = state.seenMem;
-  });
-  window.addEventListener("pagehide", seenSave);
-
+  // ---- Gameday helpers: the next-kickoff line, and where the page opens ----
+  // (the "since you last looked" banner is gone)
   // "Next kickoff: Sun 4:25pm (in 2h 14m) · 3 of your starters" whenever nobody on screen is live.
   function rbCountdown(ms) {
     var m = Math.round((ms - Date.now()) / 60000);
@@ -10012,7 +9944,7 @@
     .then(function () { return ARCHIVE ? null : loadLive(); })
     .then(function () { rbInit(); return state.epaOn ? epaLoad(true) : null; })
     .then(render)
-    .then(function () { state.awayFrom = seenLoad(); showAway(); })
+    .then(function () { /* (nothing more to load) */ })
     .catch(function (err) {
       console.error("[rumbles] boot failed:", err);
       render();
@@ -10023,7 +9955,7 @@
       function pollNow() {
         if (state.refreshing) return;
         state.lastPollAt = Date.now();
-        loadLive().then(function () { return state.epaOn ? epaLoad() : null; }).then(function () { render({ flash: true }); showAway(); });
+        loadLive().then(function () { return state.epaOn ? epaLoad() : null; }).then(function () { render({ flash: true }); });
       }
       // Don't poll Sleeper while the tab is hidden; catch up as soon as it is shown again.
       state.pollTimer = setInterval(function () {
