@@ -292,6 +292,13 @@
     letter-spacing: 0.04em;
     color: var(--accent);
   }
+  .inst-bar { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 40; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--panel-border)); box-shadow: 0 8px 28px rgba(0,0,0,0.5); font-size: 0.82rem; max-width: 560px; margin: 0 auto; }
+  .inst-bar[hidden] { display: none; } body.solo .inst-bar, body.archive .inst-bar { display: none; }
+  .inst-t { flex: 1; min-width: 0; line-height: 1.3; } .inst-t b { color: var(--accent); }
+  .inst-t svg { height: 1.15em; width: auto; vertical-align: -0.2em; }
+  .inst-go { flex: none; border: 0; border-radius: 999px; padding: 7px 14px; background: var(--accent); color: #1a1206; font: inherit; font-weight: 800; cursor: pointer; }
+  .inst-x { flex: none; border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 2px 6px; }
+  .howto-qr { display: flex; gap: 12px; align-items: center; margin: 4px 0 10px; } .howto-qr svg { width: 92px; height: 92px; flex: none; border-radius: 6px; background: #fff; }
   .howto-tooltip .howto-note { color: var(--text-dim); font-size: 0.76rem; }
   .table-panel {
     background: var(--panel);
@@ -1491,7 +1498,7 @@
   /* On-field markers (football / picket fence) next to player names. */
   .fld { display: inline-flex; flex: none; align-items: center; margin-left: 2px; line-height: 1; }
   .fld { position: relative; top: -1px; }
-  .fld svg { height: 0.95em; width: auto; display: block; }
+  .fld svg { height: 0.95em; width: auto; display: block; overflow: visible; }
   .fld-def svg { height: 0.85em; }
   .fld-off { color: #c27a45; }
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
@@ -1965,11 +1972,19 @@
   <p>Scenarios opens once the Sunday 1pm games end. It shows what you need to outscore in each Rumble still in play, and resets each game window.</p>
   <p>Score Feed lists scoring plays as they happen (only while this page is open) and clears 4.5 hours after kickoff. Live Players shows who's in a game now. A football means his team has the ball, a picket fence a defense on the field. Faded cards have nobody in a game.</p>
   <p>Your pick is remembered on this device. Copy link (in Me) opens straight to your view.</p>
+  <p class="howto-heading">Get it like an app</p>
+  <p>On an iPhone: open this page in Safari, tap Share, then Add to Home Screen. On Android or Chrome: tap Install (or the menu, then Install app). It opens full screen from your Home Screen with no address bar. Scan this to open it on a phone:</p>
+  <div class="howto-qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35" aria-label="QR code for Rumble Central"><path fill="#fff" d="M0 0h35v35h-35z"/><path class="qrline" stroke="#000" d="M1 1.5h7m2 0h2m1 0h1m2 0h9m2 0h7m-33 1h1m5 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m3 0h3m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m1 0h5m3 0h1m1 0h3m3 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m4 0h1m1 0h2m1 0h1m1 0h1m2 0h2m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m1 0h1m1 0h1m3 0h1m1 0h2m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m2 0h3m1 0h1m1 0h1m1 0h1m1 0h4m3 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-24 1h6m1 0h2m1 0h2m3 0h1m-24 1h3m1 0h2m2 0h2m1 0h1m2 0h1m1 0h1m1 0h3m2 0h1m5 0h2m-32 1h2m3 0h1m1 0h1m1 0h2m1 0h1m3 0h1m1 0h4m1 0h1m2 0h2m1 0h2m1 0h1m-29 1h1m1 0h4m2 0h1m4 0h1m2 0h2m1 0h2m1 0h4m2 0h1m-33 1h3m1 0h2m2 0h3m1 0h3m1 0h1m2 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h1m-31 1h8m1 0h5m2 0h3m1 0h2m1 0h1m2 0h2m1 0h2m-31 1h1m4 0h3m1 0h1m4 0h1m2 0h1m2 0h1m1 0h1m2 0h1m2 0h2m-31 1h1m2 0h1m1 0h2m2 0h1m1 0h2m1 0h6m3 0h1m1 0h5m-31 1h1m2 0h1m1 0h1m1 0h2m1 0h2m1 0h1m1 0h3m2 0h2m2 0h3m2 0h2m-31 1h1m1 0h1m1 0h5m2 0h1m2 0h1m3 0h1m1 0h2m3 0h2m1 0h1m-29 1h2m3 0h1m2 0h1m3 0h1m2 0h3m2 0h1m1 0h5m1 0h2m1 0h2m-30 1h2m1 0h2m2 0h1m3 0h2m5 0h2m2 0h1m1 0h2m1 0h2m-32 1h3m4 0h2m2 0h1m5 0h1m4 0h5m1 0h1m2 0h2m-30 1h1m2 0h1m3 0h2m2 0h2m2 0h2m1 0h1m1 0h1m5 0h4m-33 1h1m1 0h1m1 0h1m2 0h3m1 0h1m1 0h4m2 0h2m2 0h1m1 0h2m3 0h1m1 0h1m-31 1h3m1 0h3m4 0h3m4 0h4m1 0h1m1 0h1m2 0h3m-32 1h1m2 0h2m4 0h2m1 0h1m1 0h2m1 0h3m1 0h1m1 0h6m-30 1h1m2 0h1m1 0h2m1 0h1m5 0h1m3 0h3m1 0h7m2 0h2m-25 1h4m3 0h1m3 0h1m1 0h1m1 0h2m3 0h2m-30 1h7m2 0h1m1 0h1m1 0h3m2 0h3m2 0h2m1 0h1m1 0h1m-29 1h1m5 0h1m1 0h2m1 0h2m2 0h1m1 0h1m3 0h4m3 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m3 0h2m3 0h1m2 0h11m1 0h2m-32 1h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2m3 0h1m1 0h4m-33 1h1m1 0h3m1 0h1m1 0h3m3 0h2m6 0h1m1 0h1m1 0h2m2 0h1m-31 1h1m5 0h1m1 0h2m3 0h1m1 0h1m3 0h2m1 0h2m2 0h3m3 0h1m-33 1h7m2 0h1m5 0h1m1 0h3m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1"/></svg><span>namkurd.github.io/<wbr>SleeperLiveRumbles</span></div>
   <p class="howto-note">Updates every 30 seconds during games.</p>
 </div>
 
 <button type="button" class="epa-toggle" id="epa-toggle" aria-pressed="false" title="Show EPA next to points (from nflverse; filled in after each game ends)">EPA</button>
 
+<div class="inst-bar" id="inst-bar" hidden role="region" aria-label="Add Rumble Central to your Home Screen">
+  <span class="inst-t" id="inst-t"></span>
+  <button type="button" class="inst-go" id="inst-go" hidden>Install</button>
+  <button type="button" class="inst-x" id="inst-x" aria-label="Not now" title="Not now">&times;</button>
+</div>
 <div class="solo-splash" id="solo-splash"><b>Rumble Central</b><span>Loading the matchup\u2026</span></div>
 <div class="wp-sheet" id="wp-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="wp-title">
   <div class="wp-card">
@@ -6974,7 +6989,7 @@
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
   // defense while the other team has it.
   var FIELD_ICON = {
-    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.8 7C2.5 3 11.5 3 13.2 7C11.5 11 2.5 11 .8 7Z" fill="currentColor" stroke="#7a4220" stroke-width=".6" stroke-linejoin="round"/><path d="M5 7h4M5.8 6.1v1.8M7 6v2M8.2 6.1v1.8" fill="none" stroke="#fff" stroke-width=".55" stroke-linecap="round"/><path d="M3 5.6C4.6 4.1 8 3.8 10.6 5" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".7" stroke-linecap="round"/></g></svg></span>',
+    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.8 7C2.6 2 11.4 2 13.2 7C11.4 12 2.6 12 .8 7Z" fill="currentColor" stroke="#7a4220" stroke-width=".6" stroke-linejoin="round"/><path d="M5.1 7h3.8M5.8 6v2M7 5.9v2.2M8.2 6v2" fill="none" stroke="#fff" stroke-width=".55" stroke-linecap="round"/><path d="M3 5.3C4.6 3.7 8 3.4 10.6 4.8" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".7" stroke-linecap="round"/></g></svg></span>',
     def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 20 12" aria-hidden="true"><rect x="0" y="3.1" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><rect x="0" y="7.3" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><g fill="#fff" stroke="#587493" stroke-width=".95" stroke-linejoin="round"><path d="M.9 3.4L2.7.6l1.8 2.8v8H.9z"/><path d="M5.9 3.4L7.7.6l1.8 2.8v8H5.9z"/><path d="M10.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/><path d="M15.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/></g></svg></span>'
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
@@ -9703,6 +9718,41 @@
     if (r.density === "full" || r.density === "compact" || r.density === "totals") rbSetDensity(r.density);
     if (p.v === "rumblin" || p.v === "standings") setView(p.v);
   }
+  function wpIsStandalone() {
+    return !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone);
+  }
+  // A small "put this on your Home Screen" bar: a real Install button where the browser offers one, the two taps to make on an iPhone otherwise.
+  // Gone for good once installed or dismissed (it comes back after two weeks).
+  (function installNudge() {
+    var bar = document.getElementById("inst-bar"), txt = document.getElementById("inst-t"), go = document.getElementById("inst-go"), x = document.getElementById("inst-x");
+    if (!bar || wpIsStandalone()) return;
+    var KEY = "rumbles.inst", deferred = null;
+    function dismissed() { try { var t = Number(localStorage.getItem(KEY)); return t && Date.now() - t < 14 * 86400000; } catch (e) { return false; } }
+    function hide(remember) { bar.hidden = true; if (remember) { try { localStorage.setItem(KEY, String(Date.now())); } catch (e) { /* fine */ } } }
+    x.onclick = function () { hide(true); };
+    window.addEventListener("appinstalled", function () { hide(true); });
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault(); deferred = e;
+      if (dismissed()) return;
+      txt.innerHTML = "<b>Install Rumble Central</b> to open it like an app, from your Home Screen.";
+      go.hidden = false; bar.hidden = false;
+    });
+    go.onclick = function () {
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; hide(true); }, function () { hide(false); });
+    };
+    var ua = navigator.userAgent || "", ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Instagram|FBAN|FBAV|Line\//.test(ua);
+    if (ios && safari && !dismissed()) {
+      setTimeout(function () {
+        if (document.body.classList.contains("solo")) return;
+        txt.innerHTML = "<b>Put Rumble Central on your Home Screen:</b> tap Share <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>, then Add to Home Screen.";
+        bar.hidden = false;
+      }, 3500);
+    }
+  })();
+
   function rbInit() {
     var params = null;
     try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
@@ -9712,6 +9762,11 @@
     if (wl) state.wpLink = { week: Number(wl[1]), me: Number(wl[2]), t: Number(wl[3]), at: params.get("t") != null && isFinite(Number(params.get("t"))) ? Number(params.get("t")) : null };
     var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName()));
     if (me) state.rb.me = Number(me.roster_id);
+    // In a browser (not the installed app) the address carries who you are, so "Add to Home Screen" from here opens straight to your view
+    // (an iPhone's Home Screen app keeps its own storage, and starts from the address it was added at).
+    if (me && !ARCHIVE && !wl && params && !params.get("me") && !wpIsStandalone()) {
+      try { var uq = new URLSearchParams(location.search); uq.set("me", me.manager); history.replaceState(null, "", location.pathname + "?" + uq.toString() + location.hash); } catch (e) { /* fine */ }
+    }
     prefsRestore();
     // Opened on its own when no game is live: always the Actual standings for the current week of the current season, whatever was open last time
     var lv = state.live, liveNow = !!(lv && lv.isLive && lv.hasKickedOff && !lv.weekFinal);

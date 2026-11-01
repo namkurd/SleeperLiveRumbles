@@ -3192,6 +3192,40 @@ def scenario_gameday_helpers(browser):
     print("GAMEDAY HELPERS SCENARIO PASSED")
 
 
+def scenario_home_screen(browser):
+    print("\n" + "=" * 70)
+    print("SCENARIO: Easy to reach (Home Screen nudge, QR, address that carries who you are)")
+    print("=" * 70)
+    console_errors, page_errors = [], []
+    page = new_page(browser, console_errors, page_errors)
+    install_routes(page, _gameday_base())
+    page.goto(PAGE_URL + "?tab=rumblin&me=Ben"); page.wait_for_timeout(2500)
+    assert page.evaluate("document.getElementById('inst-bar').hidden"), "no nudge in a plain browser until it offers an install"
+    assert page.evaluate("location.search.includes('me=Ben')"), "the address carries who you are"
+    page.evaluate("window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), {prompt: () => { window.__prompted = true; }, userChoice: Promise.resolve({outcome: 'accepted'})}))")
+    page.wait_for_timeout(200)
+    assert page.evaluate("!document.getElementById('inst-bar').hidden && !document.getElementById('inst-go').hidden && /Install/.test(document.getElementById('inst-t').textContent)"), "an Install bar where the browser offers it"
+    page.click("#inst-go"); page.wait_for_timeout(300)
+    assert page.evaluate("window.__prompted === true && document.getElementById('inst-bar').hidden"), "Install asks the browser, then goes away"
+    page.close()
+    # an iPhone in Safari gets the two taps to make
+    ctx = browser.new_context(user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1", viewport={"width": 390, "height": 800}, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(page, _gameday_base())
+    page.goto(PAGE_URL); page.wait_for_timeout(5000)
+    assert page.evaluate("!document.getElementById('inst-bar').hidden && /Add to Home Screen/.test(document.getElementById('inst-t').textContent) && document.getElementById('inst-go').hidden"), "iPhone Safari: Share, then Add to Home Screen"
+    page.click("#inst-x"); page.wait_for_timeout(200)
+    page.goto(PAGE_URL); page.wait_for_timeout(5000)
+    assert page.evaluate("document.getElementById('inst-bar').hidden"), "dismissed for two weeks"
+    assert page.evaluate("!!document.querySelector('.howto-qr svg') && /Home Screen/.test(document.getElementById('howto-tooltip').textContent)"), "How to Use explains it, with a QR code"
+    ctx.close()
+    assert not console_errors, f"console errors: {console_errors}"
+    assert not page_errors, f"page errors found: {page_errors}"
+    print("HOME SCREEN SCENARIO PASSED")
+
+
 def scenario_future_weeks(browser):
     print("\n" + "=" * 70)
     print("SCENARIO: Projected tab can look ahead to future weeks")
@@ -4472,6 +4506,7 @@ def main():
         scenario_header_tabs(browser)
         scenario_past_seasons(browser)
         scenario_gameday_helpers(browser)
+        scenario_home_screen(browser)
         scenario_future_weeks(browser)
         scenario_name_overflow_audit(browser)
         scenario_epa(browser)
