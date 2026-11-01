@@ -618,11 +618,11 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 # (the player with the distance, with the week, with the date) and the first few results of each looked at.
 SCRAPE_VER = 1                               # bump to search every unmatched play again
 SCRAPE_MAX = 600                             # plays searched on the site per run
-SCRAPE_SECONDS = 30 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
+SCRAPE_SECONDS = 25 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_DEF = 10                              # ...and this many of its defensive plays
 SCRAPE_PLAYS = 45                            # a week's biggest plays searched on the site
 DISCOVERED_MAX = 40                          # channels found by the site search that are crawled in full
-RECAP_SECONDS = 15 * 60                      # time the recap-video pass may take per run
+RECAP_SECONDS = 12 * 60                      # time the recap-video pass may take per run
 SCRAPE_TOP = 12                              # results read per search
 SCRAPE_TOP_OLD = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
