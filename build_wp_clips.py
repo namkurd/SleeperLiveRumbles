@@ -1054,6 +1054,11 @@ def run(root: str = HERE, force: bool = False) -> None:
         except (QuotaOut, requests.RequestException) as e:
             print(f"[warn] {e}; searching resumes on a later run", file=sys.stderr)
             quota_out = True
+    # a clip the checks below would take off (one video for several plays, a defensive clip that does not name its defender) is no clip:
+    # take them off now, so those plays are searched for a better one instead of being found again and dropped every run
+    for d, w, doc, have, tried, plays, n in results:
+        dedupe_clips(have, plays)
+        prune_defense(have, plays)
     # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
     scraped_n = 0
     scrape_started = time.time()
