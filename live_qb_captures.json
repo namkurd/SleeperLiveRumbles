@@ -46,12 +46,16 @@
       ],
       "backup_points_total": -2.25,
       "backups_seen": [
-        "7083"
+        "7083",
+        "13350"
       ],
       "team": "BAL",
       "injury_status_at_capture": "Out",
       "game_status_at_capture": "in_progress",
-      "captured_at": "2026-11-01T19:01:24.340388+00:00"
+      "captured_at": "2026-11-01T19:01:24.340388+00:00",
+      "chain_watch_for": [
+        "7083"
+      ]
     }
   ]
 }
