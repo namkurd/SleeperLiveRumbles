@@ -705,10 +705,19 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
     return out[:7]
 
 
+WEB_FAILS: list[int] = []   # status codes of site searches that did not answer, for the log
+
+
 def web_search(query: str) -> list[dict]:
     time.sleep(0.3)
     r = requests.get(YT_WEB, params={"search_query": query, "sp": SHORT_FILTER}, headers=WEB_HEADERS, timeout=30)
-    return parse_results(r.text) if r.ok else []
+    if not r.ok:
+        WEB_FAILS.append(r.status_code)
+        return []
+    out = parse_results(r.text)
+    if not out:
+        WEB_FAILS.append(0)   # an answer with no videos in it (a consent page, a block)
+    return out
 
 
 def resolve_channels(key: str, cache_path: str, extra_path: str) -> list[dict]:
@@ -1052,6 +1061,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                     for p in scrape_pool(plays) if lacks_playable(have.get(p["key"])) and p["key"] not in scraped_of[i]), key=lambda x: x[:2])   # this season first, biggest plays first
     BATCH = 12
     stop = False
+    print(f"[info] site search: {len(gaps2)} plays to search")
     for b0 in range(0, len(gaps2), BATCH):
         if stop or scraped_n >= SCRAPE_MAX or time.time() - scrape_started > SCRAPE_SECONDS:
             break
@@ -1102,6 +1112,7 @@ def run(root: str = HERE, force: bool = False) -> None:
             scraped_of[i].add(p["key"])
             scraped_n += 1
             results[i] = (d, w, doc, have, tried, plays, n + len(found))
+    print(f"[info] site search: {scraped_n} plays searched, {len(WEB_FAILS)} searches without results" + (f" (statuses {sorted(set(WEB_FAILS))})" if WEB_FAILS else ""))
     cache["spent"].append([int(now_s), allowed - q.left])
     save_cache(cache_path, cache)
     results_idx = {(r[0], r[1]): k for k, r in enumerate(results)}
