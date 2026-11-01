@@ -1500,7 +1500,7 @@
   .fld { position: relative; top: -1px; }
   .fld svg { height: 0.95em; width: auto; display: block; overflow: visible; }
   .fld-def svg { height: 0.85em; }
-  .fld-off { color: #c27a45; }
+  .fld-off { color: #a9603b; }
   .rb-nmwrap .fld, .rb-live-t .pw .fld { align-self: center; }
   .rb-live-t .pn .nl { display: none; }
   @media (max-width: 560px) { .rb-live-t .pn .nf { display: none; } .rb-live-t .pn .nl { display: inline; } }
@@ -6989,7 +6989,7 @@
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
   // defense while the other team has it.
   var FIELD_ICON = {
-    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-38 7 7)"><path d="M.8 7C2.6 2 11.4 2 13.2 7C11.4 12 2.6 12 .8 7Z" fill="currentColor" stroke="#7a4220" stroke-width=".6" stroke-linejoin="round"/><path d="M5.1 7h3.8M5.8 6v2M7 5.9v2.2M8.2 6v2" fill="none" stroke="#fff" stroke-width=".55" stroke-linecap="round"/><path d="M3 5.3C4.6 3.7 8 3.4 10.6 4.8" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".7" stroke-linecap="round"/></g></svg></span>',
+    off: '<span class="fld fld-off" title="His team has the ball"><svg viewBox="0 0 14 14" aria-hidden="true"><g transform="rotate(-40 7 7)"><path d="M.6 7C3 2.2 11 2.2 13.4 7C11 11.8 3 11.8 .6 7Z" fill="currentColor" stroke="#8a4a2a" stroke-width=".35" stroke-linejoin="round"/><path d="M1.5 7.9C4.6 10 9.4 10 12.5 7.9" fill="none" stroke="#7a3f22" stroke-opacity=".45" stroke-width=".3" stroke-linecap="round"/><path d="M4.6 4.55Q7 4.1 9.4 4.55M4.7 3.95v1.25M5.37 3.8v1.4M6.04 3.7v1.5M6.71 3.65v1.55M7.38 3.65v1.55M8.05 3.7v1.5M8.72 3.8v1.4M9.3 3.95v1.25" fill="none" stroke="#fff" stroke-width=".5" stroke-linecap="round"/></g></svg></span>',
     def: '<span class="fld fld-def" title="Defense on the field: the other team has the ball"><svg viewBox="0 0 20 12" aria-hidden="true"><rect x="0" y="3.1" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><rect x="0" y="7.3" width="20" height="1.7" rx=".4" fill="#c8d4e2" stroke="#587493" stroke-width=".8"/><g fill="#fff" stroke="#587493" stroke-width=".95" stroke-linejoin="round"><path d="M.9 3.4L2.7.6l1.8 2.8v8H.9z"/><path d="M5.9 3.4L7.7.6l1.8 2.8v8H5.9z"/><path d="M10.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/><path d="M15.9 3.4l1.8-2.8 1.8 2.8v8h-3.6z"/></g></svg></span>'
   };
   // "J. Jefferson" -> "Jefferson" (a defense's "Bears" stays as is). Phones show the last name only.
