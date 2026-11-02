@@ -3778,6 +3778,9 @@ def scenario_win_probability(browser):
     pj = pf.evaluate("({shown: !document.getElementById('wp-proj').hidden, text: document.getElementById('wp-proj').textContent, x1: (document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1')})")
     if os.environ.get("SCENSHOT"): pf.screenshot(path="/tmp/sf/wp_intro.png")
     assert pj["shown"] and ("projected to win" in pj["text"] or "Too close" in pj["text"]) and "Before kickoff" in pj["text"], f"the replay opens with who was projected to win: {pj}"
+    coin = pf.evaluate("({n: document.querySelectorAll('#wp-proj .wp-coin-in img').length, dur: (document.querySelector('#wp-proj .wp-coin-in') ? getComputedStyle(document.querySelector('#wp-proj .wp-coin-in')).animationDuration : ''), ms: getComputedStyle(document.getElementById('wp-proj')).getPropertyValue('--coin-ms').trim()})")
+    assert (coin["n"] == 2) == ("Too close" in pj["text"]), f"too close to call flips the Content Boy Coin, a clear favourite shows their picture: {coin}"
+    if coin["n"] == 2: assert coin["ms"] == getattr(pf, "_intro_ms", None) or coin["ms"].endswith("ms"), coin
     pf.wait_for_timeout(400)
     assert pf.evaluate("(document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1')") == pj["x1"], "the line waits while the projection shows"
     pf.wait_for_timeout(2200)

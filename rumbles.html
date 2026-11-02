@@ -1586,6 +1586,12 @@
   @media (max-height: 500px) and (orientation: landscape) { .wp-read { font-size: 0.72rem; padding: 2px 8px; } }
   .wp-sheet.wp-rot .wp-read { font-size: 0.72rem; padding: 2px 8px; }
   .wp-proj { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 86%; padding: 12px 22px 14px; text-align: center; border: 2px solid var(--c, var(--accent)); border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c, var(--accent)) 26%, transparent), 0 14px 44px rgba(0,0,0,0.6); pointer-events: none; animation: wp-clutch-in 0.45s cubic-bezier(.2,1.4,.4,1) both; }
+  .wp-proj .wp-proj-av.coin { width: 66px; height: 66px; } .wp-proj .wp-coin { position: absolute; inset: 0; perspective: 500px; }
+  .wp-proj .wp-coin-in { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; animation: wp-coin-flip var(--coin-ms, 2600ms) linear 1 both; }
+  .wp-proj .wp-coin-in img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: contain; backface-visibility: hidden; -webkit-backface-visibility: hidden; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+  .wp-proj .wp-coin-in img.b { transform: rotateY(180deg); }
+  @keyframes wp-coin-flip { from { transform: rotateY(0deg); } to { transform: rotateY(720deg); } }
+  @media (prefers-reduced-motion: reduce) { .wp-proj .wp-coin-in { animation: none; } }
   .wp-proj[hidden] { display: none; } .wp-proj b { display: block; font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
   .wp-proj .wp-proj-av { position: relative; width: 52px; height: 52px; margin: 0 auto 6px; } .wp-proj img, .wp-proj .wp-proj-i { position: absolute; inset: 0; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; background: var(--panel); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--c, var(--accent)); box-shadow: 0 0 16px var(--c, var(--accent)); animation: wp-pop 0.7s cubic-bezier(.2,1.5,.4,1) 0.1s both; }
   .wp-proj i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--c, var(--accent)); box-sizing: border-box; animation: wp-ring-s 1.2s ease-out 0.25s both; z-index: -1; } @keyframes wp-ring-s { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.3); opacity: 0; } }
@@ -8581,7 +8587,13 @@
     var el = document.getElementById("wp-proj"), a = pm.model.at(pm.model.start), meFav = a.p >= 0.5, who = meFav ? pm.me : pm.t, col = wpResolve(meFav ? pm.col.mine : pm.col.theirs), p = meFav ? a.p : 1 - a.p;
     var url = (scAv || {})[who.rid], close = p < 0.53;
     el.style.setProperty("--c", col);
-    el.innerHTML = "<b>Before kickoff</b><div class=\"wp-proj-av\"><i></i><i></i>" + (url ? '<img alt="" src="' + escapeHtml(url) + '">' : '<div class="wp-proj-i">' + escapeHtml(String(who.name || "?").charAt(0)) + "</div>") + "</div>" +
+    // Too close to call: the Content Boy Coin is flipped instead (two full turns, over the time the pop is up)
+    var coinMs = Math.max(1, window.__wpIntroMs != null ? Number(window.__wpIntroMs) : 2600);
+    el.style.setProperty("--coin-ms", coinMs + "ms");
+    var avHtml = close
+      ? '<div class="wp-proj-av coin"><i></i><i></i><div class="wp-coin"><div class="wp-coin-in"><img alt="" src="assets/cbc-coin-heads.png"><img class="b" alt="" src="assets/cbc-coin-heads.png"></div></div></div>'
+      : '<div class="wp-proj-av"><i></i><i></i>' + (url ? '<img alt="" src="' + escapeHtml(url) + '">' : '<div class="wp-proj-i">' + escapeHtml(String(who.name || "?").charAt(0)) + "</div>") + "</div>";
+    el.innerHTML = "<b>Before kickoff</b>" + avHtml +
       (close ? '<div class="wp-proj-n">Too close to call</div><div class="wp-proj-d">' + escapeHtml(pm.me.name) + " vs. " + escapeHtml(pm.t.name) + " \u00b7 " + wpPct(p) + "% / " + wpPct(1 - p) + "%</div>"
              : '<div class="wp-proj-n">' + escapeHtml(who.name || "") + '</div><div class="wp-proj-d">projected to win \u00b7 <strong>' + wpPct(p) + "%</strong> \u00b7 by " + Math.abs(a.proj).toFixed(1) + " pts</div>");
     el.hidden = false;
