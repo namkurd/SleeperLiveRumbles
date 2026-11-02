@@ -3778,7 +3778,7 @@ def scenario_win_probability(browser):
     pj = pf.evaluate("({shown: !document.getElementById('wp-proj').hidden, text: document.getElementById('wp-proj').textContent, x1: (document.querySelector('#wp-chart .wp-hov line') || {getAttribute: () => '-1'}).getAttribute('x1')})")
     if os.environ.get("SCENSHOT"): pf.screenshot(path="/tmp/sf/wp_intro.png")
     assert pj["shown"] and ("projected to win" in pj["text"] or "Too close" in pj["text"]) and "Before kickoff" in pj["text"], f"the replay opens with who was projected to win: {pj}"
-    coin = pf.evaluate("({n: document.querySelectorAll('#wp-proj .wp-coin-in img').length, dur: (document.querySelector('#wp-proj .wp-coin-in') ? getComputedStyle(document.querySelector('#wp-proj .wp-coin-in')).animationDuration : ''), ms: getComputedStyle(document.getElementById('wp-proj')).getPropertyValue('--coin-ms').trim()})")
+    coin = pf.evaluate("({n: document.querySelectorAll('#wp-proj .coin-3d .heads, #wp-proj .coin-3d .tails').length, dur: (document.querySelector('#wp-proj .coin-3d') ? getComputedStyle(document.querySelector('#wp-proj .coin-3d')).animationDuration : ''), ms: getComputedStyle(document.getElementById('wp-proj')).getPropertyValue('--coin-ms').trim()})")
     assert (coin["n"] == 2) == ("Too close" in pj["text"]), f"too close to call flips the Content Boy Coin, a clear favourite shows their picture: {coin}"
     if coin["n"] == 2: assert coin["ms"] == getattr(pf, "_intro_ms", None) or coin["ms"].endswith("ms"), coin
     pf.wait_for_timeout(400)
@@ -3893,8 +3893,8 @@ def scenario_win_probability(browser):
     cf.goto(PAGE_URL + "?tab=rumblin&me=Ben"); cf.wait_for_timeout(2500)
     cf.click("#rb-me"); cf.wait_for_timeout(300); cf.click("#rb-scen"); cf.wait_for_timeout(2500)
     cq = cf.evaluate("""() => { const b = [...document.querySelectorAll('#rb-scen-view .sc-blk')].find(x => x.querySelector('.sc-bh b').textContent === 'Aidan'); const a = b.querySelector('.sc-av');
-      return {pct: b.querySelector('.sc-wp').textContent, coin: a.classList.contains('coin'), to: parseFloat(a.dataset.to), spin: getComputedStyle(a.querySelector('.coin-3d') || a).animationName, faces: a.querySelectorAll('.coin-3d > *').length, img: !!a.querySelector('img:not(.heads)'), heads: (a.querySelector('.coin-3d > img.heads') || {}).src || '', tails: (a.querySelector('.coin-3d > .tails') || {textContent: ''}).textContent.replace(/\\s+/g, ' ').trim(), w: a.getBoundingClientRect().width}; }""")
-    assert cq["coin"] and cq["faces"] == 2 and cq["spin"] == "coin-turn" and not cq["img"] and 47 <= int(cq["pct"].split("%")[0]) <= 53, f"a coin flip is a spinning coin: {cq}"
+      return {pct: b.querySelector('.sc-wp').textContent, coin: a.classList.contains('coin'), to: parseFloat(a.dataset.to), spin: getComputedStyle(a.querySelector('.coin-3d') || a).animationName, faces: a.querySelectorAll('.coin-3d > .heads, .coin-3d > .tails').length, rims: a.querySelectorAll('.coin-3d > .rim').length, img: !!a.querySelector('img:not(.heads)'), heads: (a.querySelector('.coin-3d > img.heads') || {}).src || '', tails: (a.querySelector('.coin-3d > .tails') || {textContent: ''}).textContent.replace(/\\s+/g, ' ').trim(), w: a.getBoundingClientRect().width}; }""")
+    assert cq["coin"] and cq["faces"] == 2 and cq["rims"] >= 8 and cq["spin"] == "coin-turn" and not cq["img"] and 47 <= int(cq["pct"].split("%")[0]) <= 53, f"a coin flip is a spinning coin: {cq}"
     assert cq["heads"].startswith("data:image/webp;base64,") and set(cq["tails"].replace("CBC", "")) <= {" "} and "CBC" in cq["tails"] and cq["w"] >= 38, f"the Content Boy Coin on one side, CBC on the other, bigger than the old dot: {cq}"
     if os.environ.get("SCENSHOT"):
         for i, rot in enumerate(("0deg", "60deg", "180deg", "250deg")):
