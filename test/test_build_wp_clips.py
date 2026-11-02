@@ -418,3 +418,11 @@ def test_short_clips_tagged_highlights_and_game_winning_plays_are_plays():
     assert sc("Every Saquon Barkley Touchdown from 2025", "Saquon Barkley", "PHI", "DAL", "25 yd TD run", dur=100) == 0
     assert sc("Chase Brown's best plays from 2-TD game vs. Cardinals", "Chase Brown", "CIN", "ARI", "5 yd TD run", dur=100) == 0
     assert sc("Saquon Barkley Career Highlights", "Saquon Barkley", "PHI", "DAL", "25 yd TD run", dur=60) == 0
+
+
+def test_a_rushing_touchdown_is_not_matched_to_a_passing_one():
+    sc = lambda title, lab, pl="Leonard Fournette": C.score_title(title, pl, "TB", "ATL", lab, False, "x", True, "", None, 20)
+    assert sc("Tom Brady To Leonard Fournette for a 3 Yard Touchdown", "4 yd TD run") == 0, "a TD pass is not his TD run (and 3 is not 4 yards by chance)"
+    assert sc("Leonard Fournette 3 Yard Touchdown Run", "4 yd TD run") >= C.MIN_SCORE
+    assert sc("Tom Brady To Leonard Fournette for a 4 Yard Touchdown", "4 yd TD catch") >= C.MIN_SCORE
+    assert sc("Leonard Fournette rushes for a 4 yard touchdown", "4 yd TD catch") == 0

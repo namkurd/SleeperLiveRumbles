@@ -183,6 +183,13 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
     # a kick return is not a punt return, and neither is the other
     if ("kickoff return" in low_l and re.search(r"\bpunt", t)) or ("punt return" in low_l and re.search(r"\bkick ?(off|return|six)", t)):
         return 0
+    # a rushing touchdown is not a passing one (and the other way round): the title must not describe the other kind of play
+    is_run = bool(re.search(r"\b\d+ yd (td )?run\b", low_l)) and "return" not in low_l
+    is_aerial = bool(re.search(r"\b\d+ yd (td )?(catch|pass)\b", low_l))
+    says_run = bool(re.search(r"\b(run|runs|rush|rushes|rushing|ground|scrambles?|carry|carries)\b", t))
+    says_air = bool(re.search(r"\b(pass|passing|throws?|threw|catch|catches|hauls?|connects?|find|finds|reception|grab|snags?)\b|\bto [a-z]+ [a-z]+\b", t))
+    if (is_run and says_air and not says_run) or (is_aerial and says_run and not says_air):
+        return 0
     kinds = play_kind(label)
     specific = False
     if kinds and any(re.search(rf"\b{re.escape(k)}\b", t) for k in kinds):
