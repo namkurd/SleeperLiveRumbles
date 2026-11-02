@@ -3511,6 +3511,7 @@
     return ARCHIVE && ARCHIVE.playoffs && week != null ? ARCHIVE.playoffs[String(week)] || null : null;
   }
   // 18 is the exhibition week once a season has its playoffs on file.
+  function wpSeasonOf() { return String(ARCHIVE ? ARCHIVE.season : ((state.history && state.history.season) || (state.live && state.live.season) || "")); }
   function wpWeekName(week) { var po = rbPlayoffInfo(week); return po ? po.label : (ARCHIVE && ARCHIVE.playoffs && Number(week) === 18 ? "Exhibition" : "Week " + week); }
   // A past season opens on its finals.
   function rbFinalsWeek(pastWeeks) {
@@ -8081,7 +8082,7 @@
     if (!pm) { sheet.hidden = true; return; }
     var s = wpSummary(pm), wrap = document.getElementById("wp-chart");
     sheet.hidden = false;   // measure the real width: a hidden sheet has none
-    document.getElementById("wp-title").innerHTML = s.title + ' <small>' + wpWeekName(pm.win.week) + "</small>";
+    document.getElementById("wp-title").innerHTML = s.title + ' <small>' + (wpSeasonOf() ? wpSeasonOf() + " \u00b7 " : "") + wpWeekName(pm.win.week) + "</small>";
     document.getElementById("wp-sub").innerHTML = s.sub;
     document.getElementById("wp-story").textContent = wpStory(pm).text;
     var land = wpRot || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches, desk = wpDesk();
