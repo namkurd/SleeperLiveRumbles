@@ -974,7 +974,11 @@ def run(root: str = HERE, force: bool = False) -> None:
     cache = load_cache(cache_path)
     # Several runs a day (Tuesday has eight) share one 10,000-unit daily quota: spend only what the last 24 hours left over.
     now_s = now_ms / 1000
-    cache["spent"] = [r for r in cache.get("spent", []) if now_s - r[0] < 86400]
+    # YouTube's daily quota starts over at midnight Pacific time, not 24 hours after each request
+    from zoneinfo import ZoneInfo
+    pt = datetime.fromtimestamp(now_s, ZoneInfo("America/Los_Angeles"))
+    day_start = pt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    cache["spent"] = [r for r in cache.get("spent", []) if r[0] >= day_start]
     allowed = min(BUDGET, DAILY_UNITS - sum(r[1] for r in cache["spent"]))
     if allowed < 150:
         print(f"[info] only {allowed} API units left for today; clips wait for the next run")
