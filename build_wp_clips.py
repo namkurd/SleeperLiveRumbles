@@ -620,7 +620,7 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 
 # Searching the YouTube site itself costs no API quota, so every play that nothing else matched can be searched several ways
 # (the player with the distance, with the week, with the date) and the first few results of each looked at.
-SCRAPE_VER = 1                               # bump to search every unmatched play again
+SCRAPE_VER = 2                               # bump to search every unmatched play again
 SCRAPE_MAX = 600                             # plays searched on the site per run
 SCRAPE_SECONDS = 25 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_DEF = 10                              # ...and this many of its defensive plays
@@ -704,9 +704,10 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
         extra.append(f"{CITY[p['team']]} {team.title()} {who} {kind}")   # the team's own channel
     extra += [f"{who} {c} {opp}" for c in colloquial] + [f"{team} {c} {ys} {season}" for c in colloquial[:1]]
     # by surname alone, with the team: how a fan types it, and how a Short titles the player ("Tae Banks" for D. Banks)
-    sur = re.sub(r"[^A-Za-z'\- ]", "", (actor or p["player"] or "")).split()[-1:] or [""]
-    sur = sur[0]
-    by_name = [f"{sur} {ys} {kind} {team}", f"{team} {sur} {colloquial[0] if colloquial else kind}", f"{sur} {kind} {team} shorts"] if sur else []
+    # the full name ("Joe Burrow", "Deonte Banks": the timeline carries it) is what a title says; the surname and the team is what a fan types
+    toks = [w for w in re.sub(r"[^A-Za-z'\- ]", " ", (actor or p["player"] or "")).split() if w.lower().strip(".") not in SUFFIXES]
+    sur = toks[-1] if toks else ""
+    by_name = [f"{who} {ys} {kind}", f"{sur} {ys} {kind} {team}", f"{team} {sur} {colloquial[0] if colloquial else kind}", f"{who} {kind} {team} shorts"] if sur else []
     qs = by_name + extra + [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
           f"{who} {y if y is not None else ''} yd {kind} {season}", f"{who} {kind} highlights {team} {opp}"]
     seen, out = set(), []
@@ -715,7 +716,7 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
         if x.lower() not in seen:
             seen.add(x.lower())
             out.append(x)
-    return out[:8]
+    return out[:9]
 
 
 WEB_FAILS: list[int] = []   # status codes of site searches that did not answer, for the log

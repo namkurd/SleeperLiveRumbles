@@ -175,7 +175,9 @@ def _components(row: dict, scoring: dict, g2s: dict[str, str], pos_of: dict[str,
         for c in cols:
             n = (row.get(c) or "").strip()
             if n:
-                return " (" + re.sub(r"^((?:[A-Z][a-z]?\.)+)(?=[A-Za-z])", r"\1 ", n) + ")"
+                # the full name when the player is known by his id ("Deonte Banks", as a video title says it), else "D. Banks"
+                full = (PLAYERS.get(g2s.get((row.get(c[:-5] + "_id") or "").strip(), "")) or {}).get("full_name")
+                return " (" + (full or re.sub(r"^((?:[A-Z][a-z]?\.)+)(?=[A-Za-z])", r"\1 ", n)) + ")"
         return ""
 
     def add_def(team: str, pts: float, label: str) -> None:
