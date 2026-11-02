@@ -111,8 +111,20 @@ def play_kind(label: str) -> list[str]:
 
 
 # A title about a whole game, a player's day or a reaction is not about this play.
-NOT_A_PLAY = re.compile(r"\b(game|games|highlights|best plays|recap|every|all|weighs|reacts|reaction|interview|press conference|postgame|"
-                        r"pregame|talks|says|speaks|celly|celebration|film|breakdown|career|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns", re.I)
+# A title about a whole game, a player's day or a reaction is not about this play. ("Game-winning" and "first career touchdown" are plays;
+# a "celebration" or a "Highlights" tag on a short clip of the play is still the play.)
+NOT_A_PLAY = re.compile(r"\b(best plays|recap|every|all|weighs|reacts|reaction|interview|press conference|postgame|"
+                        r"pregame|talks|says|speaks|film|breakdown|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns|"
+                        r"\bgames? (recap|film|review|preview|highlights)\b|\bfull games?\b|\bcareer (highlights|best|moments|stats|touchdowns|tds|catches|receptions|plays|games|sacks|interceptions|high)\b", re.I)
+HIGHLIGHTS_TAG = re.compile(r"\bhighlights?\b", re.I)
+HIGHLIGHTS_OK_SECONDS = 90   # a clip this short with "Highlights" in its title is one play with a tag, not a compilation
+
+
+def not_a_play(title: str, dur: int = 0) -> bool:
+    flat = norm(title).replace("-", " ")
+    if NOT_A_PLAY.search(flat) or NOT_A_PLAY.search(title.lower()):
+        return True
+    return bool(HIGHLIGHTS_TAG.search(title)) and not (0 < dur <= HIGHLIGHTS_OK_SECONDS)
 
 
 def actor_of(label: str) -> str | None:
@@ -126,8 +138,8 @@ def yards_in(label: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "", actor: str | None = None) -> int:
-    if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
+def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "", actor: str | None = None, dur: int = 0) -> int:
+    if not_a_play(title, dur):
         return 0
     t = norm(title + " " + desc)   # a result's description often names the player, team and distance a short title leaves out
     words = t.split()
@@ -179,10 +191,11 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
     y = yards_in(label)
     if y is not None:
         said = [int(x) for x in re.findall(r"\b(\d+) (?:yard|yd)", t)]
-        if said and y not in said:
+        near = bool(said) and y not in said and any(abs(y - v) <= 1 for v in said)   # one yard either way: spotted or rounded differently
+        if said and y not in said and not near:
             return 0   # the title gives a different distance: another play
         if said:
-            s += 3
+            s += 2 if near else 3
             specific = True
     if player and need_yards and not (y is not None and re.search(rf"\b{y} (yard|yd)", t)):
         return 0
@@ -203,7 +216,7 @@ def first_result_ok(u: dict, p: dict) -> bool:
     if u.get("rank") != 0 or p.get("sib") or not 0 < u.get("dur", 0) <= 60:
         return False
     title = u["title"]
-    if NOT_A_PLAY.search(norm(title).replace("-", " ")) or NOT_A_PLAY.search(title.lower()):
+    if not_a_play(title, u.get("dur", 0)):
         return False
     t, words, ch = norm(title + " " + u.get("desc", "")), norm(title + " " + u.get("desc", "")).split(), norm(u.get("ch", ""))
     nicks, opps = NICK.get(p["team"] or "", []), NICK.get(p["opp"] or "", [])
@@ -217,7 +230,7 @@ def first_result_ok(u: dict, p: dict) -> bool:
             return False
     y = yards_in(p["label"])
     said = [int(x) for x in re.findall(r"\b(\d+) (?:yard|yd)", t)]
-    if y is not None and said and y not in said:
+    if y is not None and said and y not in said and not any(abs(y - v) <= 1 for v in said):
         return False
     mine = play_kind(p["label"])
     if mine:
@@ -280,7 +293,7 @@ def match_plays(plays: list[dict], uploads: list[dict], t0_ms: int, loose: bool 
         for u in uploads:
             if not u["embeddable"] or u["dur"] > MAX_DURATION or u["pub_ms"] < at or u["pub_ms"] > at + (14 if loose else 7) * 86400 * 1000:
                 continue
-            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""), p.get("actor"))
+            s = score_title(u["title"], p["player"], p["team"], p["opp"], p["label"], p["def"], u.get("ch", ""), loose, u.get("desc", ""), p.get("actor"), u.get("dur", 0))
             if s < MIN_SCORE and loose and first_result_ok(u, p):
                 s = MIN_SCORE
             if s >= MIN_SCORE:

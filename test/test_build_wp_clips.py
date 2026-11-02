@@ -405,3 +405,16 @@ def test_return_touchdowns_are_found_by_surname_and_wrong_clips_dropped():
     wrong = {"id": "W", "s": 0, "e": 15, "t": "Dart dots up Tracy for a Giants' TD", "c": "NFL"}
     have = {"NYG:1": dict(wrong)}
     assert C.prune_defense(have, [p]) == 1 and "NYG:1" not in have, "the NFL's clip must name the defender too"
+
+
+def test_short_clips_tagged_highlights_and_game_winning_plays_are_plays():
+    sc = lambda title, pl, tm, op, lab, dur=0, loose=True: C.score_title(title, pl, tm, op, lab, False, "x", loose, "", None, dur)
+    assert sc("Zay Flowers EMBARRASSES Colts Defense For 54 YARD TD | Ravens vs Colts Highlights", "Zay Flowers", "BAL", "IND", "54 yd TD catch", dur=24) >= C.MIN_SCORE, "a 24 second clip tagged Highlights is one play"
+    assert sc("Zay Flowers EMBARRASSES Colts Defense For 54 YARD TD | Ravens vs Colts Highlights", "Zay Flowers", "BAL", "IND", "54 yd TD catch", dur=400) == 0, "a long video of Highlights is a compilation"
+    assert sc("Davante Adams' Game-Winning 17-Yard Touchdown | Packers vs Cowboys", "Davante Adams", "GB", "DAL", "17 yd TD catch", dur=35) >= C.MIN_SCORE, "game-winning is not a game recap"
+    assert sc("Zonovan Knight First Career Touchdown | Jets vs Bills", "Zonovan Knight", "NYJ", "BUF", "1 yd TD run", dur=30) >= C.MIN_SCORE, "a first career touchdown is a play"
+    assert sc("Kyler Murray 6 Yard Touchdown Pass to Zach Ertz | Seahawks vs Cardinals", "Zach Ertz", "WAS", "SEA", "5 yd TD catch", dur=20) >= C.MIN_SCORE, "one yard either way is the same play"
+    assert sc("Kyler Murray 9 Yard Touchdown Pass to Zach Ertz", "Zach Ertz", "WAS", "SEA", "5 yd TD catch", dur=20) == 0, "four yards off is another play"
+    assert sc("Every Saquon Barkley Touchdown from 2025", "Saquon Barkley", "PHI", "DAL", "25 yd TD run", dur=100) == 0
+    assert sc("Chase Brown's best plays from 2-TD game vs. Cardinals", "Chase Brown", "CIN", "ARI", "5 yd TD run", dur=100) == 0
+    assert sc("Saquon Barkley Career Highlights", "Saquon Barkley", "PHI", "DAL", "25 yd TD run", dur=60) == 0
