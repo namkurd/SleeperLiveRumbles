@@ -3229,6 +3229,22 @@ def scenario_home_screen(browser):
     assert page.evaluate("document.getElementById('inst-bar').hidden"), "dismissed for two weeks"
     assert page.evaluate("!!document.querySelector('.howto-qr svg') && /Home Screen/.test(document.getElementById('howto-tooltip').textContent)"), "How to Use explains it, with a QR code"
     ctx.close()
+    # Chrome on an iPhone gets it too
+    ctx = browser.new_context(user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/124.0.6367.111 Mobile/15E148 Safari/604.1", viewport={"width": 390, "height": 800}, timezone_id="UTC")
+    page = ctx.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    install_routes(page, _gameday_base())
+    page.goto(PAGE_URL); page.wait_for_timeout(5000)
+    assert page.evaluate("!document.getElementById('inst-bar').hidden && /Add to Home Screen/.test(document.getElementById('inst-t').textContent)"), "Chrome on an iPhone: the same two taps"
+    # a How to Use taller than the screen scrolls inside itself and stays open
+    page.set_viewport_size({"width": 390, "height": 560})
+    page.click("#howto-btn"); page.wait_for_timeout(300)
+    sc = page.evaluate("(() => { const t = document.getElementById('howto-tooltip'); return {vis: t.classList.contains('visible'), tall: t.scrollHeight > t.clientHeight + 20}; })()")
+    assert sc["vis"] and sc["tall"], f"the how-to is taller than a phone: {sc}"
+    page.evaluate("document.getElementById('howto-tooltip').scrollTop = 400"); page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('howto-tooltip').classList.contains('visible') && document.getElementById('howto-tooltip').scrollTop > 100"), "scrolling the how-to keeps it open"
+    ctx.close()
     assert not console_errors, f"console errors: {console_errors}"
     assert not page_errors, f"page errors found: {page_errors}"
     print("HOME SCREEN SCENARIO PASSED")

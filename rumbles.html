@@ -280,7 +280,7 @@
     opacity: 0;
     visibility: hidden;
   }
-  .howto-tooltip { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .howto-tooltip { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
   .howto-tooltip.visible { opacity: 1; visibility: visible; }
   .howto-tooltip p { margin: 0 0 10px; }
   .howto-tooltip p:last-child { margin-bottom: 0; }
@@ -6468,7 +6468,8 @@
       hideHowTo();
     }
   });
-  window.addEventListener("scroll", hideHowTo, true);
+  // (scrolling the tooltip itself, when it is taller than the screen, must not close it)
+  window.addEventListener("scroll", function (e) { if (e.target && e.target.nodeType === 1 && els.howtoTooltip.contains(e.target)) return; hideHowTo(); }, true);
   window.addEventListener("resize", hideHowTo);
 
   var CONFIDENCE_LABELS = { confirmed: "Confirmed", likely: "Likely", possible: "Possible" };
@@ -9744,10 +9745,11 @@
     };
     var ua = navigator.userAgent || "", ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     var safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Instagram|FBAN|FBAV|Line\//.test(ua);
-    if (ios && safari && !dismissed()) {
+    var chromeIos = /CriOS|EdgiOS|FxiOS/.test(ua) && !/Instagram|FBAN|FBAV|Line\//.test(ua);   // Chrome, Edge and Firefox on an iPhone add Home Screen apps too (iOS 16.4 and later)
+    if (ios && (safari || chromeIos) && !dismissed()) {
       setTimeout(function () {
         if (document.body.classList.contains("solo")) return;
-        txt.innerHTML = "<b>Put Rumble Central on your Home Screen:</b> tap Share <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>, then Add to Home Screen.";
+        txt.innerHTML = (chromeIos ? "<b>Put Rumble Central on your Home Screen:</b> tap Share (top right, or in the menu) " : "<b>Put Rumble Central on your Home Screen:</b> tap Share ") + " <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>, then Add to Home Screen.";
         bar.hidden = false;
       }, 3500);
     }
@@ -9956,6 +9958,7 @@
     document.body.appendChild(ind);
     var y0 = null, dy = 0, THRESH = 70;
     function scrolledInside(t) {
+      if (t && t.closest && t.closest(".howto-tooltip, .wp-sheet")) return true;   // those scroll on their own
       var e = t && t.closest ? t.closest(".rb-feed-scroll, #standings-scroll") : null;
       return !!(e && e.scrollTop > 0);
     }
