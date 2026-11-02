@@ -112,7 +112,7 @@ def play_kind(label: str) -> list[str]:
 
 # A title about a whole game, a player's day or a reaction is not about this play.
 NOT_A_PLAY = re.compile(r"\b(game|games|highlights|best plays|recap|every|all|weighs|reacts|reaction|interview|press conference|postgame|"
-                        r"pregame|talks|says|speaks|celly|celebration|film|breakdown|season|career|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns", re.I)
+                        r"pregame|talks|says|speaks|celly|celebration|film|breakdown|career|top|moments|plays|night|day)\b|\d-(td|touchdown)\b|\d touchdowns", re.I)
 
 
 def actor_of(label: str) -> str | None:
@@ -167,6 +167,10 @@ def score_title(title: str, player: str | None, team: str | None, opp: str | Non
         s += 2
     if any(n in t for n in opps):
         s += 1
+    low_l = label.lower()
+    # a kick return is not a punt return, and neither is the other
+    if ("kickoff return" in low_l and re.search(r"\bpunt", t)) or ("punt return" in low_l and re.search(r"\bkick ?(off|return|six)", t)):
+        return 0
     kinds = play_kind(label)
     specific = False
     if kinds and any(re.search(rf"\b{re.escape(k)}\b", t) for k in kinds):
@@ -524,12 +528,12 @@ def prune_defense(have: dict, plays: list[dict]) -> int:
     dropped = 0
     for k, c in list(have.items()):
         p = info.get(k)
-        if not p or not p.get("def") or not p.get("actor") or blocked_channel(c.get("c")) and not c.get("alt"):
+        if not p or not p.get("def") or not p.get("actor"):
             continue
         sur = [x.split()[-1] for x in (norm(a) for a in p["actor"].split("|")) if x.split() and len(x.split()[-1]) > 2]
 
         def named(x: dict) -> bool:
-            return blocked_channel(x.get("c")) or any(w in norm(x.get("t", "")).split() for w in sur)
+            return is_stacked(x) or any(w in norm(x.get("t", "")).split() for w in sur)   # (STACKED's chapter is the exact play; every other clip, the NFL's included, must name him)
         allc = [c] + list(c.get("alt") or [])
         keep = [x for x in allc if named(x)]
         if len(keep) == len(allc):
@@ -621,9 +625,10 @@ SCRAPE_MAX = 600                             # plays searched on the site per ru
 SCRAPE_SECONDS = 25 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_DEF = 10                              # ...and this many of its defensive plays
 SCRAPE_PLAYS = 45                            # a week's biggest plays searched on the site
+SQ_VER = 2                                  # bump to search defensive and return plays again (newer search wording)
 DISCOVERED_MAX = 40                          # channels found by the site search that are crawled in full
 RECAP_SECONDS = 12 * 60                      # time the recap-video pass may take per run
-SCRAPE_TOP = 12                              # results read per search
+SCRAPE_TOP = 20                              # results read per search
 SCRAPE_TOP_OLD = 6                               # results read per search
 YT_WEB = "https://www.youtube.com/results"
 SHORT_FILTER = "EgIYAQ=="                    # YouTube's "under 4 minutes" filter
@@ -698,7 +703,11 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
     if colloquial and CITY.get(p["team"] or "") and team:
         extra.append(f"{CITY[p['team']]} {team.title()} {who} {kind}")   # the team's own channel
     extra += [f"{who} {c} {opp}" for c in colloquial] + [f"{team} {c} {ys} {season}" for c in colloquial[:1]]
-    qs = extra + [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
+    # by surname alone, with the team: how a fan types it, and how a Short titles the player ("Tae Banks" for D. Banks)
+    sur = re.sub(r"[^A-Za-z'\- ]", "", (actor or p["player"] or "")).split()[-1:] or [""]
+    sur = sur[0]
+    by_name = [f"{sur} {ys} {kind} {team}", f"{team} {sur} {colloquial[0] if colloquial else kind}", f"{sur} {kind} {team} shorts"] if sur else []
+    qs = by_name + extra + [f"{who} {ys} {kind} {opp}", f"{who} {ys} {kind} {team} week {week}", f"{who} {kind} {opp} {day.strftime('%b')} {day.day}",
           f"{who} {y if y is not None else ''} yd {kind} {season}", f"{who} {kind} highlights {team} {opp}"]
     seen, out = set(), []
     for x in qs:
@@ -706,7 +715,7 @@ def scrape_queries(p: dict, season: int, week: int, t0_ms: float) -> list[str]:
         if x.lower() not in seen:
             seen.add(x.lower())
             out.append(x)
-    return out[:7]
+    return out[:8]
 
 
 WEB_FAILS: list[int] = []   # status codes of site searches that did not answer, for the log
@@ -934,7 +943,7 @@ def run(root: str = HERE, force: bool = False) -> None:
                 continue
             try:   # an archived week is searched once per set of channels: adding a channel searches it again
                 old = json.load(open(os.path.join(out_dir, f"week_{w}.json")))
-                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS + SCRAPE_DEF and old.get("rc")
+                done_before = old.get("chs") == sig and old.get("mv") == MATCHER and old.get("sv") == STACKED_VER and old.get("sv2") == SCRAPE_VER and old.get("sdone") and old.get("sp") == SCRAPE_PLAYS + SCRAPE_DEF and old.get("rc") and old.get("sq") == SQ_VER
             except Exception:  # noqa: BLE001
                 done_before = False
             # the current season: weeks of the last three weeks, every night. An archived season: once.
@@ -1009,10 +1018,14 @@ def run(root: str = HERE, force: bool = False) -> None:
             have = (old.get("clips") or {}) if fresh else {}
             tried = set(old.get("tried") or []) if fresh else set()
             old_scraped = list(old.get("scraped") or []) if fresh and old.get("sv2") == SCRAPE_VER else []
+            old_sq = old.get("sq") == SQ_VER
             old_rc = bool(old.get("rc")) if fresh and old.get("sv2") == SCRAPE_VER else False
         except Exception:  # noqa: BLE001
-            have, tried, old_scraped, old_rc = {}, set(), [], False
+            have, tried, old_scraped, old_rc, old_sq = {}, set(), [], False, True
         plays = plays_by_week[(d, w)]
+        if not old_sq:   # defensive and return plays are searched again with the newer wording
+            special = {pl["key"] for pl in plays if pl["def"] or "return TD" in pl["label"]}
+            old_scraped = [k for k in old_scraped if k not in special]
         found = match_plays([p for p in plays if p["key"] not in have or is_stacked(have[p["key"]])], uploads, doc["t0"])
         have.update(found)
         # STACKED's film videos give the exact play and where it ends. Their uploads often refuse to play inside another site, so unless
@@ -1192,7 +1205,7 @@ def run(root: str = HERE, force: bool = False) -> None:
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
         with open(os.path.join(out_dir, f"week_{w}.json"), "w") as fh:
-            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS + SCRAPE_DEF, "rc": int(rc_of[results_idx[(d, w)]]), "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in scrape_pool(plays)), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
+            json.dump({"v": 1, "week": w, "clips": have, "tried": sorted(tried), "scraped": sorted(scraped_of[results_idx[(d, w)]]), "sv2": SCRAPE_VER, "sp": SCRAPE_PLAYS + SCRAPE_DEF, "rc": int(rc_of[results_idx[(d, w)]]), "sq": SQ_VER, "sdone": all(not lacks_playable(have.get(p["key"])) or p["key"] in scraped_of[results_idx[(d, w)]] for p in scrape_pool(plays)), "chs": wsig, "mv": MATCHER, "sv": STACKED_VER, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}, fh, separators=(",", ":"))
         touched.add(out_dir)
         print(f"[info] {os.path.relpath(d, root) if d != root else 'current'} week {w}: {len(have)} clip(s) ({n} new)")
     print("[info] clips by channel: " + ", ".join(f"{k} {v}" for k, v in sorted(by_ch.items(), key=lambda kv: -kv[1])[:15]))

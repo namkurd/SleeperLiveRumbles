@@ -392,3 +392,16 @@ def test_new_search_pieces():
     # 14 days for a searched-for play, 7 for a crawled one
     up = {"id": "U", "title": "Justin Herbert 20 yard touchdown pass vs Cardinals", "ch": "X", "dur": 20, "embeddable": True, "pub_ms": t0 + 100_000 + 10 * 86400 * 1000, "desc": "", "rank": 0}
     assert C.match_plays([p], [up], t0 - 100_000 + 0, loose=True) and not C.match_plays([p], [up], t0 - 100_000 + 0, loose=False)
+
+
+def test_return_touchdowns_are_found_by_surname_and_wrong_clips_dropped():
+    p = {"key": "NYG:1", "sec": 100, "player": None, "team": "NYG", "opp": "LV", "label": "95 yd kickoff return TD (D. Banks)", "def": True, "actor": "D. Banks", "pts": 6}
+    qs = C.scrape_queries(p, 2025, 17, 1_000_000_000_000)
+    assert any(q.lower().startswith("banks 95 yard kickoff return touchdown giants") for q in qs) and any("shorts" in q for q in qs) and len(qs) <= 8, qs
+    ok = "Deonte Banks Returns Kickoff For 95-YD TD - GIANTS vs RAIDERS - 2025-26 NFL SEASON WEEK 17"
+    assert C.score_title(ok, None, "NYG", "LV", p["label"], True, "SportsNewsCentral", True, "", p["actor"]) >= C.MIN_SCORE, "a title that says NFL season is still a play"
+    punt = "Brandon Banks punt return TD"
+    assert C.score_title(punt, None, "NYG", "LV", p["label"], True, "x", True, "", p["actor"]) == 0, "a punt return is not a kick return"
+    wrong = {"id": "W", "s": 0, "e": 15, "t": "Dart dots up Tracy for a Giants' TD", "c": "NFL"}
+    have = {"NYG:1": dict(wrong)}
+    assert C.prune_defense(have, [p]) == 1 and "NYG:1" not in have, "the NFL's clip must name the defender too"
