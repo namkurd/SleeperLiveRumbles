@@ -7611,7 +7611,7 @@
     var pastWeeks = rbScenPastWeeks(curOpt ? liveWk : null);
     var picked = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
     var fallback = pastWeeks.filter(function (w) { return counted.indexOf(w) >= 0; })[0];
-    var showPast = picked != null ? picked : (!curOpt ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : fallback != null ? fallback : pastWeeks[0]) : null);
+    var showPast = picked != null ? picked : (curOpt && pastWeeks.length && !(state.live && state.live.hasKickedOff) ? pastWeeks[0] : !curOpt ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : fallback != null ? fallback : pastWeeks[0]) : null);
     var grid = document.getElementById("rb-grid"), view = document.getElementById("rb-scen-view"), box = document.getElementById("scen-blocks");
     ["rb-strip", "rb-note", "rb-next"].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
     var ctl = document.querySelector(".rb-controls"); if (ctl) ctl.style.display = "none";
@@ -9187,7 +9187,7 @@
     scenBtn.classList.toggle("active", rb.sub === "scenarios");
     document.getElementById("rb-matchup").classList.toggle("active", rb.sub === "matchup");
     var pickedPast = rb.scenWeek != null && pastWeeks.indexOf(rb.scenWeek) >= 0 ? rb.scenWeek : null;
-    var showPast = pickedPast != null ? pickedPast : (!curWin && !scenWait && pastWeeks.length ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : pastWeeks[0]) : null);
+    var showPast = pickedPast != null ? pickedPast : (scenWait && pastWeeks.length && !(state.live && state.live.hasKickedOff) ? pastWeeks[0] : !curWin && !scenWait && pastWeeks.length ? (rbFinalsWeek(pastWeeks) != null ? rbFinalsWeek(pastWeeks) : pastWeeks[0]) : null);
     var scenOn = rb.sub === "scenarios" && !scenBtn.hidden && !scenBtn.disabled;
     scenRow.hidden = !scenOn || state.view !== "rumblin";
     if (state.view === "rumblin") { els.modeScen.classList.toggle("active", scenOn); els.modeRumblin.classList.toggle("active", !scenOn); }
