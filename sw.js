@@ -1,3 +1,2 @@
-// Rumble Central: minimal service worker. It exists so phones offer "Add to Home Screen" /
-// "Install app". It deliberately caches nothing, so the page and live scores are always fresh.
-self.addEventListener("fetch", function () {});
+// Retired: the DTF Club hub (/sw.js, scope "/") now owns the service worker. This stub removes the old one.
+self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',()=>self.registration.unregister());

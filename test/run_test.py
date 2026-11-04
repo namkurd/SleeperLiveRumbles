@@ -80,6 +80,7 @@ def install_routes(page, routes):
         # Manager pictures come from Sleeper's CDN: a one-pixel picture instead of the real thing.
         page.route(lambda url: "sleepercdn.com" in url, lambda route: route.fulfill(status=200, content_type="image/png", body=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")))
         page.route(lambda url: "ytimg.com" in url, lambda route: route.fulfill(status=200, content_type="image/gif", body=bytes.fromhex("47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b")))   # a video's thumbnail: one pixel
+        page.route("**/shell/nav.js", lambda route: route.fulfill(status=200, content_type="application/javascript", body=""))   # the DTF Club hub shell lives on the hub origin, not in this repo
         page.route("**/wp_clips/**", lambda route: route.fulfill(status=200, content_type="application/json", body="{}"))   # no clips unless a scenario supplies them
         page.route(lambda url: "sleeper.app" in url or "raw.githubusercontent.com" in url, lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     for pattern, payload in routes.items():
