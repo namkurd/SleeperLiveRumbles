@@ -314,10 +314,6 @@ def test_site_search_results_and_queries():
     assert all("chiefs" in q.lower() for q in C.scrape_queries(d, 2026, 1, 1788999801297))
 
 
-if __name__ == "__main__":
-    for _name in [n for n in list(globals()) if n.startswith("test_")]:
-        globals()[_name]()
-    print("ALL build_wp_clips.py UNIT TESTS PASSED")
 
 
 def test_playable_clip_goes_first_and_the_blocked_one_stays_as_a_link():
@@ -361,7 +357,7 @@ def test_defensive_plays_name_their_defender():
     assert C.score_title("T.J. Watt pick six vs Falcons", None, "PIT", "ATL", p["label"], True, "Bleacher Report", True, "", p["actor"]) >= C.MIN_SCORE
     assert C.score_title("Sam Darnold throws a pick six", None, "PIT", "ATL", p["label"], True, "Bleacher Report", True, "", p["actor"]) == 0
     assert C.scrape_pool([dict(p, def_=1)] * 0) == []
-    many = [{"def": False, "key": str(i)} for i in range(40)] + [{"def": True, "key": "d%d" % i} for i in range(15)]
+    many = [{"def": False, "key": str(i)} for i in range(C.SCRAPE_PLAYS + 5)] + [{"def": True, "key": "d%d" % i} for i in range(C.SCRAPE_DEF + 5)]
     pool = C.scrape_pool(many)
     assert len(pool) == C.SCRAPE_PLAYS + C.SCRAPE_DEF and sum(1 for x in pool if x["def"]) == C.SCRAPE_DEF
 
@@ -397,7 +393,7 @@ def test_new_search_pieces():
 def test_return_touchdowns_are_found_by_surname_and_wrong_clips_dropped():
     p = {"key": "NYG:1", "sec": 100, "player": None, "team": "NYG", "opp": "LV", "label": "95 yd kickoff return TD (D. Banks)", "def": True, "actor": "D. Banks", "pts": 6}
     qs = C.scrape_queries(p, 2025, 17, 1_000_000_000_000)
-    assert any(q.lower().startswith("banks 95 yard kickoff return touchdown giants") for q in qs) and any("shorts" in q for q in qs) and len(qs) <= 8, qs
+    assert any(q.lower().startswith("banks 95 yard kickoff return touchdown giants") for q in qs) and any("shorts" in q for q in qs) and len(qs) <= 10, qs
     ok = "Deonte Banks Returns Kickoff For 95-YD TD - GIANTS vs RAIDERS - 2025-26 NFL SEASON WEEK 17"
     assert C.score_title(ok, None, "NYG", "LV", p["label"], True, "SportsNewsCentral", True, "", p["actor"]) >= C.MIN_SCORE, "a title that says NFL season is still a play"
     punt = "Brandon Banks punt return TD"
@@ -426,3 +422,44 @@ def test_a_rushing_touchdown_is_not_matched_to_a_passing_one():
     assert sc("Leonard Fournette 3 Yard Touchdown Run", "4 yd TD run") >= C.MIN_SCORE
     assert sc("Tom Brady To Leonard Fournette for a 4 Yard Touchdown", "4 yd TD catch") >= C.MIN_SCORE
     assert sc("Leonard Fournette rushes for a 4 yard touchdown", "4 yd TD catch") == 0
+
+
+class _FakeProbe:
+    def __init__(self, answers):
+        self.answers = answers
+
+    def check(self, ids):
+        return {i: self.answers.get(i) for i in ids}
+
+
+def test_a_clip_the_real_player_refuses_no_longer_counts_as_playable():
+    a = {"id": "A", "s": 0, "e": 15, "t": "t", "c": "SportsNewsCentral"}
+    b = {"id": "B", "s": 0, "e": 15, "t": "t", "c": "Bronplug"}
+    have = {"1:10": dict(a, alt=[dict(b)])}
+    assert not C.lacks_playable(have["1:10"])
+    n = C.flag_blocked([have], _FakeProbe({"A": False, "B": True}))
+    assert n == 1 and have["1:10"]["b"] == 1 and not C.lacks_playable(have["1:10"])
+    C.reorder_playable(have)
+    assert have["1:10"]["id"] == "B" and have["1:10"]["alt"][0]["id"] == "A" and have["1:10"]["alt"][0]["b"] == 1
+    only = {"2:5": dict(a)}
+    C.flag_blocked([only], _FakeProbe({"A": False}))
+    assert C.lacks_playable(only["2:5"])
+    C.flag_blocked([only], _FakeProbe({"A": None}))     # not answered in time: the mark stays, nothing else changes
+    assert C.lacks_playable(only["2:5"])
+    C.flag_blocked([only], _FakeProbe({"A": True}))     # it plays after all: the mark goes
+    assert not C.lacks_playable(only["2:5"]) and "b" not in only["2:5"]
+
+
+def test_the_embed_check_uses_what_it_already_knows_and_never_needs_a_browser_for_that():
+    from embed_probe import EmbedProbe
+    store = {"A": 1, "B": 0}
+    p = EmbedProbe(store, 60)
+    p.dead = True      # no browser: unknown ids stay unknown, known ones answer
+    assert p.check(["A", "B", "C"]) == {"A": True, "B": False, "C": None}
+    assert store == {"A": 1, "B": 0}
+
+
+if __name__ == "__main__":
+    for _name in [n for n in list(globals()) if n.startswith("test_")]:
+        globals()[_name]()
+    print("ALL build_wp_clips.py UNIT TESTS PASSED")

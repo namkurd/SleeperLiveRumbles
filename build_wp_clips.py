@@ -28,6 +28,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from embed_probe import EmbedProbe
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://www.googleapis.com/youtube/v3"
 NFL_UPLOADS = "UUDVYQ4Zhbm3S2dlz7P1GBDg"   # the NFL channel's uploads playlist
@@ -484,11 +486,52 @@ def blocked_channel(c: str | None) -> bool:
     return c.upper().startswith("STACKED") or c in NO_EMBED_HINT
 
 
+def is_blocked(x: dict) -> bool:
+    """A clip that cannot play inside the page: its channel refuses embedding, or the real player refused it ("b": 1, from the embed check)."""
+    return blocked_channel(x.get("c")) or x.get("b") == 1
+
+
 def lacks_playable(clip: dict | None) -> bool:
-    """A play whose only clips come from channels that refuse embedding: worth searching for one that plays."""
+    """A play whose only clips cannot play embedded: worth searching for one that does."""
     if not clip:
         return True
-    return all(blocked_channel(x.get("c")) for x in [clip] + list(clip.get("alt") or []))
+    return all(is_blocked(x) for x in [clip] + list(clip.get("alt") or []))
+
+
+def clip_ids(clip: dict) -> list[dict]:
+    """Every clip dict a play carries (the main one and its alternates) that is not already known to be blocked by its channel."""
+    return [x for x in [clip] + list(clip.get("alt") or []) if not blocked_channel(x.get("c"))]
+
+
+def flag_blocked(have_list: list[dict], probe, deadline: float | None = None) -> int:
+    """Tests the clips' videos in the real embedded player and marks the ones it refuses ("b": 1); one that plays loses a stale mark.
+    Videos not answered in time stay unmarked (they count as playable until a later run tests them)."""
+    todo = [x for have in have_list for c in have.values() for x in clip_ids(c)]
+    res = probe.check([x["id"] for x in todo])
+    n = 0
+    for x in todo:
+        r = res.get(x["id"])
+        if r is False and x.get("b") != 1:
+            x["b"] = 1
+            n += 1
+        elif r is True and x.get("b"):
+            del x["b"]
+    return n
+
+
+def reorder_playable(have: dict) -> None:
+    """A clip that plays goes first; a blocked one drops back behind it (still there as a link)."""
+    for k, c in list(have.items()):
+        alts = list(c.get("alt") or [])
+        if not alts or not is_blocked(c) or all(is_blocked(a) for a in alts):
+            continue
+        best = next(a for a in alts if not is_blocked(a))
+        rest = [{a_: b_ for a_, b_ in x.items() if a_ not in ("alt", "x")} for x in [c] + alts if x is not best]
+        new = {a_: b_ for a_, b_ in best.items() if a_ not in ("alt", "x")}
+        new["alt"] = rest
+        if c.get("x"):
+            new["x"] = c["x"]
+        have[k] = new
 
 
 def merge_playable(old: dict | None, new: dict) -> dict:
@@ -510,11 +553,11 @@ def dedupe_clips(have: dict, plays: list[dict]) -> int:
     uses: dict[str, set] = {}
     for k, c in have.items():
         for x in [c] + list(c.get("alt") or []):
-            if not blocked_channel(x.get("c")):
+            if not is_blocked(x):
                 uses.setdefault(x["id"], set()).add(k.split(":")[-1])
 
     def fine(k: str, x: dict) -> bool:
-        if blocked_channel(x.get("c")) or len(uses.get(x["id"], ())) < 2:
+        if is_blocked(x) or len(uses.get(x["id"], ())) < 2:
             return True
         y = yards_in((info.get(k) or {}).get("label") or "")
         return y is not None and re.search(rf"\b{y}\b", x.get("t", "")) is not None
@@ -640,13 +683,14 @@ def search_clips(q: "Quota", play: dict, t0_ms: float) -> list[dict]:
 
 # Searching the YouTube site itself costs no API quota, so every play that nothing else matched can be searched several ways
 # (the player with the distance, with the week, with the date) and the first few results of each looked at.
-SCRAPE_VER = 2                               # bump to search every unmatched play again
+SCRAPE_VER = 3                               # bump to search every unmatched play again
 SCRAPE_MAX = 600                             # plays searched on the site per run
 SCRAPE_SECONDS = 25 * 60                    # the site search stops after this long (the work is saved, the next run carries on)
 SCRAPE_DEF = 10                              # ...and this many of its defensive plays
 SCRAPE_PLAYS = 45                            # a week's biggest plays searched on the site
 SQ_VER = 2                                  # bump to search defensive and return plays again (newer search wording)
 DISCOVERED_MAX = 40                          # channels found by the site search that are crawled in full
+EMBED_SECONDS = 20 * 60                      # time the embedded-player check may take per run (videos not reached are tested on a later run)
 RECAP_SECONDS = 12 * 60                      # time the recap-video pass may take per run
 SCRAPE_TOP = 20                              # results read per search
 SCRAPE_TOP_OLD = 6                               # results read per search
@@ -1154,6 +1198,14 @@ def run(root: str = HERE, force: bool = False) -> None:
                 print(f"[warn] {e}; recap videos resume on a later run", file=sys.stderr)
                 break
         print(f"[info] recap videos: {sum(rc_of)} of {len(rc_of)} weeks looked at")
+        # YouTube's API calls videos "embeddable" that the real player then refuses (error 150): test the clips found so far in the
+        # embedded player, so a refused one no longer counts as playable and its play is searched for another
+        probe = EmbedProbe(cache.setdefault("emb", {}), EMBED_SECONDS)
+        try:
+            marked = flag_blocked([r[3] for r in results], probe)
+            print(f"[info] embed check: {probe.answered} video(s) tested, {marked} newly found not to play embedded" + ("" if not probe.dead else " (browser unavailable)"))
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] embed check skipped ({type(e).__name__}: {e})", file=sys.stderr)
         # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
         scrape_started = time.time()
         gaps2 = sorted(((0 if results[i][0] == root else 1, -p["pts"], i, p) for i, (_, _, _, have, tried, plays, _) in enumerate(results)
@@ -1185,8 +1237,8 @@ def run(root: str = HERE, force: bool = False) -> None:
                 found = {}
                 for qi, raw in enumerate(lists):
                     # a video already used for a different play of this week is not it (two plays at one instant may share one)
-                    taken = {c["id"] for k, c in have.items() if k != p["key"] and k.split(":")[-1] != str(p["sec"]) and not blocked_channel(c.get("c"))}
-                    res = [r for r in raw if not blocked_channel(r.get("ch")) and r["id"] not in taken]
+                    taken = {c["id"] for k, c in have.items() if k != p["key"] and k.split(":")[-1] != str(p["sec"]) and not is_blocked(c)}
+                    res = [r for r in raw if not blocked_channel(r.get("ch")) and r["id"] not in taken and probe.known(r["id"]) is not False]
                     for rank, r in enumerate(res):
                         r["rank"] = rank if qi == 0 else 99   # only the first result of the most exact search is trusted on its own
                         r["desc"] = ""
@@ -1202,6 +1254,14 @@ def run(root: str = HERE, force: bool = False) -> None:
                             r["dur"], r["embeddable"], r["pub_ms"] = cache["vid"][r["id"]][0], bool(cache["vid"][r["id"]][1]), cache["pub"][r["id"]]
                             ups.append(r)
                     found = match_plays([p], ups, doc["t0"], loose=True)
+                    for _try in range(3):   # a match the real player refuses is set aside and the next best taken
+                        if not found:
+                            break
+                        top = next(iter(found.values()))
+                        if probe.check([top["id"]]).get(top["id"]) is not False:
+                            break
+                        ups = [r for r in ups if r["id"] != top["id"]]
+                        found = match_plays([p], ups, doc["t0"], loose=True)
                     if found:
                         for c_ in found.values():   # the creator behind a find is remembered: from 3 finds on, the whole channel is crawled
                             chid = next((r.get("chid") for r in ups if r["id"] == c_["id"]), "")
@@ -1220,12 +1280,17 @@ def run(root: str = HERE, force: bool = False) -> None:
         print(f"[warn] site search / recap videos stopped early ({type(e).__name__}: {e})", file=sys.stderr)
     print(f"[info] site search: {scraped_n} plays searched, {len(WEB_FAILS)} searches without results" + (f" (statuses {sorted(set(WEB_FAILS))})" if WEB_FAILS else ""))
     cache["spent"].append([int(now_s), allowed - q.left])
+    try:
+        probe.close()
+    except Exception:  # noqa: BLE001
+        pass
     save_cache(cache_path, cache)
     results_idx = {(r[0], r[1]): k for k, r in enumerate(results)}
     for d, w, doc, have, tried, plays, n in results:
         out_dir = os.path.join(d, "wp_clips")
         dedupe_clips(have, plays)
         prune_defense(have, plays)
+        reorder_playable(have)
         apply_manual(have, plays, manual, int(doc.get("season") or 0), w)
         for c in have.values():
             by_ch[c.get("c", "?")] = by_ch.get(c.get("c", "?"), 0) + 1
