@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-11-03T20:32:42.144782+00:00",
+  "generated_at": "2026-11-04T08:13:27.681412+00:00",
   "weeks_completed": [
     1,
     2,
@@ -1041,7 +1041,7 @@
         "rumbles": 5
       },
       "9": {
-        "points": 155.15,
+        "points": 155.14999389648438,
         "opponent_roster_id": 12,
         "opponent_points": 151.94,
         "h2h_win": true,
@@ -1052,7 +1052,7 @@
       "12": {
         "points": 151.94,
         "opponent_roster_id": 9,
-        "opponent_points": 155.15,
+        "opponent_points": 155.14999389648438,
         "h2h_win": false,
         "teams_outscored": 7,
         "teams_outscored_by": 4,
@@ -1233,10 +1233,10 @@
         }
       ],
       "backup_points_total": -1.86,
-      "confidence": "likely",
-      "injury_status_at_capture": "Out",
-      "custom_points_delta": null,
-      "captured_at": "2026-11-01T19:01:24.340388+00:00"
+      "confidence": "confirmed",
+      "injury_status_at_capture": null,
+      "custom_points_delta": -1.86,
+      "captured_at": null
     },
     {
       "week": 8,
