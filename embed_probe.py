@@ -38,35 +38,40 @@ class EmbedProbe:
         self.asked = self.answered = 0
 
     # --- browser -------------------------------------------------------------------------------------------
-    def _start(self) -> bool:
-        if self.page is not None:
-            return True
+    def _launch(self) -> bool:
+        """A browser and a fresh page with the player API loaded (an old page is dropped: many iframes make a page slow and then crash it)."""
         if self.dead:
             return False
         try:
-            from playwright.sync_api import sync_playwright
-            self.pw = sync_playwright().start()
-            kw = {"args": ["--no-sandbox"]}
-            exe = os.environ.get("EMBED_CHROME")
-            if exe:
-                kw["executable_path"] = exe
-            proxy = os.environ.get("HTTPS_PROXY")
-            if proxy and os.environ.get("EMBED_USE_PROXY"):
-                kw["proxy"] = {"server": proxy}
-            self.browser = self.pw.chromium.launch(**kw)
+            if self.browser is None:
+                from playwright.sync_api import sync_playwright
+                self.pw = sync_playwright().start()
+                kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--mute-audio"]}
+                exe = os.environ.get("EMBED_CHROME")
+                if exe:
+                    kw["executable_path"] = exe
+                proxy = os.environ.get("HTTPS_PROXY")
+                if proxy and os.environ.get("EMBED_USE_PROXY"):
+                    kw["proxy"] = {"server": proxy}
+                self.browser = self.pw.chromium.launch(**kw)
+            if self.page is not None:
+                try:
+                    self.page.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                self.page = None
             self.page = self.browser.new_page()
             self.page.route("http://embed.test/**", lambda r: r.fulfill(body=PAGE, content_type="text/html"))
             self.page.goto("http://embed.test/p.html", wait_until="load")
             self.page.wait_for_function("() => !!window.go", timeout=30000)
             return True
         except Exception as e:  # noqa: BLE001 - no browser: carry on without the check
-            print(f"[warn] embed check unavailable ({type(e).__name__}: {str(e)[:120]})", file=sys.stderr)
-            self.dead = True
+            print(f"[warn] embed check browser failed ({type(e).__name__}: {str(e)[:120]})", file=sys.stderr)
             self.close()
             return False
 
     def close(self) -> None:
-        for o, m in ((self.browser, "close"), (self.pw, "stop")):
+        for o, m in ((self.page, "close"), (self.browser, "close"), (self.pw, "stop")):
             try:
                 if o:
                     getattr(o, m)()
@@ -82,12 +87,18 @@ class EmbedProbe:
     def check(self, ids: list[str]) -> dict:
         """{id: True (plays) | False (blocked) | None (not known)} for every id."""
         todo = [i for i in dict.fromkeys(ids) if i not in self.store]
-        for b0 in range(0, len(todo), BATCH):
-            if time.time() > self.deadline or not self._start():
+        fails = 0
+        b0 = 0
+        while b0 < len(todo):
+            if time.time() > self.deadline or self.dead:
                 break
             batch = todo[b0:b0 + BATCH]
             try:
-                self.page.evaluate("() => { window.res = {}; document.getElementById('box').innerHTML = ''; }")
+                if not self._launch():       # a fresh page for every batch
+                    fails += 1
+                    if fails >= 3:
+                        self.dead = True
+                    continue
                 self.page.evaluate("l => window.go(l)", batch)
                 t_end = time.time() + WAIT_SECONDS
                 while time.time() < t_end:
@@ -95,11 +106,15 @@ class EmbedProbe:
                     if self.page.evaluate("n => Object.keys(window.res).length >= n", len(batch)):
                         break
                 res = self.page.evaluate("() => window.res")
-            except Exception as e:  # noqa: BLE001
-                print(f"[warn] embed check stopped ({type(e).__name__}: {str(e)[:120]})", file=sys.stderr)
-                self.dead = True
+            except Exception as e:  # noqa: BLE001 - a crashed page: start again with a new browser, three failures in a row give up
+                fails += 1
+                print(f"[warn] embed check hiccup ({type(e).__name__}: {str(e)[:100]})", file=sys.stderr)
                 self.close()
-                break
+                if fails >= 3:
+                    self.dead = True
+                continue
+            fails = 0
+            b0 += BATCH
             self.asked += len(batch)
             for v, r in res.items():
                 if r == "ready":

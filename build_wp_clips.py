@@ -1204,6 +1204,16 @@ def run(root: str = HERE, force: bool = False) -> None:
         try:
             marked = flag_blocked([r[3] for r in results], probe)
             print(f"[info] embed check: {probe.answered} video(s) tested, {marked} newly found not to play embedded" + ("" if not probe.dead else " (browser unavailable)"))
+            # a play whose clip the player just refused is searched for another (once: "rs" marks it as already searched again)
+            for i, (_, _, _, have_i, _, plays_i, _) in enumerate(results):
+                for p_ in scrape_pool(plays_i):
+                    c_ = have_i.get(p_["key"])
+                    if c_ and lacks_playable(c_) and p_["key"] in scraped_of[i]:
+                        xs_ = [x for x in [c_] + list(c_.get("alt") or []) if x.get("b") == 1]
+                        if xs_ and not any(x.get("rs") for x in xs_):
+                            scraped_of[i].discard(p_["key"])
+                            for x in xs_:
+                                x["rs"] = 1
         except Exception as e:  # noqa: BLE001
             print(f"[warn] embed check skipped ({type(e).__name__}: {e})", file=sys.stderr)
         # then the YouTube site itself, which costs no quota: several searches per unmatched play, a few results of each
