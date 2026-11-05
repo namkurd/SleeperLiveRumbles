@@ -3747,6 +3747,14 @@ def scenario_win_probability(browser):
     pf.evaluate("window.__wpPlayMs = 24000"); pf.click("#wp-replay"); pf.wait_for_timeout(2500)
     pin = pf.evaluate("({top: !document.getElementById('wp-last-top').hidden, bot: !document.getElementById('wp-last-bot').hidden, tt: document.getElementById('wp-last-top').textContent, bt: document.getElementById('wp-last-bot').textContent, tip: document.getElementById('wp-read').textContent})")
     assert pin["top"] and pin["bot"] and ("yd" in pin["tt"] or "yd" in pin["bt"] or "interception" in pin["tt"] + pin["bt"] or "sack" in pin["tt"] + pin["bt"]), f"each manager's last scoring play is pinned: {pin}"
+    one = pf.evaluate("(() => [...document.querySelectorAll('#wp-last-top > div, #wp-last-bot > div')].map(r => ({h: r.offsetHeight, lh: parseFloat(getComputedStyle(r).lineHeight) || parseFloat(getComputedStyle(r).fontSize) * 1.3, cut: r.scrollWidth > r.clientWidth + 1})))()")
+    assert one and all(r["h"] < r["lh"] * 1.5 and not r["cut"] for r in one), f"each pinned scoring play stays on one line, uncut: {one}"
+    # and a LONG play (name + long label + points + clock) still fits on one line, whatever the width
+    pf.evaluate("document.querySelectorAll('#wp-last-top > div, #wp-last-bot > div').forEach(r => { r.innerHTML = '<span class=\"wl-who\">P. Washington</span><span class=\"wl-lbl\">51 yd TD catch and a two point conversion</span><small>+12.1 · Q1 5:34</small>'; })"); pf.wait_for_timeout(700)
+    one = pf.evaluate("(() => [...document.querySelectorAll('#wp-last-top > div, #wp-last-bot > div')].map(r => ({h: r.offsetHeight, lh: parseFloat(getComputedStyle(r).lineHeight) || parseFloat(getComputedStyle(r).fontSize) * 1.3, cut: r.scrollWidth > r.clientWidth + 1})))()")
+    assert one and all(r["h"] < r["lh"] * 1.5 and not r["cut"] for r in one), f"a long scoring play still stays on one line (its description may end in an ellipsis): {one}"
+    tail = pf.evaluate("(() => [...document.querySelectorAll('#wp-last-top small, #wp-last-bot small')].map(e => e.offsetLeft + e.offsetWidth <= e.parentNode.offsetLeft + e.parentNode.clientWidth + 1))()")
+    assert tail and all(tail), f"the points and clock are never clipped: only the play description gives way {tail}"
     big = pf.evaluate("(() => { const b = document.querySelector('#wp-read .wp-bigp'); return b && {size: parseFloat(getComputedStyle(b).fontSize), color: getComputedStyle(b).color, wl: document.querySelectorAll('#wp-chart .wp-wl.on').length, labels: document.querySelectorAll('#wp-chart .wp-wl').length}; })()")
     assert big and big["size"] > 14 and big["color"] != "rgb(0, 0, 0)", f"the win percentage is big and in the favoured manager's colour: {big}"
     assert big["labels"] == 0 or big["wl"] == 1, f"the game window most recently passed is lit: {big}"
