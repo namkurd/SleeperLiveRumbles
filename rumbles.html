@@ -9713,18 +9713,26 @@
   });
   // ---- remembering who you are (this device only) ----------------------
   var RB_ME_KEY = "rumbles.me";
+  // Who you are is shared with the rest of the app: the hub's "Who are you?" picker stores {id, name} under dtf.me, and picking
+  // here writes it too, so one choice follows you everywhere. The shared name wins when there is one.
+  function dtfMeName() {
+    try { var v = JSON.parse(localStorage.getItem("dtf.me") || "null"); return v && v.name ? String(v.name) : null; } catch (e) { return null; }
+  }
   function rbSaveMe(rid) {
     try {
       localStorage.setItem(RB_ME_KEY, String(rid));
       var row = rbFindManager(rid);
-      if (row) localStorage.setItem(RB_ME_KEY + ".name", row.manager);   // roster numbers change from year to year; the name does not
+      if (row) {
+        localStorage.setItem(RB_ME_KEY + ".name", row.manager);   // roster numbers change from year to year; the name does not
+        localStorage.setItem("dtf.me", JSON.stringify({ id: String(row.manager).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""), name: row.manager }));
+      }
     } catch (e) { /* storage blocked: fine */ }
   }
   function rbLoadMeName() {
-    try { return localStorage.getItem(RB_ME_KEY + ".name"); } catch (e) { return null; }
+    try { return dtfMeName() || localStorage.getItem(RB_ME_KEY + ".name"); } catch (e) { return null; }
   }
   function rbLoadMe() {
-    try { return localStorage.getItem(RB_ME_KEY); } catch (e) { return null; }
+    try { return dtfMeName() || localStorage.getItem(RB_ME_KEY); } catch (e) { return null; }
   }
   // A standings row for a roster id or a manager name (any capitalization).
   function rbFindManager(token) {
