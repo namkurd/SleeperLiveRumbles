@@ -7752,6 +7752,10 @@
       teams = rbPastTeams(L.week);
       win = { key: "lnk" + L.week, clusters: [], cur: 0, week: L.week, past: true };
     } else return;
+    if (!L.resolved) {   // ids or names -> roster ids (names are looked up in this season's standings)
+      var ra = rbFindManager(decodeURIComponent(L.me)), rb2 = rbFindManager(decodeURIComponent(L.t));
+      L.me = ra ? Number(ra.roster_id) : NaN; L.t = rb2 ? Number(rb2.roster_id) : NaN; L.resolved = true;
+    }
     var me = teams.filter(function (x) { return x.rid === L.me; })[0], t = teams.filter(function (x) { return x.rid === L.t; })[0];
     if (!me || !t) { L.gone = true; wpSoloOff(); return; }
     var pm = wpPair(win, me, t, { mine: rbColor(me.rid), theirs: "var(--bad)" });
@@ -9818,9 +9822,9 @@
     var params = null;
     try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
     var linkMe = params ? rbFindManager(params.get("me")) : null;
-    var wl = params ? /^(\d+)\.(\d+)\.(\d+)$/.exec(params.get("wp") || "") : null;
+    var wl = params ? /^(\d+)\.([^.]+)\.([^.]+)$/.exec(params.get("wp") || "") : null;   // WEEK.ME.THEM: roster ids, or manager names (the Head-to-Head tool links by name)
     if (wl) { document.body.classList.add("solo"); setTimeout(function () { if (!wpOpenKey) wpSoloOff(); }, 25000); }
-    if (wl) state.wpLink = { week: Number(wl[1]), me: Number(wl[2]), t: Number(wl[3]), at: params.get("t") != null && isFinite(Number(params.get("t"))) ? Number(params.get("t")) : null };
+    if (wl) state.wpLink = { week: Number(wl[1]), me: wl[2], t: wl[3], at: params.get("t") != null && isFinite(Number(params.get("t"))) ? Number(params.get("t")) : null };
     // ?u=Name only says who you are (it does not change what the page opens to, unlike ?me=)
     var idMe = params ? rbFindManager(params.get("u")) : null;
     var me = linkMe || (ARCHIVE ? rbFindManager(rbLoadMeName()) : rbFindManager(rbLoadMe()) || rbFindManager(rbLoadMeName())) || idMe;
