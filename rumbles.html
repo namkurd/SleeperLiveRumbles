@@ -9732,6 +9732,14 @@
       }
     } catch (e) { /* storage blocked: fine */ }
   }
+  // The shell's "Who are you?" picker (any page) changed the shared identity: forget this page's own copy and reload so every view agrees.
+  window.addEventListener("dtf:me", function (ev) {
+    try {
+      if (!(ev.detail && ev.detail.name)) { localStorage.removeItem(RB_ME_KEY); localStorage.removeItem(RB_ME_KEY + ".name"); }
+      var u = new URL(location.href); u.searchParams.delete("u");   // ?u=Name (added when you were identified) would put the old identity straight back
+      location.replace(u.toString());
+    } catch (e) { /* storage blocked: fine */ }
+  });
   function rbLoadMeName() {
     try { return dtfMeName() || localStorage.getItem(RB_ME_KEY + ".name"); } catch (e) { return null; }
   }
