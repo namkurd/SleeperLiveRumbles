@@ -1798,6 +1798,17 @@
   /* A head-to-head Rumble (worth 9) glows in the accent; a Field one stays plain. No extra room: it is the block's own edge. */
   .scen-mode-row { display: flex; justify-content: flex-end; margin: -2px 0 10px; }
   .scen-mode-row[hidden] { display: none; }
+  /* Phones with the hub nav (it carries the Actual / Projected / Rumblin' / Scenarios tabs): no row is left mostly empty.
+     The week picker shares the title row; in Scenarios it moves into the Mine / Best row instead (see placeWeekPicker). */
+  @media (max-width: 640px) {
+    body.dtf-has-nav header { flex-wrap: nowrap; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    body.dtf-has-nav header > div:first-child { flex: 1 1 auto; min-width: 0; }
+    body.dtf-has-nav header .controls { width: auto; flex: 0 0 auto; margin-left: auto; }
+    body.dtf-has-nav header .controls:empty { display: none; }
+    body.dtf-has-nav h1 { margin-bottom: 2px; }
+    body.dtf-has-nav .scen-mode-row { justify-content: space-between; align-items: center; margin: 0 0 8px; }
+    body.dtf-has-nav .status-row { margin-bottom: 8px !important; }
+  }
   .toggle-group.scen-mode[hidden] { display: none; }
   .scen-po { padding: 7px 16px; border-radius: 999px; border: 1.5px solid var(--accent); color: var(--accent); font-weight: 800; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); } .scen-po[hidden] { display: none; }
   .sc-chip.po { background: var(--accent); color: #111; } .sc-chip.gold { background: var(--gold); color: #111; }
@@ -6012,7 +6023,7 @@
       }
     });
   }
-  window.addEventListener("scroll", hideQbAdjTooltip, true);
+  window.addEventListener("scroll", function (e) { var t = document.getElementById("qb-adj-tooltip"); if (e.target && e.target.nodeType === 1 && t && t.contains(e.target)) return; hideQbAdjTooltip(); }, true);   // scrolling the tooltip itself must not close it
   window.addEventListener("resize", hideQbAdjTooltip);
 
   // A position: fixed tooltip is anchored to viewport coordinates captured
@@ -6022,7 +6033,7 @@
   // it's actually about. Simplest correct fix: just dismiss it on scroll.
   // `capture: true` here is what catches a scroll inside .table-scroll --
   // scroll events don't bubble, but they do propagate in the capture phase.
-  window.addEventListener("scroll", hidePtsTooltip, true);
+  window.addEventListener("scroll", function (e) { var t = document.getElementById("pts-tooltip"); if (e.target && e.target.nodeType === 1 && t && t.contains(e.target)) return; hidePtsTooltip(); }, true);   // scrolling the tooltip itself must not close it
   window.addEventListener("resize", hidePtsTooltip);
 
   // ---- manager-name "*" hover/tap tooltip (live QB-injury adjustment) ----
@@ -6317,7 +6328,7 @@
       });
     }
   }
-  window.addEventListener("scroll", hideQbAdjCapturedTooltip, true);
+  window.addEventListener("scroll", function (e) { var t = document.getElementById("qb-adj-captured-tooltip"); if (e.target && e.target.nodeType === 1 && t && t.contains(e.target)) return; hideQbAdjCapturedTooltip(); }, true);   // scrolling the tooltip itself must not close it
   window.addEventListener("resize", hideQbAdjCapturedTooltip);
 
   // ---- "How to Use" hover/click tooltip ----------------------------------
@@ -6406,7 +6417,7 @@
       if (state.activePfPaKey != null && (!e.target.closest || !e.target.closest("td.pfpa-cell"))) hidePfPaTooltip();
     });
   }
-  window.addEventListener("scroll", hidePfPaTooltip, true);
+  window.addEventListener("scroll", function (e) { var t = document.getElementById("pfpa-tooltip"); if (e.target && e.target.nodeType === 1 && t && t.contains(e.target)) return; hidePfPaTooltip(); }, true);   // scrolling the tooltip itself must not close it
   window.addEventListener("resize", hidePfPaTooltip);
 
   var howtoPinned = false;
@@ -6780,6 +6791,20 @@
   });
   els.modeCustom.addEventListener("click", function () { setMode("custom"); });
   els.refreshBtn.addEventListener("click", refreshNow);
+  // Phones with the hub nav: the week picker rides on the title row; in Scenarios it joins the Mine / Best row instead, so neither row is mostly empty.
+  (function placeWeekPicker() {
+    var mq = window.matchMedia("(max-width: 640px)"), wrap = document.getElementById("week-select-wrap"), ctl = document.querySelector("header .controls"), row = document.getElementById("scen-mode-row");
+    if (!wrap || !ctl || !row) return;
+    function place() {
+      var join = mq.matches && document.body.classList.contains("dtf-has-nav") && !row.hidden;
+      if (join && wrap.parentNode !== row) row.insertBefore(wrap, row.firstChild);
+      else if (!join && wrap.parentNode !== ctl) ctl.insertBefore(wrap, ctl.firstChild);
+    }
+    new MutationObserver(place).observe(row, { attributes: true, attributeFilter: ["hidden"] });
+    new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["class"] });   // the nav adds dtf-has-nav after load
+    if (mq.addEventListener) mq.addEventListener("change", place); else mq.addListener(place);
+    place();
+  })();
   // Phones: Refresh / How to Use ride on the status line (right side) instead of the header controls.
   (function () {
     var mq = window.matchMedia("(max-width: 640px)"), slot = document.getElementById("status-actions"), ctl = document.querySelector("header .controls");
@@ -10052,6 +10077,7 @@
 })();
 </script>
 <script>window.DTF_VIEWS = {"hide": ".toggle-group[aria-label=\"Scoring source\"]", "items": [{"label": "Actual", "sel": "#mode-actual"}, {"label": "Projected", "sel": "#mode-custom"}, {"label": "Rumblin'", "sel": "#mode-rumblin"}, {"label": "Scenarios", "sel": "#mode-scen"}]};</script>
+<script>window.DTF_TIPS = ["#pts-tooltip", "#qb-adj-tooltip", "#qb-adj-captured-tooltip", "#pfpa-tooltip", "#howto-tooltip", "#trend-tip", "#wp-tipx", "#wp-tipm"];</script>
 <script src="/shell/nav.js" defer></script>
 </body>
 </html>
