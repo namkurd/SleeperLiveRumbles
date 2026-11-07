@@ -1715,7 +1715,7 @@
   .wp-sheet.wp-rot { padding: 0; align-items: flex-start; justify-content: flex-start; }
   .wp-sheet.wp-rot .wp-card { position: fixed; top: 0; left: 0; box-sizing: border-box; width: var(--rot-h, 100vh); height: var(--rot-w, 100vw); max-width: none; max-height: none; transform-origin: top left; transform: translateX(var(--rot-w, 100vw)) rotate(90deg); padding: 6px 10px; overflow: hidden; border-radius: 0; border-top-width: 2px; }
   .wp-sheet.wp-rot .wp-title { font-size: 1.02rem; } .wp-sheet.wp-rot .wp-story, .wp-sheet.wp-rot .wp-ticker { display: none; }
-  .wp-sheet.wp-rot .wp-head { flex-wrap: nowrap; } .wp-sheet.wp-rot .wp-ttl { flex: 1 1 auto; } .wp-sheet.wp-rot .wp-btns { flex: 0 0 auto; }
+  .wp-sheet.wp-rot .wp-head { flex-wrap: nowrap; } .wp-sheet.wp-rot .wp-ttl { flex: 1 1 auto; min-width: 0; } .wp-sheet.wp-rot .wp-btns { flex: 0 0 auto; }
   .wp-sheet.wp-rot .wp-body { flex-direction: row; gap: 10px; align-items: flex-start; } .wp-sheet.wp-rot .wp-chartwrap { flex: 1 1 auto; width: auto; }
   .wp-sheet.wp-rot .wp-side { flex: 0 0 38%; width: auto; max-height: calc(var(--rot-w, 100vw) - 76px); overflow: auto; } .wp-sheet.wp-rot .wp-list { display: block; }
   .wp-sheet.wp-rot .wp-col + .wp-col li:first-child { border-top: 1px solid var(--panel-border); } .wp-sheet.wp-rot .wp-hint { display: none; } .wp-sheet.wp-rot .wp-sub { font-size: 0.68rem; }
@@ -1726,6 +1726,11 @@
   .wp-sheet.wp-rot .wp-list li > .wp-n { grid-row: auto; } .wp-sheet.wp-rot .wp-pd { grid-column: auto; flex-basis: auto; padding-left: 0; } .wp-sheet.wp-rot .wp-play { position: static; }
   }
   .wp-sheet.wp-rot .wp-ph { font-size: calc(0.8rem * var(--wp-fs, 1)); padding-right: 0; }
+  /* The page runs under the phone's status bar and home bar (viewport-fit=cover), and the sheet is turned a quarter turn: its top edge is the
+     phone's right side, its right end the bottom, its bottom edge the left side, its left end the top. Keep the buttons and the roster panel clear of them. */
+  .wp-sheet.wp-rot .wp-card { padding: max(6px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-top)); }
+  .wp-sheet.wp-rot .wp-rosters { top: env(safe-area-inset-right); right: env(safe-area-inset-bottom); bottom: env(safe-area-inset-left); left: env(safe-area-inset-top); }
+  @media (orientation: landscape) { .wp-sheet:not(.wp-rot) .wp-card { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); } }
   @media (prefers-reduced-motion: no-preference) { .wpm-dot { transition: left 0.4s, top 0.4s; } }
 
   .sc-scores { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: end; gap: 4px 14px; margin: 4px 4px 0; }

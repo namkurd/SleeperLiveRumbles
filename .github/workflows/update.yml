@@ -14,7 +14,12 @@ on:
     - cron: "23 5,6,7,8,9,10,12,14 * * 2"
     # Daily backup, every day of the week.
     - cron: "41 10 * * *"
-  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+  workflow_dispatch:   # lets you trigger a run manually from the Actions tab
+    inputs:
+      force_clips:
+        description: "Redo the highlight-clip search for every archived season and week too (slow, up to ~75 min), to fill gaps"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -56,7 +61,7 @@ jobs:
         continue-on-error: true
 
       - name: Run build_wp_clips.py (short official highlights for each week's biggest plays, from the NFL's YouTube channel)
-        run: python build_wp_clips.py
+        run: python build_wp_clips.py ${{ inputs.force_clips && '--force' || '' }}
         timeout-minutes: 75
         continue-on-error: true
         env:
