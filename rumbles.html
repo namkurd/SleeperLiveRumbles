@@ -2008,7 +2008,7 @@
   <button type="button" class="inst-go" id="inst-go" hidden>Install</button>
   <button type="button" class="inst-x" id="inst-x" aria-label="Not now" title="Not now">&times;</button>
 </div>
-<div class="solo-splash" id="solo-splash"><b>Rumble Central</b><span>Loading the matchup\u2026</span></div>
+<div class="solo-splash" id="solo-splash"><b>Rumble Central</b><span>Loading the matchup…</span></div>
 <div class="wp-sheet" id="wp-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="wp-title">
   <div class="wp-card">
     <div class="wp-head">
@@ -7738,11 +7738,16 @@
   }
   function wpDirty() { wpLinkTry(); if (!document.getElementById("rumblin-view").hidden) renderRumblin(); }
   // ?wp=WEEK.ME.THEM (made by "Share link") opens that chart straight away, this week's or a past one, with no manager picked.
+  // A finished week: one of the counted weeks, or a playoff week (those sit in extra_weekly and are never in weeks_completed).
+  function wpWeekDone(w) {
+    var h = state.history || {};
+    return (h.weeks_completed || []).indexOf(w) >= 0 || !!(h.extra_weekly && h.extra_weekly[String(w)]);
+  }
   function wpLinkTry() {
     var L = state.wpLink;
     if (!L || L.gone || !state.history) return;
     var liveWk = state.live && state.live.week != null ? Number(state.live.week) : null;
-    var finished = ((state.history && state.history.weeks_completed) || []).indexOf(L.week) >= 0, teams, win;
+    var finished = wpWeekDone(L.week), teams, win;
     if (L.week === liveWk && !finished && state.live && state.live.isLive) {
       var fw = rbScenWindow(true);
       teams = rbTeams();
@@ -8336,7 +8341,7 @@
       state.wpLink.gone = true;
       // ...in Rumble Central's Scenarios for that manager and week, so the person lands in the app and not on a bare page
       try {
-        var Ls = state.wpLink, rbs = state.rb, past = ((state.history && state.history.weeks_completed) || []).indexOf(Ls.week) >= 0;
+        var Ls = state.wpLink, rbs = state.rb, past = wpWeekDone(Ls.week);
         if (rbs.me == null || rbs.me !== Ls.me) rbs.me = Ls.me;
         rbs.mode = "me"; rbs.sub = "scenarios"; rbs.scenBest = false; rbs.scenWeek = past ? Ls.week : null;
         setView("rumblin");
