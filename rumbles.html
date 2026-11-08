@@ -1287,6 +1287,7 @@
   .rb-tag-out, .rb-tag-nout { background: #e5484d; color: #fff; }
   /* a second copy by the name, shown only where the Projected column is hidden (compact cards on a phone, the roster overlay) */
   .rb-tag-n { display: none; flex: none; align-self: center; margin-left: 5px; }
+  .rb-tag-s { flex: none; align-self: center; margin-left: 6px; font-size: 0.62rem; }
   .rb-table tr.rb-out .rb-tag, .rb-table tr .rb-proj .rb-tag { opacity: 1; text-decoration: none; }
   .rb-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Kickoff time (or Bye) for a player who hasn't started sits in the Act column. */
@@ -7033,9 +7034,17 @@
   // A medical-style cross for the QB-injury backup slot.
   var RB_MED_CROSS = '<svg viewBox="0 0 10 10" width="11" height="11" aria-hidden="true"><path d="M3.6 1h2.8v2.6H9v2.8H6.4V9H3.6V6.4H1V3.6h2.6z" fill="#fff"/></svg>';
 
-  // Questionable during his game: remembers the points he had when he was first seen listed (this week, on this device); once his
-  // points move he has scored again, so he is cleared and the tag goes. A player no longer listed Questionable is forgotten, so a new listing starts fresh.
-  var QUES_KEY = "rumbles.ques.v1";
+  // Questionable during his game: remembers how many scoring plays were recorded for him when he was first seen listed (this week, on this device).
+  // A new recorded play means he is back in the game, so the tag goes; a change in his points with no new play (a stat correction) does not clear it.
+  // A player no longer listed Questionable is forgotten, so a later listing starts fresh.
+  var QUES_KEY = "rumbles.ques.v2";
+  function rbPlaysFor(pid, wk) {
+    var doc = wpGet(wk, true);
+    if (!doc || !doc.ev) return null;
+    var n = 0;
+    for (var i = 0; i < doc.ev.length; i++) if (String(doc.ev[i][1]) === String(pid)) n++;
+    return n;
+  }
   function rbQues(p) {
     var wk = state.live && state.live.week, pid = p && p.player_id;
     if (wk == null || !pid || p.replacement) return false;
@@ -7044,10 +7053,14 @@
     if (store.week !== wk) store = { week: wk, p: {} };
     var listed = String(p.injury_status || "").toLowerCase() === "questionable", cur = store.p[pid], changed = false, show = false;
     if (!listed) { if (cur) { delete store.p[pid]; changed = true; } }
-    else if (!cur) { store.p[pid] = { a: num(p.actual) }; changed = true; show = true; }
-    else if (cur.c) show = false;
-    else if (Math.abs(num(p.actual) - cur.a) > 1e-9) { cur.c = 1; changed = true; }
-    else show = true;
+    else {
+      var plays = rbPlaysFor(pid, wk);
+      if (!cur) { store.p[pid] = { n: plays }; changed = true; show = true; }
+      else if (cur.c) show = false;
+      else if (cur.n == null) { if (plays != null) { cur.n = plays; changed = true; } show = true; }
+      else if (plays != null && plays > cur.n) { cur.c = 1; changed = true; }
+      else show = true;
+    }
     if (changed) { try { localStorage.setItem(QUES_KEY, JSON.stringify(store)); } catch (e) { /* private mode: it just starts fresh on reload */ } }
     return show;
   }
@@ -7435,6 +7448,12 @@
   }
   // WP-ENGINE-END
 
+  // QUES / OUT beside a name in Scenarios (there is room): QUES while his game is on and he is listed Questionable (and has not scored a recorded play since), OUT once ruled out.
+  function rbInjTagS(p, st) {
+    if (rbRuledOut(p)) return '<span class="rb-tag rb-tag-s rb-tag-nout" title="Ruled out">OUT</span>';
+    if (st === "in_progress" && rbQues(p)) return '<span class="rb-tag rb-tag-s rb-tag-nq" title="Questionable: listed during his game. Clears when he scores.">QUES</span>';
+    return "";
+  }
   function rbScenSideHtml(t, list, win) {
     var col = rbIsOpponent(t.rid) ? "var(--bad)" : rbColor(t.rid);
     var rows = list.map(function (p) {
@@ -7444,7 +7463,7 @@
       else meta = formatGameStartLabel(p.game_start_ms);
       var a = num(p.actual), pre = st === "pre_game";
       var badge = p.replacement ? '<span class="pos-badge pos-QB rb-plus" title="QB injury backup">' + RB_MED_CROSS + "</span>" : posBadgeHtml(p.position);
-      return '<div class="sc-p">' + badge + '<span class="sc-nw"><span class="sc-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + (st === "in_progress" ? fieldIcon(p.field) : "") + "</span>" +
+      return '<div class="sc-p">' + badge + '<span class="sc-nw"><span class="sc-n" title="' + escapeHtml(p.name) + '">' + nameSpans(p.short_name || p.name, p.name) + "</span>" + rbInjTagS(p, st) + (st === "in_progress" ? fieldIcon(p.field) : "") + "</span>" +
         '<span class="sc-g">' + escapeHtml(meta || "") + '</span><span class="sc-a ' + (pre ? "" : a > 0 ? "gain" : a < 0 ? "loss" : "") + '">' + (pre ? "–" : a.toFixed(2)) + "</span></div>";
     }).join("");
     return '<div class="sc-side" style="--c:' + col + '"><div class="sc-sh"><b>' + escapeHtml(t.name) + "</b><span>" + list.length + " left</span></div>" +
@@ -9447,11 +9466,18 @@
     document.querySelectorAll("#rb-grid table.rb-table").forEach(function (tb) {
       var names = [].slice.call(tb.querySelectorAll(".rb-n"));
       var cut = function (n) { return n.scrollWidth > n.clientWidth + 1; };
+      // A name that would be cut off first gets a slightly smaller font; only if that is not enough does it swap to its nickname / last name,
+      // and that one may shrink further, so a name is never cut off unless even the smallest size does not fit.
+      var shrink = function (n, min) { var f = 100; while (cut(n) && f > min) { f -= 4; n.style.fontSize = f + "%"; } };
       var pass = function () {
-        names.forEach(function (n) { n.classList.remove("nick", "ln"); });
+        names.forEach(function (n) { n.classList.remove("nick", "ln"); n.style.fontSize = ""; });
         names.forEach(function (n) {
           if (!cut(n)) return;
+          shrink(n, 84);
+          if (!cut(n)) return;
+          n.style.fontSize = "";
           if (n.querySelector(".nk")) n.classList.add("nick"); else n.classList.add("ln");
+          shrink(n, 64);
         });
         return names.some(cut);
       };
