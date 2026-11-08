@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-11-08T16:46:59.992126+00:00",
+  "generated_at": "2026-11-08T22:02:21.263488+00:00",
   "weeks_completed": [
     1,
     2,
@@ -1222,11 +1222,6 @@
       },
       "backup_qbs": [
         {
-          "player_id": "3257",
-          "name": "Jacoby Brissett",
-          "points": 3.66
-        },
-        {
           "player_id": "13350",
           "name": "Joe Fagnano",
           "points": 0.39
@@ -1237,7 +1232,7 @@
           "points": -2.25
         }
       ],
-      "backup_points_total": 1.8,
+      "backup_points_total": -1.86,
       "confidence": "confirmed",
       "injury_status_at_capture": null,
       "custom_points_delta": -1.86,
