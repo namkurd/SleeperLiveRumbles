@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_rumbles  # noqa: E402 -- imported as a module too, so tests can monkeypatch build_rumbles.LIVE_CAPTURES_PATH
 from build_rumbles import (  # noqa: E402
+    array_to_player_map,
     build_team_qb_index,
     compute_qb_adjustments_for_week,
     determine_fresh_week,
@@ -584,6 +585,22 @@ def test_find_backup_qbs_excludes_exactly_zero_point_backups():
     print("PASS: a backup QB who played but scored exactly 0.00 points is excluded from the backup list")
 
 
+def test_find_backup_qbs_uses_the_team_each_player_had_that_week():
+    # QB_BACKUP is on QB_STARTER's team in today's player metadata, but the week's own stats say he played for another team that week
+    # (he joined afterwards): he must not be credited as the starter's backup. A QB the stats say was on the team that week still is.
+    meta = dict(QB_PLAYERS_META, QB_BACKUP={**QB_PLAYERS_META["QB_BACKUP"]})
+    team = meta["QB_STARTER"]["team"]
+    arr = [{"player_id": "QB_STARTER", "team": team, "stats": QB_STATS_MAP["QB_STARTER"]},
+           {"player_id": "QB_BACKUP", "team": "XXX", "stats": {"gp": 1, "pass_att": 23, "pass_yd": 119, "pass_td": 1}}]
+    stats = array_to_player_map(arr)
+    backups = find_backup_qbs("QB_STARTER", meta["QB_STARTER"], meta, build_team_qb_index(meta), stats, QB_SCORING_SETTINGS)
+    assert backups == [], f"a QB who was on another team that week is not a backup, got {backups}"
+    arr[1]["team"] = team
+    backups = find_backup_qbs("QB_STARTER", meta["QB_STARTER"], meta, build_team_qb_index(meta), array_to_player_map(arr), QB_SCORING_SETTINGS)
+    assert [b["player_id"] for b in backups] == ["QB_BACKUP"], f"a same-team QB that week is still credited, got {backups}"
+    print("PASS: backup QBs are matched by the team they played for that week, not their team today")
+
+
 def test_find_backup_qbs_keeps_negative_point_backups():
     # A genuinely bad outing (e.g. a pick-six) is still a real, meaningful
     # backup credit -- only an exact 0.00 gets filtered, never a negative.
@@ -841,6 +858,7 @@ def main():
     test_compute_qb_adjustments_no_entry_without_a_backup()
     test_find_backup_qbs_excludes_exactly_zero_point_backups()
     test_find_backup_qbs_keeps_negative_point_backups()
+    test_find_backup_qbs_uses_the_team_each_player_had_that_week()
     test_compute_qb_adjustments_no_entry_when_only_backup_scored_exactly_zero()
     test_superflex_only_the_qb_with_a_real_backup_is_logged()
     test_superflex_both_started_qbs_can_log_separately()
