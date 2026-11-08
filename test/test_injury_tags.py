@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rumblin' cards tag a starter whose game is on and who Sleeper lists Questionable with an orange Q, and a starter ruled out in his game with a red OUT.
+"""Rumblin' cards put an orange QUES in the Projected column for a starter whose game is on and whom Sleeper lists Questionable (gone once he scores again), and a red OUT for a starter ruled out in his game.
 Reuses the e2e fixtures (needs `python3 -m http.server 8123` in the repo root, like run_test.py):  python3 test/test_injury_tags.py"""
 import sys, json
 sys.path.insert(0, "test")
@@ -22,8 +22,17 @@ with sync_playwright() as p:
     page.goto(T.PAGE_URL + "?tab=rumblin", wait_until="load"); page.wait_for_timeout(2500)
     res = page.evaluate("""() => ({
       out: [...document.querySelectorAll('#rumblin-view tr.rb-out')].map(r => !!r.querySelector('.rb-tag-out')),
-      q: [...document.querySelectorAll('#rumblin-view .rb-tag-q')].map(e => e.closest('tr').classList.contains('rb-live')) })""")
-    assert res["q"] == [True], f"one live Questionable starter should carry a Q, got {res}"
+      q: [...document.querySelectorAll('#rumblin-view .rb-tag-q')].map(e => e.closest('tr').classList.contains('rb-live') && e.closest('td').classList.contains('rb-proj') && e.textContent === 'QUES') })""")
+    assert res["q"] == [True], f"one live Questionable starter should carry QUES in the Projected column, got {res}"
+    # he scores again: cleared, the tag goes (the first sighting's points are remembered on the device)
+    import copy
+    stats = copy.deepcopy(T.load("stats_week2.json"))
+    for e in stats:
+        if e["player_id"] == "P11": e["stats"]["pass_yd"] += 60
+    page.unroute("**/stats/nfl/2026/2*"); page.route("**/stats/nfl/2026/2*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(stats)))
+    page.reload(wait_until="load"); page.wait_for_timeout(2500)
+    n = page.evaluate("document.querySelectorAll('#rumblin-view .rb-tag-q').length")
+    assert n == 0, f"a Questionable starter who scored again is cleared, but {n} QUES tag(s) remain"
     b.close()
     # a second run with nobody Questionable and the QB ruled out: the Out row carries OUT
     b = p.chromium.launch(executable_path=os.environ.get("CHROME_PATH", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"))
@@ -33,5 +42,5 @@ with sync_playwright() as p:
     page.goto(T.PAGE_URL + "?tab=rumblin", wait_until="load"); page.wait_for_timeout(2500)
     res = page.evaluate("""() => ({ out: [...document.querySelectorAll('#rumblin-view tr.rb-out')].map(r => !!r.querySelector('.rb-tag-out')), q: document.querySelectorAll('#rumblin-view .rb-tag-q').length })""")
     assert res["out"] and all(res["out"]) and res["q"] == 0, f"every ruled-out row should carry OUT and nobody a Q, got {res}"
-    print("PASS: Q on a live Questionable starter, OUT on a starter ruled out in his game")
+    print("PASS: QUES in the Projected column for a live Questionable starter, cleared once he scores; OUT for a starter ruled out in his game")
     b.close()
