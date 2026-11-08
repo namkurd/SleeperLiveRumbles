@@ -335,17 +335,26 @@ def dot_product(stats_obj: dict | None, scoring_settings: dict) -> float:
     return total
 
 
+class StatsMap(dict):
+    """player_id -> stat line for one week, plus `.teams`: player_id -> the NFL team he played for THAT week (the stats feed's own `team`;
+    Sleeper's player metadata only has his team today, which is wrong for a player who changed teams since)."""
+    teams: dict[str, str]
+
+
 def array_to_player_map(arr: list | None) -> dict[str, dict]:
     """Sleeper's bulk stats endpoint returns a JSON array of per-player
     entries ({player_id, stats: {...}, ...}) -- convert to a player_id-keyed
     lookup, same shape rumbles.html's arrayToPlayerMap() produces."""
-    out: dict[str, dict] = {}
+    out = StatsMap()
+    out.teams = {}
     if not arr:
         return out
     for entry in arr:
         pid = entry.get("player_id") if isinstance(entry, dict) else None
         if pid:
             out[pid] = entry.get("stats") or {}
+            if entry.get("team"):
+                out.teams[pid] = entry["team"]
     return out
 
 
@@ -431,12 +440,18 @@ def find_backup_qbs(
     start two QBs from the same NFL team at once, and that's the manager's
     own lineup choice, not a backup coming off the bench to relieve an
     injury."""
-    team = meta.get("team")
+    # The team that week, from the week's own stats (a QB who joined or left a team since would be on the wrong one in today's player metadata).
+    week_teams = getattr(stats_map, "teams", None) or {}
+    team = week_teams.get(started_pid) or meta.get("team")
     if not team:
         return []
     excluded = other_started_pids or set()
+    if week_teams:
+        candidates = [cid for cid, tm in week_teams.items() if tm == team and (players_meta.get(cid) or {}).get("position") == "QB"]
+    else:
+        candidates = team_qb_index.get(team, [])
     played_ids = [
-        cid for cid in team_qb_index.get(team, [])
+        cid for cid in candidates
         if cid != started_pid and cid not in excluded and is_played(stats_map.get(cid))
     ]
     backup_entries = [
