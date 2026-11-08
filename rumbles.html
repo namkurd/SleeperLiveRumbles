@@ -9444,6 +9444,7 @@
     rbSwapFx(swapUp, swapDn, before);
     flapScan(grid);
     rbFitCards();
+    rbFitWatch();
 
     // Bring your card to the middle of the screen once, right after picking.
     if (rb.centerOnce && rb.cardEls[rb.me]) {
@@ -9487,6 +9488,22 @@
     });
   }
   window.addEventListener("resize", rbFitCards);
+  // The score tiles, the possession football and web fonts settle a moment after a card is drawn and narrow the name column, so the fit is
+  // redone shortly after every draw and whenever a name cell changes width (a signature check keeps it from looping on its own font changes).
+  var rbFitSig = "", rbFitRO = null, rbFitT = 0;
+  function rbFitSigNow() { return [].map.call(document.querySelectorAll("#rb-grid td.rb-nm"), function (td) { return td.clientWidth; }).join(","); }
+  function rbFitRun() { rbFitCards(); rbFitSig = rbFitSigNow(); }
+  function rbFitSoon(ms) { clearTimeout(rbFitT); rbFitT = setTimeout(function () { if (rbFitSigNow() !== rbFitSig) rbFitRun(); }, ms); }
+  function rbFitWatch() {
+    rbFitSig = rbFitSigNow();
+    rbFitSoon(120); setTimeout(function () { rbFitSoon(0); }, 700);
+    if (window.ResizeObserver) {
+      if (!rbFitRO) rbFitRO = new ResizeObserver(function () { if (rbFitSigNow() !== rbFitSig) rbFitSoon(60); });
+      rbFitRO.disconnect();
+      document.querySelectorAll("#rb-grid td.rb-nm").forEach(function (td) { rbFitRO.observe(td); });
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { rbFitSoon(0); });
+  }
   // ---- Season trends ------------------------------------------------------
   // Three ways to read the season week by week, built only from rumbles_history.json's weekly log:
   // a rank race (line per team), a weekly Rumbles heatmap, and a "form" card per team.
