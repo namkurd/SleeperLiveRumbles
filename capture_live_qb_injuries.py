@@ -36,6 +36,13 @@ place only to cover whatever gap this script's own polling window might
 miss (a game that goes final between two 15-minute polls, this workflow
 being paused, etc).
 
+ALL STARTERS (live_injury_captures.json): the same idea for every other position. Whenever a STARTER on any team in the league (QB, RB, WR,
+TE or K) has played, his own game is still in progress, and Sleeper lists him Out/IR/PUP, that is logged with a timestamp: he was ruled out in his
+game. Nothing else counts (a pregame ruling, or a status that only flips after the game, is never logged), and Doubtful / Questionable do not
+count, the same as the QB rule. Each entry notes whether the 2nd half had started: the Shotguns lists (Home, Record Book) only leave out
+players ruled out before the 2nd half (the league's rule); the OUT tag shows for every entry. injury_overrides.json is the hand-kept
+fallback for anyone Sleeper never marked.
+
 Design notes:
   - Only ever looks at the CURRENT live/upcoming week (state['week']) --
     once a week goes fully complete there is nothing left to catch live;
@@ -82,6 +89,9 @@ from build_rumbles import (
 # SCORES_BASE reads client-side, used here purely for each team's
 # pre_game/in_progress/complete status (see normalize_game_status below).
 SCORES_BASE = "https://api.sleeper.app/scores/nfl"
+
+# Every starter (any position) seen ruled out during his own game; see find_new_injuries.
+LIVE_INJURIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_injury_captures.json")
 
 
 def is_out_status(status: str | None) -> bool:
@@ -135,7 +145,7 @@ def build_team_game_schedule(games: list[dict] | None) -> dict[str, dict]:
             continue
         meta = g.get("metadata") or {}
         status = normalize_game_status(g)
-        entry = {"status": status}
+        entry = {"status": status, "second_half": bool(meta.get("has3rd_quarter_started")), "quarter": meta.get("quarter")}
         away = meta.get("away_team") or g.get("away_team")
         home = meta.get("home_team") or g.get("home_team")
         if away:
@@ -161,6 +171,70 @@ def load_existing_captures() -> dict:
     except Exception as e:  # noqa: BLE001
         print(f"[warn] couldn't read existing {LIVE_CAPTURES_PATH} ({e}); starting from an empty log", file=sys.stderr)
         return {"captures": []}
+
+
+def load_existing_injuries() -> dict:
+    """{"captures": [...]} as on disk, or a fresh empty document (never raises)."""
+    try:
+        with open(LIVE_INJURIES_PATH) as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("captures"), list):
+            return data
+    except FileNotFoundError:
+        pass
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] couldn't read existing {LIVE_INJURIES_PATH} ({e}); starting from an empty log", file=sys.stderr)
+    return {"captures": []}
+
+
+def find_new_injuries(
+    week: int,
+    season: str,
+    matchups: list[dict],
+    players_meta: dict[str, dict],
+    stats_map: dict[str, dict],
+    scoring_settings: dict,
+    manager_map: dict[int, str],
+    team_game_schedule: dict[str, dict],
+    already_keys: set[str],
+    now_iso: str,
+) -> list[dict]:
+    """Every starter (any position but defense) on any team who has played, whose game is in progress and whom Sleeper lists
+    Out/IR/PUP right now, and who isn't logged yet. Pure: given fetched data it returns the new entries."""
+    out: list[dict] = []
+    for m in matchups:
+        roster_id = m.get("roster_id")
+        if roster_id is None:
+            continue
+        for pid in m.get("starters") or []:
+            meta = players_meta.get(pid)
+            if not meta or meta.get("position") in (None, "DEF"):
+                continue
+            key = capture_key(season, week, roster_id, pid)
+            if key in already_keys:
+                continue
+            team = meta.get("team")
+            game = team_game_schedule.get(team) if team else None
+            if not game or game["status"] != "in_progress":
+                continue          # in-game rulings only: a pregame Out, or a status that flips after the final whistle, never counts
+            if not is_played(stats_map.get(pid)):
+                continue          # he never took the field
+            status = meta.get("injury_status")
+            if not is_out_status(status):
+                continue
+            manager = manager_map.get(roster_id, f"Roster {roster_id}")
+            entry = {
+                "season": season, "week": week, "roster_id": roster_id, "manager": manager,
+                "player": {"player_id": pid, "name": player_name(meta), "position": meta.get("position"),
+                           "points": round(dot_product(stats_map.get(pid), scoring_settings), 2)},
+                "team": team, "injury_status_at_capture": status, "game_status_at_capture": game["status"], "captured_at": now_iso,
+                # Shotguns: ruled out BEFORE the 2nd half = not a Shotgun; ruled out once the 2nd half had started still is one
+                "second_half_started": bool(game.get("second_half")), "quarter_at_capture": game.get("quarter"),
+            }
+            out.append(entry)
+            already_keys.add(key)
+            print(f"[injury] week {week} roster {roster_id} ({manager}): {entry['player']['name']} ({meta.get('position')}, {status}, game in progress)")
+    return out
 
 
 def find_new_captures(
@@ -583,7 +657,7 @@ def summarize_games(games: list[dict] | None, now_ms: int | None = None) -> dict
 
 
 def commit_captures_now() -> None:
-    """Commit and push live_qb_captures.json right away, so a capture made
+    """Commit and push live_qb_captures.json (and live_injury_captures.json) right away, so a capture made
     partway through a long watch shows up on the page without waiting for
     the whole run to finish. Only when CAPTURE_COMMIT_EACH_POLL=1 (set by
     the workflow); never fatal -- the workflow's final commit step is the
@@ -591,7 +665,7 @@ def commit_captures_now() -> None:
     if os.environ.get("CAPTURE_COMMIT_EACH_POLL") != "1":
         return
     try:
-        subprocess.run(["git", "add", LIVE_CAPTURES_PATH], check=True)
+        subprocess.run(["git", "add", LIVE_CAPTURES_PATH, LIVE_INJURIES_PATH], check=True)
         if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode == 0:
             return
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -641,6 +715,19 @@ def run_poll() -> tuple[list[str], dict | None]:
         data["scoring_settings"], data["team_game_schedule"], already_captured_keys, watch_state,
     )
     save_watch_state(season, week, watch_state)
+
+    injuries = load_existing_injuries()
+    injury_keys = {capture_key(e.get("season"), e.get("week"), e.get("roster_id"), (e.get("player") or {}).get("player_id")) for e in injuries["captures"]}
+    new_injuries = find_new_injuries(
+        week, season, data["matchups"], data["players_meta"], data["stats_map"], data["scoring_settings"],
+        data["manager_map"], data["team_game_schedule"], injury_keys, now_iso,
+    )
+    if new_injuries:
+        injuries["captures"].extend(new_injuries)
+        with open(LIVE_INJURIES_PATH, "w") as f:
+            json.dump(injuries, f, indent=2)
+        print(f"[info] wrote {len(new_injuries)} new in-game injury capture(s) to {LIVE_INJURIES_PATH}")
+        commit_captures_now()
 
     if new_captures or chain_changed:
         with open(LIVE_CAPTURES_PATH, "w") as f:

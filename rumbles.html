@@ -2072,6 +2072,17 @@
   // falls back to the pre-existing in-session game-status-gated check,
   // exactly as it worked before this file existed.
   var LIVE_CAPTURES_URL = "./live_qb_captures.json";
+  // Starters ruled out during their own game, logged by capture_live_qb_injuries.py (live_injury_captures.json) or entered by hand
+  // (injury_overrides.json): "season:week:player id" -> true. They get the OUT tag whatever Sleeper's status says by now.
+  var INJ_OUT = {};
+  (function loadInjuryCaptures() {
+    var add = function (season, week, pid) { if (pid != null) INJ_OUT[season + ":" + week + ":" + pid] = true; };
+    Promise.all([fetchJson("./live_injury_captures.json").catch(function () { return {}; }), fetchJson("./injury_overrides.json").catch(function () { return {}; })]).then(function (r) {
+      ((r[0] || {}).captures || []).forEach(function (e) { if (e.player) add(e.season, e.week, e.player.player_id); });
+      ((r[1] || {}).ruled_out || []).forEach(function (e) { add(e.season, e.week, e.player_id); });
+      try { if (state.live && Object.keys(INJ_OUT).length) renderRumblin(); } catch (e) { /* the next refresh draws it */ }
+    });
+  })();
   var API_V1 = "https://api.sleeper.app/v1";
   var STATS_BASE = "https://api.sleeper.app/stats/nfl";
   var PROJECTIONS_BASE = "https://api.sleeper.app/projections/nfl";
@@ -7079,7 +7090,7 @@
 
   // Ruled Out after his game started (he played, then his status flipped).
   function rbRuledOut(p) {
-    return !p.replacement && isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played;
+    return !p.replacement && ((isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played) || !!(state.live && INJ_OUT[state.live.season + ":" + state.live.week + ":" + p.player_id]));
   }
 
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
