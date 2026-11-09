@@ -877,6 +877,8 @@
   /* The base `table` min-width (760px) and sticky-column rules must not leak in: the heatmap fits its panel. */
   .tr-heat { min-width: 0; table-layout: fixed; }
   .tr-heat thead th, .tr-heat thead th:first-child, .tr-heat thead th:nth-child(2) { position: static; background: none; box-shadow: none; text-align: center; padding: 2px 0; letter-spacing: 0; text-transform: none; }
+  /* the standings table's phone column widths ("table thead th:nth-child(n)") must not squeeze the heatmap's week columns */
+  .tr-heat thead th:nth-child(n) { width: auto; min-width: 0; max-width: none; overflow: visible; }
   .tr-heat thead th:first-child { width: 5.2rem; }
   .tr-heat thead th:last-child { width: 2.6rem; }
   .tr-heat td.tr-m { overflow: hidden; text-overflow: ellipsis; }
