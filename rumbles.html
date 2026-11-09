@@ -1287,7 +1287,7 @@
   /* Name shrinks (with an ellipsis) before the game time does. */
   .rb-nmwrap { display: flex; align-items: baseline; min-width: 0; }
   .rb-nmwrap .pos-badge { flex-shrink: 0; align-self: center; }
-  .pts-tooltip .pts-itag { margin-right: 5px; font-size: 0.54rem; vertical-align: 1px; }
+  .pts-tooltip .pts-itag { font-size: 0.62rem; vertical-align: 1px; }
   .rb-tag { display: inline-block; padding: 0 4px; border-radius: 4px; font-size: 0.56rem; font-weight: 800; line-height: 1.5; letter-spacing: 0.02em; }
   .rb-tag-q, .rb-tag-nq { background: #f0914a; color: #1a1006; }
   .rb-tag-out, .rb-tag-nout { background: #e5484d; color: #fff; }
@@ -5856,7 +5856,7 @@
   // also live -- its own tier color always wins there, since the point is
   // to flag it as a replacement (and whether that's official yet), not to
   // report its own live status.
-  // OUT / QUES (/ DOUBT) marker shown beside a player's Proj number in the tooltip
+  // OUT / QUES (/ DOUBT) marker shown in place of a player's Proj number in the tooltip
   function injTagHtml(status) {
     var k = String(status || "").toLowerCase();
     if (k === "out" || k === "ir" || k === "pup") return '<span class="rb-tag rb-tag-out pts-itag" title="Ruled out">OUT</span>';
@@ -5907,7 +5907,7 @@
           var diffText = typeof r.diff === "number" ? (r.diff >= 0 ? "+" : "") + r.diff.toFixed(2) : "—";
           projCellHtml = '<td class="pts-tooltip-proj"' + diffStyle + ">" + diffText + "</td>";
         } else {
-          projCellHtml = '<td class="pts-tooltip-proj">' + injTagHtml(r.injury) + r.proj.toFixed(2) + "</td>";
+          projCellHtml = '<td class="pts-tooltip-proj">' + (injTagHtml(r.injury) || r.proj.toFixed(2)) + "</td>";
         }
       }
       var epaCellH = "";
