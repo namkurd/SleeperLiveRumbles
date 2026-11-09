@@ -5856,13 +5856,15 @@
   // also live -- its own tier color always wins there, since the point is
   // to flag it as a replacement (and whether that's official yet), not to
   // report its own live status.
-  // OUT / QUES (/ DOUBT) marker shown in place of a player's Proj number in the tooltip
+  // Tooltip injury markers: OUT / DOUB replace the Proj number; a Questionable starter gets an orange Q after his name instead.
   function injTagHtml(status) {
     var k = String(status || "").toLowerCase();
     if (k === "out" || k === "ir" || k === "pup") return '<span class="rb-tag rb-tag-out pts-itag" title="Ruled out">OUT</span>';
-    if (k === "questionable") return '<span class="rb-tag rb-tag-q pts-itag" title="Questionable">QUES</span>';
-    if (k === "doubtful") return '<span class="rb-tag rb-tag-q pts-itag" title="Doubtful">DOUBT</span>';
+    if (k === "doubtful") return '<span class="rb-tag rb-tag-q pts-itag" title="Doubtful">DOUB</span>';
     return "";
+  }
+  function quesTagHtml(status) {
+    return String(status || "").toLowerCase() === "questionable" ? ' <span class="rb-tag rb-tag-q pts-itag" title="Questionable">Q</span>' : "";
   }
   function renderPtsTooltipContent(tooltip) {
     if (tooltip.kind === "epa") { renderEpaTooltipContent(tooltip); return; }
@@ -5924,7 +5926,7 @@
         '<td class="pts-tooltip-name">' + posBadgeHtml(r.position) +
           (r.shortName && r.shortName !== r.name
             ? '<span class="pts-name" data-short="' + escapeHtml(r.shortName) + '">' + escapeHtml(r.name) + "</span>"
-            : escapeHtml(r.name)) + "</td>" +
+            : escapeHtml(r.name)) + quesTagHtml(r.injury) + "</td>" +
         '<td class="pts-tooltip-actual">' + r.actual.toFixed(2) + "</td>" +
         projCellHtml +
         epaCellH +
