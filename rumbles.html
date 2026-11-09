@@ -4439,7 +4439,7 @@
     var live = state.live, meta = state.futureMeta;
     if (!live || !live.isLive || !meta) return [];
     var out = [];
-    for (var w = Number(live.week); w <= meta.lastRegWeek; w++) out.push(w);
+    for (var w = Number(live.week) + 1; w <= meta.lastRegWeek; w++) out.push(w);
     return out;
   }
   function futureReady(n) {
