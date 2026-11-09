@@ -279,6 +279,9 @@
   }
   .howto-tooltip { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
   .howto-tooltip.visible { opacity: 1; visibility: visible; }
+  .howto-tooltip { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+  .howto-tooltip::-webkit-scrollbar { width: 6px; } .howto-tooltip::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+  .howto-tooltip ul { margin: 0 0 10px; padding-left: 16px; } .howto-tooltip li { margin: 0 0 5px; padding-left: 1px; } .howto-tooltip li:last-child { margin-bottom: 0; }
   .howto-tooltip p { margin: 0 0 10px; }
   .howto-tooltip p:last-child { margin-bottom: 0; }
   .howto-tooltip .howto-heading {
@@ -1998,21 +2001,30 @@
 <div id="pfpa-tooltip" class="qb-adj-tooltip pfpa-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <div id="howto-tooltip" class="howto-tooltip" role="tooltip" aria-hidden="true">
-  <p class="howto-heading">Actual</p>
-  <p>Official standings through the last completed week. During games, This Week and Pts This Week update live, and season totals update once the week is final. Use the week menu to look back at past weeks.</p>
-  <p class="howto-heading">Projected</p>
-  <p>Where the standings would land if every player finishes at their projection.</p>
-  <p>Tap a team's points to see each player's score. Names share a color with this week's opponent.</p>
-  <p>The small EPA button (bottom left on a computer, at the very bottom on a phone) adds a total EPA column next to points: the combined expected points added by a team's starters, kickers and defenses included. Sort by it like any column, and hover or tap a number to see each player's EPA. Numbers appear after each game ends (updated daily), so a live week shows a faded partial total.</p>
+  <p class="howto-heading">Standings</p>
+  <ul>
+    <li><b>Actual:</b> official standings through the last full week, live during games.</li>
+    <li><b>Projected:</b> standings if everyone hits their projection. Tap a team's points for each player's score.</li>
+    <li><b>Current</b> menu: past weeks. The season name: past seasons. <b>EPA</b> button: adds expected points added.</li>
+  </ul>
   <p class="howto-heading">Rumblin'</p>
-  <p>Live cards for every team. Everyone shows all 12, Live only the managers with a player in a game, and Me your own view: Matchup, In Play (teams whose Rumble against you is still undecided), and Scenarios. You can also tap names in the strip to pick any managers to view.</p>
-  <p>Scenarios opens once the Sunday 1pm games end. It shows what you need to outscore in each Rumble still in play, and resets each game window.</p>
-  <p>Score Feed lists scoring plays as they happen (only while this page is open) and clears 4.5 hours after kickoff. Live Players shows who's in a game now. A football means his team has the ball, a picket fence a defense on the field. Faded cards have nobody in a game.</p>
-  <p>Your pick is remembered on this device. Copy link (in Me) opens straight to your view.</p>
+  <ul>
+    <li><b>Everyone</b> shows all 12, <b>Live</b> only teams in a game, <b>Me</b> your matchup, In Play and Scenarios. Tap names in the strip to pick managers.</li>
+    <li>Green: playing now. Football: has the ball. Fence: his defense is on the field.</li>
+    <li><b>QUES</b> (orange): Questionable in his game, gone once he scores a real play. <b>OUT</b> (red): ruled out in his game.</li>
+  </ul>
+  <p class="howto-heading">Scenarios and replays</p>
+  <ul>
+    <li>After the Sunday 1pm games: what you need to outscore in each Rumble still in play. <b>Mine</b> or <b>Best</b> (the week's ten best matchups).</li>
+    <li>Tap a win-probability bar for the full chart: drag for the score at any moment, press play to replay the week, open the biggest swings.</li>
+  </ul>
+  <p class="howto-heading">Good to know</p>
+  <ul>
+    <li>Updates every 30 seconds in games (R refreshes). Your pick is saved on this device; Copy link (in Me) opens straight to your view.</li>
+  </ul>
   <p class="howto-heading">Get it like an app</p>
-  <p>On an iPhone: open this page in Safari, tap Share, then Add to Home Screen. On Android or Chrome: tap Install (or the menu, then Install app). It opens full screen from your Home Screen with no address bar. Scan this to open it on a phone:</p>
+  <p>iPhone: Safari, Share, Add to Home Screen. Android or Chrome: Install. Or scan:</p>
   <div class="howto-qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35" aria-label="QR code for Rumble Central"><path fill="#fff" d="M0 0h35v35h-35z"/><path class="qrline" stroke="#000" d="M1 1.5h7m2 0h2m1 0h1m2 0h9m2 0h7m-33 1h1m5 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m3 0h3m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m1 0h5m3 0h1m1 0h3m3 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m4 0h1m1 0h2m1 0h1m1 0h1m2 0h2m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m1 0h1m1 0h1m3 0h1m1 0h2m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m2 0h3m1 0h1m1 0h1m1 0h1m1 0h4m3 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-24 1h6m1 0h2m1 0h2m3 0h1m-24 1h3m1 0h2m2 0h2m1 0h1m2 0h1m1 0h1m1 0h3m2 0h1m5 0h2m-32 1h2m3 0h1m1 0h1m1 0h2m1 0h1m3 0h1m1 0h4m1 0h1m2 0h2m1 0h2m1 0h1m-29 1h1m1 0h4m2 0h1m4 0h1m2 0h2m1 0h2m1 0h4m2 0h1m-33 1h3m1 0h2m2 0h3m1 0h3m1 0h1m2 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h1m-31 1h8m1 0h5m2 0h3m1 0h2m1 0h1m2 0h2m1 0h2m-31 1h1m4 0h3m1 0h1m4 0h1m2 0h1m2 0h1m1 0h1m2 0h1m2 0h2m-31 1h1m2 0h1m1 0h2m2 0h1m1 0h2m1 0h6m3 0h1m1 0h5m-31 1h1m2 0h1m1 0h1m1 0h2m1 0h2m1 0h1m1 0h3m2 0h2m2 0h3m2 0h2m-31 1h1m1 0h1m1 0h5m2 0h1m2 0h1m3 0h1m1 0h2m3 0h2m1 0h1m-29 1h2m3 0h1m2 0h1m3 0h1m2 0h3m2 0h1m1 0h5m1 0h2m1 0h2m-30 1h2m1 0h2m2 0h1m3 0h2m5 0h2m2 0h1m1 0h2m1 0h2m-32 1h3m4 0h2m2 0h1m5 0h1m4 0h5m1 0h1m2 0h2m-30 1h1m2 0h1m3 0h2m2 0h2m2 0h2m1 0h1m1 0h1m5 0h4m-33 1h1m1 0h1m1 0h1m2 0h3m1 0h1m1 0h4m2 0h2m2 0h1m1 0h2m3 0h1m1 0h1m-31 1h3m1 0h3m4 0h3m4 0h4m1 0h1m1 0h1m2 0h3m-32 1h1m2 0h2m4 0h2m1 0h1m1 0h2m1 0h3m1 0h1m1 0h6m-30 1h1m2 0h1m1 0h2m1 0h1m5 0h1m3 0h3m1 0h7m2 0h2m-25 1h4m3 0h1m3 0h1m1 0h1m1 0h2m3 0h2m-30 1h7m2 0h1m1 0h1m1 0h3m2 0h3m2 0h2m1 0h1m1 0h1m-29 1h1m5 0h1m1 0h2m1 0h2m2 0h1m1 0h1m3 0h4m3 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m3 0h2m3 0h1m2 0h11m1 0h2m-32 1h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2m3 0h1m1 0h4m-33 1h1m1 0h3m1 0h1m1 0h3m3 0h2m6 0h1m1 0h1m1 0h2m2 0h1m-31 1h1m5 0h1m1 0h2m3 0h1m1 0h1m3 0h2m1 0h2m2 0h3m3 0h1m-33 1h7m2 0h1m5 0h1m1 0h3m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1"/></svg><span>namkurd.github.io/<wbr>SleeperLiveRumbles</span></div>
-  <p class="howto-note">Updates every 30 seconds during games.</p>
 </div>
 
 <button type="button" class="epa-toggle" id="epa-toggle" aria-pressed="false" title="Show EPA next to points (from nflverse; filled in after each game ends)">EPA</button>
