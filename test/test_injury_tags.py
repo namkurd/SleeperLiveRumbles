@@ -51,5 +51,15 @@ with sync_playwright() as p:
     page.goto(T.PAGE_URL + "?tab=rumblin", wait_until="load"); page.wait_for_timeout(2500)
     res = page.evaluate("""() => ({ out: [...document.querySelectorAll('#rumblin-view tr.rb-out')].map(r => !!r.querySelector('.rb-tag-out')), q: document.querySelectorAll('#rumblin-view .rb-tag-q').length })""")
     assert res["out"] and all(res["out"]) and res["q"] == 0, f"every ruled-out row should carry OUT and nobody a Q, got {res}"
+    # a starter in the durable ruled-out log gets OUT even though Sleeper only lists him Questionable
+    b3 = p.chromium.launch(executable_path=os.environ.get("CHROME_PATH", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"))
+    page = T.new_page(b3, [], [])
+    routes["**/v1/players/nfl"] = dict(T.load("players.json"), P11=dict(T.load("players.json")["P11"], injury_status="Questionable"))
+    routes["**/live_injury_captures.json"] = {"captures": [{"season": "2026", "week": 2, "roster_id": 6, "player": {"player_id": "P11"}}]}
+    T.install_routes(page, routes)
+    page.goto(T.PAGE_URL + "?tab=rumblin", wait_until="load"); page.wait_for_timeout(2500)
+    res = page.evaluate("""() => ({ q: document.querySelectorAll('#rumblin-view .rb-tag-q').length, out: [...document.querySelectorAll('#rumblin-view tr.rb-out')].map(r => r.querySelector('.rb-n').textContent) })""")
+    assert res["q"] == 0 and any("Murray" in x for x in res["out"]), f"a captured ruled-out starter shows OUT, not QUES: {res}"
+    b3.close()
     print("PASS: QUES in the Projected column for a live Questionable starter, cleared by a new recorded play; OUT for a starter ruled out in his game")
     b.close()

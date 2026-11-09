@@ -96,7 +96,7 @@ jobs:
 
       - name: Commit live_qb_captures.json if it changed
         run: |
-          git add live_qb_captures.json
+          git add live_qb_captures.json live_injury_captures.json
           if git diff --cached --quiet; then
             echo "No new live QB-injury captures -- nothing to commit."
           else
