@@ -1,4 +1,21 @@
 {
   "_comment": "Hand-kept: a starter who was ruled out in his game but whom Sleeper never marked Out/IR/PUP while the game was on (so live_injury_captures.json missed him). Counts like a capture: the OUT tag, and no Shotgun. Add {season, week, roster_id, player_id, name, note}.",
-  "ruled_out": []
+  "ruled_out": [
+    {
+      "season": 2026,
+      "week": 2,
+      "roster_id": 1,
+      "player_id": "4983",
+      "name": "DJ Moore",
+      "note": "Exited in the 1st half and did not return (commissioner review)"
+    },
+    {
+      "season": 2026,
+      "week": 5,
+      "roster_id": 3,
+      "player_id": "11630",
+      "name": "Roman Wilson",
+      "note": "Exited in the 1st half and did not return (commissioner review)"
+    }
+  ]
 }
