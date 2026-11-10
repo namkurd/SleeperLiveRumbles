@@ -10,8 +10,9 @@ on:
   # build is idempotent and only commits when the standings changed, and
   # each run is well under a minute of Actions time.
   schedule:
-    # Tuesday 1:23am-10:23am ET (EDT; an hour earlier in EST), roughly hourly.
-    - cron: "23 5,6,7,8,9,10,12,14 * * 2"
+    # Weekly sync: hourly from Tuesday 05:23 UTC through Wednesday morning (UTC).
+    - cron: "23 5-23 * * 2"
+    - cron: "23 0-12 * * 3"
     # Daily backup, every day of the week.
     - cron: "41 10 * * *"
   workflow_dispatch:   # lets you trigger a run manually from the Actions tab
