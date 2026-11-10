@@ -1330,9 +1330,10 @@
   .rb-table tr.rb-repl.rb-repl-ok td.rb-nm .rb-n, .rb-table tr.rb-repl.rb-repl-ok td.rb-act, .rb-table tr.rb-repl.rb-repl-ok td.rb-proj { color: var(--good); }
   .rb-table .rb-plus { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
   .rb-table .rb-plus svg { display: block; }
-  /* Out players: no longer live, so the clock goes gray and points white. */
+  /* Out players: no longer live, so the clock goes gray and points gray too. */
   .rb-table tr.rb-outrow .rb-meta { color: var(--text-dim) !important; opacity: 0.6; text-decoration: line-through; }
-  .rb-table tr.rb-outrow td.rb-act { color: var(--text); }
+  .rb-table tr.rb-outrow td.rb-act { color: var(--text-dim); }
+  .rb-table tr.rb-outrow td.rb-act .fl, .rb-table tr.rb-outrow td.rb-act .rb-flap, .rb-table tr.rb-outrow td.rb-act > :not(.rb-meta) { color: var(--text-dim); opacity: 0.6; }
   .rb-table td.rb-proj { color: var(--text-dim); }
   /* One fixed row height for every starter, so cards line up whether or not a player is live. */
   :is(#rumblin-view, #wp-rosters) .rb-table tbody tr:not(.rb-bench-h) td { height: 1.95em; }
