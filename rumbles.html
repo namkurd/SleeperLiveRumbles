@@ -3578,7 +3578,10 @@
       .then(function (data) {
         state.history = data;
         // A past season can have had another size of league: its playoff field and the most Rumbles a week can pay.
-        if (data && data.playoff_spots) PLAYOFF_SPOTS = data.playoff_spots;
+        // The playoff field by the league's own rules for that season: 4 teams through 2022, 5 teams with the 3-team final (2023-25), 6 from 2026.
+        // (Sleeper's own setting said 4 for every past year, so the season decides, not the data.)
+        if (data && data.season) PLAYOFF_SPOTS = Number(data.season) >= 2026 ? 6 : Number(data.season) >= 2023 ? 5 : 4;
+        else if (data && data.playoff_spots) PLAYOFF_SPOTS = data.playoff_spots;
         if (data && data.max_rumbles_per_week) MAX_RUMBLES_PER_WEEK = data.max_rumbles_per_week;
         return ARCHIVE ? null : markConfirmedFromSleeper(data);
       })
@@ -5605,7 +5608,10 @@
       var poCutRid = null;
       if (displayRows.length > PLAYOFF_SPOTS && displayRows.every(function (r, i) { return !i || displayRows[i - 1].rank <= r.rank; })) poCutRid = displayRows[PLAYOFF_SPOTS - 1].roster_id;
       var poNote = document.getElementById("po-note");
-      if (poNote) poNote.hidden = poCutRid == null;
+      if (poNote) {
+        poNote.hidden = poCutRid == null;
+        poNote.innerHTML = "<i></i> Gold line: the top " + PLAYOFF_SPOTS + " make the playoffs";
+      }
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
