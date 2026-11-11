@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DTF Club — Rumble Central</title>
+<title>Rumble Central · DTF Club</title>
 <meta name="theme-color" content="#0f1115" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -1905,7 +1905,7 @@
     <div class="rb-live-wrap rb-feed-wrap" id="rb-feed" hidden></div>
     <div class="rb-live-wrap" id="rb-live" hidden></div>
     <div class="rb-empty" id="rb-empty" hidden></div>
-    <p class="rb-legend">Big number: projected Rumbles this week (9 for beating your opponent, plus 1 for each team you outscore). vs. Field: teams you're projected to outscore. Season Rumbles and H2H record are under the name. In Totals, tap a card to open it.</p>
+    <p class="rb-legend">Big number: projected Rumbles this week (10 for beating your opponent, plus 1 for each additional team you outscore). vs. Field: teams you're projected to outscore. Season Rumbles and H2H record are under the name. In Totals, tap a card to open it.</p>
   </div>
   <div class="rb-who-overlay" id="rb-who" hidden>
     <div class="rb-who-box" role="dialog" aria-modal="true" aria-labelledby="rb-who-title">
@@ -1956,7 +1956,7 @@
   </details>
 
   <footer>
-    <span>9 Rumbles for the H2H win, +1 per team outscored that week (up to 20/week).</span>
+    <span>10 Rumbles for a H2H win, plus 1 for each additional team outscored that week (up to 20 a week). <a href="/Rulebook/">Rulebook</a></span>
     <span id="live-week-label" hidden></span>
   </footer>
 
@@ -9100,7 +9100,7 @@
     rows += repl.map(function (r) { return rbPlayerRow(r, false); }).join("");
     var bench = t.bench.map(function (p) { return rbPlayerRow(p, true); }).join("");
     var ir = t.ir.map(function (p) { return rbPlayerRow(p, true); }).join("");
-    return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? RUMBLES_PER_WIN + ' for the H2H win + ' : '') + t.vsField + ' for teams outscored)"><span class="rb-rum-n">' + fl("rb:" + t.rid + ":rum", t.rumbles) + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
+    return '<div class="rb-head"><span class="rb-rum" title="Projected Rumbles this week: ' + t.rumbles + ' (' + (t.h2hWin ? (RUMBLES_PER_WIN + 1) + ' for the H2H win + ' + Math.max(0, t.vsField - 1) + ' for additional teams outscored' : t.vsField + ' for teams outscored') + ')"><span class="rb-rum-n">' + fl("rb:" + t.rid + ":rum", t.rumbles) + '</span><span class="rb-rum-f">vs. Field ' + t.vsField + '</span></span><div class="rb-who-name"><span class="rb-mgr">' + escapeHtml(t.name) + "</span>" +
       '<span class="rb-season" title="Season: ' + t.seasonRumbles + ' Rumbles, ' + t.seasonW + '-' + t.seasonL + ' head-to-head"><b>' + fl("rb:" + t.rid + ":season", t.seasonRumbles) + "</b> season <small>H2H " + t.seasonW + "-" + t.seasonL + "</small></span>" +
       '<span class="rb-rum-m"><b>' + fl("rb:" + t.rid + ":rumm", t.rumbles) + "</b> &middot; vs. Field " + t.vsField + "</span>" +
       '<div class="rb-chips">' + (me ? '<span class="rb-you">YOU</span>' : "") +
