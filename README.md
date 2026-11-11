@@ -12,7 +12,7 @@ page.
 - **Tabs:** *Actual* (official standings), *Projected* (standings if the live
   week ended on current projections) and *Rumblin'* (live matchup cards side
   by side). On a Rumblin' card, the big number is that team's projected
-  Rumbles this week (9 for projected to win the H2H, plus 1 per team
+  Rumbles this week (10 for projected to win the H2H, plus 1 per additional team
   projected to be outscored); "vs. Field" underneath is the second part.
 - **EPA (optional):** the small EPA button (bottom-left on desktop, bottom of the
   page on phones) adds a total-EPA column wherever points show: the standings table
@@ -43,11 +43,11 @@ page.
 
 For each week:
 
-- **+9 Rumbles** for winning your scheduled head-to-head matchup
-- **+1 Rumble** for every *other* team in the league you outscore that week
+- **10 Rumbles** for winning your scheduled head-to-head matchup
+- **+1 Rumble** for each *additional* team in the league you outscore that week
 
-In a 12-team league that's up to **20 Rumbles in a single week** (9 for the
-win, 11 for having the top score league-wide). Rumbles accumulate over the
+In a 12-team league that's up to **20 Rumbles in a single week** (10 for the
+win, plus 10 more for having the top score league-wide). Rumbles accumulate over the
 season and reset every year.
 
 This was verified line-by-line against the real "2026 TRUE STANDINGS"
