@@ -17,6 +17,24 @@
       "captured_at": "2026-11-15T20:05:41.506969+00:00",
       "second_half_started": true,
       "quarter_at_capture": "3"
+    },
+    {
+      "season": "2026",
+      "week": 10,
+      "roster_id": 7,
+      "manager": "Steven",
+      "player": {
+        "player_id": "1373",
+        "name": "Geno Smith",
+        "position": "QB",
+        "points": 6.67
+      },
+      "team": "NYJ",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "2026-11-15T21:06:25.593317+00:00",
+      "second_half_started": true,
+      "quarter_at_capture": "4"
     }
   ]
 }
