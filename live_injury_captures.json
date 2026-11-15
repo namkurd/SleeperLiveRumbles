@@ -35,6 +35,24 @@
       "captured_at": "2026-11-15T21:06:25.593317+00:00",
       "second_half_started": true,
       "quarter_at_capture": "4"
+    },
+    {
+      "season": "2026",
+      "week": 10,
+      "roster_id": 7,
+      "manager": "Steven",
+      "player": {
+        "player_id": "11604",
+        "name": "Brock Bowers",
+        "position": "TE",
+        "points": 4.8
+      },
+      "team": "LV",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "2026-11-15T22:51:35.855992+00:00",
+      "second_half_started": true,
+      "quarter_at_capture": "3"
     }
   ]
 }
