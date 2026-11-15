@@ -62,6 +62,32 @@
           "captured_at": "2026-11-01T20:11:31.708929+00:00"
         }
       ]
+    },
+    {
+      "season": "2026",
+      "week": 10,
+      "roster_id": 7,
+      "manager": "Steven",
+      "injured_qb": {
+        "player_id": "1373",
+        "name": "Geno Smith",
+        "points": 6.67
+      },
+      "backup_qbs": [
+        {
+          "player_id": "13303",
+          "name": "Cade Klubnik",
+          "points": 6.93
+        }
+      ],
+      "backup_points_total": 6.93,
+      "backups_seen": [
+        "13303"
+      ],
+      "team": "NYJ",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "2026-11-15T21:06:25.593317+00:00"
     }
   ]
 }
