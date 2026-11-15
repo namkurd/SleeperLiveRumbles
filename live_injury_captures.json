@@ -1,3 +1,22 @@
 {
-  "captures": []
+  "captures": [
+    {
+      "season": "2026",
+      "week": 10,
+      "roster_id": 1,
+      "manager": "Aidan",
+      "player": {
+        "player_id": "13276",
+        "name": "Omar Cooper Jr.",
+        "position": "WR",
+        "points": 0.0
+      },
+      "team": "NYJ",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "2026-11-15T20:05:41.506969+00:00",
+      "second_half_started": true,
+      "quarter_at_capture": "3"
+    }
+  ]
 }
