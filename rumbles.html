@@ -7130,7 +7130,7 @@
       h += '<div class="po-mc">' + [["auto", wi === 0 && lm ? "Projected" : "Auto"], ["W", "Win"], ["L", "Loss"]].map(function (m) { var on = m[0] === "auto" ? !set : set && set.res === m[0]; return '<button type="button" data-m="' + m[0] + '"' + (on ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</div>";
       if (set) {
         var lo = set.res === "W" ? 10 : 0, hi = set.res === "W" ? mx : 10, w = poOppWindow(N, set.res, set.r);
-        h += '<div class="po-mr"><input type="range" min="' + lo + '" max="' + hi + '" step="1" value="' + set.r + '"><b>' + set.r + '</b> Rumbles</div><div class="po-mo">' + escapeHtml(o.name) + ": " + (w[0] === w[1] ? w[0] : w[0] + "–" + w[1]) + " Rumbles</div>";
+        h += '<div class="po-mr"><input type="range" min="' + lo + '" max="' + hi + '" step="1" value="' + set.r + '"><b>' + set.r + '</b> Rumbles</div><div class="po-mo">' + escapeHtml(o.name) + ": " + (w[0] === w[1] ? w[0] : w[0] + " to " + w[1]) + " Rumbles</div>";
       }
       return h + "</div>";
     }).join("");
@@ -10751,7 +10751,7 @@
     var rg = e.target.closest("input[type=range]"); if (!rg || !poUi.liveSet) return;
     var row = rg.closest(".po-m"), set = poUi.liveSet; set.r = Number(rg.value); row.querySelector(".po-mr b").textContent = set.r;
     var teams = poTeams(), w = poOppWindow(teams.length, set.res, set.r), nm = row.querySelector(".po-mh b").textContent.replace(/^vs /, "");
-    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]) + " Rumbles";
+    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + " to " + w[1]) + " Rumbles";
     renderPlayoffs(true);
   });
   document.getElementById("po-reset-b").addEventListener("click", function () { poUi.sets = {}; renderPlayoffs(); });
@@ -10766,7 +10766,7 @@
     var row = rg.closest(".po-m"), wk = Number(row.getAttribute("data-w")), set = poUi.sets[wk]; if (!set) return;
     set.r = Number(rg.value); row.querySelector(".po-mr b").textContent = set.r;
     var teams = poTeams(), w = poOppWindow(teams.length, set.res, set.r), nm = row.querySelector(".po-mh b").textContent.replace(/^vs /, "");
-    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]) + " Rumbles";
+    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + " to " + w[1]) + " Rumbles";
     renderPlayoffs(true);
   });
   document.getElementById("sm-best").addEventListener("click", function () {
