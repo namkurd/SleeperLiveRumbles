@@ -6859,7 +6859,7 @@
   function poByes() { var s = poSeason(); return s >= 2026 ? 2 : s >= 2023 ? 1 : 0; }
   function poTeams() {
     var h = state.history; if (!h || !h.standings || !h.standings.length) return null;
-    return h.standings.map(function (r) { return { rid: r.roster_id, name: r.manager, R: num(r.rumbles), pf: num(r.pf), rank: r.rank }; });
+    return h.standings.map(function (r) { return { rid: r.roster_id, name: r.manager, R: num(r.rumbles), pf: num(r.pf), rank: r.rank, w: num(r.h2h_w), l: num(r.h2h_l) }; });
   }
   function poPlayed() { var w = (state.history && state.history.weeks_completed) || []; return w.length ? Math.max.apply(null, w) : 0; }
   // regular-season weeks still to count (the week in progress included), or null while that is not known yet
@@ -7071,8 +7071,12 @@
     if (lw) { lwi = teams.map(function (x) { return lw[x.rid] || null; }); if (lwi.some(function (x) { return !x; })) lwi = null; }
     var opp = weeks.map(function (wk) { var o = {}; (sched[wk] || []).forEach(function (p) { o[idx[p[0]]] = idx[p[1]]; o[idx[p[1]]] = idx[p[0]]; }); return o; });
     var seedC = teams.map(function () { var z = []; for (var k = 0; k < N; k++) z.push(0); return z; }), winN = weeks.map(function () { return 0; }), outright = 0, bracket = 0;
+    function zeros(n) { var a = [], q; for (q = 0; q < n; q++) a.push(0); return a; }
+    var P0 = PLAYOFF_SPOTS, B0 = poByes(), uncW = [], nUnc = 0, winsAtPos = teams.map(function () { return {}; });
+    weeks.forEach(function (wk0, wi0) { var o0 = opp[wi0][ti], dec = lwi && wi0 === 0 && o0 != null && lwi[ti].sd + lwi[o0].sd < 1; uncW.push(o0 != null && !dec); if (o0 != null && !dec) nUnc++; });
+    var wkh = { n: nUnc, cnt: zeros(nUnc + 1), pl: zeros(nUnc + 1), by: zeros(nUnc + 1), on: zeros(nUnc + 1), av: zeros(nUnc + 1) };
     for (t = 0; t < trials; t++) {
-      var rng = poRng(90210 + t * 7919), R = teams.map(function (x) { return x.R; }), PF = teams.map(function (x) { return x.pf; });
+      var rng = poRng(90210 + t * 7919), R = teams.map(function (x) { return x.R; }), PF = teams.map(function (x) { return x.pf; }), Wn = teams.map(function (x) { return x.w || 0; }), mw = 0;
       for (var wi = 0; wi < weeks.length; wi++) {
         var wk = weeks[wi], o = opp[wi], s = [], set = pins[wk], oi = o[ti];
         var useLive = lwi && wi === 0;
@@ -7093,15 +7097,19 @@
           var outs = 0; for (q = 0; q < N; q++) if (q !== j && s[j] > s[q]) outs++;
           var won = o[j] != null && s[j] > s[o[j]];
           R[j] += outs + (won ? RUMBLES_PER_WIN : 0); PF[j] += s[j];
-          if (j === ti && won) winN[wi]++;
+          if (won) Wn[j]++;
+          if (j === ti && won) { winN[wi]++; if (uncW[wi]) mw++; }
         }
       }
       var order = []; for (j = 0; j < N; j++) order.push(j);
       order.sort(function (x, y) { return R[y] - R[x] || PF[y] - PF[x]; });
       for (j = 0; j < N; j++) seedC[order[j]][j]++;
-      if (order[N - 1] === ti) { if (R[order[N - 2]] - R[ti] >= 31) outright++; else bracket++; }   // last place: an outright Sacko is 31+ Rumbles behind the team above
+      if (order[N - 1] === ti) { if (R[order[N - 2]] - R[ti] >= 31) outright++; else bracket++; }
+      var rk = order.indexOf(ti) + 1, avoid = !(order[N - 1] === ti && R[order[N - 2]] - R[ti] >= 31);
+      wkh.cnt[mw]++; if (rk <= P0) wkh.pl[mw]++; if (B0 > 1 && rk <= B0) wkh.by[mw]++; if (rk === 1) wkh.on[mw]++; if (avoid) wkh.av[mw]++;
+      for (j = 0; j < N; j++) { var hh = winsAtPos[j], ww = Wn[order[j]]; hh[ww] = (hh[ww] || 0) + 1; }   // last place: an outright Sacko is 31+ Rumbles behind the team above
     }
-    return { seedC: seedC, trials: trials, winN: winN, weeks: weeks, opp: opp, outright: outright, bracket: bracket };
+    return { seedC: seedC, trials: trials, winN: winN, weeks: weeks, opp: opp, outright: outright, bracket: bracket, wk: wkh, winsAtPos: winsAtPos };
   }
   function poPct(sim, j, m) { var s = 0; for (var k = 0; k < m; k++) s += sim.seedC[j][k]; return s / sim.trials; }
   function poFmtPct(p) { var v = p * 100; return v >= 99.5 && v < 100 ? ">99%" : v > 0 && v < 0.5 ? "<1%" : Math.round(v) + "%"; }
@@ -7137,7 +7145,7 @@
       function need(th) { for (var k = 0; k < vals.length; k++) if (res[k] >= th) return k === 0 ? 0 : vals[k - 1] + (th - res[k - 1]) / (res[k] - res[k - 1] || 1) * 2; return null; }
       var n50 = need(0.5), n90 = need(0.9), fmt = function (v) { return v == null ? "not reachable" : v <= 0.05 ? "any average" : "about " + v.toFixed(1) + " a week"; };
       var html = '<small>Playoff chance by average</small>' + vals.map(function (v, k) { return '<span class="po-chip ' + (res[k] >= 0.5 ? "ok" : "bad") + '"><b>' + v + "</b><i>" + poFmtPct(res[k]) + "</i></span>"; }).join("") +
-        '<div class="po-need2">A coin flip at ' + fmt(n50) + "; a 90% shot at " + fmt(n90) + ".</div>";
+        '<div class="po-need2">A 50% chance at ' + fmt(n50) + "; 90% at " + fmt(n90) + ".</div>";
       poCache.chips = { key: key, v: html };
       var e2 = document.getElementById("po-chips"); if (e2) e2.innerHTML = html;
     }
@@ -7194,6 +7202,17 @@
     return hi;
   }
   // ---- the summary at the top: the bullets that matter for the picked manager ----
+  // Head-to-head wins as the yardstick: among the simulated runs where you win exactly k of your remaining (undecided) matchups, how often did it work out?
+  function poWinsNeed(wk, key, th) { for (var k = 0; k <= wk.n; k++) if (wk.cnt[k] >= 40 && wk[key][k] / wk.cnt[k] >= th) return { k: k, p: wk[key][k] / wk.cnt[k] }; return null; }
+  function poWinsTxt(wk, key, label) {
+    var n = wk.n, a = poWinsNeed(wk, key, 0.5), b = poWinsNeed(wk, key, 0.9);
+    if (n === 0) return null;
+    if (!a) return "even winning all " + n + " remaining matchup" + (n === 1 ? "" : "s") + " leaves " + label + " under a 50% chance";
+    var t = a.k === 0 ? "even with no more wins you have a " + poFmtPct(a.p) + " chance of " + label : "win at least " + a.k + " of your " + n + " remaining matchup" + (n === 1 ? "" : "s") + " for a 50%+ chance of " + label;
+    if (b && b.k > a.k) t += "; win " + b.k + " for 90%+"; else if (!b) t += "; no win total gets it to 90%";
+    return t;
+  }
+  function poMedianWins(h) { var ks = Object.keys(h).map(Number).sort(function (x, y) { return x - y; }), tot = 0; ks.forEach(function (k) { tot += h[k]; }); var c = 0; for (var i = 0; i < ks.length; i++) { c += h[ks[i]]; if (c >= tot / 2) return ks[i]; } return 0; }
   var poSumTok = 0;
   function poSumHtml(items) { return "<ul>" + items.filter(Boolean).map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul>"; }
   function poSummary(teams, ti, W, liveOn, key) {
@@ -7218,9 +7237,16 @@
       secF = mf.filter(function (t) { return t !== meF; }).sort(function (x, y) { return x.R - y.R; })[0];
       var gapNow = secF.R - meF.R;
       b8 = "<b>Sacko:</b> last place, " + gapNow + " Rumbles behind " + esc(secF.name) + " (" + poOrd(N - 1) + ", " + secF.R + (mc.fold ? ", counting this week\u2019s projected result" : "") + "). An outright Sacko needs a gap of 31+ at the end of the regular season; anything less and the Sacko bracket decides it. " + (base.outright + base.bracket > 0 ? "Right now: outright " + poFmtPct(base.outright / base.trials) + " \u00b7 Sacko bracket " + poFmtPct(base.bracket / base.trials) + " \u00b7 out of last place " + poFmtPct(1 - (base.outright + base.bracket) / base.trials) + "." : "Right now you finish out of last place in nearly every run.");
-      b9 = "<b>Path to the Sacko bracket:</b> " + wait;
+      var glx = poSackoLock(mf, ti, mc.mW);
+      b9 = "<b>Path to the Sacko bracket:</b> " + (glx === 0 ? "an outright Sacko can no longer happen." : (glx == null ? "an outright Sacko can\u2019t be ruled out by points alone yet" : "earn " + glx + " more Rumbles (about " + (glx / Math.max(1, mc.mW)).toFixed(1) + " a week) and an outright Sacko is impossible whatever anyone else does") + "; " + (poWinsTxt(base.wk, "av", "avoiding an outright Sacko") || "no matchups left") + ".");
     }
-    el.innerHTML = poSumHtml([b1, b2, b3, "<b>Biggest matchup:</b> " + wait, b5, "<b>Path to the playoffs:</b> " + wait, "<b>Path to your best seed:</b> " + wait, b8, b9]);
+    var wk = base.wk, medP = poMedianWins(base.winsAtPos[P - 1]), medB = B > 1 ? poMedianWins(base.winsAtPos[B - 1]) : null, med1 = poMedianWins(base.winsAtPos[0]);
+    var needP = Math.max(0, medP - me.w);
+    var bw = "<b>Wins to level-set:</b> you\u2019re " + me.w + "\u2013" + me.l + " with " + W + " to play. The " + poOrd(P) + " seed typically finishes with " + medP + " wins" + (medB != null ? ", a bye with " + medB : "") + ", the 1 seed with " + med1 + (needP > 0 ? "; matching that " + poOrd(P) + " seed takes " + needP + " more win" + (needP === 1 ? "" : "s") + "." : "; you are already there.");
+    var pathP = "<b>Path to the playoffs:</b> " + (mc.mst.x ? "locked in." : mc.mst.dead ? "out of reach." : (poWinsTxt(wk, "pl", "making the playoffs") || "no undecided matchups left") + (mc.fold ? " (this week\u2019s projected result counted)" : "") + ".");
+    var bestK = poWinsNeed(wk, "on", 0.5) ? 1 : (B > 1 && poWinsNeed(wk, "by", 0.5) ? B : P), bestKey = bestK === 1 ? "on" : bestK === B ? "by" : "pl", bestLab = bestK === 1 ? "the 1 seed" : bestK === B ? "a bye" : "making the playoffs";
+    var pathS = "<b>Path to your best seed:</b> " + (bestK === P ? "the playoffs are the target (see above)." : (mc.mst.one && bestK === 1 ? "the 1 seed is clinched." : (poWinsTxt(wk, bestKey, bestLab) || "no undecided matchups left") + (bestK === 1 && B > 1 && !mc.mst.bye ? ". For a bye: " + (poWinsTxt(wk, "by", "a bye") || "n/a") : "") + "."));
+    el.innerHTML = poSumHtml([b1, b2, bw, b3, "<b>Biggest matchup:</b> " + wait, b5, pathP, pathS, b8, b9]);
     var tok = ++poSumTok;
     function later(fn) { setTimeout(function () { if (tok === poSumTok) fn(); }, 0); }
     // biggest matchup: the one week that moves the odds most when it goes one way or the other
@@ -7239,30 +7265,13 @@
         var html;
         if (!pick) html = cand.length ? "no single game moves your odds by more than a few points" : "none left to play";
         else { var o = byRid[pick.best.r.oid], k = pick.m[1]; html = "Wk " + pick.best.r.wk + " vs " + esc(o.name) + " (" + poOrd(o.rank) + ", " + o.R + "): a win puts your odds of " + pick.m[0] + " at " + poFmtPct(pick.best.r.w[k]) + ", a loss at " + poFmtPct(pick.best.r.l[k]); }
-        var li = el.querySelectorAll("li")[3]; if (li) li.innerHTML = "<b>Biggest matchup:</b> " + html;
-        later(paths); return;
+        var li = el.querySelectorAll("li")[4]; if (li) li.innerHTML = "<b>Biggest matchup:</b> " + html;
+        return;
       }
       var c = cand[i], pw = {}, pl = {}; pw[c.wk] = { res: "W", r: null }; pl[c.wk] = { res: "L", r: null };
       var sw = poSim(teams, ti, W, null, 1200, pw, liveOn), sl = poSim(teams, ti, W, null, 1200, pl, liveOn);
       res.push({ wk: c.wk, oid: c.oid, w: { 1: poPct(sw, ti, 1), [B]: poPct(sw, ti, B), [P]: poPct(sw, ti, P), av: 1 - sw.outright / sw.trials }, l: { 1: poPct(sl, ti, 1), [B]: poPct(sl, ti, B), [P]: poPct(sl, ti, P), av: 1 - sl.outright / sl.trials } });
       later(function () { swing(i + 1); });
-    }
-    function paths() {
-      var vals = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20], gP = [], gB = [], g1 = [], gA = [];
-      vals.forEach(function (a) { var sm = poSim(teams, ti, W, a, 600, null, liveOn); gP.push(poPct(sm, ti, P)); gB.push(B > 1 ? poPct(sm, ti, B) : 0); g1.push(poPct(sm, ti, 1)); gA.push(1 - sm.outright / sm.trials); });
-      function need(arr, th) { for (var k = 0; k < vals.length; k++) if (arr[k] >= th) return k === 0 ? 0 : vals[k - 1] + (th - arr[k - 1]) / (arr[k] - arr[k - 1] || 1) * 2; return null; }
-      function fmt(v) { return v <= 0.05 ? "any average" : "about " + v.toFixed(1) + " a week"; }
-      function path(arr, label) { var a50 = need(arr, 0.5), a90 = need(arr, 0.9); if (a50 == null) return null; return "a coin flip takes " + fmt(a50) + (a90 != null && a90 > a50 + 0.05 ? ", a 90% shot " + fmt(a90) : ""); }
-      var restTxt = liveOn ? " (the weeks after this one)" : "";
-      var lis = el.querySelectorAll("li");
-      if (isLast && lis[8]) {
-        var gl2 = poSackoLock(mf, ti, mc.mW), a50 = need(gA, 0.5), a90 = need(gA, 0.9);
-        lis[8].innerHTML = "<b>Path to the Sacko bracket:</b> " + (gl2 === 0 ? "an outright Sacko can no longer happen." : (gl2 == null ? "an outright Sacko can\u2019t be ruled out by points alone yet" : "earn " + gl2 + " more Rumbles (about " + (gl2 / Math.max(1, mc.mW)).toFixed(1) + " a week) and an outright Sacko is impossible whatever anyone else does") + "; realistically, " + (a50 == null ? "even 20 a week" + restTxt + " leaves it a long shot" : "a coin flip at avoiding it takes " + fmt(a50) + (a90 != null && a90 > a50 + 0.05 ? ", a 90% shot " + fmt(a90) : "") + restTxt) + ".");
-      }
-      lis[5].innerHTML = "<b>Path to the playoffs:</b> " + (mc.mst.x ? "locked in." : mc.mst.dead ? "out of reach." : (gP[0] >= 0.995 ? "a near-lock: even 0 a week" + restTxt + " very likely gets you there." : (path(gP, "the playoffs") || "not reachable at the current pace of the league") + restTxt + "."));
-      var bestK = g1.some(function (v) { return v >= 0.5; }) ? 1 : (B > 1 && gB.some(function (v) { return v >= 0.5; }) ? B : P), arr = bestK === 1 ? g1 : bestK === B ? gB : gP;
-      var label = bestK === 1 ? "the 1 seed" : bestK === B ? "a bye" : "the playoffs";
-      lis[6].innerHTML = "<b>Path to your best seed:</b> " + (bestK === P ? "the playoffs are the target (see above)." : (mc.mst.one && bestK === 1 ? "the 1 seed is clinched." : (arr[0] >= 0.995 ? label + " is a near-lock." : "for " + label + ", " + (path(arr, label) || "a long shot") + restTxt + ".")) + (bestK === 1 && B > 1 && !mc.mst.bye ? " For a bye, a coin flip takes " + (need(gB, 0.5) == null ? "more than that" : fmt(need(gB, 0.5))) + "." : ""));
     }
     later(function () { swing(0); });
   }
