@@ -29,6 +29,10 @@ on:
   schedule:
     - cron: "7,37 12-23 * * *"
     - cron: "7,37 0-4 * * *"
+    # Sunday mornings only: extra tries before the 9:30am ET international kickoff (14:30 UTC). Week 10 2026: every run before 18:45 UTC was
+    # skipped, so the Munich game was never watched. More entries, at other minutes, give the scheduler more chances to fire one in time.
+    - cron: "2,32 11-13 * * 0"
+    - cron: "12,42 13-14 * * 0"
   workflow_dispatch: {}  # manual runs, and how a long run starts its successor
 
 permissions:

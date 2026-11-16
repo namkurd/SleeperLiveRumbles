@@ -88,6 +88,33 @@
       "injury_status_at_capture": "Out",
       "game_status_at_capture": "in_progress",
       "captured_at": "2026-11-15T21:06:25.593317+00:00"
+    },
+    {
+      "season": "2026",
+      "week": 10,
+      "roster_id": 3,
+      "manager": "Jake",
+      "injured_qb": {
+        "player_id": "11564",
+        "name": "Drake Maye",
+        "points": 3.37
+      },
+      "backup_qbs": [
+        {
+          "player_id": "11292",
+          "name": "Tommy DeVito",
+          "points": 6.74
+        }
+      ],
+      "backup_points_total": 6.74,
+      "backups_seen": [
+        "11292"
+      ],
+      "team": "NE",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "manual",
+      "note": "Added by hand: the 9:30am ET Munich game (NE @ DET) was over before any capture run started (GitHub's schedule did not start one until 18:45 UTC). The page showed him Out while the game was live."
     }
   ]
 }
