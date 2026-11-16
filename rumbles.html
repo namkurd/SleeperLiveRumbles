@@ -891,6 +891,7 @@
   .po-sr.rival b { color: var(--gold); }
   .po-fine { font-size: 0.7rem; color: var(--text-dim); margin: 10px 2px 0; }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  #po-legend { font-size: 0.6rem; } #po-legend span { white-space: nowrap; overflow: hidden; text-overflow: clip; display: block; min-width: 0; }
   .po-note[hidden] { display: none; }
   .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
   .tr-svg .tr-po { fill: none; stroke: var(--gold); stroke-width: 2.2; opacity: 0.95; pointer-events: none; }
@@ -6937,11 +6938,12 @@
     return out;
   }
   function poLegendHtml() {
-    var B = poByes(), bits = ["<b>x</b> clinched a playoff spot"];
-    if (B > 1) bits.push("<b>z</b> clinched a bye (top " + B + ")");
-    bits.push("<b>$</b> clinched the 1 seed", "💀 eliminated");
-    return bits.join(" · ");
+    var bits = ["<b>x</b> clinched playoffs"];
+    if (poByes() > 1) bits.push("<b>z</b> clinched bye");
+    bits.push("<b>$</b> clinched 1 seed", "\uD83D\uDC80 eliminated");
+    return "<span>" + bits.join(" \u00b7 ") + "</span>";
   }
+
 
   // ---- the Playoffs tab: pick a team and an average, see what it takes ------------------------------------------
   var poUi = { rid: null, avg: null, field: "pace", fa: 10 };
