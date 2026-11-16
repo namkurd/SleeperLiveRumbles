@@ -857,8 +857,9 @@
   #standings-body tr.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
   #standings-table tr.me-row.po-cut td.rank { box-shadow: inset 0 -2px 0 var(--gold); }
   #standings-table tr.me-row.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
-  .po-mk { display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 4px; font-size: 0.6rem; font-weight: 800; line-height: 1.5; background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold); vertical-align: 1px; }
-  .po-mk.dead { background: none; padding: 0; font-size: 0.72rem; vertical-align: 0; }
+  /* clinch / elimination marker before the name, pro-standings style: x-Name */
+  .po-mk { font-weight: 900; font-size: 0.95em; letter-spacing: 0; } .po-dash { color: var(--text-dim); margin: 0 3px 0 1px; font-weight: 700; }
+  .po-mk.k-one { color: #ffd23f; } .po-mk.k-bye { color: #4fc3f7; } .po-mk.k-in { color: #5bd67a; } .po-mk.k-out { font-weight: 400; }
   #po-view { padding: 0 2px 20px; }
   .po-card { display: grid; gap: 10px; padding: 12px; margin: 6px 0 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); }
   .po-f { display: grid; gap: 4px; font-size: 0.78rem; color: var(--text-dim); }
@@ -915,7 +916,7 @@
   .po-summ { margin: 0 0 12px; } .po-summ ul { margin: 0; padding: 10px 12px 10px 28px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); display: grid; gap: 6px; font-size: 0.82rem; line-height: 1.35; } .po-summ b { color: var(--accent); }
   .po-fine { font-size: 0.7rem; color: var(--text-dim); margin: 10px 2px 0; }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
-  #po-legend { font-size: 0.6rem; } #po-legend span { white-space: nowrap; overflow: hidden; text-overflow: clip; display: block; min-width: 0; }
+  #po-legend { font-size: 0.6rem; } #po-legend > span { white-space: nowrap; overflow: hidden; text-overflow: clip; display: block; min-width: 0; }
   .po-note[hidden] { display: none; }
   .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
   .tr-svg .tr-po { fill: none; stroke: var(--gold); stroke-width: 2.2; opacity: 0.95; pointer-events: none; }
@@ -5632,7 +5633,8 @@
     var c = document.querySelector(".table-scroll"), root = document.documentElement.style, names = ["--c1", "--c2", "--c3", "--c4", "--c5"];
     var mq = window.matchMedia("(max-width: 640px)");
     if (!c || !mq.matches || !c.clientWidth) { names.forEach(function (n) { root.removeProperty(n); }); return; }
-    var W = c.clientWidth, base = [34, 100, 58, 48, 84], tot = 324, px = base.map(function (v) { return Math.floor(W * v / tot); });
+    var marked = !!document.querySelector("#standings-body .po-mk");   // a marker before the name needs a little more room in the Manager column
+    var W = c.clientWidth, base = [34, marked ? 128 : 100, 58, 48, 84], tot = marked ? 352 : 324, px = base.map(function (v) { return Math.floor(W * v / tot); });
     px[4] = W - px[0] - px[1] - px[2] - px[3];
     names.forEach(function (n, i) { root.setProperty(n, px[i] + "px"); });
   }
@@ -5790,7 +5792,7 @@
         var rowCls = (state.rb && Number(r.roster_id) === state.rb.me ? "me-row" : "") + (r.roster_id === poCutRid ? " po-cut" : "");
         return '<tr data-rid="' + r.roster_id + '"' + (rowCls.trim() ? ' class="' + rowCls.trim() + '"' : "") + ">" +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
-          '<td class="manager">' + nameHtml + (poMk[r.roster_id] ? '<span class="po-mk' + (poMk[r.roster_id].c === "\uD83D\uDC80" ? " dead" : "") + '" title="' + poMk[r.roster_id].t + '">' + poMk[r.roster_id].c + "</span>" : "") + "</td>" +
+          '<td class="manager">' + (poMk[r.roster_id] ? poMarkerHtml(poMk[r.roster_id]) : "") + nameHtml + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2), { pop: state.mode === "actual" ? "act" : "cr", cr: r.roster_id }) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
@@ -6981,10 +6983,13 @@
     } finally { poFoldN = 0; }
     return out;
   }
+  function poMkClass(c) { return c === "$" ? "k-one" : c === "z" ? "k-bye" : c === "x" ? "k-in" : "k-out"; }
+  function poMarkerHtml(m) { return '<span class="po-mk ' + poMkClass(m.c) + '" title="' + m.t + '">' + m.c + '</span><span class="po-dash">-</span>'; }
   function poLegendHtml() {
-    var bits = ["<b>x</b> clinched playoffs"];
-    if (poByes() > 1) bits.push("<b>z</b> clinched bye");
-    bits.push("<b>$</b> clinched 1 seed", "\uD83D\uDC80 eliminated");
+    var mk = function (c) { return '<span class="po-mk ' + poMkClass(c) + '">' + c + "</span>"; };
+    var bits = [mk("x") + " clinched playoffs"];
+    if (poByes() > 1) bits.push(mk("z") + " clinched bye");
+    bits.push(mk("$") + " clinched 1 seed", mk("\uD83D\uDC80") + " eliminated");
     return "<span>" + bits.join(" \u00b7 ") + "</span>";
   }
 
@@ -7079,6 +7084,10 @@
         var wk = weeks[wi], o = opp[wi], s = [], set = pins[wk], oi = o[ti];
         var useLive = lwi && wi === 0;
         for (j = 0; j < N; j++) s[j] = useLive ? lwi[j].m + lwi[j].sd * poGauss(rng) : mus[j] + sd * poGauss(rng);
+        // A team set to score far below (or above) everyone else is still just last (or first): keep its points believable, since points for breaks ties in Rumbles.
+        var lowO = Infinity, highO = -Infinity, padS = sd * 0.3;
+        for (j = 0; j < N; j++) if (j !== ti) { if (s[j] < lowO) lowO = s[j]; if (s[j] > highO) highO = s[j]; }
+        if (s[ti] < lowO - padS) s[ti] = lowO - padS * rng(); else if (s[ti] > highO + padS) s[ti] = highO + padS * rng();
         if (set && oi != null && set.r == null) {
           if ((set.res === "W") !== (s[ti] > s[oi])) { var sw = s[ti]; s[ti] = s[oi]; s[oi] = sw; }   // an outcome only: the natural scores, swapped if they went the other way
         } else if (set && oi != null) {
