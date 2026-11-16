@@ -1542,6 +1542,7 @@
   .sc-wp { display: block; font-style: normal; font-size: 0.7rem; font-weight: 700; margin-top: 1px; color: var(--text-dim); }
   .sc-wp.ok { color: var(--good); } .sc-wp.bad { color: var(--bad); } .sc-wp.even { color: #d98a1c; }
   .sc-gap.bad b { color: var(--bad); } .sc-gap.ok b { color: var(--good); } .sc-gap.even b { color: #d98a1c; }
+  .sc-need { font-size: 0.74rem; font-weight: 600; margin: 8px 2px 4px; text-wrap: balance; }
   .sc-hl { font-size: 0.72rem; font-weight: 600; line-height: 1.2; margin-top: 2px; text-wrap: balance; }
   /* Win-probability chart in Scenarios */
   .sc-wpm { position: relative; height: 62px; margin: 6px 0 4px; padding-right: 54px; cursor: pointer; border-radius: 8px; background: color-mix(in srgb, var(--text-dim) 7%, transparent); touch-action: manipulation; }
@@ -7671,6 +7672,27 @@
     return { mine: ca, theirs: ca === cb ? "var(--bad)" : cb };
   }
   // Every pairing of the week (a head-to-head game, or any two teams for the Field point) scored by wpInterest; best ten, no team more than three times.
+  // What is left in a Best matchup: each side's starters whose game is not over (same Out filters as Mine), what each side needs, and the players with their games.
+  function rbBestLeft(t) {
+    return t.players.filter(function (p) {
+      if (p.game_status === "complete" || rbRuledOut(p)) return false;
+      if (isOutStatus(p.injury_status) && !p.replacement) return false;
+      return true;
+    });
+  }
+  function rbBestNeedHtml(r, live) {
+    if (!live) return "";
+    var la = rbBestLeft(r.a), lb = rbBestLeft(r.b);
+    if (!la.length && !lb.length) return "";
+    var gap = r.a.act - r.b.act, g = Math.abs(gap).toFixed(2), A = escapeHtml(r.a.name), B = escapeHtml(r.b.name), pa = rbPosList(la), pb = rbPosList(lb), txt;
+    function vb(k) { return k === 1 ? "needs" : "need"; }
+    if (gap > 0.004) {
+      txt = !lb.length ? A + " is clear: " + B + " has nobody left" : !la.length ? B + "\u2019s " + pb + " " + vb(lb.length) + " " + g + " to catch " + A : B + "\u2019s " + pb + " " + vb(lb.length) + " to outscore " + A + "\u2019s " + pa + " by " + g;
+    } else if (gap < -0.004) {
+      txt = !la.length ? B + " is clear: " + A + " has nobody left" : !lb.length ? A + "\u2019s " + pa + " " + vb(la.length) + " " + g + " to catch " + B : A + "\u2019s " + pa + " " + vb(la.length) + " to outscore " + B + "\u2019s " + pb + " by " + g;
+    } else txt = "Dead even: " + A + "\u2019s " + (pa || "none") + " vs. " + B + "\u2019s " + (pb || "none");
+    return '<div class="sc-need">' + txt + '</div><div class="sc-cols">' + rbScenSideHtml(r.a, la, null) + rbScenSideHtml(r.b, lb, null) + "</div>";
+  }
   function rbBestList(teams, win) {
     var out = [], missing = 0, i, j;
     for (i = 0; i < teams.length; i++) for (j = i + 1; j < teams.length; j++) {
@@ -7772,7 +7794,7 @@
       var verdict = pm.done ? (last.my > last.th + 0.004 ? r.a.name + " won" : last.th > last.my + 0.004 ? r.b.name + " won" : "Tied") : "Live";
       return '<section class="sc-blk best' + (r.h2h ? " h2h" : "") + '" data-best="' + win.week + "." + r.a.rid + "." + r.b.rid + '" data-it="' + r.it.score.toFixed(4) + '" data-flips="' + r.it.flips + '" data-margin="' + r.it.margin.toFixed(2) + '" data-h2h="' + (r.h2h ? 1 : 0) + '"><div class="sc-bh"><div><span class="sc-rk">#' + (i + 1) + '</span><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip' + (r.h2h ? " h2h" : "") + '">' + (r.h2h ? "H2H · 10 Rumbles" : "Field · 1 Rumble") + "</span>" +
         '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + escapeHtml(r.it.why.join(" \u00b7 ")) + "</div></div>" +
-        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + "</section>";
+        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + rbBestNeedHtml(r, live && !pm.done) + "</section>";
     }).join("");
     box.innerHTML = html;
     scAvatars(); wpMiniOff();
