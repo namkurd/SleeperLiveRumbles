@@ -7189,11 +7189,29 @@
     var lfpA = 0; if (liveOn) rbTeams().forEach(function (t) { lfpA += t.act + t.proj; });
     var baseA = base + "|" + liveOn + pinKeyA + "|" + Math.round(lfpA * 10);
     var simA = poCached(baseA + "|a" + poUi.avg, "a", function () { return poSim(teams, ti, W, poUi.avg, 3000, pinsA, liveOn); });
-    function magic(label, k) {
-      var done = k === P ? stt.x : k === 1 ? stt.one : stt.bye, g = done ? 0 : (stt.dead ? null : poLockGain(teams, ti, k, W));
-      return '<div class="' + (done ? "ok" : "") + '"><b>' + (done ? "✓" : g == null ? "—" : g) + "</b><small>" + label + (done ? " clinched" : g == null ? (stt.dead ? " out" : " not yet") : " · ~" + (g / W).toFixed(1) + "/wk") + "</small></div>";
+    // The magic numbers count the week in progress as played: its projected result, or the result pinned above (the opponent's Rumbles are held inside the
+    // window that result leaves them). They are then Rumbles to earn from the next week on.
+    var mT = teams, mW = W, fold = 0;
+    if (liveOn) {
+      var lt = {}; rbTeams().forEach(function (t) { lt[t.rid] = t; });
+      var add = {}; teams.forEach(function (t) { add[t.rid] = lt[t.rid] ? lt[t.rid].rumbles : 0; });
+      var oppId = lt[me.rid] ? lt[me.rid].opp : null;
+      if (poUi.liveSet && oppId != null && add[oppId] != null) { var ls = poUi.liveSet, ow = poOppWindow(N, ls.res, ls.r); add[me.rid] = ls.r; add[oppId] = Math.max(ow[0], Math.min(ow[1], add[oppId])); }
+      mT = teams.map(function (t) { return { rid: t.rid, name: t.name, R: t.R + add[t.rid], pf: t.pf, rank: 0 }; });
+      mT.slice().sort(function (x, y) { return y.R - x.R || y.pf - x.pf; }).forEach(function (t, i) { t.rank = i + 1; });
+      mW = Math.max(0, W - 1); fold = 1;
     }
-    var ha = '<div class="po-magic"><div class="po-mt">Magic number: Rumbles to earn from here that clinch it, whatever anyone else does</div><div class="po-mg">' + magic("playoffs", P) + (B > 1 ? magic("bye", B) : "") + magic("1 seed", 1) + "</div></div>";
+    var mi = ti, mst, gains = {};
+    poFoldN = fold;
+    try {
+      mst = poStatuses(mT, mW, P, B)[me.rid];
+      [P, B, 1].forEach(function (k) { gains[k] = mW > 0 && !mst.dead ? poLockGain(mT, mi, k, mW) : null; });
+    } finally { poFoldN = 0; }
+    function magic(label, k) {
+      var done = k === P ? mst.x : k === 1 ? mst.one : mst.bye, g = done ? 0 : gains[k];
+      return '<div class="' + (done ? "ok" : "") + '"><b>' + (done ? "\u2713" : g == null ? "\u2014" : g) + "</b><small>" + label + (done ? " clinched" : g == null ? (mst.dead ? " out" : " not yet") : " \u00b7 ~" + (g / mW).toFixed(1) + "/wk") + "</small></div>";
+    }
+    var ha = '<div class="po-magic"><div class="po-mt">Magic number: Rumbles to earn ' + (fold ? "after this week (its result as set above)" : "from here") + ' that clinch it, whatever anyone else does</div><div class="po-mg">' + magic("playoffs", P) + (B > 1 ? magic("bye", B) : "") + magic("1 seed", 1) + "</div></div>";
     ha += '<div class="po-sub">' + (liveOn ? "This week as set above, then <b>" + Number(poUi.avg).toFixed(1) + "</b> a week:" : "At <b>" + Number(poUi.avg).toFixed(1) + "</b> a week, every week:") + "</div>" + poOddsHtml(simA, ti, P, B) + poBarsHtml(simA, ti, me.name, P, N) + '<div class="po-chips" id="po-chips"></div>';
     pa.innerHTML = ha;
     var al = document.getElementById("po-a-live");
