@@ -4625,6 +4625,8 @@
     // week is over, so its results are official (see loadLive's weekFinal).
     var weekFinal = !!(liveActive && live.weekFinal);
     var foldCurrentWeekIntoTotals = (state.mode !== "actual" && kickoffStarted) || weekFinal;
+    // for the clinch markers: whether the week in progress is already inside the totals shown (as projected, or as final)
+    state.poFold = (foldCurrentWeekIntoTotals && liveActive && state.history && (state.history.weeks_completed || []).indexOf(Number(live.week)) < 0) ? 1 : 0;
 
     // Actual tab's week picker: a past completed week is rebuilt entirely
     // from the weekly log (see buildHistoricalRows) instead of the live/
@@ -5698,7 +5700,7 @@
         poNote.hidden = poCutRid == null;
         poNote.innerHTML = "<i></i> Gold line: the top " + PLAYOFF_SPOTS + " make the playoffs";
       }
-      var poMk = histWeek == null ? poMarkers() : {}, poLeg = document.getElementById("po-legend");
+      var poMk = histWeek == null ? poMarkers(displayRows) : {}, poLeg = document.getElementById("po-legend");
       if (poLeg) { poLeg.hidden = histWeek != null; poLeg.innerHTML = poLegendHtml(); }
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
@@ -6905,7 +6907,7 @@
   // matchup it touches (two of them playing each other share one), which is what the schedule takes away.
   function poAhead(teams, i, k, W, gain) {
     var N = teams.length; if (k > N - 1) return false;
-    var cap = poMaxWeek(N) * W, target = teams[i].R + gain, sched = poSchedWeeks(), played = poPlayed();
+    var cap = poMaxWeek(N) * W, target = teams[i].R + gain, sched = poSchedWeeks(), played = poPlayed() + poFoldN;
     var others = teams.filter(function (t, j) { return j !== i; }).sort(function (a, b) { return b.R - a.R; });
     function need(t) { return Math.max(0, target - t.R); }
     if (!sched) {
@@ -6928,9 +6930,9 @@
       return sumNeed <= room;
     });
   }
-  var poMemo = null;
+  var poMemo = null, poFoldN = 0;
   function poStatuses(teams, W, P, B) {
-    var mk = teams.map(function (t) { return t.rid + ':' + t.R + ':' + t.rank; }).join(',') + '|' + W + '|' + P + '|' + B + '|' + (poSchedWeeks() ? 's' : 'n');
+    var mk = teams.map(function (t) { return t.rid + ':' + t.R + ':' + t.rank; }).join(',') + '|' + W + '|' + P + '|' + B + '|' + (poSchedWeeks() ? 's' : 'n') + '|' + poFoldN;
     if (poMemo && poMemo.k === mk) return poMemo.v;
     var N = teams.length, out = {};
     teams.forEach(function (t, i) {
@@ -6957,15 +6959,25 @@
     return hi;
   }
   var PO_MK = { one: ["$", "Clinched the 1 seed"], bye: ["z", "Clinched a first-round bye"], x: ["x", "Clinched a playoff spot"], dead: ["💀", "Eliminated from playoff contention"] };
-  function poMarkers() {
+  // rows: the standings rows being shown (their Rumbles already hold the week in progress when it is folded in: projected in Projected, final in Actual)
+  function poMarkers(rows) {
     if (state.shownHistoricalWeek != null) return {};
-    var teams = poTeams(), W = poWeeksLeft(); if (!teams || W == null) return {};
+    var W0 = poWeeksLeft(); if (W0 == null) return {};
+    var teams, fold = 0;
+    if (rows && rows.length) { teams = rows.map(function (r) { return { rid: r.roster_id, name: r.manager, R: num(r.rumbles), pf: num(r.pf), rank: r.rank }; }); fold = ARCHIVE ? 0 : (state.poFold || 0); }
+    else teams = poTeams();
+    if (!teams) return {};
+    var W = Math.max(0, W0 - fold);
     poSchedLoad();
-    var B = poByes(), st = poStatuses(teams, W, PLAYOFF_SPOTS, B), out = {};
-    teams.forEach(function (t) {
-      var s = st[t.rid], m = s.one ? PO_MK.one : (s.bye && B > 1) ? PO_MK.bye : s.x ? PO_MK.x : s.dead ? PO_MK.dead : null;
-      if (m) out[t.rid] = { c: m[0], t: m[1] };
-    });
+    var B = poByes(), out = {};
+    poFoldN = fold;
+    try {
+      var st = poStatuses(teams, W, PLAYOFF_SPOTS, B);
+      teams.forEach(function (t) {
+        var s = st[t.rid], m = s.one ? PO_MK.one : (s.bye && B > 1) ? PO_MK.bye : s.x ? PO_MK.x : s.dead ? PO_MK.dead : null;
+        if (m) out[t.rid] = { c: m[0], t: m[1] + (fold && state.mode !== "actual" ? " (on this week\u2019s projected results)" : "") };
+      });
+    } finally { poFoldN = 0; }
     return out;
   }
   function poLegendHtml() {
