@@ -902,6 +902,16 @@
   .po-mr { display: flex; align-items: center; gap: 8px; margin: 6px 0 0 3.2rem; font-size: 0.78rem; color: var(--text-dim); } .po-mr input { flex: 1; accent-color: var(--accent); } .po-mr b { color: var(--text); min-width: 1.4rem; text-align: right; }
   .po-mo { margin: 2px 0 0 3.2rem; font-size: 0.72rem; color: var(--gold); }
   .po-need2 { width: 100%; font-size: 0.8rem; margin-top: 4px; } .po-wait { font-size: 0.75rem; color: var(--text-dim); }
+  .po-sec { border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px; margin: 0 0 14px; background: color-mix(in srgb, var(--panel) 60%, transparent); }
+  .po-sh { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .po-sh h3 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+  .po-sh h3 i { font-style: normal; display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--accent); color: #111; font-size: 0.78rem; font-weight: 800; }
+  .po-reset { padding: 3px 12px; border-radius: 14px; border: 1px solid var(--panel-border); background: none; color: var(--text); font: inherit; font-size: 0.76rem; cursor: pointer; } .po-reset:disabled { opacity: 0.35; cursor: default; }
+  .po-sd { margin: 4px 0 10px; font-size: 0.78rem; color: var(--text-dim); }
+  .po-magic { margin: 10px 0; } .po-mt { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 4px; }
+  .po-mg { display: flex; gap: 8px; } .po-mg > div { flex: 1; text-align: center; padding: 8px 4px; border-radius: 10px; border: 1px dashed var(--gold); } .po-mg > div.ok { border-style: solid; border-color: var(--good); }
+  .po-mg b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; } .po-mg small { color: var(--text-dim); font-size: 0.66rem; }
+  .po-sub { font-size: 0.8rem; margin: 10px 2px 6px; }
+  .po-live { margin: 6px 0 0 3.2rem; font-size: 0.74rem; color: var(--text-dim); } .po-live b { color: var(--text); }
   .po-fine { font-size: 0.7rem; color: var(--text-dim); margin: 10px 2px 0; }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   #po-legend { font-size: 0.6rem; } #po-legend span { white-space: nowrap; overflow: hidden; text-overflow: clip; display: block; min-width: 0; }
@@ -1971,14 +1981,23 @@
   </div>
 
   <div id="po-view" hidden>
-    <div class="po-card">
-      <label class="po-f">Team <select id="po-team" class="week-select"></select></label>
-      <label class="po-f">Average Rumbles a week for matchups left on Auto <b id="po-avg-v"></b>
-        <input type="range" id="po-avg" min="0" max="20" step="0.5" value="10"></label>
+    <div class="po-card"><label class="po-f">Team <select id="po-team" class="week-select"></select></label></div>
+    <div id="po-status"></div>
+    <div id="po-secs" hidden>
+      <section class="po-sec">
+        <div class="po-sh"><h3><i>1</i> By average</h3><button type="button" class="po-reset" id="po-reset-a">Reset</button></div>
+        <p class="po-sd">How many Rumbles a week does it take? Pick an average for every week left.</p>
+        <label class="po-f">Average Rumbles a week <b id="po-avg-v"></b><input type="range" id="po-avg" min="0" max="20" step="0.5" value="10"></label>
+        <div id="po-a"></div>
+      </section>
+      <section class="po-sec">
+        <div class="po-sh"><h3><i>2</i> Matchup by matchup</h3><button type="button" class="po-reset" id="po-reset-b">Reset</button></div>
+        <p class="po-sd">Set up your own run: pin any matchup to a win or loss and the Rumbles you get. The week in progress starts from the live projections.</p>
+        <div id="po-b-top"></div>
+        <div id="po-sched"></div>
+        <div id="po-out"></div>
+      </section>
     </div>
-    <div id="po-top"></div>
-    <div id="po-sched"></div>
-    <div id="po-out"></div>
   </div>
   <div id="standings-view">
   <div class="table-panel">
@@ -6991,6 +7010,7 @@
     var played = poPlayed(), weeks = [], w, mu = {}, me = teams[ti].rid;
     for (w = played + 1; w <= played + W; w++) weeks.push(w);
     teams.forEach(function (t) { mu[t.rid] = st.mu[t.rid] != null ? st.mu[t.rid] : st.lg; });
+    if (a == null) return { mu: mu, sd: st.sd, weeks: weeks };
     function mine() { var s = 0; weeks.forEach(function (wk) { s += poWeekExp(teams, mu, st.sd, sched[wk])[me].e; }); return s / W; }
     var lo = st.lg - 5 * st.sd, hi = st.lg + 5 * st.sd;
     for (var it = 0; it < 24; it++) { mu[me] = (lo + hi) / 2; if (mine() < a) lo = mu[me]; else hi = mu[me]; }
@@ -7015,25 +7035,41 @@
     var mx = poMaxWeek(N);
     return res === "W" ? [0, Math.max(0, r - 10)] : [Math.min(mx, r + 10), mx];
   }
-  function poSim(teams, ti, W, a, trials) {
+  // The week in progress, from the live projections: each team's projected score, and how far it can still move (the same per-position
+  // spread the win-chance model uses, on the points still to come).
+  function poLiveWeek(week) {
+    if (!state.live || !state.live.isLive || Number(state.live.week) !== week) return null;
+    var lt = rbTeams(), out = {}; if (!lt.length) return null;
+    lt.forEach(function (t) {
+      var v = 0; t.players.forEach(function (p) { if (rbRuledOut(p) || p.game_status === "complete") return; var rem = Math.max(0, num(p.proj) - num(p.actual)); var c = WIN_SD_C[p.position] || 2.3; v += c * c * rem; });
+      out[t.rid] = { m: t.proj, sd: Math.sqrt(v) };
+    });
+    return out;
+  }
+  function poSim(teams, ti, W, a, trials, pins, live) {
     var sched = poSchedWeeks(), cal = poCalibrate(teams, ti, W, a); if (!sched || !cal) return null;
+    pins = pins || {};
     var N = teams.length, mus = teams.map(function (x) { return cal.mu[x.rid]; }), sd = cal.sd, idx = {}, weeks = cal.weeks, t, j, q;
     teams.forEach(function (x, k) { idx[x.rid] = k; });
+    var lw = live ? poLiveWeek(weeks[0]) : null, lwi = null;
+    if (lw) { lwi = teams.map(function (x) { return lw[x.rid] || null; }); if (lwi.some(function (x) { return !x; })) lwi = null; }
     var opp = weeks.map(function (wk) { var o = {}; (sched[wk] || []).forEach(function (p) { o[idx[p[0]]] = idx[p[1]]; o[idx[p[1]]] = idx[p[0]]; }); return o; });
     var seedC = teams.map(function () { var z = []; for (var k = 0; k < N; k++) z.push(0); return z; }), winN = weeks.map(function () { return 0; });
     for (t = 0; t < trials; t++) {
       var rng = poRng(90210 + t * 7919), R = teams.map(function (x) { return x.R; }), PF = teams.map(function (x) { return x.pf; });
       for (var wi = 0; wi < weeks.length; wi++) {
-        var wk = weeks[wi], o = opp[wi], s = [], set = poUi.sets[wk], oi = o[ti];
-        for (j = 0; j < N; j++) s[j] = mus[j] + sd * poGauss(rng);
+        var wk = weeks[wi], o = opp[wi], s = [], set = pins[wk], oi = o[ti];
+        var useLive = lwi && wi === 0;
+        for (j = 0; j < N; j++) s[j] = useLive ? lwi[j].m + lwi[j].sd * poGauss(rng) : mus[j] + sd * poGauss(rng);
         if (set && oi != null) {
           var win = set.res === "W", len = N - 2, kr = Math.max(0, Math.min(len, win ? set.r - RUMBLES_PER_WIN - 1 : set.r)), rest = [];
           for (j = 0; j < N; j++) if (j !== ti && j !== oi) rest.push(s[j]);
           rest.sort(function (x, y) { return y - x; });
           var lo = kr > 0 ? rest[len - kr] : rest[len - 1] - sd, hi = kr < len ? rest[len - 1 - kr] : rest[0] + sd;
-          var tt = lo + rng() * (hi - lo), c = rbNormCdf((tt - mus[oi]) / sd), u = rng();
+          var om = useLive ? lwi[oi].m : mus[oi], os = Math.max(1, useLive ? lwi[oi].sd : sd);
+          var tt = lo + rng() * (hi - lo), c = rbNormCdf((tt - om) / os), u = rng();
           s[ti] = tt;
-          s[oi] = mus[oi] + sd * poInvCdf(win ? c * u : c + u * (1 - c));
+          s[oi] = om + os * poInvCdf(win ? c * u : c + u * (1 - c));
         }
         for (j = 0; j < N; j++) {
           var outs = 0; for (q = 0; q < N; q++) if (q !== j && s[j] > s[q]) outs++;
@@ -7052,84 +7088,109 @@
   function poFmtPct(p) { var v = p * 100; return v >= 99.5 && v < 100 ? ">99%" : v > 0 && v < 0.5 ? "<1%" : Math.round(v) + "%"; }
   function poOrd(n) { var s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 
-  var poChipTok = 0;
+  var poChipTok = 0, poCache = {};
   function poSchedHtml(teams, ti, sim) {
     var byRid = {}; teams.forEach(function (t) { byRid[t.rid] = t; });
-    var N = teams.length, P = PLAYOFF_SPOTS, mx = poMaxWeek(N), sched = poSchedWeeks(), me = teams[ti];
-    return '<div class="po-sched"><small>Your remaining matchups. Leave a week on Auto, or pin it to a win or loss and the Rumbles you get.</small>' + sim.weeks.map(function (wk, wi) {
+    var N = teams.length, P = PLAYOFF_SPOTS, mx = poMaxWeek(N), sched = poSchedWeeks(), me = teams[ti], liveT = {};
+    if (state.live && state.live.isLive) rbTeams().forEach(function (t) { liveT[t.rid] = t; });
+    return sim.weeks.map(function (wk, wi) {
       var pr = (sched[wk] || []).filter(function (p) { return p[0] === me.rid || p[1] === me.rid; })[0], oid = pr ? (pr[0] === me.rid ? pr[1] : pr[0]) : null, o = oid != null ? byRid[oid] : null;
       var set = poUi.sets[wk], rival = o && Math.abs(o.rank - P) <= 2;
       var h = '<div class="po-m' + (rival ? " rival" : "") + '" data-w="' + wk + '"><div class="po-mh"><span>Wk ' + wk + "</span><b>" + (o ? "vs " + escapeHtml(o.name) : "bye") + "</b><em>" + (o ? poOrd(o.rank) + " · " + o.R : "") + '</em><i class="po-wc">' + (!set && o ? "model " + Math.round(sim.winN[wi] / sim.trials * 100) + "% to win" : "") + "</i></div>";
       if (!o) return h + "</div>";
-      h += '<div class="po-mc">' + [["auto", "Auto"], ["W", "Win"], ["L", "Loss"]].map(function (m) { var on = m[0] === "auto" ? !set : set && set.res === m[0]; return '<button type="button" data-m="' + m[0] + '"' + (on ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</div>";
+      var lm = Number(state.live && state.live.week) === wk ? liveT[me.rid] : null, lo2 = lm ? liveT[o.rid] : null;
+      if (lm && lo2) h += '<div class="po-live"><b>This week:</b> ' + escapeHtml(me.name) + " " + lm.act.toFixed(1) + " (proj " + lm.proj.toFixed(1) + ") vs " + escapeHtml(o.name) + " " + lo2.act.toFixed(1) + " (proj " + lo2.proj.toFixed(1) + ") · projected " + (lm.h2hWin ? "win" : "loss") + ", " + lm.rumbles + " Rumbles</div>";
+      h += '<div class="po-mc">' + [["auto", wi === 0 && lm ? "Projected" : "Auto"], ["W", "Win"], ["L", "Loss"]].map(function (m) { var on = m[0] === "auto" ? !set : set && set.res === m[0]; return '<button type="button" data-m="' + m[0] + '"' + (on ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</div>";
       if (set) {
         var lo = set.res === "W" ? 10 : 0, hi = set.res === "W" ? mx : 10, w = poOppWindow(N, set.res, set.r);
         h += '<div class="po-mr"><input type="range" min="' + lo + '" max="' + hi + '" step="1" value="' + set.r + '"><b>' + set.r + '</b> Rumbles</div><div class="po-mo">' + escapeHtml(o.name) + " that week: " + (w[0] === w[1] ? w[0] : w[0] + "–" + w[1]) + "</div>";
       }
       return h + "</div>";
-    }).join("") + "</div>";
+    }).join("");
   }
-  function poChips(teams, ti, W, token) {
+  function poChips(teams, ti, W, token, key) {
     var el = document.getElementById("po-chips"); if (!el) return;
     var vals = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20], res = [], i = 0, P = PLAYOFF_SPOTS;
     function step() {
       if (token !== poChipTok) return;
-      var a = vals[i], sm = poSim(teams, ti, W, a, 700); res.push(sm ? poPct(sm, ti, P) : 0); i++;
+      var a = vals[i], sm = poSim(teams, ti, W, a, 700, null, false); res.push(sm ? poPct(sm, ti, P) : 0); i++;
       if (i < vals.length) { setTimeout(step, 0); return; }
       function need(th) { for (var k = 0; k < vals.length; k++) if (res[k] >= th) return k === 0 ? 0 : vals[k - 1] + (th - res[k - 1]) / (res[k] - res[k - 1] || 1) * 2; return null; }
       var n50 = need(0.5), n90 = need(0.9), fmt = function (v) { return v == null ? "not reachable" : v <= 0.05 ? "any average" : "about " + v.toFixed(1) + " a week"; };
-      el.innerHTML = '<small>Playoff chance by the average on Auto weeks</small>' + vals.map(function (v, k) { return '<span class="po-chip ' + (res[k] >= 0.5 ? "ok" : "bad") + '"><b>' + v + "</b><i>" + poFmtPct(res[k]) + "</i></span>"; }).join("") +
+      var html = '<small>Playoff chance by average</small>' + vals.map(function (v, k) { return '<span class="po-chip ' + (res[k] >= 0.5 ? "ok" : "bad") + '"><b>' + v + "</b><i>" + poFmtPct(res[k]) + "</i></span>"; }).join("") +
         '<div class="po-need2">A coin flip at ' + fmt(n50) + "; a 90% shot at " + fmt(n90) + ".</div>";
+      poCache.chips = { key: key, v: html };
+      var e2 = document.getElementById("po-chips"); if (e2) e2.innerHTML = html;
     }
-    el.innerHTML = '<small>Playoff chance by the average on Auto weeks</small><span class="po-wait">working it out…</span>';
+    el.innerHTML = '<small>Playoff chance by average</small><span class="po-wait">working it out\u2026</span>';
     setTimeout(step, 30);
   }
+  function poCached(key, name, fn) { var c = poCache[name]; if (c && c.key === key) return c.v; var v = fn(); poCache[name] = { key: key, v: v }; return v; }
+  function poBarsHtml(sim, ti, name, P, N) {
+    var h = '<div class="po-bars"><small>Where ' + escapeHtml(name) + " finishes</small>", outP = 0, k;
+    for (k = 0; k < N; k++) {
+      var p = sim.seedC[ti][k] / sim.trials;
+      if (k < P) h += '<div class="po-bar"><span>' + (k + 1) + '</span><i style="width:' + Math.max(0.5, p * 100).toFixed(1) + '%"></i><em>' + poFmtPct(p) + "</em></div>"; else outP += p;
+    }
+    return h + '<div class="po-bar out"><span>out</span><i style="width:' + Math.max(0.5, outP * 100).toFixed(1) + '%"></i><em>' + poFmtPct(outP) + "</em></div></div>";
+  }
+  function poOddsHtml(sim, ti, P, B) {
+    return '<div class="po-odds"><div><b>' + poFmtPct(poPct(sim, ti, P)) + "</b><small>playoffs</small></div>" + (B > 1 ? "<div><b>" + poFmtPct(poPct(sim, ti, B)) + "</b><small>bye (top " + B + ")</small></div>" : "") + "<div><b>" + poFmtPct(poPct(sim, ti, 1)) + "</b><small>1 seed</small></div></div>";
+  }
   function renderPlayoffs(keepEditor) {
-    var out = document.getElementById("po-out"), top = document.getElementById("po-top"), ed = document.getElementById("po-sched"); if (!out) return;
+    var status = document.getElementById("po-status"), pa = document.getElementById("po-a"), pb = document.getElementById("po-b-top"), ed = document.getElementById("po-sched"), out = document.getElementById("po-out"); if (!out) return;
+    var secs = document.getElementById("po-secs");
     var teams = poTeams(), W = poWeeksLeft(), P = PLAYOFF_SPOTS, B = poByes(), sel = document.getElementById("po-team");
-    if (!teams || W == null) { top.innerHTML = '<div class="rb-live-empty">Loading the standings…</div>'; ed.innerHTML = ""; out.innerHTML = ""; return; }
+    function blank(msg) { status.innerHTML = msg ? '<div class="rb-live-empty">' + msg + "</div>" : ""; secs.hidden = true; }
+    if (!teams || W == null) { blank("Loading the standings…"); return; }
     var sig = teams.map(function (t) { return t.rid + ":" + t.name; }).join(",");
     if (sel.getAttribute("data-sig") !== sig) { sel.innerHTML = teams.map(function (t) { return '<option value="' + t.rid + '">' + escapeHtml(t.name) + "</option>"; }).join(""); sel.setAttribute("data-sig", sig); }
     if (poUi.rid == null || !teams.some(function (t) { return t.rid === poUi.rid; })) poUi.rid = (state.rb && teams.some(function (t) { return t.rid === state.rb.me; })) ? state.rb.me : teams[0].rid;
     sel.value = String(poUi.rid);
     var ti = 0; teams.forEach(function (t, j) { if (t.rid === poUi.rid) ti = j; });
-    var me = teams[ti], played = Math.max(1, poPlayed()), mx = poMaxWeek(teams.length);
-    var avgIn = document.getElementById("po-avg"), avgV = document.getElementById("po-avg-v");
-    if (poUi.avg == null || avgIn.getAttribute("data-rid") !== String(me.rid)) { poUi.avg = Math.min(mx, Math.round(me.R / played * 2) / 2); avgIn.setAttribute("data-rid", String(me.rid)); }
-    avgIn.max = String(mx); avgIn.value = String(poUi.avg); avgV.textContent = Number(poUi.avg).toFixed(1);
+    var me = teams[ti], played = Math.max(1, poPlayed()), mx = poMaxWeek(teams.length), N = teams.length;
+    var defAvg = Math.min(mx, Math.round(me.R / played * 2) / 2);
+    if (poUi.avg == null || document.getElementById("po-avg").getAttribute("data-rid") !== String(me.rid)) { poUi.avg = defAvg; document.getElementById("po-avg").setAttribute("data-rid", String(me.rid)); }
+    var avgIn = document.getElementById("po-avg");
+    avgIn.max = String(mx); avgIn.value = String(poUi.avg); document.getElementById("po-avg-v").textContent = Number(poUi.avg).toFixed(1);
     poSchedLoad();
-    var st = poStatuses(teams, W, P, B)[me.rid], sorted = teams.slice().sort(function (x, y) { return x.rank - y.rank; }), line = sorted[P - 1];
+    var stt = poStatuses(teams, W, P, B)[me.rid], sorted = teams.slice().sort(function (x, y) { return x.rank - y.rank; }), line = sorted[P - 1];
     var h = '<div class="po-sum"><b>' + escapeHtml(me.name) + "</b> is " + poOrd(me.rank) + " with " + me.R + " Rumbles";
     if (W <= 0) {
-      h += ". The regular season is over: " + (st.x ? "in the playoffs" + (B > 0 && st.bye ? (st.one ? " as the 1 seed" : " with a bye") : "") : "out of the playoffs") + ".</div>";
-      top.innerHTML = h; ed.innerHTML = ""; out.innerHTML = ""; return;
+      h += ". The regular season is over: " + (stt.x ? "in the playoffs" + (B > 0 && stt.bye ? (stt.one ? " as the 1 seed" : " with a bye") : "") : "out of the playoffs") + ".</div>";
+      blank(); status.innerHTML = h; return;
     }
     h += ". " + W + " regular-season week" + (W === 1 ? "" : "s") + " left. Playoff line: " + poOrd(P) + " place has " + line.R + ".</div>";
-    var badge = st.dead ? '<span class="po-b dead">💀 Eliminated</span>' : st.one ? '<span class="po-b ok">$ Clinched the 1 seed</span>' : (st.bye && B > 1) ? '<span class="po-b ok">z Clinched a bye</span>' : st.x ? '<span class="po-b ok">x Clinched a playoff spot</span>' : '<span class="po-b">Still alive</span>';
-    var lock = !st.x && !st.dead ? poLockGain(teams, ti, P, W) : null;
-    h += '<div class="po-line">' + badge + (!st.x && !st.dead ? (lock == null ? " · can’t be locked up by points alone yet" : " · locked up with " + lock + " more Rumbles, whatever anyone else does") : "") + "</div>";
-    if (!poSchedWeeks() || !poStrength()) { top.innerHTML = h + '<div class="rb-live-empty">Loading the schedule…</div>'; ed.innerHTML = ""; out.innerHTML = ""; return; }
-    // drop pins for weeks that are gone
+    h += '<div class="po-line">' + (stt.dead ? '<span class="po-b dead">💀 Eliminated</span>' : stt.one ? '<span class="po-b ok">$ Clinched the 1 seed</span>' : (stt.bye && B > 1) ? '<span class="po-b ok">z Clinched a bye</span>' : stt.x ? '<span class="po-b ok">x Clinched a playoff spot</span>' : '<span class="po-b">Still alive</span>') + "</div>";
+    status.innerHTML = h;
+    if (!poSchedWeeks() || !poStrength()) { secs.hidden = true; status.innerHTML += '<div class="rb-live-empty">Loading the schedule…</div>'; return; }
+    secs.hidden = false;
     Object.keys(poUi.sets).forEach(function (k) { if (Number(k) <= poPlayed()) delete poUi.sets[k]; });
-    var sim = poSim(teams, ti, W, poUi.avg, 3000);
-    var pPlay = poPct(sim, ti, P), pBye = B > 0 ? poPct(sim, ti, B) : null, pOne = poPct(sim, ti, 1), pins = Object.keys(poUi.sets).length;
-    h += '<div class="po-odds"><div><b>' + poFmtPct(pPlay) + "</b><small>playoffs</small></div>" + (B > 1 ? "<div><b>" + poFmtPct(pBye) + "</b><small>bye (top " + B + ")</small></div>" : "") + "<div><b>" + poFmtPct(pOne) + "</b><small>1 seed</small></div></div>";
-    h += '<div class="po-note2">' + (pins ? pins + " matchup" + (pins === 1 ? "" : "s") + " pinned. " : "") + 'Based on ' + sim.trials + ' simulations of the rest of the regular season.</div>';
-    h += '<div class="po-bars"><small>Where ' + escapeHtml(me.name) + " finishes</small>";
-    var N = teams.length, outP = 0, k;
-    for (k = 0; k < N; k++) {
-      var p = sim.seedC[ti][k] / sim.trials;
-      if (k < P) h += '<div class="po-bar"><span>' + (k + 1) + '</span><i style="width:' + Math.max(0.5, p * 100).toFixed(1) + '%"></i><em>' + poFmtPct(p) + "</em></div>"; else outP += p;
+    var base = me.rid + "|" + W + "|" + teams.map(function (t) { return t.R; }).join(",");
+    // ---- 1: by average
+    var simA = poCached(base + "|a" + poUi.avg, "a", function () { return poSim(teams, ti, W, poUi.avg, 3000, null, false); });
+    function magic(label, k) {
+      var done = k === P ? stt.x : k === 1 ? stt.one : stt.bye, g = done ? 0 : (stt.dead ? null : poLockGain(teams, ti, k, W));
+      return '<div class="' + (done ? "ok" : "") + '"><b>' + (done ? "✓" : g == null ? "—" : g) + "</b><small>" + label + (done ? " clinched" : g == null ? (stt.dead ? " out" : " not yet") : " · ~" + (g / W).toFixed(1) + "/wk") + "</small></div>";
     }
-    h += '<div class="po-bar out"><span>out</span><i style="width:' + Math.max(0.5, outP * 100).toFixed(1) + '%"></i><em>' + poFmtPct(outP) + "</em></div></div>";
-    top.innerHTML = h;
-    if (!keepEditor) ed.innerHTML = poSchedHtml(teams, ti, sim);
-    else [].forEach.call(ed.querySelectorAll(".po-m"), function (row, wi) { var wc = row.querySelector(".po-wc"), wk = Number(row.getAttribute("data-w")), i2 = sim.weeks.indexOf(wk); if (wc && !poUi.sets[wk] && i2 >= 0) wc.textContent = "model " + Math.round(sim.winN[i2] / sim.trials * 100) + "% to win"; });
-    var f = '<div class="po-tbl"><small>Everyone’s playoff chance</small>' + sorted.map(function (t) { var j = teams.indexOf(t), p = poPct(sim, j, P); return '<div class="po-r' + (j === ti ? " me" : "") + '"><span>' + t.rank + "</span><b>" + escapeHtml(t.name) + "</b><em>" + poFmtPct(p) + "</em></div>"; }).join("") + "</div>";
-    f += '<div class="po-chips" id="po-chips"></div>';
+    var ha = '<div class="po-magic"><div class="po-mt">Magic number: Rumbles to earn from here that clinch it, whatever anyone else does</div><div class="po-mg">' + magic("playoffs", P) + (B > 1 ? magic("bye", B) : "") + magic("1 seed", 1) + "</div></div>";
+    ha += '<div class="po-sub">At <b>' + Number(poUi.avg).toFixed(1) + "</b> a week, every week:</div>" + poOddsHtml(simA, ti, P, B) + poBarsHtml(simA, ti, me.name, P, N) + '<div class="po-chips" id="po-chips"></div>';
+    pa.innerHTML = ha;
+    document.getElementById("po-reset-a").disabled = poUi.avg === defAvg;
+    // ---- 2: matchup by matchup
+    var pinKey = Object.keys(poUi.sets).sort().map(function (k) { return k + poUi.sets[k].res + poUi.sets[k].r; }).join(",");
+    var lfp = 0; if (state.live && state.live.isLive) rbTeams().forEach(function (t) { lfp += t.act + t.proj; });
+    var simB = poCached(base + "|b" + pinKey + "|" + Math.round(lfp * 10), "b", function () { return poSim(teams, ti, W, null, 3000, poUi.sets, true); });
+    var pins = Object.keys(poUi.sets).length;
+    pb.innerHTML = poOddsHtml(simB, ti, P, B) + '<div class="po-note2">' + (pins ? pins + " matchup" + (pins === 1 ? "" : "s") + " pinned. " : "Nothing pinned: every week is the model" + (Number(state.live && state.live.week) === simB.weeks[0] ? ", and this week starts from the live projections" : "") + ". ") + simB.trials + " simulations of the rest of the regular season.</div>" + poBarsHtml(simB, ti, me.name, P, N);
+    if (!keepEditor) ed.innerHTML = poSchedHtml(teams, ti, simB);
+    else [].forEach.call(ed.querySelectorAll(".po-m"), function (row) { var wc = row.querySelector(".po-wc"), wk = Number(row.getAttribute("data-w")), i2 = simB.weeks.indexOf(wk); if (wc && !poUi.sets[wk] && i2 >= 0) wc.textContent = "model " + Math.round(simB.winN[i2] / simB.trials * 100) + "% to win"; });
+    document.getElementById("po-reset-b").disabled = !pins;
+    var f = '<div class="po-tbl"><small>Everyone’s playoff chance (with the matchups above)</small>' + sorted.map(function (t) { var j = teams.indexOf(t), p = poPct(simB, j, P); return '<div class="po-r' + (j === ti ? " me" : "") + '"><span>' + t.rank + "</span><b>" + escapeHtml(t.name) + "</b><em>" + poFmtPct(p) + "</em></div>"; }).join("") + "</div>";
     f += '<p class="po-fine">A guide, not a promise. Scores are drawn from how each team has scored so far and how much a week swings; head-to-head pairings are the real ones; ties in Rumbles go to points for. Pinning a result forces your Rumbles for the week and draws everyone else to fit it.</p>';
     out.innerHTML = f;
-    poChipTok++; poChips(teams, ti, W, poChipTok);
+    var cc = poCache.chips, cel = document.getElementById("po-chips");
+    if (cc && cc.key === base) { if (cel) cel.innerHTML = cc.v; } else { poChipTok++; poChips(teams, ti, W, poChipTok, base); }
   }
   function setView(view) {
     state.view = view;
@@ -10526,6 +10587,8 @@
   els.modePo.addEventListener("click", function () { setView("playoffs"); });
   document.getElementById("po-team").addEventListener("change", function () { poUi.rid = Number(this.value); poUi.avg = null; poUi.sets = {}; renderPlayoffs(); });
   document.getElementById("po-avg").addEventListener("input", function () { poUi.avg = Number(this.value); renderPlayoffs(true); });
+  document.getElementById("po-reset-a").addEventListener("click", function () { poUi.avg = null; renderPlayoffs(true); });
+  document.getElementById("po-reset-b").addEventListener("click", function () { poUi.sets = {}; renderPlayoffs(); });
   document.getElementById("po-sched").addEventListener("click", function (e) {
     var bt = e.target.closest("button[data-m]"); if (!bt) return;
     var wk = Number(bt.closest(".po-m").getAttribute("data-w")), m = bt.getAttribute("data-m");
