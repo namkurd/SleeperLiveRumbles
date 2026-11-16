@@ -7201,6 +7201,79 @@
     while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (outrightPossible(mid)) lo = mid; else hi = mid; }
     return hi;
   }
+  // ---- Strength of schedule ------------------------------------------------------------------------------
+  // For each remaining game after the live week: how good the opponent has been (its Vs. Field record) and how strong its best possible lineup
+  // is that week from the players on its roster now (Sleeper's projections, byes and empty slots filled with a replacement-level player: the
+  // average of the three best unrostered players at that position). Both are put on the same scale (z-scores across the league), averaged,
+  // and averaged over the games left. 50 is an average schedule; higher is harder.
+  var PO_SLOT = { QB: ["QB"], RB: ["RB"], WR: ["WR"], TE: ["TE"], K: ["K"], DEF: ["DEF"], REC_FLEX: ["WR", "TE"], WRRB_FLEX: ["RB", "WR"], FLEX: ["RB", "WR", "TE"], SUPER_FLEX: ["QB", "RB", "WR", "TE"] };
+  function poLineup(players, slots, rep) {
+    var pool = players.slice().sort(function (x, y) { return y.pts - x.pts; }), used = {}, total = 0;
+    slots.forEach(function (sl) {
+      var ok = PO_SLOT[sl], pick = -1, q;
+      for (q = 0; q < pool.length; q++) if (!used[q] && ok.indexOf(pool[q].pos) >= 0) { pick = q; break; }
+      var repBest = 0; ok.forEach(function (ps) { if ((rep[ps] || 0) > repBest) repBest = rep[ps]; });
+      if (pick >= 0) { used[pick] = 1; total += pool[pick].pts; } else total += repBest;   // nobody left for this slot: a replacement-level player
+    });
+    return total;
+  }
+  function poSosLoad(done) {
+    var meta = state.futureMeta, lid = state.history && state.history.league_id, sched = poSchedWeeks();
+    if (!meta || !lid || !sched || ARCHIVE) return;
+    var liveW = state.live && state.live.isLive ? Number(state.live.week) : poPlayed(), from = liveW + 1, to = Number(meta.lastRegWeek), key = lid + ":" + from + "-" + to;
+    var c = state.poSos;
+    if (c && c.key === key && Date.now() - c.at < 20 * 60 * 1000) { done && done(); return; }
+    if (state.poSosBusy === key) { (state.poSosWait = state.poSosWait || []).push(done); return; }
+    if (from > to) { state.poSos = { key: key, at: Date.now(), weeks: {} }; done && done(); return; }
+    state.poSosBusy = key; state.poSosWait = [done];
+    var slots = (meta.rosterPositions || []).filter(function (x) { return PO_SLOT[x]; }), ws = [], w;
+    for (w = from; w <= to; w++) ws.push(w);
+    var q = "?season_type=" + encodeURIComponent(meta.seasonType) + "&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF";
+    Promise.all(ws.map(function (wk) {
+      return Promise.all([fetchJson(API_V1 + "/league/" + lid + "/matchups/" + wk), fetchJson(PROJECTIONS_BASE + "/" + meta.season + "/" + wk + q)]).then(function (r) {
+        var ms = r[0] || [], proj = {}, rostered = {}, pts;
+        (r[1] || []).forEach(function (e) {
+          var pos = e && e.player && e.player.position; if (!e || !e.player_id || !PO_SLOT[pos]) return;
+          pts = scoreFrom(e.stats || {}, meta.scoring, false); if (pts > 0) proj[e.player_id] = { pos: pos, pts: pts };
+        });
+        ms.forEach(function (m) { (m.players || []).forEach(function (pid) { rostered[pid] = 1; }); });
+        var free = {}; Object.keys(proj).forEach(function (pid) { if (!rostered[pid]) (free[proj[pid].pos] = free[proj[pid].pos] || []).push(proj[pid].pts); });
+        var rep = {}; Object.keys(free).forEach(function (ps) { var a = free[ps].sort(function (x, y) { return y - x; }).slice(0, 3); rep[ps] = a.reduce(function (x, y) { return x + y; }, 0) / a.length; });
+        var L = {}; ms.forEach(function (m) { L[m.roster_id] = poLineup((m.players || []).filter(function (pid) { return proj[pid]; }).map(function (pid) { return proj[pid]; }), slots, rep); });
+        return { w: wk, L: L };
+      });
+    })).then(function (rs) {
+      var weeks = {}; rs.forEach(function (x) { weeks[x.w] = x.L; });
+      state.poSos = { key: key, at: Date.now(), weeks: weeks }; state.poSosBusy = null;
+      (state.poSosWait || []).forEach(function (f) { f && f(); }); state.poSosWait = [];
+    }, function () { state.poSosBusy = null; (state.poSosWait || []).forEach(function (f) { f && f(true); }); state.poSosWait = []; });
+  }
+  // {score, rank, n, games:[{wk, name, rank, c}]} for team index ti, or null until the data is in
+  function poSosCompute(teams, ti) {
+    var c = state.poSos, sched = poSchedWeeks(), st = state.history && state.history.standings; if (!c || !sched || !st) return null;
+    var wks = Object.keys(c.weeks).map(Number).sort(function (a, b) { return a - b; }); if (!wks.length) return null;
+    var vf = {}, vals = [];
+    st.forEach(function (r) { var tot = num(r.vs_field_w) + num(r.vs_field_l); vf[r.roster_id] = tot ? num(r.vs_field_w) / tot : 0.5; vals.push(vf[r.roster_id]); });
+    function ms(a) { var m = a.reduce(function (x, y) { return x + y; }, 0) / a.length, v = a.reduce(function (x, y) { return x + (y - m) * (y - m); }, 0) / a.length; return { m: m, sd: Math.sqrt(v) || 1 }; }
+    var fs = ms(vals), zl = {};
+    wks.forEach(function (w) { var a = Object.keys(c.weeks[w]).map(function (k) { return c.weeks[w][k]; }); zl[w] = ms(a); });
+    var byRid = {}; teams.forEach(function (t) { byRid[t.rid] = t; });
+    function sosOf(rid) {
+      var games = [];
+      wks.forEach(function (w) {
+        var pr = (sched[w] || []).filter(function (p) { return p[0] === rid || p[1] === rid; })[0]; if (!pr) return;
+        var o = pr[0] === rid ? pr[1] : pr[0], lo = c.weeks[w][o]; if (lo == null) return;
+        var cc = 0.5 * ((vf[o] - fs.m) / fs.sd) + 0.5 * ((lo - zl[w].m) / zl[w].sd);
+        games.push({ wk: w, oid: o, c: cc });
+      });
+      return games.length ? { mean: games.reduce(function (x, g) { return x + g.c; }, 0) / games.length, games: games } : null;
+    }
+    var all = teams.map(function (t) { var r = sosOf(t.rid); return r ? { rid: t.rid, mean: r.mean, games: r.games } : null; }).filter(Boolean).sort(function (x, y) { return y.mean - x.mean; });
+    var mine = null, rank = 0; all.forEach(function (x, i) { if (x.rid === teams[ti].rid) { mine = x; rank = i + 1; } });
+    if (!mine) return null;
+    var g = mine.games.slice().sort(function (x, y) { return y.c - x.c; });
+    return { score: Math.round(50 + 20 * mine.mean), rank: rank, n: all.length, hard: g[0], easy: g[g.length - 1], from: wks[0], to: wks[wks.length - 1], games: g.length };
+  }
   // ---- the summary at the top: the bullets that matter for the picked manager ----
   // Head-to-head wins as the yardstick: among the simulated runs where you win exactly k of your remaining (undecided) matchups, how often did it work out?
   function poWinsNeed(wk, key, th) { for (var k = 0; k <= wk.n; k++) if (wk.cnt[k] >= 40 && wk[key][k] / wk.cnt[k] >= th) return { k: k, p: wk[key][k] / wk.cnt[k] }; return null; }
@@ -7248,8 +7321,16 @@
     var pathP = "<b>To make the playoffs:</b> " + (mc.mst.x ? "locked in." : mc.mst.dead ? "out of reach." : (poWinsTxt(wk, "pl") || "no undecided games left") + (mc.fold ? " (counting this week\u2019s projected result)" : "") + ".");
     var pathB = B > 1 && !mc.mst.bye && !mc.mst.dead && poWinsNeed(wk, "by", 0.5) ? "<b>For a bye:</b> " + poWinsTxt(wk, "by") + "." : null;
     var pathS = !mc.mst.one && !mc.mst.dead && poWinsNeed(wk, "on", 0.5) ? "<b>For the 1 seed:</b> " + poWinsTxt(wk, "on") + "." : null;
-    el.innerHTML = poSumHtml([b1, b2, bw, b3, "<b>Biggest game:</b> " + wait, b5, pathP, pathB, pathS, b8, b9]);
+    el.innerHTML = poSumHtml([b1, b2, bw, b3, "<b>Biggest game:</b> " + wait, b5, '<b>Strength of schedule:</b> <span id="po-sos">' + wait + "</span>", pathP, pathB, pathS, b8, b9]);
+    function fillSos(failed) {
+      var span = document.getElementById("po-sos"); if (!span || tok !== poSumTok) return;
+      var r = failed ? null : poSosCompute(teams, ti);
+      if (!r) { span.textContent = failed ? "not available right now." : "no games left after this week."; return; }
+      var hardW = r.hard, easyW = r.easy, nm = function (g) { return "Wk " + g.wk + " vs " + esc(byRid[g.oid] ? byRid[g.oid].name : "?"); };
+      span.innerHTML = poOrd(r.rank) + " hardest of " + r.n + " \u00b7 score " + r.score + " (50 is average, higher is harder). Based on opponents\u2019 Vs. Field records and their best lineups in Wk " + r.from + (r.to > r.from ? "\u2013" + r.to : "") + "." + (r.games > 1 ? " Toughest: " + nm(hardW) + ". Easiest: " + nm(easyW) + "." : "");
+    }
     var tok = ++poSumTok;
+    poSosLoad(function (failed) { fillSos(failed); });
     function later(fn) { setTimeout(function () { if (tok === poSumTok) fn(); }, 0); }
     // biggest matchup: the one week that moves the odds most when it goes one way or the other
     var cand = [], lw = liveOn ? poLiveWeek(played + 1) : null;
