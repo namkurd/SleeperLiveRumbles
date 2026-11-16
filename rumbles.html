@@ -7680,7 +7680,7 @@
       return true;
     });
   }
-  function rbBestNeedHtml(r, live) {
+  function rbBestNeedHtml(r, live, cols, pm) {
     if (!live) return "";
     var la = rbBestLeft(r.a), lb = rbBestLeft(r.b);
     if (!la.length && !lb.length) return "";
@@ -7691,7 +7691,8 @@
     } else if (gap < -0.004) {
       txt = !la.length ? B + " is clear: " + A + " has nobody left" : !lb.length ? A + "\u2019s " + pa + " " + vb(la.length) + " " + g + " to catch " + B : A + "\u2019s " + pa + " " + vb(la.length) + " to outscore " + B + "\u2019s " + pb + " by " + g;
     } else txt = "Dead even: " + A + "\u2019s " + (pa || "none") + " vs. " + B + "\u2019s " + (pb || "none");
-    return '<div class="sc-need">' + txt + '</div><div class="sc-cols">' + rbScenSideHtml(r.a, la, null) + rbScenSideHtml(r.b, lb, null) + "</div>";
+    var wp = wpPct(pm.pEnd), cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
+    return rbScenScores(r.a, r.b, cB) + scBarHtml(r.a, r.b, wp, cA, cB) + '<div class="sc-need">' + txt + '</div><div class="sc-cols">' + rbScenSideHtml(r.a, la, null) + rbScenSideHtml(r.b, lb, null) + "</div>";
   }
   function rbBestList(teams, win) {
     var out = [], missing = 0, i, j;
@@ -7794,7 +7795,7 @@
       var verdict = pm.done ? (last.my > last.th + 0.004 ? r.a.name + " won" : last.th > last.my + 0.004 ? r.b.name + " won" : "Tied") : "Live";
       return '<section class="sc-blk best' + (r.h2h ? " h2h" : "") + '" data-best="' + win.week + "." + r.a.rid + "." + r.b.rid + '" data-it="' + r.it.score.toFixed(4) + '" data-flips="' + r.it.flips + '" data-margin="' + r.it.margin.toFixed(2) + '" data-h2h="' + (r.h2h ? 1 : 0) + '"><div class="sc-bh"><div><span class="sc-rk">#' + (i + 1) + '</span><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip' + (r.h2h ? " h2h" : "") + '">' + (r.h2h ? "H2H · 10 Rumbles" : "Field · 1 Rumble") + "</span>" +
         '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + escapeHtml(r.it.why.join(" \u00b7 ")) + "</div></div>" +
-        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + rbBestNeedHtml(r, live && !pm.done) + "</section>";
+        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + rbBestNeedHtml(r, live && !pm.done, cols, pm) + "</section>";
     }).join("");
     box.innerHTML = html;
     scAvatars(); wpMiniOff();
