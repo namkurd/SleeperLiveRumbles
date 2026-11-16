@@ -1987,18 +1987,18 @@
     <div id="po-summary" class="po-summ"></div>
     <div id="po-secs" hidden>
       <section class="po-sec">
-        <div class="po-sh"><h3><i>1</i> By average</h3><button type="button" class="po-reset" id="po-reset-a">Reset</button></div>
-        <p class="po-sd">How many Rumbles a week does it take? The week in progress starts from the live projections (set its result if you like); pick an average for the weeks after it.</p>
-        <div id="po-a-live"></div>
-        <label class="po-f"><span id="po-avg-l">Average Rumbles a week</span> <b id="po-avg-v"></b><input type="range" id="po-avg" min="0" max="20" step="0.5" value="10"></label>
-        <div id="po-a"></div>
-      </section>
-      <section class="po-sec">
-        <div class="po-sh"><h3><i>2</i> Matchup by matchup</h3><button type="button" class="po-reset" id="po-reset-b">Reset</button></div>
-        <p class="po-sd">Set up your own run: pin any matchup to a win or loss and the Rumbles you get. The week in progress starts from the live projections.</p>
+        <div class="po-sh"><h3><i>1</i> Matchup by matchup</h3><button type="button" class="po-reset" id="po-reset-b">Reset</button></div>
+        <p class="po-sd">Pick a result for each of your remaining games. Leave a game on Auto to let the model decide.</p>
         <div id="po-b-top"></div>
         <div id="po-sched"></div>
         <div id="po-out"></div>
+      </section>
+      <section class="po-sec">
+        <div class="po-sh"><h3><i>2</i> By average</h3><button type="button" class="po-reset" id="po-reset-a">Reset</button></div>
+        <p class="po-sd">Set how many Rumbles you earn each week and see what it does to your odds. This week (if it is live) starts from the live projections, and you can set its result.</p>
+        <div id="po-a-live"></div>
+        <label class="po-f"><span id="po-avg-l">Average Rumbles a week</span> <b id="po-avg-v"></b><input type="range" id="po-avg" min="0" max="20" step="0.5" value="10"></label>
+        <div id="po-a"></div>
       </section>
     </div>
   </div>
@@ -7123,14 +7123,14 @@
     return sim.weeks.filter(function (wk) { return only == null || wk === only; }).map(function (wk) {
       var wi = sim.weeks.indexOf(wk), pr = (sched[wk] || []).filter(function (p) { return p[0] === me.rid || p[1] === me.rid; })[0], oid = pr ? (pr[0] === me.rid ? pr[1] : pr[0]) : null, o = oid != null ? byRid[oid] : null;
       var set = sets[wk], rival = o && Math.abs(o.rank - P) <= 2;
-      var h = '<div class="po-m' + (rival ? " rival" : "") + '" data-w="' + wk + '"><div class="po-mh"><span>Wk ' + wk + "</span><b>" + (o ? "vs " + escapeHtml(o.name) : "bye") + "</b><em>" + (o ? poOrd(o.rank) + " · " + o.R : "") + '</em><i class="po-wc">' + (!set && o ? "model " + Math.round(sim.winN[wi] / sim.trials * 100) + "% to win" : "") + "</i></div>";
+      var h = '<div class="po-m' + (rival ? " rival" : "") + '" data-w="' + wk + '"><div class="po-mh"><span>Wk ' + wk + "</span><b>" + (o ? "vs " + escapeHtml(o.name) : "bye") + "</b><em>" + (o ? poOrd(o.rank) + " · " + o.R : "") + '</em><i class="po-wc">' + (!set && o ? Math.round(sim.winN[wi] / sim.trials * 100) + "% to win" : "") + "</i></div>";
       if (!o) return h + "</div>";
       var lm = Number(state.live && state.live.week) === wk ? liveT[me.rid] : null, lo2 = lm ? liveT[o.rid] : null;
-      if (lm && lo2) h += '<div class="po-live"><b>This week:</b> ' + escapeHtml(me.name) + " " + lm.act.toFixed(1) + " (proj " + lm.proj.toFixed(1) + ") vs " + escapeHtml(o.name) + " " + lo2.act.toFixed(1) + " (proj " + lo2.proj.toFixed(1) + ") · projected " + (lm.h2hWin ? "win" : "loss") + ", " + lm.rumbles + " Rumbles</div>";
+      if (lm && lo2) h += '<div class="po-live"><b>Live:</b> ' + escapeHtml(me.name) + " " + lm.act.toFixed(1) + " (proj " + lm.proj.toFixed(1) + ") vs " + escapeHtml(o.name) + " " + lo2.act.toFixed(1) + " (proj " + lo2.proj.toFixed(1) + ") \u2192 projected " + (lm.h2hWin ? "win" : "loss") + ", " + lm.rumbles + " Rumbles</div>";
       h += '<div class="po-mc">' + [["auto", wi === 0 && lm ? "Projected" : "Auto"], ["W", "Win"], ["L", "Loss"]].map(function (m) { var on = m[0] === "auto" ? !set : set && set.res === m[0]; return '<button type="button" data-m="' + m[0] + '"' + (on ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</div>";
       if (set) {
         var lo = set.res === "W" ? 10 : 0, hi = set.res === "W" ? mx : 10, w = poOppWindow(N, set.res, set.r);
-        h += '<div class="po-mr"><input type="range" min="' + lo + '" max="' + hi + '" step="1" value="' + set.r + '"><b>' + set.r + '</b> Rumbles</div><div class="po-mo">' + escapeHtml(o.name) + " that week: " + (w[0] === w[1] ? w[0] : w[0] + "–" + w[1]) + "</div>";
+        h += '<div class="po-mr"><input type="range" min="' + lo + '" max="' + hi + '" step="1" value="' + set.r + '"><b>' + set.r + '</b> Rumbles</div><div class="po-mo">' + escapeHtml(o.name) + ": " + (w[0] === w[1] ? w[0] : w[0] + "–" + w[1]) + " Rumbles</div>";
       }
       return h + "</div>";
     }).join("");
@@ -7144,17 +7144,17 @@
       if (i < vals.length) { setTimeout(step, 0); return; }
       function need(th) { for (var k = 0; k < vals.length; k++) if (res[k] >= th) return k === 0 ? 0 : vals[k - 1] + (th - res[k - 1]) / (res[k] - res[k - 1] || 1) * 2; return null; }
       var n50 = need(0.5), n90 = need(0.9), fmt = function (v) { return v == null ? "not reachable" : v <= 0.05 ? "any average" : "about " + v.toFixed(1) + " a week"; };
-      var html = '<small>Playoff chance by average</small>' + vals.map(function (v, k) { return '<span class="po-chip ' + (res[k] >= 0.5 ? "ok" : "bad") + '"><b>' + v + "</b><i>" + poFmtPct(res[k]) + "</i></span>"; }).join("") +
-        '<div class="po-need2">A 50% chance at ' + fmt(n50) + "; 90% at " + fmt(n90) + ".</div>";
+      var html = '<small>Playoff chance at each average</small>' + vals.map(function (v, k) { return '<span class="po-chip ' + (res[k] >= 0.5 ? "ok" : "bad") + '"><b>' + v + "</b><i>" + poFmtPct(res[k]) + "</i></span>"; }).join("") +
+        '<div class="po-need2">' + (n50 == null ? "Out of reach at any average." : "50% chance at " + fmt(n50) + " \u00b7 90% at " + fmt(n90)) + "</div>";
       poCache.chips = { key: key, v: html };
       var e2 = document.getElementById("po-chips"); if (e2) e2.innerHTML = html;
     }
-    el.innerHTML = '<small>Playoff chance by average</small><span class="po-wait">working it out\u2026</span>';
+    el.innerHTML = '<small>Playoff chance at each average</small><span class="po-wait">working it out\u2026</span>';
     setTimeout(step, 30);
   }
   function poCached(key, name, fn) { var c = poCache[name]; if (c && c.key === key) return c.v; var v = fn(); poCache[name] = { key: key, v: v }; return v; }
   function poBarsHtml(sim, ti, name, P, N) {
-    var h = '<div class="po-bars"><small>Where ' + escapeHtml(name) + " finishes</small>", outP = 0, k;
+    var h = '<div class="po-bars"><small>' + escapeHtml(name) + "’s final seed</small>", outP = 0, k;
     for (k = 0; k < N; k++) {
       var p = sim.seedC[ti][k] / sim.trials;
       if (k < P) h += '<div class="po-bar"><span>' + (k + 1) + '</span><i style="width:' + Math.max(0.5, p * 100).toFixed(1) + '%"></i><em>' + poFmtPct(p) + "</em></div>"; else outP += p;
@@ -7162,7 +7162,7 @@
     return h + '<div class="po-bar out"><span>out</span><i style="width:' + Math.max(0.5, outP * 100).toFixed(1) + '%"></i><em>' + poFmtPct(outP) + "</em></div></div>";
   }
   function poOddsHtml(sim, ti, P, B) {
-    return '<div class="po-odds"><div><b>' + poFmtPct(poPct(sim, ti, P)) + "</b><small>playoffs</small></div>" + (B > 1 ? "<div><b>" + poFmtPct(poPct(sim, ti, B)) + "</b><small>bye (top " + B + ")</small></div>" : "") + "<div><b>" + poFmtPct(poPct(sim, ti, 1)) + "</b><small>1 seed</small></div></div>";
+    return '<div class="po-odds"><div><b>' + poFmtPct(poPct(sim, ti, P)) + "</b><small>playoffs</small></div>" + (B > 1 ? "<div><b>" + poFmtPct(poPct(sim, ti, B)) + "</b><small>bye</small></div>" : "") + "<div><b>" + poFmtPct(poPct(sim, ti, 1)) + "</b><small>1 seed</small></div></div>";
   }
   // The magic numbers count the week in progress as played: its projected result, or the result pinned in `liveSet` (the opponent's Rumbles are held inside
   // the window that result leaves them). They are then Rumbles to earn from the next week on.
@@ -7204,12 +7204,13 @@
   // ---- the summary at the top: the bullets that matter for the picked manager ----
   // Head-to-head wins as the yardstick: among the simulated runs where you win exactly k of your remaining (undecided) matchups, how often did it work out?
   function poWinsNeed(wk, key, th) { for (var k = 0; k <= wk.n; k++) if (wk.cnt[k] >= 40 && wk[key][k] / wk.cnt[k] >= th) return { k: k, p: wk[key][k] / wk.cnt[k] }; return null; }
-  function poWinsTxt(wk, key, label) {
+  function poWinsTxt(wk, key) {
     var n = wk.n, a = poWinsNeed(wk, key, 0.5), b = poWinsNeed(wk, key, 0.9);
     if (n === 0) return null;
-    if (!a) return "even winning all " + n + " remaining matchup" + (n === 1 ? "" : "s") + " leaves " + label + " under a 50% chance";
-    var t = a.k === 0 ? "even with no more wins you have a " + poFmtPct(a.p) + " chance of " + label : "win at least " + a.k + " of your " + n + " remaining matchup" + (n === 1 ? "" : "s") + " for a 50%+ chance of " + label;
-    if (b && b.k > a.k) t += "; win " + b.k + " for 90%+"; else if (!b) t += "; no win total gets it to 90%";
+    var g = n === 1 ? "game" : "games";
+    if (!a) return "even winning all " + n + " " + g + " leaves it under 50%";
+    var t = a.k === 0 ? "already " + poFmtPct(a.p) + " with no more wins" : "win at least " + a.k + " of your " + n + " remaining " + g + " for a 50%+ chance";
+    if (b && b.k > a.k) t += ", " + b.k + " for 90%+"; else if (!b) t += "; no win total reaches 90%";
     return t;
   }
   function poMedianWins(h) { var ks = Object.keys(h).map(Number).sort(function (x, y) { return x - y; }), tot = 0; ks.forEach(function (k) { tot += h[k]; }); var c = 0; for (var i = 0; i < ks.length; i++) { c += h[ks[i]]; if (c >= tot / 2) return ks[i]; } return 0; }
@@ -7225,28 +7226,29 @@
     var meets = {}; for (var w = played + 1; w <= played + W; w++) (sched[w] || []).forEach(function (pr) { if (pr[0] === me.rid) meets[pr[1]] = w; else if (pr[1] === me.rid) meets[pr[0]] = w; });
     var byRid = {}; teams.forEach(function (t) { byRid[t.rid] = t; });
     var gap = me.R - line.R;
-    var b1 = "<b>Standing:</b> " + poOrd(me.rank) + " with " + me.R + " Rumbles, " + (me.rank <= P ? (gap > 0 ? gap + " above" : "on") : Math.abs(gap) + " below") + " the playoff line (" + poOrd(P) + " place, " + line.R + ")" + (mc.mst.x ? ". Playoffs clinched." : mc.mst.dead ? ". Eliminated." : ".");
-    var b2 = "<b>Odds:</b> playoffs " + poFmtPct(pP) + (pB != null ? " · bye " + poFmtPct(pB) : "") + " · 1 seed " + poFmtPct(p1) + (liveOn ? " (this week from the live projections)" : "");
-    var mg = mc.mst.x ? "playoffs clinched" : mc.gains[P] == null ? (mc.mst.dead ? "out of reach" : "not yet possible to lock by points alone") : mc.gains[P] + " more Rumbles clinch the playoffs" + (mc.fold ? ", after this week’s projected result" : "");
-    var b3 = "<b>Magic number:</b> " + mg + (B > 1 && !mc.mst.bye && mc.gains[B] != null ? "; " + mc.gains[B] + " for a bye" : "") + (!mc.mst.one && mc.gains[1] != null ? "; " + mc.gains[1] + " for the 1 seed" : "") + ".";
+    var b1 = "<b>Standing:</b> " + poOrd(me.rank) + ", " + me.R + " Rumbles \u2014 " + (me.rank <= P ? (gap > 0 ? gap + " above" : "on") : Math.abs(gap) + " below") + " the playoff line (" + poOrd(P) + ", " + line.R + ")." + (mc.mst.x ? " Playoffs clinched." : mc.mst.dead ? " Eliminated." : "");
+    var b2 = "<b>Odds:</b> playoffs " + poFmtPct(pP) + (pB != null ? " \u00b7 bye " + poFmtPct(pB) : "") + " \u00b7 1 seed " + poFmtPct(p1) + (liveOn ? " (this week uses live projections)" : "");
+    var mg = mc.mst.x ? "playoffs clinched." : mc.gains[P] == null ? (mc.mst.dead ? "out of reach." : "can\u2019t be locked by points alone yet.") : mc.gains[P] + " more Rumbles clinch the playoffs" + (mc.fold ? " (counting this week\u2019s projected result)." : ".");
+    var more = []; if (B > 1 && !mc.mst.bye && mc.gains[B] != null) more.push("bye " + mc.gains[B]); if (!mc.mst.one && mc.gains[1] != null) more.push("1 seed " + mc.gains[1]);
+    var b3 = "<b>Magic number:</b> " + mg + (more.length && !mc.mst.dead ? " Also: " + more.join(" \u00b7 ") + "." : "");
     var rivals = teams.filter(function (t) { return t !== me; }).sort(function (x, y) { return Math.abs(x.R - me.R) - Math.abs(y.R - me.R) || x.rank - y.rank; }).slice(0, 3);
-    var b5 = "<b>Main rivals:</b> " + rivals.map(function (t) { return esc(t.name) + " (" + poOrd(t.rank) + ", " + t.R + (meets[t.rid] ? "; you play Wk " + meets[t.rid] : "") + ")"; }).join(" · ");
-    var wait = "working it out…";
+    var b5 = "<b>Rivals:</b> " + rivals.map(function (t) { return esc(t.name) + " (" + poOrd(t.rank) + ", " + t.R + (meets[t.rid] ? ", you play Wk " + meets[t.rid] : "") + ")"; }).join(" \u00b7 ");
+    var wait = "working it out\u2026";
     var mf = mc.mT, meF = mf[ti], isLast = meF.rank === N, b8 = null, b9 = null, secF = null;
     if (isLast) {
       secF = mf.filter(function (t) { return t !== meF; }).sort(function (x, y) { return x.R - y.R; })[0];
       var gapNow = secF.R - meF.R;
-      b8 = "<b>Sacko:</b> last place, " + gapNow + " Rumbles behind " + esc(secF.name) + " (" + poOrd(N - 1) + ", " + secF.R + (mc.fold ? ", counting this week\u2019s projected result" : "") + "). An outright Sacko needs a gap of 31+ at the end of the regular season; anything less and the Sacko bracket decides it. " + (base.outright + base.bracket > 0 ? "Right now: outright " + poFmtPct(base.outright / base.trials) + " \u00b7 Sacko bracket " + poFmtPct(base.bracket / base.trials) + " \u00b7 out of last place " + poFmtPct(1 - (base.outright + base.bracket) / base.trials) + "." : "Right now you finish out of last place in nearly every run.");
+      b8 = "<b>Sacko:</b> last place, " + gapNow + " behind " + esc(secF.name) + " (" + poOrd(N - 1) + ", " + secF.R + (mc.fold ? ", counting this week\u2019s projected result" : "") + "). An outright Sacko means finishing 31+ behind " + poOrd(N - 1) + "; otherwise the Sacko bracket decides it. " + (base.outright + base.bracket > 0 ? "Now: outright " + poFmtPct(base.outright / base.trials) + " \u00b7 bracket " + poFmtPct(base.bracket / base.trials) + " \u00b7 out of last " + poFmtPct(1 - (base.outright + base.bracket) / base.trials) : "Now you finish out of last place in nearly every run.");
       var glx = poSackoLock(mf, ti, mc.mW);
-      b9 = "<b>Path to the Sacko bracket:</b> " + (glx === 0 ? "an outright Sacko can no longer happen." : (glx == null ? "an outright Sacko can\u2019t be ruled out by points alone yet" : "earn " + glx + " more Rumbles (about " + (glx / Math.max(1, mc.mW)).toFixed(1) + " a week) and an outright Sacko is impossible whatever anyone else does") + "; " + (poWinsTxt(base.wk, "av", "avoiding an outright Sacko") || "no matchups left") + ".");
+      b9 = "<b>To reach the Sacko bracket:</b> " + (glx === 0 ? "an outright Sacko can no longer happen." : (glx == null ? "an outright Sacko can\u2019t be ruled out by points alone yet. " : "earn " + glx + " more Rumbles (" + (glx / Math.max(1, mc.mW)).toFixed(1) + " a week) and an outright Sacko is impossible. Or ") + (poWinsTxt(base.wk, "av") || "no games left") + " to avoid one.");
     }
     var wk = base.wk, medP = poMedianWins(base.winsAtPos[P - 1]), medB = B > 1 ? poMedianWins(base.winsAtPos[B - 1]) : null, med1 = poMedianWins(base.winsAtPos[0]);
     var needP = Math.max(0, medP - me.w);
-    var bw = "<b>Wins to level-set:</b> you\u2019re " + me.w + "\u2013" + me.l + " with " + W + " to play. The " + poOrd(P) + " seed typically finishes with " + medP + " wins" + (medB != null ? ", a bye with " + medB : "") + ", the 1 seed with " + med1 + (needP > 0 ? "; matching that " + poOrd(P) + " seed takes " + needP + " more win" + (needP === 1 ? "" : "s") + "." : "; you are already there.");
-    var pathP = "<b>Path to the playoffs:</b> " + (mc.mst.x ? "locked in." : mc.mst.dead ? "out of reach." : (poWinsTxt(wk, "pl", "making the playoffs") || "no undecided matchups left") + (mc.fold ? " (this week\u2019s projected result counted)" : "") + ".");
-    var bestK = poWinsNeed(wk, "on", 0.5) ? 1 : (B > 1 && poWinsNeed(wk, "by", 0.5) ? B : P), bestKey = bestK === 1 ? "on" : bestK === B ? "by" : "pl", bestLab = bestK === 1 ? "the 1 seed" : bestK === B ? "a bye" : "making the playoffs";
-    var pathS = "<b>Path to your best seed:</b> " + (bestK === P ? "the playoffs are the target (see above)." : (mc.mst.one && bestK === 1 ? "the 1 seed is clinched." : (poWinsTxt(wk, bestKey, bestLab) || "no undecided matchups left") + (bestK === 1 && B > 1 && !mc.mst.bye ? ". For a bye: " + (poWinsTxt(wk, "by", "a bye") || "n/a") : "") + "."));
-    el.innerHTML = poSumHtml([b1, b2, bw, b3, "<b>Biggest matchup:</b> " + wait, b5, pathP, pathS, b8, b9]);
+    var bw = "<b>Head-to-head wins:</b> you\u2019re " + me.w + "\u2013" + me.l + " with " + W + " to play. The " + poOrd(P) + " seed usually ends with " + medP + " wins" + (medB != null ? ", a bye " + medB : "") + ", the 1 seed " + med1 + "." + (needP > 0 ? " You need " + needP + " more to match the " + poOrd(P) + " seed." : " You\u2019re already past the " + poOrd(P) + "-seed mark.");
+    var pathP = "<b>To make the playoffs:</b> " + (mc.mst.x ? "locked in." : mc.mst.dead ? "out of reach." : (poWinsTxt(wk, "pl") || "no undecided games left") + (mc.fold ? " (counting this week\u2019s projected result)" : "") + ".");
+    var pathB = B > 1 && !mc.mst.bye && !mc.mst.dead && poWinsNeed(wk, "by", 0.5) ? "<b>For a bye:</b> " + poWinsTxt(wk, "by") + "." : null;
+    var pathS = !mc.mst.one && !mc.mst.dead && poWinsNeed(wk, "on", 0.5) ? "<b>For the 1 seed:</b> " + poWinsTxt(wk, "on") + "." : null;
+    el.innerHTML = poSumHtml([b1, b2, bw, b3, "<b>Biggest game:</b> " + wait, b5, pathP, pathB, pathS, b8, b9]);
     var tok = ++poSumTok;
     function later(fn) { setTimeout(function () { if (tok === poSumTok) fn(); }, 0); }
     // biggest matchup: the one week that moves the odds most when it goes one way or the other
@@ -7260,12 +7262,12 @@
     var res = [];
     function swing(i) {
       if (i >= cand.length) {
-        var metrics = (isLast ? [["avoiding an outright Sacko", "av"]] : []).concat([["playoffs", P]]).concat(B > 1 ? [["a bye", B]] : []).concat([["the 1 seed", 1]]), pick = null;
+        var metrics = (isLast ? [["avoiding an outright Sacko", "av"]] : []).concat([["making the playoffs", P]]).concat(B > 1 ? [["a bye", B]] : []).concat([["the 1 seed", 1]]), pick = null;
         metrics.forEach(function (m) { if (pick) return; var best = null; res.forEach(function (r) { var d = Math.abs(r.w[m[1]] - r.l[m[1]]); if (!best || d > best.d) best = { d: d, r: r }; }); if (best && best.d >= 0.03) pick = { m: m, best: best }; });
         var html;
-        if (!pick) html = cand.length ? "no single game moves your odds by more than a few points" : "none left to play";
-        else { var o = byRid[pick.best.r.oid], k = pick.m[1]; html = "Wk " + pick.best.r.wk + " vs " + esc(o.name) + " (" + poOrd(o.rank) + ", " + o.R + "): a win puts your odds of " + pick.m[0] + " at " + poFmtPct(pick.best.r.w[k]) + ", a loss at " + poFmtPct(pick.best.r.l[k]); }
-        var li = el.querySelectorAll("li")[4]; if (li) li.innerHTML = "<b>Biggest matchup:</b> " + html;
+        if (!pick) html = cand.length ? "no single game moves your odds much." : "none left to play.";
+        else { var o = byRid[pick.best.r.oid], k = pick.m[1]; html = "Wk " + pick.best.r.wk + " vs " + esc(o.name) + " (" + poOrd(o.rank) + ", " + o.R + "). Chance of " + pick.m[0] + ": " + poFmtPct(pick.best.r.w[k]) + " with a win, " + poFmtPct(pick.best.r.l[k]) + " with a loss."; }
+        var li = el.querySelectorAll("li")[4]; if (li) li.innerHTML = "<b>Biggest game:</b> " + html;
         return;
       }
       var c = cand[i], pw = {}, pl = {}; pw[c.wk] = { res: "W", r: null }; pl[c.wk] = { res: "L", r: null };
@@ -7293,12 +7295,12 @@
     avgIn.max = String(mx); avgIn.value = String(poUi.avg); document.getElementById("po-avg-v").textContent = Number(poUi.avg).toFixed(1);
     poSchedLoad();
     var stt = poStatuses(teams, W, P, B)[me.rid], sorted = teams.slice().sort(function (x, y) { return x.rank - y.rank; }), line = sorted[P - 1];
-    var h = '<div class="po-sum"><b>' + escapeHtml(me.name) + "</b> is " + poOrd(me.rank) + " with " + me.R + " Rumbles";
+    var h = '<div class="po-sum"><b>' + escapeHtml(me.name) + "</b> \u00b7 " + poOrd(me.rank) + " \u00b7 " + me.R + " Rumbles";
     if (W <= 0) {
       h += ". The regular season is over: " + (stt.x ? "in the playoffs" + (B > 0 && stt.bye ? (stt.one ? " as the 1 seed" : " with a bye") : "") : "out of the playoffs") + ".</div>";
       blank(); status.innerHTML = h; return;
     }
-    h += ". " + W + " regular-season week" + (W === 1 ? "" : "s") + " left. Playoff line: " + poOrd(P) + " place has " + line.R + ".</div>";
+    h += " \u00b7 " + W + " week" + (W === 1 ? "" : "s") + " left \u00b7 playoff line " + line.R + " (" + poOrd(P) + ")</div>";
     h += '<div class="po-line">' + (stt.dead ? '<span class="po-b dead">💀 Eliminated</span>' : stt.one ? '<span class="po-b ok">$ Clinched the 1 seed</span>' : (stt.bye && B > 1) ? '<span class="po-b ok">z Clinched a bye</span>' : stt.x ? '<span class="po-b ok">x Clinched a playoff spot</span>' : '<span class="po-b">Still alive</span>') + "</div>";
     status.innerHTML = h;
     var sumEl = document.getElementById("po-summary");
@@ -7320,25 +7322,25 @@
       var done = k === P ? mst.x : k === 1 ? mst.one : mst.bye, g = done ? 0 : gains[k];
       return '<div class="' + (done ? "ok" : "") + '"><b>' + (done ? "\u2713" : g == null ? "\u2014" : g) + "</b><small>" + label + (done ? " clinched" : g == null ? (mst.dead ? " out" : " not yet") : " \u00b7 ~" + (g / mW).toFixed(1) + "/wk") + "</small></div>";
     }
-    var ha = '<div class="po-magic"><div class="po-mt">Magic number: Rumbles to earn ' + (fold ? "after this week (its result as set above)" : "from here") + ' that clinch it, whatever anyone else does</div><div class="po-mg">' + magic("playoffs", P) + (B > 1 ? magic("bye", B) : "") + magic("1 seed", 1) + "</div></div>";
-    ha += '<div class="po-sub">' + (liveOn ? "This week as set above, then <b>" + Number(poUi.avg).toFixed(1) + "</b> a week:" : "At <b>" + Number(poUi.avg).toFixed(1) + "</b> a week, every week:") + "</div>" + poOddsHtml(simA, ti, P, B) + poBarsHtml(simA, ti, me.name, P, N) + '<div class="po-chips" id="po-chips"></div>';
+    var ha = '<div class="po-magic"><div class="po-mt">Magic number: Rumbles you still need to clinch, no matter what others do' + (fold ? " (counts this week as set)" : "") + '</div><div class="po-mg">' + magic("playoffs", P) + (B > 1 ? magic("bye", B) : "") + magic("1 seed", 1) + "</div></div>";
+    ha += '<div class="po-sub">' + (liveOn ? "This week as set, then <b>" + Number(poUi.avg).toFixed(1) + "</b> a week:" : "At <b>" + Number(poUi.avg).toFixed(1) + "</b> a week:") + "</div>" + poOddsHtml(simA, ti, P, B) + poBarsHtml(simA, ti, me.name, P, N) + '<div class="po-chips" id="po-chips"></div>';
     pa.innerHTML = ha;
     var al = document.getElementById("po-a-live");
-    if (liveOn && simA.weeks.length) { if (!keepEditor || !al.innerHTML) al.innerHTML = '<div class="po-sub">The week in progress</div>' + poSchedHtml(teams, ti, simA, poUi.liveSet ? (function (o) { o[poUi.liveSet.wk] = poUi.liveSet; return o; })({}) : {}, liveWk); }
+    if (liveOn && simA.weeks.length) { if (!keepEditor || !al.innerHTML) al.innerHTML = '<div class="po-sub">This week (live)</div>' + poSchedHtml(teams, ti, simA, poUi.liveSet ? (function (o) { o[poUi.liveSet.wk] = poUi.liveSet; return o; })({}) : {}, liveWk); }
     else al.innerHTML = "";
-    document.getElementById("po-avg-l").textContent = liveOn ? "Average Rumbles a week for Wk " + (liveWk + 1) + (poPlayed() + W > liveWk + 1 ? "\u2013" + (poPlayed() + W) : "") + " (after the week in progress)" : "Average Rumbles a week";
+    document.getElementById("po-avg-l").textContent = liveOn ? "Average Rumbles per week, Wk " + (liveWk + 1) + (poPlayed() + W > liveWk + 1 ? "\u2013" + (poPlayed() + W) : "") : "Average Rumbles per week";
     document.getElementById("po-reset-a").disabled = poUi.avg === defAvg && !poUi.liveSet;
     // ---- 2: matchup by matchup
     var pinKey = Object.keys(poUi.sets).sort().map(function (k) { return k + poUi.sets[k].res + poUi.sets[k].r; }).join(",");
     var lfp = 0; if (state.live && state.live.isLive) rbTeams().forEach(function (t) { lfp += t.act + t.proj; });
     var simB = poCached(base + "|b" + pinKey + "|" + Math.round(lfp * 10), "b", function () { return poSim(teams, ti, W, null, 3000, poUi.sets, true); });
     var pins = Object.keys(poUi.sets).length;
-    pb.innerHTML = poOddsHtml(simB, ti, P, B) + '<div class="po-note2">' + (pins ? pins + " matchup" + (pins === 1 ? "" : "s") + " pinned. " : "Nothing pinned: every week is the model" + (Number(state.live && state.live.week) === simB.weeks[0] ? ", and this week starts from the live projections" : "") + ". ") + simB.trials + " simulations of the rest of the regular season.</div>" + poBarsHtml(simB, ti, me.name, P, N);
+    pb.innerHTML = poOddsHtml(simB, ti, P, B) + '<div class="po-note2">' + (pins ? pins + (pins === 1 ? " result set. " : " results set. ") : "Nothing set: every game uses the model" + (Number(state.live && state.live.week) === simB.weeks[0] ? ", and this week starts from live projections" : "") + ". ") + "Based on " + simB.trials.toLocaleString() + " simulated seasons.</div>" + poBarsHtml(simB, ti, me.name, P, N);
     if (!keepEditor) ed.innerHTML = poSchedHtml(teams, ti, simB, poUi.sets);
-    else [].forEach.call(ed.querySelectorAll(".po-m"), function (row) { var wc = row.querySelector(".po-wc"), wk = Number(row.getAttribute("data-w")), i2 = simB.weeks.indexOf(wk); if (wc && !poUi.sets[wk] && i2 >= 0) wc.textContent = "model " + Math.round(simB.winN[i2] / simB.trials * 100) + "% to win"; });
+    else [].forEach.call(ed.querySelectorAll(".po-m"), function (row) { var wc = row.querySelector(".po-wc"), wk = Number(row.getAttribute("data-w")), i2 = simB.weeks.indexOf(wk); if (wc && !poUi.sets[wk] && i2 >= 0) wc.textContent = Math.round(simB.winN[i2] / simB.trials * 100) + "% to win"; });
     document.getElementById("po-reset-b").disabled = !pins;
-    var f = '<div class="po-tbl"><small>Everyone’s playoff chance (with the matchups above)</small>' + sorted.map(function (t) { var j = teams.indexOf(t), p = poPct(simB, j, P); return '<div class="po-r' + (j === ti ? " me" : "") + '"><span>' + t.rank + "</span><b>" + escapeHtml(t.name) + "</b><em>" + poFmtPct(p) + "</em></div>"; }).join("") + "</div>";
-    f += '<p class="po-fine">A guide, not a promise. Scores are drawn from how each team has scored so far and how much a week swings; head-to-head pairings are the real ones; ties in Rumbles go to points for. Pinning a result forces your Rumbles for the week and draws everyone else to fit it.</p>';
+    var f = '<div class="po-tbl"><small>Everyone’s playoff chance</small>' + sorted.map(function (t) { var j = teams.indexOf(t), p = poPct(simB, j, P); return '<div class="po-r' + (j === ti ? " me" : "") + '"><span>' + t.rank + "</span><b>" + escapeHtml(t.name) + "</b><em>" + poFmtPct(p) + "</em></div>"; }).join("") + "</div>";
+    f += '<p class="po-fine">Estimates, not promises. Each team\u2019s weekly score is drawn from how it has scored so far, and the matchups are the real schedule. Rumbles ties go to points scored. Setting a result fixes your Rumbles that week, and the rest of the league adjusts to fit it.</p>';
     out.innerHTML = f;
     var cc = poCache.chips, cel = document.getElementById("po-chips");
     if (cc && cc.key === baseA) { if (cel) cel.innerHTML = cc.v; } else { poChipTok++; poChips(teams, ti, W, poChipTok, baseA, pinsA, liveOn); }
@@ -10749,7 +10751,7 @@
     var rg = e.target.closest("input[type=range]"); if (!rg || !poUi.liveSet) return;
     var row = rg.closest(".po-m"), set = poUi.liveSet; set.r = Number(rg.value); row.querySelector(".po-mr b").textContent = set.r;
     var teams = poTeams(), w = poOppWindow(teams.length, set.res, set.r), nm = row.querySelector(".po-mh b").textContent.replace(/^vs /, "");
-    row.querySelector(".po-mo").textContent = nm + " that week: " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]);
+    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]) + " Rumbles";
     renderPlayoffs(true);
   });
   document.getElementById("po-reset-b").addEventListener("click", function () { poUi.sets = {}; renderPlayoffs(); });
@@ -10764,7 +10766,7 @@
     var row = rg.closest(".po-m"), wk = Number(row.getAttribute("data-w")), set = poUi.sets[wk]; if (!set) return;
     set.r = Number(rg.value); row.querySelector(".po-mr b").textContent = set.r;
     var teams = poTeams(), w = poOppWindow(teams.length, set.res, set.r), nm = row.querySelector(".po-mh b").textContent.replace(/^vs /, "");
-    row.querySelector(".po-mo").textContent = nm + " that week: " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]);
+    row.querySelector(".po-mo").textContent = nm + ": " + (w[0] === w[1] ? w[0] : w[0] + "\u2013" + w[1]) + " Rumbles";
     renderPlayoffs(true);
   });
   document.getElementById("sm-best").addEventListener("click", function () {
