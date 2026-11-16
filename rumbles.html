@@ -857,6 +857,33 @@
   #standings-body tr.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
   #standings-table tr.me-row.po-cut td.rank { box-shadow: inset 0 -2px 0 var(--gold); }
   #standings-table tr.me-row.po-cut td.manager { box-shadow: inset 0 -2px 0 var(--gold), 1px 0 0 var(--panel-border); }
+  .po-mk { display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 4px; font-size: 0.6rem; font-weight: 800; line-height: 1.5; background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold); vertical-align: 1px; }
+  .po-mk.dead { background: none; padding: 0; font-size: 0.72rem; vertical-align: 0; }
+  #po-view { padding: 0 2px 20px; }
+  .po-card { display: grid; gap: 10px; padding: 12px; margin: 6px 0 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); }
+  .po-f { display: grid; gap: 4px; font-size: 0.78rem; color: var(--text-dim); }
+  .po-card select { width: auto; max-width: 100%; }
+  .po-f b { color: var(--text); font-size: 0.95rem; margin-left: 6px; }
+  .po-f input[type=range] { width: 100%; accent-color: var(--accent); }
+  .po-f input[type=number] { width: 5rem; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); }
+  .po-sum { font-size: 0.9rem; line-height: 1.35; margin: 4px 2px 8px; }
+  .po-line { font-size: 0.8rem; color: var(--text-dim); margin: 0 2px 10px; }
+  .po-b { display: inline-block; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--panel-border); font-weight: 700; color: var(--text); }
+  .po-b.ok { border-color: var(--good); color: var(--good); } .po-b.dead { border-color: var(--bad); color: var(--bad); }
+  .po-res { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-border); background: var(--panel); margin-bottom: 10px; font-size: 0.9rem; }
+  .po-res.ok { border-color: var(--good); } .po-res.bad { border-color: var(--bad); }
+  .po-need { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; font-size: 0.84rem; }
+  .po-need li { padding: 8px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--panel-border); }
+  .po-need li.ok { border-color: var(--good); } .po-need li.bad { border-color: var(--bad); color: var(--text-dim); }
+  .po-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+  .po-chips small, .po-tbl small { color: var(--text-dim); font-size: 0.72rem; width: 100%; }
+  .po-chip { display: inline-flex; flex-direction: column; align-items: center; min-width: 2.6rem; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--panel-border); background: var(--panel); font-size: 0.78rem; }
+  .po-chip i { font-style: normal; font-size: 0.66rem; color: var(--text-dim); } .po-chip.ok { border-color: var(--good); } .po-chip.bad { opacity: 0.7; }
+  .po-tbl { border: 1px solid var(--panel-border); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+  .po-r { display: grid; grid-template-columns: 1.6rem 1fr auto; gap: 6px; padding: 3px 0; font-size: 0.82rem; }
+  .po-r span, .po-r em { color: var(--text-dim); font-style: normal; font-variant-numeric: tabular-nums; } .po-r.me b { color: var(--accent); }
+  .po-r.cut { border-bottom: 2px solid var(--gold); }
+  .po-fine { font-size: 0.7rem; color: var(--text-dim); margin: 10px 2px 0; }
   .po-note { margin: 6px 4px 0; font-size: 0.68rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
   .po-note[hidden] { display: none; }
   .po-note i { width: 18px; height: 0; border-top: 2px solid var(--gold); display: inline-block; }
@@ -1865,6 +1892,7 @@
         <button type="button" id="mode-custom">Projected</button>
         <button type="button" id="mode-rumblin">Rumblin'</button>
         <button type="button" id="mode-scen">Scenarios</button>
+        <button type="button" id="mode-po">Playoffs</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn" title="Press R to refresh">Refresh (R)</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
@@ -1922,6 +1950,17 @@
     </div>
   </div>
 
+  <div id="po-view" hidden>
+    <div class="po-card">
+      <label class="po-f">Team <select id="po-team" class="week-select"></select></label>
+      <label class="po-f">Your average Rumbles per remaining week <b id="po-avg-v"></b>
+        <input type="range" id="po-avg" min="0" max="20" step="0.5" value="10"></label>
+      <label class="po-f">The rest of the league
+        <select id="po-field" class="week-select"><option value="pace">keeps its season pace</option><option value="even">all average&hellip;</option></select>
+        <input type="number" id="po-fa" min="0" max="20" step="0.5" value="10" hidden></label>
+    </div>
+    <div id="po-out"></div>
+  </div>
   <div id="standings-view">
   <div class="table-panel">
     <div class="scroll-hint">Swipe to see more stats →</div>
@@ -1948,6 +1987,7 @@
     </table>
     </div>
     <div class="po-note" id="po-note" hidden><i></i> Gold line: the top 6 make the playoffs</div>
+    <div class="po-note" id="po-legend" hidden></div>
     <div class="po-note" id="fw-note" hidden></div>
   </div>
 
@@ -2193,6 +2233,7 @@
     modeActual: document.getElementById("mode-actual"),
     modeRumblin: document.getElementById("mode-rumblin"),
     modeScen: document.getElementById("mode-scen"),
+    modePo: document.getElementById("mode-po"),
     modeCustom: document.getElementById("mode-custom"),
     refreshBtn: document.getElementById("refresh-btn"),
     weekSelect: document.getElementById("week-select"),
@@ -5052,8 +5093,8 @@
       sel.value = su.value;
       return;
     }
-    var inActual = state.mode === "actual" && state.view !== "rumblin";
-    var fut = state.mode === "custom" && state.view !== "rumblin" ? futureWeekChoices() : [];
+    var inActual = state.mode === "actual" && state.view !== "rumblin" && state.view !== "playoffs";
+    var fut = state.mode === "custom" && state.view !== "rumblin" && state.view !== "playoffs" ? futureWeekChoices() : [];
     var on = inActual || fut.length > 0;
     sel.disabled = !on;
     els.weekSelectWrap.classList.toggle("is-disabled", !on);
@@ -5553,6 +5594,7 @@
   }
   window.addEventListener("resize", fitPortraitColumns);
   function render(opts) {
+    if (state.view === "playoffs") renderPlayoffs();
     requestAnimationFrame(fitPortraitColumns);
     prefsSave();
     if (!state.userSorted) state.sort = defaultSortFor(state.mode);
@@ -5618,6 +5660,8 @@
         poNote.hidden = poCutRid == null;
         poNote.innerHTML = "<i></i> Gold line: the top " + PLAYOFF_SPOTS + " make the playoffs";
       }
+      var poMk = histWeek == null ? poMarkers() : {}, poLeg = document.getElementById("po-legend");
+      if (poLeg) { poLeg.hidden = histWeek != null; poLeg.innerHTML = poLegendHtml(); }
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
@@ -5702,7 +5746,7 @@
         var rowCls = (state.rb && Number(r.roster_id) === state.rb.me ? "me-row" : "") + (r.roster_id === poCutRid ? " po-cut" : "");
         return '<tr data-rid="' + r.roster_id + '"' + (rowCls.trim() ? ' class="' + rowCls.trim() + '"' : "") + ">" +
           '<td class="rank">' + renderRankChange(r.rank_change) + '<span class="rank-num">' + r.rank + "</span></td>" +
-          '<td class="manager">' + nameHtml + "</td>" +
+          '<td class="manager">' + nameHtml + (poMk[r.roster_id] ? '<span class="po-mk' + (poMk[r.roster_id].c === "\uD83D\uDC80" ? " dead" : "") + '" title="' + poMk[r.roster_id].t + '">' + poMk[r.roster_id].c + "</span>" : "") + "</td>" +
           '<td class="rumbles">' + r.rumbles.toFixed(0) + "</td>" +
           '<td class="thisweek"' + thisWeekCellAttrs + ">" + r.this_week.toFixed(0) + "</td>" +
           "<td" + ptsCellAttrs + ">" + fl(flapNs + r.roster_id + ":p", r.this_week_points.toFixed(2), { pop: state.mode === "actual" ? "act" : "cr", cr: r.roster_id }) + (r.this_week_points_live ? liveBadgeHtml(r) : "") + ptsAsteriskHtml + "</td>" +
@@ -6764,19 +6808,169 @@
   }
   if (window.ResizeObserver) { var rsoT = document.getElementById("standings-table"), rsoS = document.getElementById("standings-scroll"); var rso = new ResizeObserver(syncScrollHint); if (rsoT) rso.observe(rsoT); if (rsoS) rso.observe(rsoS); }
   window.addEventListener("resize", syncScrollHint);
+  // ---- Playoff picture: clinch / elimination markers in the standings and the Playoffs tab ---------------------
+  // A team is "clinched" only when no outcome can take it away, and "eliminated" only when none can save it. That is judged on the
+  // most one team can earn in a week (20 in a 12-team league) and on what the league can hand out in a week, so a marker is never wrong,
+  // it just shows up as late as the maths allows. The Playoffs tab is the realistic side: you pick an average.
+  function poSeason() { return Number((state.history && state.history.season) || (ARCHIVE && ARCHIVE.season) || (state.live && state.live.season) || new Date().getFullYear()); }
+  function poByes() { var s = poSeason(); return s >= 2026 ? 2 : s >= 2023 ? 1 : 0; }
+  function poTeams() {
+    var h = state.history; if (!h || !h.standings || !h.standings.length) return null;
+    return h.standings.map(function (r) { return { rid: r.roster_id, name: r.manager, R: num(r.rumbles), pf: num(r.pf), rank: r.rank }; });
+  }
+  function poPlayed() { var w = (state.history && state.history.weeks_completed) || []; return w.length ? Math.max.apply(null, w) : 0; }
+  // regular-season weeks still to count (the week in progress included), or null while that is not known yet
+  function poWeeksLeft() {
+    if (ARCHIVE) return 0;
+    var meta = state.futureMeta; if (!meta || !state.history || !meta.lastRegWeek) return null;
+    return Math.max(0, Number(meta.lastRegWeek) - poPlayed());
+  }
+  function poMaxWeek(N) { return N - 1 + RUMBLES_PER_WIN; }
+  function poWeekTotal(N) { return N * (N - 1) / 2 + RUMBLES_PER_WIN * Math.floor(N / 2); }
+  // most Rumbles k teams can share in one week (the best k outscore counts, every one of them also winning its H2H when it can)
+  function poGroupMax(N, k) {
+    var s = 0, r;
+    for (r = 0; r < k; r++) s += N - 1 - r;
+    return s + RUMBLES_PER_WIN * (Math.min(k, N - k) + Math.floor(Math.max(0, 2 * k - N) / 2));
+  }
+  // Can k other teams all finish at or above team i when i earns only `gain` more? (ties count against i)
+  function poAhead(teams, i, k, W, gain) {
+    var N = teams.length; if (k > N - 1) return false;
+    var cap = poMaxWeek(N) * W, target = teams[i].R + gain, sum = 0;
+    var others = teams.filter(function (t, j) { return j !== i; }).sort(function (a, b) { return b.R - a.R; }).slice(0, k);
+    for (var q = 0; q < others.length; q++) {
+      var need = Math.max(0, target - others[q].R);
+      if (need > cap) return false;
+      sum += need;
+    }
+    return sum <= W * poGroupMax(N, k);
+  }
+  function poStatuses(teams, W, P, B) {
+    var N = teams.length, out = {};
+    teams.forEach(function (t, i) {
+      var s = { x: false, bye: false, one: false, dead: false };
+      if (W <= 0) { s.x = t.rank <= P; s.bye = B > 0 && t.rank <= B; s.one = t.rank === 1; s.dead = t.rank > P; }
+      else {
+        s.x = !poAhead(teams, i, P, W, 0);
+        s.bye = B > 0 && !poAhead(teams, i, B, W, 0);
+        s.one = !poAhead(teams, i, 1, W, 0);
+        var ahead = teams.filter(function (o, j) { return j !== i && o.R > t.R + poMaxWeek(N) * W; }).length;
+        s.dead = ahead >= P;
+      }
+      out[t.rid] = s;
+    });
+    return out;
+  }
+  // fewest more Rumbles that lock top-k whatever anyone else does (null: cannot be locked by points alone)
+  function poLockGain(teams, i, k, W) {
+    var hi = poMaxWeek(teams.length) * W, lo = 0;
+    if (poAhead(teams, i, k, W, hi)) return null;
+    if (!poAhead(teams, i, k, W, 0)) return 0;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (poAhead(teams, i, k, W, mid)) lo = mid; else hi = mid; }
+    return hi;
+  }
+  var PO_MK = { one: ["$", "Clinched the 1 seed"], bye: ["z", "Clinched a first-round bye"], x: ["x", "Clinched a playoff spot"], dead: ["💀", "Eliminated from playoff contention"] };
+  function poMarkers() {
+    if (state.shownHistoricalWeek != null) return {};
+    var teams = poTeams(), W = poWeeksLeft(); if (!teams || W == null) return {};
+    var B = poByes(), st = poStatuses(teams, W, PLAYOFF_SPOTS, B), out = {};
+    teams.forEach(function (t) {
+      var s = st[t.rid], m = s.one ? PO_MK.one : (s.bye && B > 1) ? PO_MK.bye : s.x ? PO_MK.x : s.dead ? PO_MK.dead : null;
+      if (m) out[t.rid] = { c: m[0], t: m[1] };
+    });
+    return out;
+  }
+  function poLegendHtml() {
+    var B = poByes(), bits = ["<b>x</b> clinched a playoff spot"];
+    if (B > 1) bits.push("<b>z</b> clinched a bye (top " + B + ")");
+    bits.push("<b>$</b> clinched the 1 seed", "💀 eliminated");
+    return bits.join(" · ");
+  }
+
+  // ---- the Playoffs tab: pick a team and an average, see what it takes ------------------------------------------
+  var poUi = { rid: null, avg: null, field: "pace", fa: 10 };
+  // Everyone's final Rumbles if `me` averages `a` from here. At "pace" the rest of the league shares what is left of the week's
+  // total (a week hands out the same number of Rumbles however it falls), each in proportion to its season pace; or all average `fa`.
+  function poFinals(teams, ti, W, a) {
+    var N = teams.length, played = Math.max(1, poPlayed()), sumPace = 0;
+    teams.forEach(function (t, j) { if (j !== ti) sumPace += t.R / played; });
+    var pool = Math.max(0, poWeekTotal(N) - a);
+    return teams.map(function (t, j) {
+      var gain = j === ti ? W * a : poUi.field === "even" ? W * poUi.fa : (sumPace > 0 ? W * pool * (t.R / played) / sumPace : W * pool / (N - 1));
+      return { rid: t.rid, name: t.name, R: t.R, pf: t.pf, fin: t.R + gain, me: j === ti };
+    }).sort(function (x, y) { return y.fin - x.fin || y.pf - x.pf; });
+  }
+  function poRankAt(teams, ti, W, a) { var f = poFinals(teams, ti, W, a); for (var i = 0; i < f.length; i++) if (f[i].me) return i + 1; return f.length; }
+  // smallest average (to 0.1) that finishes in the top m, or null when even the maximum does not
+  function poNeedAvg(teams, ti, W, m) {
+    var mx = poMaxWeek(teams.length);
+    for (var a = 0; a <= mx + 1e-9; a += 0.1) if (poRankAt(teams, ti, W, Math.round(a * 10) / 10) <= m) return Math.round(a * 10) / 10;
+    return null;
+  }
+  function poOrd(n) { var s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function poNeedLine(label, m, teams, ti, W) {
+    var a = poNeedAvg(teams, ti, W, m), mx = poMaxWeek(teams.length);
+    if (a == null) return '<li class="bad"><b>' + label + ":</b> out of reach if the rest of the field plays as assumed (even " + mx + " a week is not enough)</li>";
+    if (a === 0) return '<li class="ok"><b>' + label + ":</b> in already at this pace, even with 0 a week</li>";
+    return '<li><b>' + label + ":</b> average at least <b>" + a.toFixed(1) + "</b> a week (" + Math.round(a * W) + " more Rumbles over " + W + " week" + (W === 1 ? "" : "s") + ")" + (a > mx * 0.85 ? " — close to a perfect week every week" : "") + "</li>";
+  }
+  function renderPlayoffs() {
+    var out = document.getElementById("po-out"); if (!out) return;
+    var teams = poTeams(), W = poWeeksLeft(), P = PLAYOFF_SPOTS, B = poByes(), sel = document.getElementById("po-team");
+    if (!teams || W == null) { out.innerHTML = '<div class="rb-live-empty">Loading the standings…</div>'; return; }
+    var sig = teams.map(function (t) { return t.rid + ":" + t.name; }).join(",");
+    if (sel.getAttribute("data-sig") !== sig) {
+      sel.innerHTML = teams.map(function (t) { return '<option value="' + t.rid + '">' + escapeHtml(t.name) + "</option>"; }).join("");
+      sel.setAttribute("data-sig", sig);
+    }
+    if (poUi.rid == null || !teams.some(function (t) { return t.rid === poUi.rid; })) poUi.rid = (state.rb && teams.some(function (t) { return t.rid === state.rb.me; })) ? state.rb.me : teams[0].rid;
+    sel.value = String(poUi.rid);
+    var ti = 0; teams.forEach(function (t, j) { if (t.rid === poUi.rid) ti = j; });
+    var me = teams[ti], played = Math.max(1, poPlayed()), mx = poMaxWeek(teams.length);
+    var avgIn = document.getElementById("po-avg"), avgV = document.getElementById("po-avg-v");
+    if (poUi.avg == null || avgIn.getAttribute("data-rid") !== String(me.rid)) { poUi.avg = Math.min(mx, Math.round(me.R / played * 2) / 2); avgIn.setAttribute("data-rid", String(me.rid)); }
+    avgIn.max = String(mx); avgIn.value = String(poUi.avg); avgV.textContent = Number(poUi.avg).toFixed(1);
+    document.getElementById("po-field").value = poUi.field;
+    var fa = document.getElementById("po-fa"); fa.value = String(poUi.fa); fa.hidden = poUi.field !== "even";
+    var st = poStatuses(teams, W, P, B)[me.rid], sorted = teams.slice().sort(function (x, y) { return x.rank - y.rank; }), line = sorted[P - 1];
+    var h = '<div class="po-sum"><b>' + escapeHtml(me.name) + "</b> is " + poOrd(me.rank) + " with " + me.R + " Rumbles";
+    if (W <= 0) {
+      h += ". The regular season is over: " + (st.x ? "in the playoffs" + (B > 0 && st.bye ? (st.one ? " as the 1 seed" : " with a bye") : "") : "out of the playoffs") + ".</div>";
+      out.innerHTML = h; return;
+    }
+    h += ". " + W + " regular-season week" + (W === 1 ? "" : "s") + " left (up to " + (mx * W) + " more Rumbles). Playoff line: " + poOrd(P) + " place has " + line.R + ".</div>";
+    var badge = st.dead ? '<span class="po-b dead">💀 Eliminated</span>' : st.one ? '<span class="po-b ok">$ Clinched the 1 seed</span>' : (st.bye && B > 1) ? '<span class="po-b ok">z Clinched a bye</span>' : st.x ? '<span class="po-b ok">x Clinched a playoff spot</span>' : '<span class="po-b">Still alive</span>';
+    var lock = !st.x && !st.dead ? poLockGain(teams, ti, P, W) : null;
+    h += '<div class="po-line">' + badge + (!st.x && !st.dead ? (lock == null ? " · can’t be locked up by points alone yet" : " · locked up with " + lock + " more Rumbles (about " + (lock / W).toFixed(1) + " a week), whatever anyone else does") : "") + "</div>";
+    var rk = poRankAt(teams, ti, W, poUi.avg), fin = poFinals(teams, ti, W, poUi.avg);
+    var inn = rk <= P;
+    h += '<div class="po-res ' + (inn ? "ok" : "bad") + '">At <b>' + Number(poUi.avg).toFixed(1) + "</b> a week you finish <b>" + poOrd(rk) + "</b> with " + Math.round(fin[rk - 1].fin) + " Rumbles: " + (inn ? (B > 0 && rk <= B ? (rk === 1 ? "in as the 1 seed" : "in with a bye") : "in the playoffs") : "out of the playoffs") + ".</div>";
+    h += '<ul class="po-need">' + poNeedLine("Make the playoffs", P, teams, ti, W) + (B > 1 ? poNeedLine("Get a bye (top " + B + ")", B, teams, ti, W) : "") + poNeedLine("Take the 1 seed", 1, teams, ti, W) + "</ul>";
+    h += '<div class="po-chips"><small>If you average…</small>';
+    for (var a = 0; a <= mx; a += (mx > 20 ? 2 : 2)) { var r2 = poRankAt(teams, ti, W, a); h += '<span class="po-chip ' + (r2 <= P ? "ok" : "bad") + '"><b>' + a + "</b><i>" + poOrd(r2) + "</i></span>"; }
+    h += "</div>";
+    h += '<div class="po-tbl"><small>Projected final standings at ' + Number(poUi.avg).toFixed(1) + " a week (" + (poUi.field === "even" ? "everyone else averaging " + poUi.fa : "the rest of the league at its season pace") + ")</small>" + fin.map(function (f, i) {
+      return '<div class="po-r' + (f.me ? " me" : "") + (i === P - 1 ? " cut" : "") + '"><span>' + (i + 1) + "</span><b>" + escapeHtml(f.name) + "</b><em>" + Math.round(f.fin) + "</em></div>";
+    }).join("") + "</div>";
+    h += '<p class="po-fine">A guide, not a promise: a week hands out the same Rumbles however it falls, so when you take more the rest of the league takes less. Head-to-head matchups and the tiebreaker (points for) are not modelled.</p>';
+    out.innerHTML = h;
+  }
   function setView(view) {
     state.view = view;
-    var rb = view === "rumblin";
-    els.modeActual.classList.toggle("active", !rb && state.mode === "actual");
-    els.modeCustom.classList.toggle("active", !rb && state.mode === "custom");
+    var rb = view === "rumblin", po = view === "playoffs";
+    els.modeActual.classList.toggle("active", !rb && !po && state.mode === "actual");
+    els.modeCustom.classList.toggle("active", !rb && !po && state.mode === "custom");
+    els.modePo.classList.toggle("active", po);
     var onScen = (state.rb.mode === "me" && state.rb.sub === "scenarios") || (state.rb.scenBest && state.rb.sub === "scenarios");
     els.modeRumblin.classList.toggle("active", rb && !onScen);
     els.modeScen.classList.toggle("active", rb && onScen);
     document.getElementById("scen-mode-row").hidden = !(rb && onScen);
-    document.getElementById("standings-view").hidden = rb;
+    document.getElementById("standings-view").hidden = rb || po;
     document.getElementById("rumblin-view").hidden = !rb;
+    document.getElementById("po-view").hidden = !po;
     render();
     renderWeekSelect();
+    if (po) renderPlayoffs();
   }
 
   function refreshNow() {
@@ -10153,6 +10347,11 @@
     state.rb.sub = "scenarios";
     renderRumblin();
   });
+  els.modePo.addEventListener("click", function () { setView("playoffs"); });
+  document.getElementById("po-team").addEventListener("change", function () { poUi.rid = Number(this.value); poUi.avg = null; renderPlayoffs(); });
+  document.getElementById("po-avg").addEventListener("input", function () { poUi.avg = Number(this.value); renderPlayoffs(); });
+  document.getElementById("po-field").addEventListener("change", function () { poUi.field = this.value; renderPlayoffs(); });
+  document.getElementById("po-fa").addEventListener("input", function () { var v = Number(this.value); if (!isNaN(v)) { poUi.fa = Math.max(0, Math.min(20, v)); renderPlayoffs(); } });
   document.getElementById("sm-best").addEventListener("click", function () {
     state.rb.scenBest = true; state.rb.sub = "scenarios"; state.rb.scenWeek = state.rb.scenWeek; renderRumblin();
   });
@@ -10254,7 +10453,7 @@
     });
 })();
 </script>
-<script>window.DTF_VIEWS = {"hide": ".toggle-group[aria-label=\"Scoring source\"]", "items": [{"label": "Actual", "sel": "#mode-actual"}, {"label": "Projected", "sel": "#mode-custom"}, {"label": "Rumblin'", "sel": "#mode-rumblin"}, {"label": "Scenarios", "sel": "#mode-scen"}]};</script>
+<script>window.DTF_VIEWS = {"hide": ".toggle-group[aria-label=\"Scoring source\"]", "items": [{"label": "Actual", "sel": "#mode-actual"}, {"label": "Projected", "sel": "#mode-custom"}, {"label": "Rumblin'", "sel": "#mode-rumblin"}, {"label": "Scenarios", "sel": "#mode-scen"}, {"label": "Playoffs", "sel": "#mode-po"}]};</script>
 <script>window.DTF_TIPS = ["#pts-tooltip", "#qb-adj-tooltip", "#qb-adj-captured-tooltip", "#pfpa-tooltip", "#howto-tooltip", "#trend-tip", "#wp-tipx", "#wp-tipm"];</script>
 <script src="/shell/nav.js" defer></script>
 </body>
