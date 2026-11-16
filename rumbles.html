@@ -4858,6 +4858,7 @@
       applyFutureFold(rows, wl, foldCurrentWeekIntoTotals ? 1 : 0);
       state.trendFuture = tf.map(function (x) { var by = {}; Object.keys(x.by).forEach(function (rid) { by[rid] = { rumbles: num(x.by[rid].rumbles), points: num(x.by[rid].points) }; }); return { week: x.week, by: by }; });
       state.futureShown = fwk; futureOn = true;
+      state.poFold = fwk - Number(live.week) + 1;   // for the clinch markers: the weeks now inside the totals shown
     }
 
     // "#" is each team's fixed SEASON STANDING (by cumulative Rumbles,
@@ -5875,9 +5876,6 @@
           fwNote.textContent = "Loading projections through Week " + state.futureWeek + "\u2026";
           loadFutureWeeks(state.futureWeek).then(function () { render(); });
         }
-        fwNote.hidden = false;
-      } else if (state.futureShown != null) {
-        fwNote.textContent = "Projected after Week " + state.futureShown + ": each team's current starters scored on Sleeper's projections, byes count 0, and Rumbles use the real schedule.";
         fwNote.hidden = false;
       } else fwNote.hidden = true;
     }
