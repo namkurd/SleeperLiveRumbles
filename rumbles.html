@@ -1319,6 +1319,11 @@
   .rb-compact .rb-meta .rb-ms { display: inline; }
   /* Only players in a game right now stand out; everyone else is faded. */
   .rb-table tr.rb-off .rb-n, .rb-table tr.rb-off .pos-badge, .rb-table tr.rb-off td.rb-act, .rb-table tr.rb-off td.rb-proj { opacity: 0.5; }
+  /* A ruled-out starter's position icon fades like every other finished player's (the QB-injury replacement's + stays bright). */
+  .rb-table tr.rb-outrow .pos-badge { opacity: 0.5; }
+  .rb-table tr.rb-outrow.rb-final .pos-badge { opacity: 0.4; }
+  /* With no game live anywhere (before kickoff, between windows, after the last game) nothing is faded. */
+  #rumblin-view.rb-nolive .rb-table tr .rb-n, #rumblin-view.rb-nolive .rb-table tr .pos-badge, #rumblin-view.rb-nolive .rb-table tr td.rb-act, #rumblin-view.rb-nolive .rb-table tr td.rb-proj { opacity: 1 !important; }
   /* Kickoff times stay readable in their time-slot color. */
   .rb-table tr.rb-off .rb-meta { opacity: 0.9; }
   .rb-table tr.rb-live td.rb-nm .rb-n, .rb-table tr.rb-live td.rb-act { color: var(--live); }
@@ -9424,7 +9429,9 @@
     rbRenderFeed(shown);
     rbRenderLive(shown);
 
-    // Cards.
+    // Cards. Only fade the ones with nobody in a live game while some game IS live; with none live, every card is bright.
+    var rbAnyLive = teams.some(function (t) { return t.liveCount > 0; });
+    var rbView = document.getElementById("rumblin-view"); if (rbView) rbView.classList.toggle("rb-nolive", !rbAnyLive);
     var before = rbRects(rb.cardEls);
     Object.keys(rb.cardEls).forEach(function (rid) {
       if (!shownSet[rid]) { rb.cardEls[rid].remove(); delete rb.cardEls[rid]; }
@@ -9465,7 +9472,7 @@
         el.removeAttribute("role");
         el.removeAttribute("aria-expanded");
       }
-      el.classList.toggle("rb-idle", !t.liveCount);
+      el.classList.toggle("rb-idle", rbAnyLive && !t.liveCount);
       el.innerHTML = rbCardHtml(t);
       var prev = rb.lastTotals[t.rid];
       if (prev != null && Math.abs(prev - t.act) > 0.001) {
