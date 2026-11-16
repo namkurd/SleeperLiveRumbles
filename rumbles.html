@@ -7079,6 +7079,10 @@
         var wk = weeks[wi], o = opp[wi], s = [], set = pins[wk], oi = o[ti];
         var useLive = lwi && wi === 0;
         for (j = 0; j < N; j++) s[j] = useLive ? lwi[j].m + lwi[j].sd * poGauss(rng) : mus[j] + sd * poGauss(rng);
+        // A team set to score far below (or above) everyone else is still just last (or first): keep its points believable, since points for breaks ties in Rumbles.
+        var lowO = Infinity, highO = -Infinity, padS = sd * 0.3;
+        for (j = 0; j < N; j++) if (j !== ti) { if (s[j] < lowO) lowO = s[j]; if (s[j] > highO) highO = s[j]; }
+        if (s[ti] < lowO - padS) s[ti] = lowO - padS * rng(); else if (s[ti] > highO + padS) s[ti] = highO + padS * rng();
         if (set && oi != null && set.r == null) {
           if ((set.res === "W") !== (s[ti] > s[oi])) { var sw = s[ti]; s[ti] = s[oi]; s[oi] = sw; }   // an outcome only: the natural scores, swapped if they went the other way
         } else if (set && oi != null) {
