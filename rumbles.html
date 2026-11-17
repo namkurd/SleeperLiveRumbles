@@ -6676,7 +6676,9 @@
     els.howtoTooltip.style.top = top + "px";
   }
 
+  var HOWTO_MAIN = els.howtoTooltip.innerHTML, HOWTO_PO = "<p class=\"howto-heading\">Playoff Hunt</p><ul><li>Shows up on its own a few weeks before the end of the season, once any team can clinch or be eliminated. <b>View</b> picks the <b>League</b> or one team's own path.</li></ul><p class=\"howto-heading\">How the odds are made</p><ul><li>Every week left is played thousands of times. Each team's score is drawn around its season average, pulled toward the league average (as if it had 3 more average weeks) with the league's usual week-to-week swing. The real schedule decides each head-to-head; Rumbles come from the week's score order plus 9 for the head-to-head win. Seeds go by Rumbles, then points for.</li><li>This week uses the live scores plus projections for players still to play. A team's <b>Playoffs</b> % is how often it ends in the top {P}, <b>Bye</b> the top {B}. Estimates, not promises.</li></ul><p class=\"howto-heading\">Clinching cards</p><ul><li><b>Strict:</b> only results no later week can undo are listed, assuming rivals could score the weekly max (20) every week left. <b>Chance</b> is how often it happens this week.</li><li><b>No help:</b> a score that does it alone. <b>Real shot:</b> the lowest score with a 15%+ chance. <b>Long shot:</b> the bare minimum, needing a lot of help. <b>Projected</b> shows live: green real shot, blue long shot, red short.</li><li><b>Help:</b> a rival counts against the team once it scores its number or more. Slide the team's Rumbles to see the numbers shift (one fewer Rumble lowers each by 1); the pills turn green or red against what rivals are projected for.</li></ul><p class=\"howto-heading\">Also on the page</p><ul><li><b>Games that matter:</b> each game run both ways to see how far it swings the odds; after the Sunday 1pm games, live scenarios.</li><li><b>Sacko hunt:</b> an outright Sacko is last place 31+ Rumbles behind second-to-last, otherwise the bracket decides. The card shows the odds and what a week of Rumbles does to them.</li><li>Percentages flip as the live odds move. <b>Rumblin'!</b> / <b>Stumblin'..</b> pops mark a team moving up or down the projected standings, naming who it passed or who passed it.</li><li>A single team's view has its magic numbers, a by-average simulator and a matchup-by-matchup one where you can set results.</li></ul>";
   function showHowTo() {
+    els.howtoTooltip.innerHTML = state.view === "playoffs" ? HOWTO_PO.replace("{P}", PLAYOFF_SPOTS).replace("{B}", Math.max(1, poByes())) : HOWTO_MAIN;   // Playoff Hunt has its own page of help
     els.howtoTooltip.classList.add("visible");
     els.howtoTooltip.setAttribute("aria-hidden", "false");
     positionHowToTooltip();
@@ -7854,7 +7856,7 @@
     if (cc && cc.key === baseA) { if (cel) cel.innerHTML = cc.v; } else { poChipTok++; poChips(teams, ti, W, poChipTok, baseA, pinsA, liveOn); }
   }
   function setView(view) {
-    state.view = view;
+    state.view = view; hideHowTo();
     var rb = view === "rumblin", po = view === "playoffs";
     els.modeActual.classList.toggle("active", !rb && !po && state.mode === "actual");
     els.modeCustom.classList.toggle("active", !rb && !po && state.mode === "custom");
