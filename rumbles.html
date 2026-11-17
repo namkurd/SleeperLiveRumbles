@@ -898,29 +898,30 @@
   .po-lsec { margin-bottom: 18px; scroll-margin-top: 8px; }
   .po-lgh { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 14px 0 8px; } .po-lgh h3 { margin: 0; font-size: 1rem; } .po-lgh small { color: var(--text-dim); font-size: 0.72rem; text-align: right; }
   .po-od { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); overflow: hidden; }
-  .po-odh, .po-or { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) minmax(90px, 1.3fr) 2.8rem; gap: 8px; align-items: center; padding: 7px 10px; }
+  .po-odh, .po-or { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 3.4rem 3rem; gap: 8px; align-items: center; padding: 7px 10px; }
   .po-odh { color: var(--text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--panel-border); } .po-odh span:last-child, .po-by { text-align: right; }
-  .po-odh.sk, .po-or.sk { grid-template-columns: minmax(0, 1fr) minmax(90px, 1.3fr) 4rem; }
   .po-or { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--panel-border); color: inherit; font: inherit; text-align: left; cursor: pointer; } .po-or.sk { cursor: default; }
   .po-or:last-child { border-bottom: 0; } .po-or.cut { box-shadow: inset 0 -2px 0 var(--gold); } .po-or:not(.sk):hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
   .po-rk { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 0.8rem; }
   .po-nm { font-weight: 600; font-size: 0.86rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; } .po-nm small { color: var(--text-dim); font-weight: 400; font-size: 0.7rem; }
   .po-nm .po-mk { font-style: normal; }
-  .po-pc { display: flex; align-items: center; gap: 8px; } .po-pc em { font-style: normal; font-weight: 700; font-size: 0.82rem; min-width: 2.4rem; text-align: right; font-variant-numeric: tabular-nums; }
-  .po-bar { flex: 1; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); overflow: hidden; } .po-bar b { display: block; height: 100%; background: var(--accent); border-radius: 4px; } .po-bar.bad b { background: var(--bad); }
-  .po-or.in .po-bar b { background: var(--good); }
+  .po-pc { display: flex; align-items: center; justify-content: flex-end; } .po-pc em { font-style: normal; font-weight: 700; font-size: 0.82rem; min-width: 2.4rem; text-align: right; font-variant-numeric: tabular-nums; }
   .po-by { font-size: 0.8rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .po-how { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 8px; } .po-how summary { cursor: pointer; } .po-how ul { margin: 6px 0 0; padding-left: 18px; } .po-how li { margin: 2px 0; }
   .po-sc2s { display: grid; gap: 10px; }
   .po-sc2 { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); padding: 10px 12px; }
   .po-sc2h { display: flex; align-items: center; gap: 10px; } .po-sc2t { flex: 1; min-width: 0; } .po-sc2t b { display: block; font-size: 0.95rem; } .po-sc2t small, .po-sc2p small { color: var(--text-dim); font-size: 0.7rem; }
-  .po-sc2p { text-align: right; } .po-sc2p b { display: block; font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .po-sc2p { text-align: right; max-width: 11rem; } .po-sc2p small { display: block; line-height: 1.2; } .po-sc2p .po-mk { display: inline-block; margin-top: 3px; font-size: 1rem; } .po-sc2p b { display: block; font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
   .po-sc2b { display: grid; gap: 8px; margin-top: 8px; font-size: 0.8rem; } .po-sc2b span { display: block; color: var(--text-dim); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.05em; } .po-sc2b p { margin: 1px 0 0; } .po-sc2b small { color: var(--text-dim); font-size: 0.7rem; }
   .po-cp { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; } .po-cp span { border: 1px solid var(--panel-border); border-radius: 999px; padding: 2px 9px; font-size: 0.76rem; background: color-mix(in srgb, var(--text-dim) 10%, transparent); }
   @media (min-width: 640px) { .po-sc2b { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } .po-sc2s { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .po-live { margin-top: 8px; border-radius: 8px; border: 1px solid var(--panel-border); font-size: 0.78rem; } .po-live.ok { border-color: var(--good); } .po-live.bad { border-color: var(--bad); }
   .po-live summary { cursor: pointer; padding: 5px 9px; list-style: none; } .po-live summary::-webkit-details-marker { display: none; } .po-live summary span { color: var(--text-dim); }
   .po-live ul { list-style: none; margin: 0; padding: 2px 9px 8px; } .po-live li { padding: 1px 0; }
+  .po-sl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 3px 0 6px; font-size: 0.8rem; } .po-sl input { flex: 1 1 120px; min-width: 100px; accent-color: var(--accent); }
+  .po-snap { border: 1px solid var(--panel-border); background: none; color: var(--text); border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 0.7rem; cursor: pointer; }
+  .po-cp span.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); } .po-cp span.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); } .po-cp span i { font-style: normal; color: var(--text-dim); font-size: 0.68rem; }
+  .po-live { padding: 5px 9px; } .po-live span { color: var(--text-dim); }
   .po-yes { color: var(--good); } .po-no { color: var(--bad); }
   .po-gms { display: grid; gap: 10px; margin-bottom: 8px; }
   .po-gm { border: 1px solid var(--panel-border); border-radius: 12px; padding: 9px 12px; background: var(--panel); font-size: 0.82rem; }
@@ -7070,61 +7071,59 @@
   function poListHtml(list) { return "<ul>" + list.map(function (x) { return "<li>" + escapeHtml(x.n) + " <b>" + x.th + "+</b></li>"; }).join("") + "</ul>"; }
   // Live check: the same scenario, tested on this week's projected Rumbles. Every requirement gets a check or an X.
   function poLiveCheck(teams, i, e, sc, P) {
-    var g = Math.min(sc.mx, sc.proj[i]), me = teams[i], elim = e === 3, N = teams.length, R2 = teams.map(function (t, j) { return t.R + sc.proj[j]; }), ge = 0, gt = 0, j;
+    var g = Math.min(sc.mx, sc.proj[i]), elim = e === 3, N = teams.length, R2 = teams.map(function (t, j) { return t.R + sc.proj[j]; }), ge = 0, gt = 0, j;
     for (j = 0; j < N; j++) if (j !== i) { if (R2[j] + sc.capR >= R2[i]) ge++; if (R2[j] > R2[i] + sc.capR) gt++; }
-    var k = sc.K[e], pass = elim ? gt >= P : ge <= k - 1, hp = poHelp(teams, i, g, e, sc, P), nm = escapeHtml(me.name), rows = "", reached = [];
-    function mk(ok) { return ok ? '<b class="po-yes">\u2713</b>' : '<b class="po-no">\u2717</b>'; }
-    var ownOk = elim ? true : hp.allow >= 0;
-    rows += "<li>" + (elim ? "" : mk(ownOk) + " ") + nm + " projected <b>" + g + "</b>" + (!elim && !ownOk ? " \u2014 too few to clinch" : "") + "</li>";
-    if (hp.base) rows += "<li>" + mk(true) + " " + hp.base + (elim ? " rival" + (hp.base === 1 ? " is" : "s are") + " already beyond reach" : " rival" + (hp.base === 1 ? "" : "s") + " already count" + (hp.base === 1 ? "s" : "") + " against") + "</li>";
-    hp.list.forEach(function (x) {
-      var j2 = teams.findIndex(function (t) { return t.name === x.n; }), pv = sc.proj[j2], hit = pv >= x.th; if (hit) reached.push(x.n);
-      rows += "<li>" + mk(elim ? hit : !hit) + " " + escapeHtml(x.n) + " projected <b>" + pv + "</b> " + (elim ? (hit ? "reaches " : "short of ") : (hit ? "reaches " : "stays under ")) + "<b>" + x.th + "</b></li>";
-    });
-    var why = "";
-    if (!pass) {
-      if (elim) why = "only " + gt + " of the " + P + " rivals needed are beyond reach";
-      else if (!ownOk) why = "";
-      else why = "too many rivals reach their number (" + reached.map(escapeHtml).join(", ") + "; " + poWord(hp.allow).toLowerCase() + " allowed)";
-    }
-    var head = elim ? (pass ? '<b class="po-no">\u2713 Eliminated</b> <span>on this week\u2019s projections</span>' : '<b class="po-yes">\u2717 Still alive</b> <span>on this week\u2019s projections' + (why ? ": " + why : "") + "</span>")
-      : pass ? '<b class="po-yes">\u2713 On track</b> <span>on this week\u2019s projections</span>' : '<b class="po-no">\u2717 Off track</b> <span>on this week\u2019s projections' + (why ? ": " + why : "") + "</span>";
-    return '<details class="po-live ' + ((elim ? !pass : pass) ? "ok" : "bad") + '"><summary>' + head + '</summary><ul>' + rows + "</ul></details>";
+    var pass = elim ? gt >= P : ge <= sc.K[e] - 1;
+    var txt = elim ? (pass ? "Eliminated" : "Still alive") : (pass ? "On track" : "Off track");
+    return '<div class="po-live ' + ((elim ? !pass : pass) ? "ok" : "bad") + '"><b>' + (pass ? "\u2713 " : "\u2717 ") + txt + "</b> <span>on this week\u2019s projections</span></div>";
   }
-  function poChipsHtml(list) { return '<div class="po-cp">' + list.map(function (x) { return "<span>" + escapeHtml(x.n) + " <b>" + x.th + "+</b></span>"; }).join("") + "</div>"; }
+  var poLgCtx = null;
+  function poHelpBlock(teams, i, e, g, sc, P) {
+    var hp = poHelp(teams, i, g, e, sc, P), elim = e === 3, nm = escapeHtml(teams[i].name), pills = "", txt;
+    pills = hp.list.length ? '<div class="po-cp">' + hp.list.map(function (x) {
+      var j = teams.findIndex(function (t) { return t.name === x.n; }), cls = "", pr = "";
+      if (sc.proj) { var pv = sc.proj[j]; cls = pv < x.th ? " ok" : " bad"; pr = " <i>proj " + pv + "</i>"; }
+      return '<span class="' + cls.trim() + '">' + escapeHtml(x.n) + " <b>" + x.th + "+</b>" + pr + "</span>";
+    }).join("") + "</div>" : "";
+    if (elim) {
+      var must = hp.list.length - hp.allow;
+      txt = hp.allow < 0 ? "Out at this score." : must <= 0 ? "Safe at this score." : (must === 1 ? "At least <b>one</b> of these must stay below its number" : "At least <b>" + must + "</b> of these must stay below their numbers") + ":";
+      if (hp.allow < 0 || must <= 0) pills = "";
+    } else {
+      txt = hp.allow < 0 ? "Can\u2019t clinch at this score." : hp.list.length <= hp.allow ? "No help needed." : (hp.allow === 0 ? "<b>None</b> of these can reach its number" : poWord(hp.allow).replace("No more than", "<b>No more than") + "</b> of these can reach its number") + ":";
+      if (hp.allow < 0) pills = "";
+    }
+    return "<p>" + txt + "</p>" + pills;
+  }
   function poLeagueHtml(teams, W, P, B) {
     var sc = poLeagueScen(teams, W); if (!sc) return '<div class="rb-live-empty">Loading the schedule…</div>';
-    var sorted = teams.slice().sort(function (a, b) { return a.rank - b.rank; }), cards = "", mx = sc.mx, MK = [["x", "Clinch a playoff spot", "k-in"], ["z", "Clinch a bye", "k-bye"], ["$", "Clinch the 1 seed", "k-one"], ["\uD83D\uDC80", "Eliminated", "k-out"]];
+    poLgCtx = { teams: teams, sc: sc, P: P };
+    var sorted = teams.slice().sort(function (a, b) { return a.rank - b.rank; }), cards = "", mx = sc.mx, MK = [["x", "chance to clinch a playoff spot", "k-in"], ["z", "chance to clinch a bye", "k-bye"], ["$", "chance to clinch the 1 seed", "k-one"], ["\uD83D\uDC80", "chance to be eliminated", "k-out"]];
     sorted.forEach(function (t) {
       var i = teams.indexOf(t), d = sc.D[i];
       for (var e = 0; e < 4; e++) {
         if (e === 1 && B < 2) continue;
         var tot = d.h[e].reduce(function (a, b) { return a + b; }, 0); if (!tot) continue;
-        var p = tot / sc.trials, need = null, g, nm = escapeHtml(t.name);
+        var p = tot / sc.trials, need = null, g, nm = escapeHtml(t.name), longShot = false;
         for (g = 0; g <= mx; g++) { var pw = poWin(d, e, g, mx, e === 3); if (pw != null && pw >= 0.15) { need = g; break; } }
-        var ref = mx, outAt = -1, needTxt = "", help, longShot = false;
-        if (need == null) for (g = 0; g <= mx; g++) if (d.h[e][g]) { need = g; longShot = true; break; }
+        if (need == null) { longShot = true; for (g = 0; g <= mx; g++) if (d.h[e][g]) { need = g; break; } }
+        if (need == null) need = mx;
+        var outAt = -1, needTxt;
         if (e === 3) {
           for (g = 0; g <= mx; g++) { if (d.n[g] && d.h[3][g] / d.n[g] >= 0.99) outAt = g; else if (d.n[g] > 4) break; }
-          ref = mx; for (g = 0; g <= mx; g++) { var pe = poWin(d, 3, g, mx, false); if (pe != null && pe < 0.1) { ref = g; break; } }
-          needTxt = (outAt >= 0 ? "Out at <b>" + outAt + "</b> or fewer. " : "") + (need != null && !longShot ? "Needs <b>" + need + "+</b> Rumbles to survive." : "");
-          var hh = poHelp(teams, i, ref, 3, sc, P), must = hh.list.length - hh.allow;
-          help = hh.allow < 0 ? "Out at this score." : must <= 0 ? "Safe at this score." : (must === 1 ? "At least <b>one</b> of these must stay below its number" : "At least <b>" + must + "</b> of these must stay below their numbers") + " <small>if " + nm + " gets " + ref + "</small>" + poChipsHtml(hh.list);
-        } else {
-          needTxt = need != null ? "<b>" + need + "+</b> Rumbles" + (longShot ? " <small>long shot</small>" : "") : "";
-          var h2 = poHelp(teams, i, ref, e, sc, P);
-          help = h2.allow < 0 ? "Not possible." : h2.list.length <= h2.allow ? "No help needed." : (h2.allow === 0 ? "<b>None</b> of these can reach its number" : poWord(h2.allow).replace("No more than", "<b>No more than") + "</b> of these can reach its number") + " <small>if " + nm + " gets " + ref + "</small>" + poChipsHtml(h2.list);
-        }
-        cards += '<div class="po-sc2"><div class="po-sc2h"><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + '</span><div class="po-sc2t"><b>' + nm + "</b><small>" + MK[e][1] + " \u00b7 " + poOrd(t.rank) + ", " + t.R + '</small></div><div class="po-sc2p"><b>' + poFmtPct(p) + "</b><small>chance</small></div></div>" +
+          needTxt = (outAt >= 0 ? "Out at <b>" + outAt + "</b> or fewer. " : "") + (longShot ? "" : "Needs <b>" + need + "+</b> Rumbles to survive");
+        } else needTxt = "<b>" + need + "+</b> Rumbles" + (longShot ? " <small>long shot</small>" : "");
+        if (sc.proj) { var pj = sc.proj[i]; needTxt += ' \u00b7 projected <b class="' + (pj >= need ? "po-yes" : "po-no") + '">' + pj + " " + (pj >= need ? "\u2713" : "\u2717") + "</b>"; }
+        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><b>' + poFmtPct(p) + "</b><small>" + MK[e][1] + '</small><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div></div>" +
           (sc.proj ? poLiveCheck(teams, i, e, sc, P) : "") +
-          '<div class="po-sc2b"><div><span>Needs</span><p>' + needTxt + "</p></div><div><span>Help</span><p>" + help + "</p></div></div></div>";
+          '<div class="po-sc2b"><div><span>Needs</span><p>' + needTxt + '</p></div><div><span>Help</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + need + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + need + '">' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">Projected (' + sc.proj[i] + ")</button>" : "") + '</label><div class="po-hb">' + poHelpBlock(teams, i, e, need, sc, P) + "</div></div></div></div>";
       }
     });
     var h = '<section class="po-lsec" id="po-s-scen"><div class="po-lgh"><h3>This week: who can clinch or be eliminated</h3><small>Week ' + sc.wk + (sc.proj ? " \u00b7 live check on" : " \u00b7 live check starts at kickoff") + "</small></div>";
-    h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: the lowest week that gives it at least a 15% chance.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. Each Rumble fewer for the team lowers every number by 1.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>On track / Off track</b>: the same scenario tested on this week\u2019s projected Rumbles. Tap it for each requirement.</li></ul></details>';
+    h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: the lowest week that gives it at least a 15% chance.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. It starts at the team\u2019s minimum; slide to see how the numbers change.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>Live</b>: once games start, projected Rumbles show next to Needs, and each rival turns green (condition met) or red (not met).</li></ul></details>';
     h += cards ? '<div class="po-sc2s">' + cards + "</div>" : '<div class="po-note2">No team can clinch or be eliminated this week.</div>';
     h += '</section><section class="po-lsec" id="po-s-games"><div class="po-lgh"><h3>Games that matter</h3><small>Playoff chance, by result</small></div><div id="po-lg-pm"></div></section>';
-    h += '<section class="po-lsec" id="po-s-sacko"><div class="po-lgh"><h3>Sacko bracket hunt</h3></div><div id="po-lg-sk"></div><div id="po-lg-sm"></div></section>';
+    h += '<section class="po-lsec" id="po-s-sacko"><div class="po-lgh"><h3>Sacko bracket hunt</h3><small>Avoiding an outright Sacko</small></div><div id="po-lg-sk"></div><div id="po-lg-sm"></div></section>';
     return h;
   }
   function poLeagueNav() {
@@ -7137,23 +7136,33 @@
   function poLeagueOdds(teams, W, P, B) {
     var sim = poLeagueSim(teams); if (!sim) return "";
     var sorted = teams.slice().sort(function (a, b) { return a.rank - b.rank; }), st = poStatuses(teams, W, P, B);
-    var h = '<section class="po-lsec" id="po-s-odds"><div class="po-lgh"><h3>Playoff picture</h3><small>Tap a team for its path</small></div><div class="po-od"><div class="po-odh"><span>#</span><span>Team</span><span>Playoffs</span>' + (B > 1 ? "<span>Bye</span>" : "") + "</div>";
+    var h = '<section class="po-lsec" id="po-s-odds"><div class="po-lgh"><h3>Playoff picture</h3><small>Tap a team for its path</small></div><div class="po-od"><div class="po-odh"><span>#</span><span>Team</span><span>Playoffs</span>' + (B > 1 ? "<span>Bye</span>" : "<span></span>") + "</div>";
     sorted.forEach(function (t) {
       var j = teams.indexOf(t), pp = poPct(sim, j, P), s0 = st[t.rid] || {}, m = s0.dead ? ["\uD83D\uDC80", "k-out"] : s0.one ? ["$", "k-one"] : (s0.bye && B > 1) ? ["z", "k-bye"] : s0.x ? ["x", "k-in"] : null;
-      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + (t.rank <= P ? " in" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><i class="po-bar"><b style="width:' + Math.max(0, Math.min(100, pp * 100)).toFixed(1) + '%"></b></i><em>' + poFmtPct(pp) + "</em></span>" + (B > 1 ? '<span class="po-by">' + poFmtPct(poPct(sim, j, B)) + "</span>" : "") + "</button>";
+      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><em>' + poFmtPct(pp) + "</em></span>" + (B > 1 ? '<span class="po-by">' + poFmtPct(poPct(sim, j, B)) + "</span>" : "<span></span>") + "</button>";
     });
     return h + "</div></section>";
   }
-  // Sacko hunt: odds of finishing last (and of finishing 31+ behind the team above, an outright Sacko), from the season simulation
-  function poSackoHtml(teams, W) {
+  // Sacko hunt: last place only matters for one thing, an outright Sacko (31+ behind second-to-last). Everyone else is about forcing the Sacko bracket instead.
+  function poSackoHtml(teams, W, sc) {
     var sim = poLeagueSim(teams); if (!sim) return "";
-    var N = teams.length, byR = teams.slice().sort(function (a, b) { return a.R - b.R || a.pf - b.pf; }), last = byR[0], sec = byR[1], rows = "";
-    var cand = teams.map(function (t, j) { return { t: t, j: j, l: sim.lastN[j] / sim.trials, o: sim.outN[j] / sim.trials }; }).filter(function (x) { return x.l >= 0.005; }).sort(function (a, b) { return b.l - a.l; });
-    cand.forEach(function (x) { rows += '<div class="po-or sk"><span class="po-nm">' + escapeHtml(x.t.name) + "<small>" + x.t.R + '</small></span><span class="po-pc"><i class="po-bar bad"><b style="width:' + (x.l * 100).toFixed(1) + '%"></b></i><em>' + poFmtPct(x.l) + '</em></span><span class="po-by">' + poFmtPct(x.o) + "</span></div>"; });
-    var gap = sec.R - last.R, li = teams.indexOf(last), lock = poSackoLock(teams, li, W), ln = escapeHtml(last.name);
-    var h = '<div class="po-od"><div class="po-odh sk"><span>Team</span><span>Last place</span><span>Outright</span></div>' + rows + "</div>";
-    h += '<div class="po-note2"><b>' + ln + "</b> is last, " + gap + " behind " + escapeHtml(sec.name) + " (" + poOrd(N - 1) + "). Finish 31+ behind " + poOrd(N - 1) + " and it is an outright Sacko; closer goes to the Sacko bracket. " + (lock === 0 ? "An outright Sacko is now certain unless the standings above move." : lock == null ? "" : "To rule out an outright Sacko, " + ln + " needs " + lock + " more Rumbles (" + (lock / Math.max(1, W)).toFixed(1) + " a week).") + "</div>";
-    return h;
+    var N = teams.length, cand = teams.map(function (t, j) { return { t: t, j: j, o: sim.outN[j] / sim.trials }; }).filter(function (x) { return x.o >= 0.005; }).sort(function (a, b) { return b.o - a.o; });
+    if (!cand.length) return '<div class="po-note2">No team is at risk of an outright Sacko.</div>';
+    var byR = teams.slice().sort(function (a, b) { return a.R - b.R || a.pf - b.pf; }), sec = byR[1];
+    var h = '<div class="po-sc2s">';
+    cand.forEach(function (x) {
+      var t = x.t, nm = escapeHtml(t.name), lock = poSackoLock(teams, x.j, W), gap = sec.R - t.R, live = "";
+      if (sc && sc.proj) {
+        var R2 = teams.map(function (u, k) { return u.R + sc.proj[k]; }), lo = Infinity, me2 = R2[x.j];
+        for (var k = 0; k < N; k++) if (k !== x.j && R2[k] < lo) lo = R2[k];
+        var g2 = lo - me2, out = g2 >= 31;
+        live = '<div class="po-live ' + (out ? "bad" : "ok") + '"><b>' + (out ? "\u2717 Outright Sacko" : "\u2713 Bracket") + '</b> <span>on this week\u2019s projections' + (me2 > lo ? " (not last)" : ": " + g2 + " behind " + poOrd(N - 1)) + "</span></div>";
+      }
+      var need = t === byR[0] ? (lock === 0 ? "An outright Sacko is already certain unless the teams above move." : lock == null ? "" : "<b>" + lock + "</b> more Rumbles (" + (lock / Math.max(1, W)).toFixed(1) + " a week) makes an outright Sacko impossible.") : "";
+      h += '<div class="po-sc2"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + " Rumbles" + (t === byR[0] ? " \u00b7 " + gap + " behind " + escapeHtml(sec.name) + " (" + poOrd(N - 1) + ")" : "") + '</small></div><div class="po-sc2p"><b>' + poFmtPct(x.o) + "</b><small>chance of an outright Sacko</small></div></div>" + live +
+        '<div class="po-sc2b"><div><span>To force a Sacko bracket</span><p>Finish within <b>30</b> Rumbles of ' + poOrd(N - 1) + " place. " + need + "</p></div></div></div>";
+    });
+    return h + "</div>";
   }
   // Games that move the odds most: each game this week is run both ways (a pinned win, then a pinned loss) and the change in every team's odds is read off.
   var poLgMTok = 0;
@@ -7176,7 +7185,13 @@
         }).join("") + "</div>";
       }
       pm.innerHTML = section("p", 3, "No game this week moves anyone\u2019s playoff odds much.");
-      if (sm) sm.innerHTML = '<div class="po-sub">Games that matter for last place</div>' + section("l", 3, "No game this week moves the Sacko race much.");
+      if (sm) {
+        var sl2 = g.map(function (x) { var sc2 = 0; x.risk.forEach(function (q) { sc2 += Math.abs(q.a - q.b); }); return { x: x, score: sc2 }; }).filter(function (o) { return o.score * 100 >= 3; }).sort(function (a, b) { return b.score - a.score; }).slice(0, 4);
+        sm.innerHTML = '<div class="po-sub">Games that move the outright Sacko odds</div>' + (sl2.length ? '<div class="po-gms">' + sl2.map(function (o) {
+          return '<div class="po-gm"><div class="po-gh"><b>' + escapeHtml(o.x.t[0].n) + " vs " + escapeHtml(o.x.t[1].n) + "</b><em>" + Math.round(o.score * 100) + "-pt swing</em></div>" +
+            o.x.risk.map(function (q) { return '<div class="po-gr"><span class="po-gn">' + escapeHtml(q.n) + "<small>outright now " + poFmtPct(q.now) + '</small></span><span class="po-wl l">If ' + escapeHtml(o.x.t[0].n) + " wins <b>" + poFmtPct(q.a) + '</b></span><span class="po-wl l">If ' + escapeHtml(o.x.t[1].n) + " wins <b>" + poFmtPct(q.b) + "</b></span></div>"; }).join("") + "</div>";
+        }).join("") + "</div>" : '<div class="po-note2">No game this week moves the Sacko race much.</div>');
+      }
     }
     var c = poCache.lgm; if (c && c.key === key) { paint(c.v); return; }
     if (c && c.v) paint(c.v); else { var a = document.getElementById("po-lg-pm"), b2 = document.getElementById("po-lg-sm"); if (a) a.innerHTML = '<span class="po-wait">working it out\u2026</span>'; if (b2) b2.innerHTML = ""; }
@@ -7187,8 +7202,9 @@
         var pw = {}, pl = {}; pw[wk] = { res: "W", r: null }; pl[wk] = { res: "L", r: null };
         var sw = poSim(teams, ia, W, null, 1200, pw, true), sl = poSim(teams, ia, W, null, 1200, pl, true);
         if (sw && sl) {
-          var mk = function (j, w, l) { return { n: teams[j].name, p: [poPct(w, j, P), poPct(l, j, P), poPct(base, j, P)], l: [w.lastN[j] / w.trials, l.lastN[j] / l.trials, base.lastN[j] / base.trials] }; };
-          games.push({ t: [mk(ia, sw, sl), mk(ib, sl, sw)] });
+          var mk = function (j, w, l) { return { n: teams[j].name, p: [poPct(w, j, P), poPct(l, j, P), poPct(base, j, P)], l: [0, 0, 0] }; };
+          var risk = []; teams.forEach(function (t, q) { if (base.outN[q] / base.trials >= 0.005) risk.push({ n: t.name, a: sw.outN[q] / sw.trials, b: sl.outN[q] / sl.trials, now: base.outN[q] / base.trials }); });
+          games.push({ t: [mk(ia, sw, sl), mk(ib, sl, sw)], risk: risk });
         }
       }
       k++;
@@ -7615,7 +7631,7 @@
     if (poUi.rid === "league") {
       document.getElementById("po-back").hidden = true; status.innerHTML = ""; var se0 = document.getElementById("po-summary"); if (se0) se0.innerHTML = ""; secs.hidden = true; lgEl.hidden = false;
       lgEl.innerHTML = W <= 0 ? '<div class="rb-live-empty">The regular season is over.</div>' : poLeagueNav() + poLeagueOdds(teams, W, P, B) + poLeagueHtml(teams, W, P, B);
-      if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W); poLeagueMatchups(teams, W, P); }
+      if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W, poLgCtx && poLgCtx.sc); poLeagueMatchups(teams, W, P); }
       return;
     }
     lgEl.hidden = true; document.getElementById("po-back").hidden = false;
@@ -11072,7 +11088,14 @@
   els.modePo.addEventListener("click", function () { setView("playoffs"); });
   document.getElementById("po-team").addEventListener("change", function () { poUi.rid = this.value === "league" ? "league" : Number(this.value); poUi.avg = null; poUi.sets = {}; poUi.liveSet = null; renderPlayoffs(); });
   document.getElementById("po-back").addEventListener("click", function () { poUi.rid = "league"; renderPlayoffs(); window.scrollTo(0, 0); });
+  document.getElementById("po-league").addEventListener("input", function (ev) {
+    var sl = ev.target; if (!sl.classList || !sl.classList.contains("po-slide") || !poLgCtx) return;
+    var card = sl.closest(".po-sc2"), i = Number(card.getAttribute("data-i")), e = Number(card.getAttribute("data-e")), g = Number(sl.value);
+    card.querySelector(".po-sv").textContent = g; card.querySelector(".po-hb").innerHTML = poHelpBlock(poLgCtx.teams, i, e, g, poLgCtx.sc, poLgCtx.P);
+  });
   document.getElementById("po-league").addEventListener("click", function (ev) {
+    var sn = ev.target.closest && ev.target.closest(".po-snap");
+    if (sn) { var sl = sn.parentNode.querySelector(".po-slide"); sl.value = sn.getAttribute("data-g"); sl.dispatchEvent(new Event("input", { bubbles: true })); return; }
     var t = ev.target.closest && ev.target.closest("[data-po-team]"), j = ev.target.closest && ev.target.closest("[data-po-jump]");
     if (t) { poUi.rid = Number(t.getAttribute("data-po-team")); poUi.avg = null; poUi.sets = {}; poUi.liveSet = null; renderPlayoffs(); window.scrollTo(0, 0); }
     else if (j) { var el = document.getElementById(j.getAttribute("data-po-jump")); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
