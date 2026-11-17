@@ -922,7 +922,11 @@
   .po-hh { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; } .po-hh .po-snap { text-transform: none; letter-spacing: 0; }
   .po-tiers { display: grid; gap: 2px; margin-top: 2px; } .po-tiers div { display: flex; align-items: baseline; gap: 6px; } .po-tiers em { font-style: normal; min-width: 4.6rem; color: var(--text-dim); font-size: 0.74rem; } .po-tiers small { color: var(--text-dim); }
   .po-pj { margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); } .po-out { display: block; font-size: 0.78rem; margin-top: 1px; }
-  .po-strict { display: block; margin-top: 2px; } .po-pa { display: block; margin: 2px 0 4px; }
+  .po-strict { display: block; margin-top: 2px; } .po-pa { display: flex !important; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin: 2px 0 4px; } .po-vd { font-weight: 600; } .po-vd.ok { color: var(--good); } .po-vd.bad { color: var(--bad); }
+  .po-pr { display: flex; align-items: center; justify-content: flex-end; gap: 6px; } .po-sc2p .po-pr b { display: inline; } .po-sc2p .po-pr .po-mk { margin-top: 0; }
+  .po-sc2b .po-pa span { text-transform: none; letter-spacing: 0; font-size: 0.72rem; color: var(--text-dim); display: inline; } .po-sc2b .po-pa span.po-vd.ok { color: var(--good); } .po-sc2b .po-pa span.po-vd.bad { color: var(--bad); }
+  .po-sc2t .po-live b { display: inline; font-size: inherit; }
+  .po-sc2t .po-live { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; }
   .po-snap { border: 1px solid var(--panel-border); background: none; color: var(--text); border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 0.7rem; cursor: pointer; }
   .po-cp span.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); } .po-cp span.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); } .po-cp span i { font-style: normal; color: var(--text-dim); font-size: 0.68rem; }
   .po-live { padding: 5px 9px; } .po-live span { color: var(--text-dim); }
@@ -7079,7 +7083,7 @@
     for (j = 0; j < N; j++) if (j !== i) { if (R2[j] + sc.capR >= R2[i]) ge++; if (R2[j] > R2[i] + sc.capR) gt++; }
     var pass = elim ? gt >= P : ge <= sc.K[e] - 1;
     var txt = elim ? (pass ? "Eliminated" : "Still alive") : (pass ? "On track" : "Off track");
-    return '<div class="po-live ' + ((elim ? !pass : pass) ? "ok" : "bad") + '"><b>' + (pass ? "\u2713 " : "\u2717 ") + txt + "</b> <span>on this week\u2019s projections</span></div>";
+    return '<span class="po-live ' + ((elim ? !pass : pass) ? "ok" : "bad") + '" title="On this week\u2019s projections"><b>' + (pass ? "\u2713 " : "\u2717 ") + txt + "</b></span>";
   }
   var poLgCtx = null;
   function poHelpBlock(teams, i, e, g, sc, P) {
@@ -7099,8 +7103,17 @@
     }
     var pa = poWin(sc.D[i], e, g, sc.mx, false), n = 0, q;
     for (q = g; q <= Math.min(sc.mx, g + 1); q++) n += sc.D[i].n[q];
-    var cap = e === 3 ? "Chance of elimination at " : "Chance to clinch at ";
-    return '<small class="po-pa">' + cap + g + " Rumbles: <b>" + (pa == null || n < 4 ? (pa == null || pa === 0 ? "~0%" : "rare") : poFmtPct(pa)) + "</b></small><p>" + txt + "</p>" + pills;
+    var cap = "Chance at ";
+    var reach = 0; if (sc.proj) hp.list.forEach(function (x) { var j2 = teams.findIndex(function (t) { return t.name === x.n; }); if (sc.proj[j2] >= x.th) reach++; });
+    var vd = "", nothing = hp.list.length <= hp.allow, KN = ["Playoffs clinched", "Bye clinched", "1 seed clinched"];
+    if (elim) {
+      var must2 = hp.list.length - hp.allow, out = hp.allow < 0 || (sc.proj && reach > hp.allow), alive = hp.allow >= 0 && (must2 <= 0 || (sc.proj && reach <= hp.allow));
+      vd = out ? '<span class="po-vd bad">\u2717 Eliminated in this scenario</span>' : alive ? '<span class="po-vd ok">\u2713 Survives in this scenario</span>' : "";
+    } else {
+      var yes = hp.allow >= 0 && (nothing || (sc.proj && reach <= hp.allow)), no = hp.allow < 0 || (sc.proj && reach > hp.allow);
+      vd = yes ? '<span class="po-vd ok">\u2713 ' + KN[e] + " in this scenario</span>" : no ? '<span class="po-vd bad">\u2717 Not clinched in this scenario</span>' : "";
+    }
+    return '<small class="po-pa"><span>' + cap + g + ": <b>" + (pa == null || n < 4 ? (pa == null || pa === 0 ? "~0%" : "rare") : poFmtPct(pa)) + "</b></span>" + vd + "</small><p>" + txt + "</p>" + pills;
   }
   function poLeagueHtml(teams, W, P, B) {
     var sc = poLeagueScen(teams, W); if (!sc) return '<div class="rb-live-empty">Loading the schedule…</div>';
@@ -7129,9 +7142,8 @@
         tiers.sort(function (x, y) { return y[1] - x[1]; });
         if (pj != null) tiers.forEach(function (tr) { if (pj >= tr[1] && reachedTier == null) reachedTier = tr[0]; });
         var needTxt = (e === 3 && outAt >= 0 ? '<span class="po-out">Almost certainly out at <b>' + outAt + "</b> or fewer.</span>" : "") + '<div class="po-tiers">' + tiers.map(function (tr) { return "<div><em>" + tr[0] + "</em><b>" + tr[1] + '+</b> Rumbles <small>' + tr[2] + "</small></div>"; }).join("") + "</div>";
-        if (pj != null) needTxt += '<div class="po-pj">Projected <b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "" : "po-no") + '">' + pj + "</b> \u00b7 " + (reachedTier ? reachedTier.toLowerCase() + " reached" : "below the long shot") + "</div>";
-        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><b>' + poFmtPct(p) + "</b><small>" + MK[e][1] + '</small><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div></div>" +
-          (sc.proj ? poLiveCheck(teams, i, e, sc, P) : "") +
+        if (pj != null) needTxt += '<div class="po-pj">Projected <b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "" : "po-no") + '">' + pj + "</b></div>";
+        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + " Rumbles</small>" + (sc.proj ? poLiveCheck(teams, i, e, sc, P) : "") + '</div><div class="po-sc2p"><div class="po-pr"><b>' + poFmtPct(p) + '</b><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small></div></div>" +
           '<div class="po-sc2b"><div><span>Needs</span><p>' + needTxt + '</p></div><div><span class="po-hh">Help' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">\u21BA Reset to projected (' + sc.proj[i] + ")</button>" : "") + '</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + need + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + need + '"></label><div class="po-hb">' + poHelpBlock(teams, i, e, need, sc, P) + "</div></div></div></div>";
       }
     });
