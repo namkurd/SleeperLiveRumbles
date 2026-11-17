@@ -7178,6 +7178,7 @@
     var on = poActive();
     if (els.modePo.hidden === on) els.modePo.hidden = !on;
     var smp = document.getElementById("sm-po"); if (smp && smp.hidden === on) smp.hidden = !on;
+    if (state.wantPo && poTeams() && poWeeksLeft() != null) { state.wantPo = false; if (on && state.view !== "playoffs") setTimeout(function () { setView("playoffs"); }, 0); }
     if (!on && state.view === "playoffs") setTimeout(function () { if (state.view === "playoffs" && !poActive()) setView("standings"); }, 0);
   }
   // How much each team has riding on the week's results: highest when its playoff (or outright Sacko) odds are near 50%, nothing once settled.
@@ -7252,6 +7253,7 @@
     var sched = poSchedWeeks(), wk = poPlayed() + 1, pairs = sched && sched[wk]; if (!pairs) return;
     var lf = 0; if (state.live && state.live.isLive) rbTeams().forEach(function (t) { lf += t.act + t.proj; });
     var key = teams.map(function (t) { return t.R; }).join(",") + "|" + wk + "|" + Math.round(lf * 10), tok = ++poLgMTok, idx = {}, games = [], k = 0, base = poLeagueSim(teams);
+    if (!base) return;   // the simulation needs the season's scores and schedule first; the page repaints once they are in
     teams.forEach(function (t, j) { idx[t.rid] = j; });
     function paint(g) {
       var pm = document.getElementById("po-lg-pm"), sm = document.getElementById("po-lg-sm"); if (!pm) return;
@@ -7496,7 +7498,7 @@
     el.innerHTML = '<small>Playoff chance at each average</small><span class="po-wait">working it out\u2026</span>';
     setTimeout(step, 30);
   }
-  function poCached(key, name, fn) { var c = poCache[name]; if (c && c.key === key) return c.v; var v = fn(); poCache[name] = { key: key, v: v }; return v; }
+  function poCached(key, name, fn) { var c = poCache[name]; if (c && c.key === key) return c.v; var v = fn(); if (v != null) poCache[name] = { key: key, v: v }; return v; }   // a result that was not ready (no schedule yet) is never kept
   function poBarsHtml(sim, ti, name, P, N) {
     var h = '<div class="po-bars"><small>' + escapeHtml(name) + "’s final seed</small>", outP = 0, k;
     for (k = 0; k < N; k++) {
@@ -11037,6 +11039,7 @@
     if (ARCHIVE && params && params.get("tab") === "scenarios") { if (me) rbEnterMe(); setView("rumblin"); if (me) state.rb.sub = "scenarios"; }
     else if (ARCHIVE) { /* a past season opens on its standings */ }
     else if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
+    else if (params && params.get("tab") === "playoffs") state.wantPo = true;   // the Hub's Playoff Hunt tile: opens it once the standings are in (and only while the race is on)
     else rbAutoLand();
     state.prefsReady = true;
   }
