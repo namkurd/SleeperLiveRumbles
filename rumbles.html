@@ -930,6 +930,8 @@
   .po-popwrap .rb-swaptag { position: static; border-radius: 0 0 8px 8px; } .po-popwrap .po-pop2 { font-weight: 700; }
   .po-fx-up .po-pop2 { background: color-mix(in srgb, var(--good) 30%, var(--panel)); color: var(--text); } .po-fx-dn .po-pop2 { background: color-mix(in srgb, var(--bad) 30%, var(--panel)); color: var(--text); }
   .po-fx-up .po-pop:not(.po-pop2) { background: var(--good); color: #06240f; } .po-fx-dn .po-pop:not(.po-pop2) { background: var(--bad); color: #fff; }
+  .po-pa b.po-shine { background: linear-gradient(100deg, #b8860b 0%, #ffd25a 32%, #fff8dc 50%, #ffd25a 68%, #b8860b 100%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 5px rgba(255, 210, 90, 0.6)); animation: po-sheen 1.3s ease-out 1; }
+  @keyframes po-sheen { from { background-position: 100% 0; } to { background-position: 0 0; } }
   .po-pr { display: flex; align-items: center; justify-content: flex-end; gap: 6px; } .po-sc2p .po-pr b { display: inline; } .po-sc2p .po-pr .po-mk { margin-top: 0; }
   .po-sc2b .po-pa span { text-transform: none; letter-spacing: 0; font-size: 0.72rem; color: var(--text-dim); display: inline; } .po-sc2b .po-pa span.po-vd.ok { color: var(--good); } .po-sc2b .po-pa span.po-vd.bad { color: var(--bad); }
   .po-sc2t .po-live b { display: inline; font-size: inherit; }
@@ -2061,7 +2063,7 @@
   </div>
 
   <div id="po-view" hidden>
-    <div class="po-card"><label class="po-f">View <select id="po-team" class="week-select"></select></label><button type="button" class="po-back" id="po-back" hidden>\u2039 League</button></div>
+    <div class="po-card"><label class="po-f">View <select id="po-team" class="week-select"></select></label><button type="button" class="po-back" id="po-back" hidden>League</button></div>
     <div id="po-league" hidden></div>
     <div id="po-status"></div>
     <div id="po-summary" class="po-summ"></div>
@@ -6676,7 +6678,9 @@
     els.howtoTooltip.style.top = top + "px";
   }
 
+  var HOWTO_MAIN = els.howtoTooltip.innerHTML, HOWTO_PO = "<p class=\"howto-heading\">Playoff Hunt</p><ul><li>Shows up on its own a few weeks before the end of the season, once any team can clinch or be eliminated. <b>View</b> picks the <b>League</b> or one team's own path.</li></ul><p class=\"howto-heading\">How the odds are made</p><ul><li>Every week left is played thousands of times. Each team's score is drawn around its season average, pulled toward the league average (as if it had 3 more average weeks) with the league's usual week-to-week swing. The real schedule decides each head-to-head; Rumbles come from the week's score order plus 9 for the head-to-head win. Seeds go by Rumbles, then points for.</li><li>This week uses the live scores plus projections for players still to play. A team's <b>Playoffs</b> % is how often it ends in the top {P}, <b>Bye</b> the top {B}. Estimates, not promises.</li></ul>";
   function showHowTo() {
+    els.howtoTooltip.innerHTML = state.view === "playoffs" ? HOWTO_PO.replace("{P}", PLAYOFF_SPOTS).replace("{B}", Math.max(1, poByes())) : HOWTO_MAIN;   // Playoff Hunt has its own page of help
     els.howtoTooltip.classList.add("visible");
     els.howtoTooltip.setAttribute("aria-hidden", "false");
     positionHowToTooltip();
@@ -7089,8 +7093,15 @@
   function poListHtml(list) { return "<ul>" + list.map(function (x) { return "<li>" + escapeHtml(x.n) + " <b>" + x.th + "+</b></li>"; }).join("") + "</ul>"; }
   // Live check: the same scenario, tested on this week's projected Rumbles. Every requirement gets a check or an X.
   // A chance as split-flap numbers (the digits flip when the figure changes, like the scores): "23%", "<1%", ">99%"
-  function flPct(key, p) {
-    var t = poFmtPct(p), m = /^([<>]?)(\d+)%$/.exec(t);
+  // The simulation can land on 100% or 0% without it being settled: only a clinched team reads 100%, only an eliminated one reads 0%.
+  // The chance at the slider's score turns golden with a passing sheen each time the slider changes it, then settles back.
+  function poShine(card) {
+    var b = card.querySelector(".po-hb .po-pa b"); if (!b || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+    b.classList.add("po-shine"); setTimeout(function () { b.classList.remove("po-shine"); }, 1300);
+  }
+  function poSure(p, clinched, out) { return p >= 0.995 && !clinched ? ">99%" : p < 0.005 && !out ? "<1%" : null; }
+  function flPct(key, p, txt) {
+    var t = txt || poFmtPct(p), m = /^([<>]?)(\d+)%$/.exec(t);
     return m ? m[1].replace("<", "&lt;").replace(">", "&gt;") + fl(key, m[2]) + "%" : escapeHtml(t);
   }
   // Rumblin' / Stumblin' on the League page: as the live Rumbles move, a team that climbs the projected standings (this week's projected Rumbles
@@ -7234,7 +7245,7 @@
     var h = '<section class="po-lsec" id="po-s-odds"><div class="po-lgh"><h3>Playoff picture</h3><small>Tap a team for its path</small></div><div class="po-od"><div class="po-odh"><span>#</span><span>Team</span><span>Playoffs</span>' + (B > 1 ? "<span>Bye</span>" : "<span></span>") + "</div>";
     sorted.forEach(function (t) {
       var j = teams.indexOf(t), pp = poPct(sim, j, P), s0 = st[t.rid] || {}, m = s0.dead ? ["\uD83D\uDC80", "k-out"] : s0.one ? ["$", "k-one"] : (s0.bye && B > 1) ? ["z", "k-bye"] : s0.x ? ["x", "k-in"] : null;
-      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><em>' + flPct("po:p:" + t.rid, pp) + "</em></span>" + (B > 1 ? '<span class="po-by">' + flPct("po:b:" + t.rid, poPct(sim, j, B)) + "</span>" : "<span></span>") + "</button>";
+      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><em>' + flPct("po:p:" + t.rid, pp, poSure(pp, s0.x, s0.dead)) + "</em></span>" + (B > 1 ? '<span class="po-by">' + flPct("po:b:" + t.rid, poPct(sim, j, B), poSure(poPct(sim, j, B), s0.bye, s0.dead)) + "</span>" : "<span></span>") + "</button>";
     });
     return h + "</div></section>";
   }
@@ -7854,7 +7865,7 @@
     if (cc && cc.key === baseA) { if (cel) cel.innerHTML = cc.v; } else { poChipTok++; poChips(teams, ti, W, poChipTok, baseA, pinsA, liveOn); }
   }
   function setView(view) {
-    state.view = view;
+    state.view = view; hideHowTo();
     var rb = view === "rumblin", po = view === "playoffs";
     els.modeActual.classList.toggle("active", !rb && !po && state.mode === "actual");
     els.modeCustom.classList.toggle("active", !rb && !po && state.mode === "custom");
@@ -11261,9 +11272,9 @@
   document.getElementById("po-back").addEventListener("click", function () { poUi.rid = "league"; renderPlayoffs(); window.scrollTo(0, 0); });
   document.getElementById("po-league").addEventListener("input", function (ev) {
     var sl = ev.target; if (!sl.classList || !sl.classList.contains("po-slide") || !poLgCtx) return;
-    if (sl.classList.contains("po-skslide")) { var sk = sl.closest(".po-sc2"), tb = sk && poSkTbl(Number(sk.getAttribute("data-sk"))); if (tb) { sk.querySelector(".po-sv").textContent = sl.value; sk.querySelector(".po-hb").innerHTML = poSkLine(tb, Number(sl.value)); } return; }
+    if (sl.classList.contains("po-skslide")) { var sk = sl.closest(".po-sc2"), tb = sk && poSkTbl(Number(sk.getAttribute("data-sk"))); if (tb) { sk.querySelector(".po-sv").textContent = sl.value; sk.querySelector(".po-hb").innerHTML = poSkLine(tb, Number(sl.value)); poShine(sk); } return; }
     var card = sl.closest(".po-sc2"), i = Number(card.getAttribute("data-i")), e = Number(card.getAttribute("data-e")), g = Number(sl.value);
-    card.querySelector(".po-sv").textContent = g; card.querySelector(".po-hb").innerHTML = poHelpBlock(poLgCtx.teams, i, e, g, poLgCtx.sc, poLgCtx.P);
+    card.querySelector(".po-sv").textContent = g; card.querySelector(".po-hb").innerHTML = poHelpBlock(poLgCtx.teams, i, e, g, poLgCtx.sc, poLgCtx.P); poShine(card);
   });
   document.getElementById("po-league").addEventListener("click", function (ev) {
     var sn = ev.target.closest && ev.target.closest(".po-snap");
