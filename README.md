@@ -1895,6 +1895,14 @@ and the lead changes so far), and counts a head-to-head game for more, since it 
 the reason, and each says **H2H** or **Field**. No team appears more than three times. It follows the header week picker,
 this week or any finished one, and works for past seasons too. A head-to-head block has an orange outline in both views.
 
+### Playoff Hunt wakes up by itself
+
+The Playoff Hunt tab, the standings' clinch / elimination markers and legend, and the Scenarios **Playoff** view stay hidden until the
+race is on: the first time any team can clinch a playoff spot, a bye or the 1 seed, or can be eliminated, using the real number of
+Rumbles left (`poActive()` in `rumbles.html`). Nothing is tied to a year: it reads the league's own schedule length, spot count and
+bye count, so each season starts dormant and switches on a few weeks before the end of the regular season (in 2026, after Week 10).
+A past season never turns it on. While it is on, **Best** also ranks games by their playoff and Sacko stakes.
+
 ### Playoffs in past seasons
 
 For 2021 onward the Scenarios week picker names the playoff weeks **Semifinals** (week 16) and **Finals** (week 17). Those weeks show only the

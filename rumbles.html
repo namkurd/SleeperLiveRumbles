@@ -861,8 +861,9 @@
   .po-mk { font-weight: 900; font-size: 0.95em; letter-spacing: 0; } .po-dash { color: var(--text-dim); margin: 0 3px 0 1px; font-weight: 700; }
   .po-mk.k-one { color: #ffd23f; } .po-mk.k-bye { color: #4fc3f7; } .po-mk.k-in { color: #5bd67a; } .po-mk.k-out { font-weight: 400; }
   #po-view { padding: 0 2px 20px; }
-  .po-card { display: grid; gap: 10px; padding: 12px; margin: 6px 0 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); }
-  .po-f { display: grid; gap: 4px; font-size: 0.78rem; color: var(--text-dim); }
+  .po-card { display: flex; align-items: center; gap: 8px; padding: 0; margin: 4px 0 10px; border: 0; background: none; }
+  .po-f { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-dim); }
+  #po-team { width: auto; min-width: 8.5rem; max-width: 15rem; padding: 6px 28px 6px 12px; font-size: 0.86rem; background-position: right 9px center; }
   .po-card select { width: auto; max-width: 100%; }
   .po-f b { color: var(--text); font-size: 0.95rem; margin-left: 6px; }
   .po-f input[type=range] { width: 100%; accent-color: var(--accent); }
@@ -892,9 +893,8 @@
   .po-lg tr:last-child td { border-bottom: 0; } .po-lg tr.cut td { border-bottom: 2px solid var(--gold); }
   .po-lg td small { display: block; color: var(--text-dim); font-size: 0.7rem; } .po-lg td small.po-dn { margin-top: 4px; }
   .po-lg ul { margin: 3px 0 0; padding-left: 16px; } .po-lg li { white-space: nowrap; }
-  .po-jump { display: flex; gap: 6px; margin: 2px 0 6px; overflow-x: auto; }
-  .po-jump button, .po-back { border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 0.76rem; cursor: pointer; white-space: nowrap; }
-  .po-back { margin-left: 8px; }
+  .po-back { border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 0.76rem; cursor: pointer; white-space: nowrap; }
+  .po-back { margin-left: 0; }
   .po-lsec { margin-bottom: 18px; scroll-margin-top: 8px; }
   .po-lgh { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 14px 0 8px; } .po-lgh h3 { margin: 0; font-size: 1rem; } .po-lgh small { color: var(--text-dim); font-size: 0.72rem; text-align: right; }
   .po-od { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel); overflow: hidden; }
@@ -914,7 +914,7 @@
   .po-sc2p { text-align: right; max-width: 15rem; flex-shrink: 0; } .po-sc2p small { display: block; line-height: 1.2; } .po-sc2p .po-mk { display: inline-block; margin-top: 3px; font-size: 1rem; } .po-sc2p b { display: block; font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
   .po-sc2b { display: grid; gap: 8px; margin-top: 8px; font-size: 0.8rem; } .po-sc2b span { display: block; color: var(--text-dim); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.05em; } .po-sc2b p { margin: 1px 0 0; } .po-sc2b small { color: var(--text-dim); font-size: 0.7rem; }
   .po-cp { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; } .po-cp span { border: 1px solid var(--panel-border); border-radius: 999px; padding: 2px 9px; font-size: 0.76rem; background: color-mix(in srgb, var(--text-dim) 10%, transparent); }
-  @media (min-width: 640px) { .po-sc2b { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } .po-sc2s { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .po-sc2s { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
   .po-live { margin-top: 8px; border-radius: 8px; border: 1px solid var(--panel-border); font-size: 0.78rem; } .po-live.ok { border-color: var(--good); } .po-live.bad { border-color: var(--bad); }
   .po-live summary { cursor: pointer; padding: 5px 9px; list-style: none; } .po-live summary::-webkit-details-marker { display: none; } .po-live summary span { color: var(--text-dim); }
   .po-live ul { list-style: none; margin: 0; padding: 2px 9px 8px; } .po-live li { padding: 1px 0; }
@@ -934,6 +934,7 @@
   .po-live { padding: 5px 9px; } .po-live span { color: var(--text-dim); }
   .po-yes { color: var(--good); } .po-no { color: var(--bad); }
   .po-gms { display: grid; gap: 10px; margin-bottom: 8px; }
+  @media (min-width: 900px) { .po-gms.po-gs { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
   .po-gm { border: 1px solid var(--panel-border); border-radius: 12px; padding: 9px 12px; background: var(--panel); font-size: 0.82rem; }
   .po-gh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; } .po-gh em { font-style: normal; font-size: 0.7rem; color: var(--accent); font-weight: 700; }
   .po-gr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; padding: 3px 0; } .po-gn small { color: var(--text-dim); font-size: 0.7rem; margin-left: 6px; }
@@ -1995,14 +1996,14 @@
         <button type="button" id="mode-custom">Projected</button>
         <button type="button" id="mode-rumblin">Rumblin'</button>
         <button type="button" id="mode-scen">Scenarios</button>
-        <button type="button" id="mode-po">Playoff Hunt</button>
+        <button type="button" id="mode-po" hidden>Playoff Hunt</button>
       </div>
       <button type="button" class="refresh-btn" id="refresh-btn" title="Press R to refresh">Refresh (R)</button>
       <button type="button" class="refresh-btn howto-btn" id="howto-btn" aria-describedby="howto-tooltip">How to Use</button>
     </div>
   </header>
 
-  <div class="scen-mode-row" id="scen-mode-row" hidden><div class="toggle-group scen-mode" id="scen-mode" role="group" aria-label="Scenarios view"><button type="button" id="sm-mine">Mine</button><button type="button" id="sm-best">Best</button></div><span class="scen-po" id="scen-po" hidden>Playoffs</span></div>
+  <div class="scen-mode-row" id="scen-mode-row" hidden><div class="toggle-group scen-mode" id="scen-mode" role="group" aria-label="Scenarios view"><button type="button" id="sm-mine">Mine</button><button type="button" id="sm-best">Best</button><button type="button" id="sm-po" hidden>Playoff</button></div><span class="scen-po" id="scen-po" hidden>Playoffs</span></div>
 
   <div class="status-row" style="margin-bottom:12px;">
     <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text" class="pill-full">Checking status…</span><span id="status-text-short" class="pill-short">Checking…</span></span>
@@ -5712,6 +5713,7 @@
   }
   window.addEventListener("resize", fitPortraitColumns);
   function render(opts) {
+    poGate();
     if (state.view === "playoffs") renderPlayoffs();
     requestAnimationFrame(fitPortraitColumns);
     prefsSave();
@@ -5778,8 +5780,8 @@
         poNote.hidden = poCutRid == null;
         poNote.innerHTML = "<i></i> Gold line: the top " + PLAYOFF_SPOTS + " make the playoffs";
       }
-      var poMk = histWeek == null ? poMarkers(displayRows) : {}, poLeg = document.getElementById("po-legend");
-      if (poLeg) { poLeg.hidden = histWeek != null; poLeg.innerHTML = poLegendHtml(); }
+      var poMk = histWeek == null && poActive() ? poMarkers(displayRows) : {}, poLeg = document.getElementById("po-legend");
+      if (poLeg) { poLeg.hidden = histWeek != null || !poActive(); poLeg.innerHTML = poLegendHtml(); }
       els.body.innerHTML = displayRows.map(function (r) {
         var nameHtml;
         if (r.matchup_color) {
@@ -7152,13 +7154,43 @@
     var h = '<section class="po-lsec" id="po-s-scen"><div class="po-lgh"><h3>This week: who can clinch or be eliminated</h3><small>Week ' + sc.wk + (sc.proj ? " \u00b7 live check on" : " \u00b7 live check starts at kickoff") + "</small></div>";
     h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: <i>No help</i> is a score that does it on its own (only shown when one exists); <i>Real shot</i> is the lowest score with at least a 15% chance; <i>Long shot</i> is the bare minimum, and needs a lot of help.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. It starts at the team\u2019s minimum; slide to see how the numbers change.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>Live</b>: once games start, the projected Rumbles show under Needs, and each rival turns green (condition met) or red (not met).</li></ul></details>';
     h += cards ? '<div class="po-sc2s">' + cards + "</div>" : '<div class="po-note2">No team can clinch or be eliminated this week.</div>';
-    h += '</section><section class="po-lsec" id="po-s-games"><div class="po-lgh"><h3>Games that matter</h3><small>Playoff chance, by result</small></div><div id="po-lg-pm"></div></section>';
+    h += '</section><section class="po-lsec" id="po-s-games"><div class="po-lgh"><h3>Games that matter</h3><small id="po-gm-s">Playoff chance, by result</small></div><div id="po-lg-pm"></div></section>';
     h += '<section class="po-lsec" id="po-s-sacko"><div class="po-lgh"><h3>Sacko bracket hunt</h3><small>Avoiding an outright Sacko</small></div><div id="po-lg-sk"></div><div id="po-lg-sm"></div></section>';
     return h;
   }
-  function poLeagueNav() {
-    return '<nav class="po-jump">' + [["odds", "Odds"], ["scen", "This week"], ["games", "Games"], ["sacko", "Sacko"]].map(function (x) { return '<button type="button" data-po-jump="po-s-' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</nav>";
+  // The Playoff Hunt features sleep until some team can clinch or be eliminated (any playoff spot, bye or the 1 seed, or elimination), which
+  // happens by itself a few weeks before the end of every regular season; a past season never wakes them. Nothing here is tied to a year.
+  var poActCache = null;
+  function poActive() {
+    if (ARCHIVE) return false;
+    var teams = poTeams(), W = poWeeksLeft(); if (!teams || W == null || W <= 0) return false;
+    var P = PLAYOFF_SPOTS, B = poByes(), N = teams.length, mx = poMaxWeek(N), key = teams.map(function (t) { return t.R; }).join(",") + "|" + W + "|" + P + "|" + B;
+    if (poActCache && poActCache.k === key) return poActCache.v;
+    var sc = { opp: [], capR: mx * (W - 1), mx: mx, K: [P, B, 1] }, on = false, i, ev = B > 1 ? [0, 1, 2] : [0, 2];
+    for (i = 0; i < N && !on; i++) {
+      ev.forEach(function (e) { if (!on && poHelp(teams, i, mx, e, sc, P).allow >= 0) on = true; });
+      if (!on) { var h = poHelp(teams, i, 0, 3, sc, P); if (h.list.length > h.allow) on = true; }
+    }
+    poActCache = { k: key, v: on };
+    return on;
   }
+  function poGate() {
+    var on = poActive();
+    if (els.modePo.hidden === on) els.modePo.hidden = !on;
+    var smp = document.getElementById("sm-po"); if (smp && smp.hidden === on) smp.hidden = !on;
+    if (!on && state.view === "playoffs") setTimeout(function () { if (state.view === "playoffs" && !poActive()) setView("standings"); }, 0);
+  }
+  // How much each team has riding on the week's results: highest when its playoff (or outright Sacko) odds are near 50%, nothing once settled.
+  function poStakeMap() {
+    if (!poActive()) return null;
+    var teams = poTeams(); if (!teams) return null;
+    poSchedLoad();
+    var sim = poLeagueSim(teams); if (!sim) return null;
+    var m = {};
+    teams.forEach(function (t, j) { var p = poPct(sim, j, PLAYOFF_SPOTS), o = sim.outN[j] / sim.trials; m[t.rid] = 4 * p * (1 - p) + 2 * o * (1 - o); });
+    return m;
+  }
+  function poAfterOnePm() { var a = rbScenWindow(false); if (a && !a.wait) return true; var f = rbScenWindow(true); return !!(f && f.final); }
   function poLeagueSim(teams) {
     var lf = 0; if (state.live && state.live.isLive) rbTeams().forEach(function (t) { lf += t.act + t.proj; });
     return poCached(teams.map(function (t) { return t.R; }).join(",") + "|L|" + Math.round(lf * 10), "lg", function () { return poSim(teams, 0, poWeeksLeft(), null, 3000, {}, true); });
@@ -7195,6 +7227,26 @@
     return h + "</div>";
   }
   // Games that move the odds most: each game this week is run both ways (a pinned win, then a pinned loss) and the change in every team's odds is read off.
+  // After the Sunday 1pm games: the games with playoff stakes as live Scenarios (score, win chance, and what each side still needs).
+  function poLeagueScenHtml() {
+    var liveWk = state.live && state.live.week != null ? Number(state.live.week) : null; if (liveWk == null || ARCHIVE) return null;
+    var teams = rbTeams(); if (!teams.length) return null;
+    var fw = rbScenWindow(true), win = { key: "best" + liveWk, clusters: [], cur: 0, week: liveWk, past: false, final: !!(fw && fw.final) }, ck = liveWk + "|" + win.final;
+    var c = poCache.lgs;
+    if (!(c && c.key === ck && c.res.missing === 0 && Date.now() - c.at < 90000)) c = poCache.lgs = { key: ck, at: Date.now(), res: rbBestList(teams, win, true) };
+    if (!c.res.list.length) return null;
+    var pt = poTeams(), sim = pt ? poLeagueSim(pt) : null, odds = {};
+    if (sim) pt.forEach(function (t, j) { odds[t.rid] = poPct(sim, j, PLAYOFF_SPOTS); });
+    var live = !win.final;
+    return '<div class="po-gms po-gs">' + c.res.list.slice(0, 4).map(function (r) {
+      var cols = rbPairCols(r.a, r.b), pm = r.pm, last = pm.model.at(pm.model.end), cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
+      var verdict = pm.done ? (last.my > last.th + 0.004 ? r.a.name + " won" : last.th > last.my + 0.004 ? r.b.name + " won" : "Tied") : "Live";
+      var why = odds[r.a.rid] != null ? escapeHtml(r.a.name) + " " + poFmtPct(odds[r.a.rid]) + " \u00b7 " + escapeHtml(r.b.name) + " " + poFmtPct(odds[r.b.rid]) + " to make the playoffs" : "";
+      return '<section class="sc-blk best h2h po-sb"><div class="sc-bh"><div><b style="color:' + cA + '">' + escapeHtml(r.a.name) + '</b> <span class="sc-vs">vs.</span> <b style="color:' + cB + '">' + escapeHtml(r.b.name) + '</b> <span class="sc-chip h2h">H2H \u00b7 10 Rumbles</span>' +
+        '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + why + "</div></div>" +
+        '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + rbBestNeedHtml(r, live && !pm.done, cols, pm) + "</section>";
+    }).join("") + "</div>";
+  }
   var poLgMTok = 0;
   function poLeagueMatchups(teams, W, P) {
     var sched = poSchedWeeks(), wk = poPlayed() + 1, pairs = sched && sched[wk]; if (!pairs) return;
@@ -7214,7 +7266,10 @@
             o.x.t.map(function (z) { return '<div class="po-gr"><span class="po-gn">' + escapeHtml(z.n) + "<small>now " + poFmtPct(z[metric][2]) + '</small></span><span class="po-wl w">Win <b>' + poFmtPct(z[metric][0]) + '</b></span><span class="po-wl l">Lose <b>' + poFmtPct(z[metric][1]) + "</b></span></div>"; }).join("") + "</div>";
         }).join("") + "</div>";
       }
-      pm.innerHTML = section("p", 3, "No game this week moves anyone\u2019s playoff odds much.");
+      var scenH = poAfterOnePm() ? poLeagueScenHtml() : null, gs = document.getElementById("po-gm-s");
+      if (gs) gs.textContent = scenH ? "Live scenarios \u00b7 after the 1pm games" : "Playoff chance, by result";
+      pm.innerHTML = scenH ? scenH + '<p class="po-fine">The same games are in Scenarios \u203a Playoff.</p>' : section("p", 3, "No game this week moves anyone\u2019s playoff odds much.");
+      if (scenH) { scAvatars(); }
       if (sm) {
         var sl2 = g.map(function (x) { var sc2 = 0; x.risk.forEach(function (q) { sc2 += Math.abs(q.a - q.b); }); return { x: x, score: sc2 }; }).filter(function (o) { return o.score * 100 >= 3; }).sort(function (a, b) { return b.score - a.score; }).slice(0, 4);
         sm.innerHTML = '<div class="po-sub">Games that move the outright Sacko odds</div>' + (sl2.length ? '<div class="po-gms">' + sl2.map(function (o) {
@@ -7660,7 +7715,7 @@
     var lgEl = document.getElementById("po-league");
     if (poUi.rid === "league") {
       document.getElementById("po-back").hidden = true; status.innerHTML = ""; var se0 = document.getElementById("po-summary"); if (se0) se0.innerHTML = ""; secs.hidden = true; lgEl.hidden = false;
-      lgEl.innerHTML = W <= 0 ? '<div class="rb-live-empty">The regular season is over.</div>' : poLeagueNav() + poLeagueOdds(teams, W, P, B) + poLeagueHtml(teams, W, P, B);
+      lgEl.innerHTML = W <= 0 ? '<div class="rb-live-empty">The regular season is over.</div>' : poLeagueOdds(teams, W, P, B) + poLeagueHtml(teams, W, P, B);
       if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W, poLgCtx && poLgCtx.sc); poLeagueMatchups(teams, W, P); }
       return;
     }
@@ -8656,16 +8711,22 @@
     var wp = wpPct(pm.pEnd), cA = wpResolve(cols.mine), cB = wpResolve(cols.theirs);
     return rbScenScores(r.a, r.b, cB) + scBarHtml(r.a, r.b, wp, cA, cB) + '<div class="sc-need">' + txt + '</div><div class="sc-cols">' + rbScenSideHtml(r.a, la, null) + rbScenSideHtml(r.b, lb, null) + "</div>";
   }
-  function rbBestList(teams, win) {
-    var out = [], missing = 0, i, j;
+  function rbBestList(teams, win, poMode) {
+    var out = [], missing = 0, i, j, stakes = win.past ? null : poStakeMap();
     for (i = 0; i < teams.length; i++) for (j = i + 1; j < teams.length; j++) {
       var a = teams[i], b = teams[j];
       if (b.act > a.act) { var sw = a; a = b; b = sw; }   // whoever is ahead is listed first, so "Won" on the chart means the first name
       var pm = wpPair(win, a, b, rbPairCols(a, b));
       if (!pm) { missing++; continue; }
       var h2h = a.opp === b.rid || b.opp === a.rid;
-      out.push({ a: a, b: b, pm: pm, h2h: h2h, it: wpInterest(pm, h2h) });
+      var it = wpInterest(pm, h2h);
+      // Once the playoff race is on, a game that decides a playoff spot (or the Sacko) outranks an equally close game that decides nothing.
+      it.stake = stakes ? ((stakes[a.rid] || 0) + (stakes[b.rid] || 0)) / 2 * (h2h ? 1 : 0.15) : 0;
+      if (it.stake > 0) it.score += 0.45 * it.stake;
+      if (it.stake >= 0.3) it.why.push("playoff stakes");
+      out.push({ a: a, b: b, pm: pm, h2h: h2h, it: it });
     }
+    if (poMode) return { list: out.filter(function (r) { return r.h2h && r.it.stake > 0.02; }).sort(function (x, y) { return y.it.stake - x.it.stake; }), missing: missing, total: out.length + missing };
     out.sort(function (x, y) { return y.it.score - x.it.score; });
     var uses = {}, picked = [];
     out.forEach(function (r) {
@@ -8710,8 +8771,10 @@
     rbStickOffset();
   }
   function rbScenModeUi(best) {
-    document.getElementById("sm-best").classList.toggle("active", best);
+    var po = !!(best && state.rb.scenPo && poActive());
+    document.getElementById("sm-best").classList.toggle("active", best && !po);
     document.getElementById("sm-mine").classList.toggle("active", !best);
+    document.getElementById("sm-po").classList.toggle("active", po);
   }
   function rbRenderBest() {
     var rb = state.rb;
@@ -8743,12 +8806,13 @@
       teams = liveTeams; win = { key: "best" + liveWk, clusters: [], cur: 0, week: liveWk, past: false, final: !!(fw && fw.final) };
     } else { box.innerHTML = '<div class="rb-live-empty">No games to show yet.</div>'; return; }
     // a finished week is scored once; the week in progress at most every 90 seconds
-    var c = state.bestCache, fresh = c && c.key === win.key && c.res.missing === 0 && c.res.total > 0 && (win.past || win.final || Date.now() - c.at < 90000) && c.docs === wpStatus(win.week);
-    if (!fresh) { c = state.bestCache = { key: win.key, at: Date.now(), docs: wpStatus(win.week), res: rbBestList(teams, win) }; }
+    var poView = !!(rb.scenBest && rb.scenPo && poActive() && !win.past), ckey = win.key + (poView ? "|po" : "");
+    var c = state.bestCache, fresh = c && c.key === ckey && c.res.missing === 0 && c.res.total > 0 && (win.past || win.final || Date.now() - c.at < 90000) && c.docs === wpStatus(win.week);
+    if (!fresh) { c = state.bestCache = { key: ckey, at: Date.now(), docs: wpStatus(win.week), res: rbBestList(teams, win, poView) }; }
     var res = c.res, live = !win.past && !win.final;
     if (!res.list.length) {
       var st = wpStatus(win.week);
-      box.innerHTML = '<div class="rb-live-empty">' + (st === "loading" ? "Loading the week\u2019s play-by-play\u2026" : live ? "Best matchups start once the games kick off." : "Play-by-play isn\u2019t available for this week.") + "</div>";
+      box.innerHTML = '<div class="rb-live-empty">' + (st === "loading" ? "Loading the week\u2019s play-by-play\u2026" : poView && res.total > 0 ? "No game this week has playoff stakes." : live ? "Best matchups start once the games kick off." : "Play-by-play isn\u2019t available for this week.") + "</div>";
       return;
     }
     var html = res.list.map(function (r, i) {
@@ -8759,7 +8823,7 @@
         '<div class="sc-hl">' + last.my.toFixed(2) + " \u2013 " + last.th.toFixed(2) + '</div><div class="sc-why">' + escapeHtml(r.it.why.join(" \u00b7 ")) + "</div></div>" +
         '<div class="sc-gap even"><span>Margin</span><b>' + r.it.margin.toFixed(2) + '</b><em class="sc-wp even">' + escapeHtml(verdict) + "</em></div></div>" + mini.html + rbBestNeedHtml(r, live && !pm.done, cols, pm) + "</section>";
     }).join("");
-    box.innerHTML = html;
+    box.innerHTML = (poView ? '<div class="po-note2">Games with a playoff or Sacko result riding on them, biggest first.</div>' : "") + html;
     scAvatars(); wpMiniOff();
     wpSheetKeep();
     rbStickOffset();
@@ -8821,7 +8885,8 @@
     return '<div class="sc-bar"><i class="sc-mid"></i><span class="sc-av' + (d.coin ? " coin" : "") + '" style="left:' + from.toFixed(1) + "%;--c:" + col + '" data-to="' + d.pos.toFixed(1) + '" title="' +
       escapeHtml(d.coin ? "A coin flip: " + winPct + "% to win" : who.name + " is ahead: " + (d.lead > 0 ? winPct : 100 - winPct) + "% to win") + '">' + face + "</span></div>";
   }
-  function wpDirty() { wpLinkTry(); if (!document.getElementById("rumblin-view").hidden) renderRumblin(); }
+  var poLgT = null;
+  function wpDirty() { wpLinkTry(); if (!document.getElementById("rumblin-view").hidden) renderRumblin(); if (document.getElementById("po-view") && !document.getElementById("po-view").hidden && poUi.rid === "league") { clearTimeout(poLgT); poLgT = setTimeout(function () { renderPlayoffs(true); }, 250); } }
   // ?wp=WEEK.ME.THEM (made by "Share link") opens that chart straight away, this week's or a past one, with no manager picked.
   // A finished week: one of the counted weeks, or a playoff week (those sit in extra_weekly and are never in weeks_completed).
   function wpWeekDone(w) {
@@ -11161,10 +11226,13 @@
     renderPlayoffs(true);
   });
   document.getElementById("sm-best").addEventListener("click", function () {
-    state.rb.scenBest = true; state.rb.sub = "scenarios"; state.rb.scenWeek = state.rb.scenWeek; renderRumblin();
+    state.rb.scenBest = true; state.rb.scenPo = false; state.rb.sub = "scenarios"; state.rb.scenWeek = state.rb.scenWeek; renderRumblin();
+  });
+  document.getElementById("sm-po").addEventListener("click", function () {
+    state.rb.scenBest = true; state.rb.scenPo = true; state.rb.sub = "scenarios"; renderRumblin();
   });
   document.getElementById("sm-mine").addEventListener("click", function () {
-    state.rb.scenBest = false;
+    state.rb.scenBest = false; state.rb.scenPo = false;
     if (state.rb.me == null) { state.rb.wantMe = true; state.rb.wantScen = true; openWhoPicker(); state.rb.scenBest = true; return; }
     rbEnterMe(); state.rb.sub = "scenarios"; renderRumblin();
   });
