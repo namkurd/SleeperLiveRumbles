@@ -920,6 +920,8 @@
   .po-live ul { list-style: none; margin: 0; padding: 2px 9px 8px; } .po-live li { padding: 1px 0; }
   .po-sl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 3px 0 6px; font-size: 0.8rem; } .po-sl input { flex: 1 1 120px; min-width: 100px; accent-color: var(--accent); }
   .po-hh { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; } .po-hh .po-snap { text-transform: none; letter-spacing: 0; }
+  .po-tiers { display: grid; gap: 2px; margin-top: 2px; } .po-tiers div { display: flex; align-items: baseline; gap: 6px; } .po-tiers em { font-style: normal; min-width: 4.6rem; color: var(--text-dim); font-size: 0.74rem; } .po-tiers small { color: var(--text-dim); }
+  .po-pj { margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); } .po-out { display: block; font-size: 0.78rem; margin-top: 1px; }
   .po-strict { display: block; margin-top: 2px; } .po-pa { display: block; margin: 2px 0 4px; }
   .po-snap { border: 1px solid var(--panel-border); background: none; color: var(--text); border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 0.7rem; cursor: pointer; }
   .po-cp span.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); } .po-cp span.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); } .po-cp span i { font-style: normal; color: var(--text-dim); font-size: 0.68rem; }
@@ -7113,24 +7115,28 @@
         for (g = 0; g <= mx; g++) { var pw = poWin(d, e, g, mx, e === 3); if (pw != null && pw >= 0.15) { need = g; break; } }
         if (need == null) { longShot = true; for (g = 0; g <= mx; g++) if (d.h[e][g]) { need = g; break; } }
         if (need == null) need = mx;
-        var outAt = -1, needTxt, strictTxt = "";
-        if (e === 3) {
-          for (g = 0; g <= mx; g++) { if (d.n[g] && d.h[3][g] / d.n[g] >= 0.99) outAt = g; else if (d.n[g] > 4) break; }
-          needTxt = (outAt >= 0 ? "Out at <b>" + outAt + "</b> or fewer. " : "") + (longShot ? "" : "Needs <b>" + need + "+</b> Rumbles to survive");
-        } else {
-          var strict = null; for (g = 0; g <= mx; g++) if (poHelp(teams, i, g, e, sc, P).allow >= 0) { strict = g; break; }
-          needTxt = "<b>" + need + "+</b> Rumbles" + (longShot ? " <small>long shot</small>" : " <small>for a real shot (15%+)</small>");
-          var strictTxt = strict != null && strict < need ? '<small class="po-strict">Works with as few as ' + strict + ", but only if nearly every rival is shut out.</small>" : "";
+        var outAt = -1, noHelp = null, longMin = null, hq;
+        for (g = 0; g <= mx; g++) {
+          hq = poHelp(teams, i, g, e, sc, P);
+          if (longMin == null && hq.allow >= 0) longMin = g;
+          if (noHelp == null && hq.allow >= 0 && (e === 3 ? hq.list.length - hq.allow <= 0 : hq.list.length <= hq.allow)) noHelp = g;
         }
-        if (sc.proj) { var pj = sc.proj[i]; needTxt += ' \u00b7 projected <b class="' + (pj >= need ? "po-yes" : "po-no") + '">' + pj + " " + (pj >= need ? "\u2713" : "\u2717") + "</b>"; }
-        if (typeof strictTxt === "string") { needTxt += strictTxt; strictTxt = ""; }
+        if (e === 3) for (g = 0; g <= mx; g++) { if (d.n[g] && d.h[3][g] / d.n[g] >= 0.99) outAt = g; else if (d.n[g] > 4) break; }
+        var tiers = [], pj = sc.proj ? sc.proj[i] : null, reachedTier = null;
+        if (noHelp != null) tiers.push(["No help", noHelp, e === 3 ? "safe on your own" : "clinch on your own"]);
+        if (!longShot) tiers.push(["Real shot", need, "15%+ chance"]);
+        if (longMin != null && (longShot || longMin < need) && (noHelp == null || longMin < noHelp)) tiers.push(["Long shot", longMin, "needs a lot of help"]);
+        tiers.sort(function (x, y) { return y[1] - x[1]; });
+        if (pj != null) tiers.forEach(function (tr) { if (pj >= tr[1] && reachedTier == null) reachedTier = tr[0]; });
+        var needTxt = (e === 3 && outAt >= 0 ? '<span class="po-out">Almost certainly out at <b>' + outAt + "</b> or fewer.</span>" : "") + '<div class="po-tiers">' + tiers.map(function (tr) { return "<div><em>" + tr[0] + "</em><b>" + tr[1] + '+</b> Rumbles <small>' + tr[2] + "</small></div>"; }).join("") + "</div>";
+        if (pj != null) needTxt += '<div class="po-pj">Projected <b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "" : "po-no") + '">' + pj + "</b> \u00b7 " + (reachedTier ? reachedTier.toLowerCase() + " reached" : "below the long shot") + "</div>";
         cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><b>' + poFmtPct(p) + "</b><small>" + MK[e][1] + '</small><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div></div>" +
           (sc.proj ? poLiveCheck(teams, i, e, sc, P) : "") +
           '<div class="po-sc2b"><div><span>Needs</span><p>' + needTxt + '</p></div><div><span class="po-hh">Help' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">\u21BA Reset to projected (' + sc.proj[i] + ")</button>" : "") + '</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + need + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + need + '"></label><div class="po-hb">' + poHelpBlock(teams, i, e, need, sc, P) + "</div></div></div></div>";
       }
     });
     var h = '<section class="po-lsec" id="po-s-scen"><div class="po-lgh"><h3>This week: who can clinch or be eliminated</h3><small>Week ' + sc.wk + (sc.proj ? " \u00b7 live check on" : " \u00b7 live check starts at kickoff") + "</small></div>";
-    h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: the lowest week that gives it at least a 15% chance.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. It starts at the team\u2019s minimum; slide to see how the numbers change.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>Live</b>: once games start, projected Rumbles show next to Needs, and each rival turns green (condition met) or red (not met).</li></ul></details>';
+    h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: <i>No help</i> is a score that does it on its own (only shown when one exists); <i>Real shot</i> is the lowest score with at least a 15% chance; <i>Long shot</i> is the bare minimum, and needs a lot of help.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. It starts at the team\u2019s minimum; slide to see how the numbers change.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>Live</b>: once games start, the projected Rumbles show under Needs, and each rival turns green (condition met) or red (not met).</li></ul></details>';
     h += cards ? '<div class="po-sc2s">' + cards + "</div>" : '<div class="po-note2">No team can clinch or be eliminated this week.</div>';
     h += '</section><section class="po-lsec" id="po-s-games"><div class="po-lgh"><h3>Games that matter</h3><small>Playoff chance, by result</small></div><div id="po-lg-pm"></div></section>';
     h += '<section class="po-lsec" id="po-s-sacko"><div class="po-lgh"><h3>Sacko bracket hunt</h3><small>Avoiding an outright Sacko</small></div><div id="po-lg-sk"></div><div id="po-lg-sm"></div></section>';
