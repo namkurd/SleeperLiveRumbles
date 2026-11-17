@@ -925,6 +925,11 @@
   .po-sc2p .po-live { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; white-space: nowrap; } .po-sc2p .po-live b { display: inline; font-size: inherit; line-height: inherit; }
   .po-pj { margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); } .po-out { display: block; font-size: 0.78rem; margin-top: 1px; }
   .po-strict { display: block; margin-top: 2px; } .po-pa { display: flex !important; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin: 2px 0 4px; } .po-vd { font-weight: 600; } .po-vd.ok { color: var(--good); } .po-vd.bad { color: var(--bad); }
+  .po-or, .po-sc2 { position: relative; } .po-fx-up { animation: rb-glow-up 4.2s ease-out forwards; } .po-fx-dn { animation: rb-glow-dn 4.2s ease-out forwards; }
+  .po-popwrap { position: absolute; top: 0; right: 0; z-index: 6; display: flex; gap: 3px; pointer-events: none; }
+  .po-popwrap .rb-swaptag { position: static; border-radius: 0 0 8px 8px; } .po-popwrap .po-pop2 { font-weight: 700; }
+  .po-fx-up .po-pop2 { background: color-mix(in srgb, var(--good) 30%, var(--panel)); color: var(--text); } .po-fx-dn .po-pop2 { background: color-mix(in srgb, var(--bad) 30%, var(--panel)); color: var(--text); }
+  .po-fx-up .po-pop:not(.po-pop2) { background: var(--good); color: #06240f; } .po-fx-dn .po-pop:not(.po-pop2) { background: var(--bad); color: #fff; }
   .po-pr { display: flex; align-items: center; justify-content: flex-end; gap: 6px; } .po-sc2p .po-pr b { display: inline; } .po-sc2p .po-pr .po-mk { margin-top: 0; }
   .po-sc2b .po-pa span { text-transform: none; letter-spacing: 0; font-size: 0.72rem; color: var(--text-dim); display: inline; } .po-sc2b .po-pa span.po-vd.ok { color: var(--good); } .po-sc2b .po-pa span.po-vd.bad { color: var(--bad); }
   .po-sc2t .po-live b { display: inline; font-size: inherit; }
@@ -7088,6 +7093,34 @@
     var t = poFmtPct(p), m = /^([<>]?)(\d+)%$/.exec(t);
     return m ? m[1].replace("<", "&lt;").replace(">", "&gt;") + fl(key, m[2]) + "%" : escapeHtml(t);
   }
+  // Rumblin' / Stumblin' on the League page: as the live Rumbles move, a team that climbs the projected standings (this week's projected Rumbles
+  // added to its season total) gets the green "Rumblin'! +N" pop with a second pop naming whom it overtook; one that drops gets the red
+  // "Stumblin'.. -N" pop naming who overtook it. Same pops and glow as the Rumblin' cards, on the Playoff picture rows and the scenario cards.
+  function poPops(teams, sc) {
+    var lg = document.getElementById("po-league");
+    if (!lg || !sc || !sc.proj) { state.poLast = null; return; }
+    var tots = teams.map(function (t, j) { return { t: t, tot: t.R + sc.proj[j] }; }).sort(function (a, b) { return b.tot - a.tot || b.t.pf - a.t.pf || a.t.rank - b.t.rank; });
+    var cur = {}; tots.forEach(function (x, i) { cur[x.t.rid] = { i: i, tot: x.tot }; });
+    var last = state.poLast; state.poLast = { wk: sc.wk, m: cur };
+    if (!last || last.wk !== sc.wk || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+    function names(list) { var n = list.map(function (o) { return o.name; }); return n.slice(0, 3).join(", ") + (n.length > 3 ? " +" + (n.length - 3) : ""); }
+    teams.forEach(function (t, j) {
+      var a = last.m[t.rid], b = cur[t.rid]; if (!a || !b) return;
+      var d = Math.round((b.tot - a.tot) * 10) / 10, up = b.i < a.i && d > 0, dn = b.i > a.i && d < 0;
+      if (!up && !dn) return;
+      var who = teams.filter(function (o) { var la = last.m[o.rid], cb = cur[o.rid]; return o !== t && la && cb && (up ? la.i < a.i && cb.i > b.i : la.i > a.i && cb.i < b.i); });
+      var els = [].slice.call(lg.querySelectorAll('[data-po-team="' + t.rid + '"], .po-sc2[data-i="' + j + '"]'));
+      els.forEach(function (el) {
+        var wrap = document.createElement("span"), t1 = document.createElement("span"), t2 = document.createElement("span");
+        wrap.className = "po-popwrap"; t1.className = "rb-swaptag po-pop"; t2.className = "rb-swaptag po-pop po-pop2";
+        t1.textContent = up ? "Rumblin'! +" + Math.abs(d) : "Stumblin'.. -" + Math.abs(d);
+        t2.textContent = (up ? "Overtook " : "Overtaken by ") + (who.length ? names(who) : "\u2014");
+        wrap.appendChild(t1); wrap.appendChild(t2); el.appendChild(wrap);
+        el.classList.add(up ? "po-fx-up" : "po-fx-dn");
+        setTimeout(function () { el.classList.remove("po-fx-up", "po-fx-dn"); if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, RB_GLOW_MS + 100);
+      });
+    });
+  }
   var poLgCtx = null;
   function poHelpBlock(teams, i, e, g, sc, P) {
     var hp = poHelp(teams, i, g, e, sc, P), elim = e === 3, nm = escapeHtml(teams[i].name), pills = "", txt;
@@ -7758,7 +7791,7 @@
       document.getElementById("po-back").hidden = true; status.innerHTML = ""; var se0 = document.getElementById("po-summary"); if (se0) se0.innerHTML = ""; secs.hidden = true; lgEl.hidden = false;
       lgEl.innerHTML = W <= 0 ? '<div class="rb-live-empty">The regular season is over.</div>' : poLeagueOdds(teams, W, P, B) + poLeagueHtml(teams, W, P, B);
       if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W, poLgCtx && poLgCtx.sc); if (poSackoRun.cand) poSackoRun(teams, W, poSackoRun.cand); flapScan(lgEl); poLeagueMatchups(teams, W, P); }
-      flapScan(lgEl);
+      flapScan(lgEl); poPops(teams, poLgCtx && poLgCtx.sc);
       return;
     }
     lgEl.hidden = true; document.getElementById("po-back").hidden = false;
