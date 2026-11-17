@@ -925,7 +925,6 @@
   .po-sc2p .po-live { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; white-space: nowrap; } .po-sc2p .po-live b { display: inline; font-size: inherit; line-height: inherit; }
   .po-pj { margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); } .po-out { display: block; font-size: 0.78rem; margin-top: 1px; }
   .po-strict { display: block; margin-top: 2px; } .po-pa { display: flex !important; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin: 2px 0 4px; } .po-vd { font-weight: 600; } .po-vd.ok { color: var(--good); } .po-vd.bad { color: var(--bad); }
-  .po-sc2p .po-pr .po-wl { font-size: 0.9rem; padding: 3px 9px; } .po-sc2p .po-pr .po-wl b { display: inline; font-size: inherit; line-height: inherit; }
   .po-pr { display: flex; align-items: center; justify-content: flex-end; gap: 6px; } .po-sc2p .po-pr b { display: inline; } .po-sc2p .po-pr .po-mk { margin-top: 0; }
   .po-sc2b .po-pa span { text-transform: none; letter-spacing: 0; font-size: 0.72rem; color: var(--text-dim); display: inline; } .po-sc2b .po-pa span.po-vd.ok { color: var(--good); } .po-sc2b .po-pa span.po-vd.bad { color: var(--bad); }
   .po-sc2t .po-live b { display: inline; font-size: inherit; }
@@ -7047,7 +7046,7 @@
     teams.forEach(function (t, k) { idx[t.rid] = k; opp.push(-1); });
     pairs.forEach(function (p) { opp[idx[p[0]]] = idx[p[1]]; opp[idx[p[1]]] = idx[p[0]]; });
     var live = poLiveWeek(wk), useLive = !!(live && teams.every(function (t) { return live[t.rid]; })), trials = 6000, rng = poRng(4242);
-    var K = [P, B, 1], D = teams.map(function () { var o = { n: [], h: [[], [], [], []], nw: 0, nl: 0, hw: [0, 0, 0, 0], hl: [0, 0, 0, 0] }; for (g = 0; g <= mx; g++) { o.n.push(0); for (var e = 0; e < 4; e++) o.h[e].push(0); } return o; });
+    var K = [P, B, 1], D = teams.map(function () { var o = { n: [], h: [[], [], [], []] }; for (g = 0; g <= mx; g++) { o.n.push(0); for (var e = 0; e < 4; e++) o.h[e].push(0); } return o; });
     for (var t = 0; t < trials; t++) {
       var s = [], xg = [], R2 = [];
       for (j = 0; j < N; j++) s[j] = useLive ? live[teams[j].rid].m + live[teams[j].rid].sd * poGauss(rng) : (st.mu[teams[j].rid] != null ? st.mu[teams[j].rid] : st.lg) + st.sd * poGauss(rng);
@@ -7055,12 +7054,10 @@
       for (i = 0; i < N; i++) {
         var ge = 0, gt = 0; for (j = 0; j < N; j++) if (j !== i) { if (R2[j] + capR >= R2[i]) ge++; if (R2[j] > R2[i] + capR) gt++; }
         var d = D[i], x = Math.min(mx, xg[i]); d.n[x]++;
-        var won = opp[i] >= 0 && s[i] > s[opp[i]], side = won ? d.hw : d.hl;   // the chance is also kept apart for "wins its game" and "loses it"
-        if (opp[i] >= 0) { if (won) d.nw++; else d.nl++; }
-        if (ge <= P - 1) { d.h[0][x]++; side[0]++; }
-        if (B > 1 && ge <= B - 1) { d.h[1][x]++; side[1]++; }
-        if (ge <= 0) { d.h[2][x]++; side[2]++; }
-        if (gt >= P) { d.h[3][x]++; side[3]++; }
+        if (ge <= P - 1) d.h[0][x]++;
+        if (B > 1 && ge <= B - 1) d.h[1][x]++;
+        if (ge <= 0) d.h[2][x]++;
+        if (gt >= P) d.h[3][x]++;
       }
     }
     var proj = null;
@@ -7086,10 +7083,10 @@
   }
   function poListHtml(list) { return "<ul>" + list.map(function (x) { return "<li>" + escapeHtml(x.n) + " <b>" + x.th + "+</b></li>"; }).join("") + "</ul>"; }
   // Live check: the same scenario, tested on this week's projected Rumbles. Every requirement gets a check or an X.
-  // The chance split by how the team's own game goes, like the Games that matter cards: Win / Lose chips that move with the live Rumbles.
-  function poSplitHtml(d, e) {
-    var w = d.nw ? d.hw[e] / d.nw : null, l = d.nl ? d.hl[e] / d.nl : null;
-    return '<span class="po-wl w">Win <b>' + (w == null ? "\u2014" : poFmtPct(w)) + '</b></span><span class="po-wl l">Lose <b>' + (l == null ? "\u2014" : poFmtPct(l)) + "</b></span>";
+  // A chance as split-flap numbers (the digits flip when the figure changes, like the scores): "23%", "<1%", ">99%"
+  function flPct(key, p) {
+    var t = poFmtPct(p), m = /^([<>]?)(\d+)%$/.exec(t);
+    return m ? m[1].replace("<", "&lt;").replace(">", "&gt;") + fl(key, m[2]) + "%" : escapeHtml(t);
   }
   var poLgCtx = null;
   function poHelpBlock(teams, i, e, g, sc, P) {
@@ -7149,7 +7146,7 @@
         if (pj != null) tiers.forEach(function (tr) { if (pj >= tr[1] && reachedTier == null) reachedTier = tr[0]; });
         var needTxt = '<div class="po-tiers">' + tiers.map(function (tr) { return "<div><em>" + tr[0] + "</em><b>" + tr[1] + '+</b> Rumbles <small>' + tr[2] + "</small></div>"; }).join("") +
           (pj != null ? '<div class="po-tp"><em>Projected</em><b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "po-mid" : "po-no") + '">' + pj + "</b> Rumbles</div>" : "") + "</div>";
-        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr">' + poSplitHtml(d, e) + '<span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small><small>" + poFmtPct(p) + " overall</small></div></div>" +
+        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr"><b>' + flPct("po:c:" + t.rid + ":" + e, p) + '</b><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small></div></div>" +
           '<div class="po-sc2b"><div>' + needTxt + '</div><div><span class="po-hh">Help' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">\u21BA Reset to projected (' + sc.proj[i] + ")</button>" : "") + '</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + need + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + need + '"></label><div class="po-hb">' + poHelpBlock(teams, i, e, need, sc, P) + "</div></div></div></div>";
       }
     });
@@ -7204,7 +7201,7 @@
     var h = '<section class="po-lsec" id="po-s-odds"><div class="po-lgh"><h3>Playoff picture</h3><small>Tap a team for its path</small></div><div class="po-od"><div class="po-odh"><span>#</span><span>Team</span><span>Playoffs</span>' + (B > 1 ? "<span>Bye</span>" : "<span></span>") + "</div>";
     sorted.forEach(function (t) {
       var j = teams.indexOf(t), pp = poPct(sim, j, P), s0 = st[t.rid] || {}, m = s0.dead ? ["\uD83D\uDC80", "k-out"] : s0.one ? ["$", "k-one"] : (s0.bye && B > 1) ? ["z", "k-bye"] : s0.x ? ["x", "k-in"] : null;
-      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><em>' + poFmtPct(pp) + "</em></span>" + (B > 1 ? '<span class="po-by">' + poFmtPct(poPct(sim, j, B)) + "</span>" : "<span></span>") + "</button>";
+      h += '<button type="button" class="po-or' + (t.rank === P ? " cut" : "") + '" data-po-team="' + t.rid + '"><span class="po-rk">' + t.rank + '</span><span class="po-nm">' + (m ? '<i class="po-mk ' + m[1] + '">' + m[0] + "</i>" : "") + escapeHtml(t.name) + "<small>" + t.R + '</small></span><span class="po-pc"><em>' + flPct("po:p:" + t.rid, pp) + "</em></span>" + (B > 1 ? '<span class="po-by">' + flPct("po:b:" + t.rid, poPct(sim, j, B)) + "</span>" : "<span></span>") + "</button>";
     });
     return h + "</div></section>";
   }
@@ -7264,7 +7261,7 @@
     cand.forEach(function (x) {
       var t = x.t, nm = escapeHtml(t.name), gap = sec.R - t.R;
       h += '<div class="po-sc2" data-sk="' + t.rid + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + " Rumbles" +
-        '</small></div><div class="po-sc2p"><div class="po-pr"><b>' + poFmtPct(x.o) + '</b><span class="po-mk k-out">\uD83D\uDCA9</span></div><small>chance of an outright Sacko</small></div></div>' +
+        '</small></div><div class="po-sc2p"><div class="po-pr"><b>' + flPct("po:s:" + t.rid, x.o) + '</b><span class="po-mk k-out">\uD83D\uDCA9</span></div><small>chance of an outright Sacko</small></div></div>' +
         '<div class="po-sc2b"><div class="po-skb">' + poSackoBodyHtml(teams, x, W, sc, poSackoLock(teams, x.j, W)) + '</div><p class="po-skn">' + (t === byR[0] ? "<b>" + gap + "</b> behind " + escapeHtml(sec.name) + " (" + poOrd(N - 1) + "). " : "") + "Forcing the bracket means finishing within <b>30</b> Rumbles of " + poOrd(N - 1) + " place.</p></div></div>";
     });
     return h + "</div>";
@@ -7760,7 +7757,8 @@
     if (poUi.rid === "league") {
       document.getElementById("po-back").hidden = true; status.innerHTML = ""; var se0 = document.getElementById("po-summary"); if (se0) se0.innerHTML = ""; secs.hidden = true; lgEl.hidden = false;
       lgEl.innerHTML = W <= 0 ? '<div class="rb-live-empty">The regular season is over.</div>' : poLeagueOdds(teams, W, P, B) + poLeagueHtml(teams, W, P, B);
-      if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W, poLgCtx && poLgCtx.sc); if (poSackoRun.cand) poSackoRun(teams, W, poSackoRun.cand); poLeagueMatchups(teams, W, P); }
+      if (W > 0 && poSchedWeeks() && poStrength()) { var skEl = document.getElementById("po-lg-sk"); if (skEl) skEl.innerHTML = poSackoHtml(teams, W, poLgCtx && poLgCtx.sc); if (poSackoRun.cand) poSackoRun(teams, W, poSackoRun.cand); flapScan(lgEl); poLeagueMatchups(teams, W, P); }
+      flapScan(lgEl);
       return;
     }
     lgEl.hidden = true; document.getElementById("po-back").hidden = false;
