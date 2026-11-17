@@ -925,6 +925,7 @@
   .po-sc2p .po-live { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; white-space: nowrap; } .po-sc2p .po-live b { display: inline; font-size: inherit; line-height: inherit; }
   .po-pj { margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); } .po-out { display: block; font-size: 0.78rem; margin-top: 1px; }
   .po-strict { display: block; margin-top: 2px; } .po-pa { display: flex !important; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin: 2px 0 4px; } .po-vd { font-weight: 600; } .po-vd.ok { color: var(--good); } .po-vd.bad { color: var(--bad); }
+  .po-sc2p .po-pr .po-wl { font-size: 0.9rem; padding: 3px 9px; } .po-sc2p .po-pr .po-wl b { display: inline; font-size: inherit; line-height: inherit; }
   .po-pr { display: flex; align-items: center; justify-content: flex-end; gap: 6px; } .po-sc2p .po-pr b { display: inline; } .po-sc2p .po-pr .po-mk { margin-top: 0; }
   .po-sc2b .po-pa span { text-transform: none; letter-spacing: 0; font-size: 0.72rem; color: var(--text-dim); display: inline; } .po-sc2b .po-pa span.po-vd.ok { color: var(--good); } .po-sc2b .po-pa span.po-vd.bad { color: var(--bad); }
   .po-sc2t .po-live b { display: inline; font-size: inherit; }
@@ -7046,7 +7047,7 @@
     teams.forEach(function (t, k) { idx[t.rid] = k; opp.push(-1); });
     pairs.forEach(function (p) { opp[idx[p[0]]] = idx[p[1]]; opp[idx[p[1]]] = idx[p[0]]; });
     var live = poLiveWeek(wk), useLive = !!(live && teams.every(function (t) { return live[t.rid]; })), trials = 6000, rng = poRng(4242);
-    var K = [P, B, 1], D = teams.map(function () { var o = { n: [], h: [[], [], [], []] }; for (g = 0; g <= mx; g++) { o.n.push(0); for (var e = 0; e < 4; e++) o.h[e].push(0); } return o; });
+    var K = [P, B, 1], D = teams.map(function () { var o = { n: [], h: [[], [], [], []], nw: 0, nl: 0, hw: [0, 0, 0, 0], hl: [0, 0, 0, 0] }; for (g = 0; g <= mx; g++) { o.n.push(0); for (var e = 0; e < 4; e++) o.h[e].push(0); } return o; });
     for (var t = 0; t < trials; t++) {
       var s = [], xg = [], R2 = [];
       for (j = 0; j < N; j++) s[j] = useLive ? live[teams[j].rid].m + live[teams[j].rid].sd * poGauss(rng) : (st.mu[teams[j].rid] != null ? st.mu[teams[j].rid] : st.lg) + st.sd * poGauss(rng);
@@ -7054,10 +7055,12 @@
       for (i = 0; i < N; i++) {
         var ge = 0, gt = 0; for (j = 0; j < N; j++) if (j !== i) { if (R2[j] + capR >= R2[i]) ge++; if (R2[j] > R2[i] + capR) gt++; }
         var d = D[i], x = Math.min(mx, xg[i]); d.n[x]++;
-        if (ge <= P - 1) d.h[0][x]++;
-        if (B > 1 && ge <= B - 1) d.h[1][x]++;
-        if (ge <= 0) d.h[2][x]++;
-        if (gt >= P) d.h[3][x]++;
+        var won = opp[i] >= 0 && s[i] > s[opp[i]], side = won ? d.hw : d.hl;   // the chance is also kept apart for "wins its game" and "loses it"
+        if (opp[i] >= 0) { if (won) d.nw++; else d.nl++; }
+        if (ge <= P - 1) { d.h[0][x]++; side[0]++; }
+        if (B > 1 && ge <= B - 1) { d.h[1][x]++; side[1]++; }
+        if (ge <= 0) { d.h[2][x]++; side[2]++; }
+        if (gt >= P) { d.h[3][x]++; side[3]++; }
       }
     }
     var proj = null;
@@ -7083,12 +7086,10 @@
   }
   function poListHtml(list) { return "<ul>" + list.map(function (x) { return "<li>" + escapeHtml(x.n) + " <b>" + x.th + "+</b></li>"; }).join("") + "</ul>"; }
   // Live check: the same scenario, tested on this week's projected Rumbles. Every requirement gets a check or an X.
-  function poLiveCheck(teams, i, e, sc, P) {
-    var g = Math.min(sc.mx, sc.proj[i]), elim = e === 3, N = teams.length, R2 = teams.map(function (t, j) { return t.R + sc.proj[j]; }), ge = 0, gt = 0, j;
-    for (j = 0; j < N; j++) if (j !== i) { if (R2[j] + sc.capR >= R2[i]) ge++; if (R2[j] > R2[i] + sc.capR) gt++; }
-    var pass = elim ? gt >= P : ge <= sc.K[e] - 1;
-    var txt = elim ? (pass ? "Eliminated" : "Still alive") : (pass ? "On track" : "Off track");
-    return '<span class="po-live ' + ((elim ? !pass : pass) ? "ok" : "bad") + '" title="On this week\u2019s projections"><b>Projection: ' + (pass ? "\u2713 " : "\u2717 ") + txt + "</b></span>";
+  // The chance split by how the team's own game goes, like the Games that matter cards: Win / Lose chips that move with the live Rumbles.
+  function poSplitHtml(d, e) {
+    var w = d.nw ? d.hw[e] / d.nw : null, l = d.nl ? d.hl[e] / d.nl : null;
+    return '<span class="po-wl w">Win <b>' + (w == null ? "\u2014" : poFmtPct(w)) + '</b></span><span class="po-wl l">Lose <b>' + (l == null ? "\u2014" : poFmtPct(l)) + "</b></span>";
   }
   var poLgCtx = null;
   function poHelpBlock(teams, i, e, g, sc, P) {
@@ -7108,7 +7109,7 @@
     }
     var pa = poWin(sc.D[i], e, g, sc.mx, false), n = 0, q;
     for (q = g; q <= Math.min(sc.mx, g + 1); q++) n += sc.D[i].n[q];
-    var cap = "Chance at ";
+    var cap = "Chance with ";
     var reach = 0; if (sc.proj) hp.list.forEach(function (x) { var j2 = teams.findIndex(function (t) { return t.name === x.n; }); if (sc.proj[j2] >= x.th) reach++; });
     var vd = "", nothing = hp.list.length <= hp.allow, KN = ["Playoffs clinched", "Bye clinched", "1 seed clinched"];
     if (elim) {
@@ -7148,11 +7149,11 @@
         if (pj != null) tiers.forEach(function (tr) { if (pj >= tr[1] && reachedTier == null) reachedTier = tr[0]; });
         var needTxt = '<div class="po-tiers">' + tiers.map(function (tr) { return "<div><em>" + tr[0] + "</em><b>" + tr[1] + '+</b> Rumbles <small>' + tr[2] + "</small></div>"; }).join("") +
           (pj != null ? '<div class="po-tp"><em>Projected</em><b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "po-mid" : "po-no") + '">' + pj + "</b> Rumbles</div>" : "") + "</div>";
-        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr"><b>' + poFmtPct(p) + '</b><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small>" + (sc.proj ? poLiveCheck(teams, i, e, sc, P) : "") + "</div></div>" +
+        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr">' + poSplitHtml(d, e) + '<span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small><small>" + poFmtPct(p) + " overall</small></div></div>" +
           '<div class="po-sc2b"><div>' + needTxt + '</div><div><span class="po-hh">Help' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">\u21BA Reset to projected (' + sc.proj[i] + ")</button>" : "") + '</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + need + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + need + '"></label><div class="po-hb">' + poHelpBlock(teams, i, e, need, sc, P) + "</div></div></div></div>";
       }
     });
-    var h = '<section class="po-lsec" id="po-s-scen"><div class="po-lgh"><h3>This week: who can clinch or be eliminated</h3><small>Week ' + sc.wk + (sc.proj ? " \u00b7 live check on" : " \u00b7 live check starts at kickoff") + "</small></div>";
+    var h = '<section class="po-lsec" id="po-s-scen"><div class="po-lgh"><h3>This week: who can clinch or be eliminated</h3><small>Week ' + sc.wk + "</small></div>";
     h += '<details class="po-how"><summary>How to read this</summary><ul><li><b>Chance</b>: how often it happens, from ' + sc.trials.toLocaleString() + ' simulated weeks.</li><li><b>Needs</b>: <i>No help</i> is a score that does it on its own (only shown when one exists); <i>Real shot</i> is the lowest score with at least a 15% chance; <i>Long shot</i> is the bare minimum, and needs a lot of help.</li><li><b>Help</b>: a rival counts against the team once it scores its number or more. It starts at the team\u2019s minimum; slide to see how the numbers change.</li><li><b>Strict</b>: only results no later week can undo are shown.</li><li><b>Live</b>: once games start, the projected Rumbles show under Needs, and each rival turns green (condition met) or red (not met).</li></ul></details>';
     h += cards ? '<div class="po-sc2s">' + cards + "</div>" : '<div class="po-note2">No team can clinch or be eliminated this week.</div>';
     h += '</section><section class="po-lsec" id="po-s-games"><div class="po-lgh"><h3>Games that matter</h3><small id="po-gm-s">Playoff chance, by result</small></div><div id="po-lg-pm"></div></section>';
@@ -7232,7 +7233,7 @@
   }
   function poSkLine(tbl, g) {
     var pa = poSkPa(tbl, g), ok = pa >= 0.5;
-    return '<small class="po-pa"><span>Chance at ' + g + ": <b>" + poFmtPct(pa) + '</b> to avoid it</span><span class="po-vd ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Sacko bracket likely" : "\u2717 Outright Sacko likely") + " in this scenario</span></small>";
+    return '<small class="po-pa"><span>Chance with ' + g + ": <b>" + poFmtPct(pa) + '</b> to avoid it</span><span class="po-vd ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Sacko bracket likely" : "\u2717 Outright Sacko likely") + " in this scenario</span></small>";
   }
   function poSackoRun(teams, W, cand) {
     var key = poSkKey(teams), c = poCache.skt, tok = ++poSkTok, wk = poPlayed() + 1;
@@ -7261,15 +7262,9 @@
     poSackoRun.cand = cand;
     var h = '<div class="po-sc2s">';
     cand.forEach(function (x) {
-      var t = x.t, nm = escapeHtml(t.name), gap = sec.R - t.R, pill = "";
-      if (sc && sc.proj) {
-        var R2 = teams.map(function (u, k) { return u.R + sc.proj[k]; }), lo = Infinity, me2 = R2[x.j];
-        for (var k = 0; k < N; k++) if (k !== x.j && R2[k] < lo) lo = R2[k];
-        var g2 = lo - me2, out = g2 >= 31;
-        pill = '<span class="po-live ' + (out ? "bad" : "ok") + '" title="' + (me2 > lo ? "Not last" : g2 + " behind " + poOrd(N - 1)) + ' on this week\u2019s projections"><b>Projection: ' + (out ? "\u2717 Outright Sacko" : "\u2713 Bracket") + "</b></span>";
-      }
+      var t = x.t, nm = escapeHtml(t.name), gap = sec.R - t.R;
       h += '<div class="po-sc2" data-sk="' + t.rid + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + " Rumbles" +
-        '</small></div><div class="po-sc2p"><div class="po-pr"><b>' + poFmtPct(x.o) + '</b><span class="po-mk k-out">\uD83D\uDCA9</span></div><small>chance of an outright Sacko</small>' + pill + "</div></div>" +
+        '</small></div><div class="po-sc2p"><div class="po-pr"><b>' + poFmtPct(x.o) + '</b><span class="po-mk k-out">\uD83D\uDCA9</span></div><small>chance of an outright Sacko</small></div></div>' +
         '<div class="po-sc2b"><div class="po-skb">' + poSackoBodyHtml(teams, x, W, sc, poSackoLock(teams, x.j, W)) + '</div><p class="po-skn">' + (t === byR[0] ? "<b>" + gap + "</b> behind " + escapeHtml(sec.name) + " (" + poOrd(N - 1) + "). " : "") + "Forcing the bracket means finishing within <b>30</b> Rumbles of " + poOrd(N - 1) + " place.</p></div></div>";
     });
     return h + "</div>";
