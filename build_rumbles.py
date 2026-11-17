@@ -42,6 +42,7 @@ import requests
 API_BASE = "https://api.sleeper.app/v1"
 STATS_BASE = "https://api.sleeper.app/stats/nfl"
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rumbles_history.json")
+PLAYOFF_HUNT_PATH = os.path.join(os.path.dirname(OUTPUT_PATH) or ".", "playoff_hunt.json")
 
 # Used if auto-discovery can't find the league by name (see
 # discover_current_league_id below).
@@ -874,6 +875,44 @@ def build_history(
     }
 
 
+def playoff_hunt_status(standings: list[dict], season: int, played: int, last_reg_week: int) -> dict:
+    """Whether the playoff race is on: any team has a clinching (playoff spot, bye, the 1 seed) or elimination scenario still possible.
+    The same cap rule as the Playoff Hunt tab in rumbles.html (poActive): a team can earn at most N-1+9 Rumbles a week, so a rival counts against
+    a team once it can reach it with every remaining week at that maximum. Written into rumbles_history.json so the Hub can show its tile."""
+    weeks_left = max(0, last_reg_week - played)
+    out = {"active": False, "weeks_left": weeks_left}
+    n = len(standings)
+    if weeks_left <= 0 or n < 2:
+        return out
+    mx = n - 1 + RUMBLES_PER_WIN
+    cap = mx * (weeks_left - 1)
+    spots = 6 if season >= 2026 else 5 if season >= 2023 else 4
+    byes = 2 if season >= 2026 else 1 if season >= 2023 else 0
+    r = [s["rumbles"] for s in standings]
+
+    def counts(i: int, g: int, e: int) -> tuple[int, int]:
+        base = reach = 0
+        for j in range(n):
+            if j == i:
+                continue
+            th = r[i] + g + cap + 1 - r[j] if e == 3 else r[i] + g - cap - r[j]
+            if th <= 1:
+                base += 1
+            elif th <= mx:
+                reach += 1
+        k = spots if e == 3 else [spots, byes, 1][e]
+        return reach, k - 1 - base
+
+    for i in range(n):
+        for e in ((0, 1, 2) if byes > 1 else (0, 2)):
+            if counts(i, mx, e)[1] >= 0:
+                out["active"] = True
+        reach, allow = counts(i, 0, 3)
+        if reach > allow:
+            out["active"] = True
+    return out
+
+
 def likely_extra_points(adjustments: list[dict]) -> dict[int, float]:
     """roster_id -> backup points to add for this week's "likely" entries."""
     extra: dict[int, float] = {}
@@ -981,6 +1020,7 @@ def main() -> None:
 
     print(f"[info] season={season} league_id={league_id} completed_weeks={completed_weeks}")
     print(f"[info] managers: {list(manager_map.values())}")
+    last_reg_week = LAST_COUNTED_WEEK - 1   # the league's own setting (playoff_week_start - 1) replaces this once Sleeper's league object loads
 
     if not completed_weeks:
         print("[info] no fully completed weeks yet this season -- writing an empty-but-valid history file")
@@ -1018,6 +1058,7 @@ def main() -> None:
         scoring_settings: dict = {}
         try:
             league = get_json(f"{API_BASE}/league/{league_id}")
+            last_reg_week = int((league.get("settings") or {}).get("playoff_week_start") or LAST_COUNTED_WEEK) - 1
             scoring_settings = league.get("scoring_settings") or {}
             players_meta = get_json(f"{API_BASE}/players/nfl") or {}
             team_qb_index = build_team_qb_index(players_meta)
@@ -1051,6 +1092,15 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001 - viewing-only extras never block the standings
             print(f"[warn] weeks 16-18 skipped ({e})", file=sys.stderr)
 
+    try:
+        ph = playoff_hunt_status(history.get("standings") or [], int(season), max(history.get("weeks_completed") or [0]), last_reg_week)
+        ph["season"] = int(season)
+        ph["generated_at"] = history.get("generated_at")
+        with open(PLAYOFF_HUNT_PATH, "w") as pf:   # tiny file for the Hub's Playoff Hunt tile
+            json.dump(ph, pf, indent=2)
+        print(f"[info] playoff hunt: {ph}")
+    except Exception as e:  # noqa: BLE001 - the Hub tile is a nice-to-have
+        print(f"[warn] playoff hunt status skipped ({e})", file=sys.stderr)
     with open(OUTPUT_PATH, "w") as f:
         json.dump(history, f, indent=2)
     print(f"[info] wrote {OUTPUT_PATH}")
