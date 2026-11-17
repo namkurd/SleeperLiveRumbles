@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-11-17T07:43:25.888657+00:00",
+  "generated_at": "2026-11-17T14:41:41.582519+00:00",
   "weeks_completed": [
     1,
     2,
@@ -40,7 +40,7 @@
       "last_completed_week_rumbles": 13,
       "last_completed_week_points": 138.05,
       "pf": 1584.69,
-      "pa": 1349.81,
+      "pa": 1349.31,
       "h2h_w": 7,
       "h2h_l": 3,
       "vs_field_w": 74,
@@ -113,8 +113,8 @@
       "rumbles": 93,
       "rumble_pct": 46.5,
       "last_completed_week_rumbles": 1,
-      "last_completed_week_points": 105.51,
-      "pf": 1518.87,
+      "last_completed_week_points": 105.01,
+      "pf": 1518.37,
       "pa": 1465.05,
       "h2h_w": 4,
       "h2h_l": 6,
@@ -1263,7 +1263,7 @@
         "rumbles": 16
       },
       "6": {
-        "points": 105.51,
+        "points": 105.01,
         "opponent_roster_id": 7,
         "opponent_points": 138.05,
         "h2h_win": false,
@@ -1274,7 +1274,7 @@
       "7": {
         "points": 138.05,
         "opponent_roster_id": 6,
-        "opponent_points": 105.51,
+        "opponent_points": 105.01,
         "h2h_win": true,
         "teams_outscored": 4,
         "teams_outscored_by": 7,
