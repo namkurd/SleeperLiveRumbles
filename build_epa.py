@@ -156,7 +156,7 @@ def add_backup_qbs(lineups: dict, names: dict, history: dict) -> int:
     if int(history.get("season") or 0) < 2026:   # the league's backup-QB rule starts with the 2026 season
         return 0
     for adj in history.get("qb_adjustments") or []:
-        if adj.get("confidence") != "confirmed":
+        if adj.get("confidence") not in ("confirmed", "likely"):   # "likely": credited in the standings now, before the commissioner keys it in
             continue
         row = (lineups.get(str(adj.get("week"))) or {}).get(str(adj.get("roster_id")))
         if row is None:

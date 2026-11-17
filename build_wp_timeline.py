@@ -518,12 +518,22 @@ def write_index(out_dir: str = OUT_DIR) -> None:
         json.dump({"weeks": weeks}, fh, separators=(",", ":"))
 
 
-def already_good(path: str, have_league: bool = False) -> bool:
+def already_good(path: str, have_league: bool = False, lineup: dict | None = None) -> bool:
     """A finished timeline is kept; one flagged approximate is retried, since nflverse fills in a day late, and one
     built with the fitted default is rebuilt once the league's own settings can be fetched."""
     try:
         d = json.load(open(path))
-        return not d.get("approx", True) and not (have_league and d.get("scoring", "default") == "default" and d.get("q", 1) < 0.995)
+        if d.get("approx", True) or (have_league and d.get("scoring", "default") == "default" and d.get("q", 1) < 0.995):
+            return False
+        if lineup:   # a player the lineup now credits (a backup QB added after the week was built) with points the timeline lacks: rebuild
+            got: dict[str, float] = {}
+            for e in d.get("ev", []):
+                got[e[1]] = got.get(e[1], 0.0) + e[2]
+            for starters in lineup.values():
+                for pid, pts in starters:
+                    if abs(float(pts) - got.get(pid, 0.0)) > 0.05 and pid not in got and abs(float(pts)) > 0.05:
+                        return False
+        return True
     except Exception:  # noqa: BLE001
         return False
 
@@ -668,7 +678,7 @@ def run(epa_path: str = EPA_PATH, out_dir: str = OUT_DIR, league_id: str | None 
                     prior.setdefault(pid, []).append(p)
         path = os.path.join(out_dir, f"week_{wk}.json")
         lineup = lineups[str(wk)]
-        if wk in played and not already_good(path, candidates[0][0] == "league"):
+        if wk in played and not already_good(path, candidates[0][0] == "league", lineup):
             tl = build_best(wk, rows, lineup, g2s, candidates, prior, fetch_projections(season, wk, scoring), season, pos_of)
             if tl and tl["q"] >= 0.5:
                 with open(path, "w") as fh:
