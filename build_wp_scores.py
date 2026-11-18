@@ -5,7 +5,7 @@ wp_timeline/week_N.json places every fantasy event on a wall-clock axis (seconds
 about the game itself. This writes wp_sit/week_N.json from the same nflverse play-by-play, on the same axis (it reuses the
 timeline's own GameClock and t0), so a play at second S can be shown as "Q2 4:12 · SEA 14 – NYG 10":
 
-  { "BUF@NYJ": { "away": "BUF", "home": "NYJ", "p": [[sec, qtr, "m:ss", away_score_after, home_score_after], ...] } }
+  { "BUF@NYJ": { "away": "BUF", "home": "NYJ", "p": [[sec, qtr, "m:ss", away_score, home_score (before the play)], ...] } }
 
 Only weeks that have a timeline and no file yet are built (a finished week never changes).  python3 build_wp_scores.py [--force]
 """
@@ -49,10 +49,8 @@ def build_week(week: int, rows: list, t0: int) -> dict:
             ms = clk.ms(el) if el is not None else None
             if ms is None:
                 continue
-            nxt = grows[i + 1] if i + 1 < len(grows) else None
-            src = nxt if nxt is not None and nxt.get("total_home_score") not in (None, "") else r
-            try:   # the score after the play: the next play's running total (the last play's own total is all there is)
-                a, h = int(float(src["total_away_score"])), int(float(src["total_home_score"]))
+            try:   # the score going into the play (nflverse's running total at the snap), so a touchdown is shown before its points
+                a, h = int(float(r["total_away_score"])), int(float(r["total_home_score"]))
             except (KeyError, ValueError):
                 continue
             try:
