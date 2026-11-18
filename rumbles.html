@@ -9395,6 +9395,22 @@
     var d = wpClips[week];
     return d && mk.tt != null ? d.clips[mk.sid + ":" + mk.tt] || null : null;
   }
+  // The NFL game behind each play (wp_sit/week_N.json: quarter, clock and score at each second of the week), for the Hub's Top plays.
+  var wpSit = {};
+  function wpSitLoad(week) {
+    if (wpSit[week]) return wpSit[week];
+    var e = wpSit[week] = { done: false, d: null };
+    fetchJson(DATA_BASE + "wp_sit/week_" + week + ".json").then(function (d) { e.d = d; e.done = true; }, function () { e.done = true; });
+    return e;
+  }
+  function wpSitAt(doc, week, sid, sec) {
+    var e = wpSit[week], team = doc.tm[sid], gk = doc.tg[team], g = e && e.d && e.d[gk];
+    if (!g || !g.p.length) return null;
+    var lo = 0, hi = g.p.length - 1;
+    while (lo < hi) { var m = (lo + hi + 1) >> 1; if (g.p[m][0] <= sec) lo = m; else hi = m - 1; }
+    var r = g.p[lo], mine = team === g.home;
+    return { team: team, opp: mine ? g.away : g.home, at: mine ? "" : "@", q: r[1], clock: r[2], tm: mine ? r[4] : r[3], op: mine ? r[3] : r[4] };
+  }
   // For the Hub's Top plays tile: every head-to-head of a finished week with its biggest win-probability swings and the clip each one has.
   // Read by tools/build_topplays.py in the Hub (headless browser); { wait: true } until the week's play-by-play and clips have loaded.
   window.__dtfTop = function (week) {
@@ -9402,6 +9418,7 @@
     if (!state.epa) { if (!state.epaScenBusy) { state.epaScenBusy = true; epaLoad().then(function () { state.epaScenBusy = false; }, function () { state.epaScenBusy = false; }); } return { wait: true, plays: [] }; }
     var teams = rbPastTeams(week); wpClipsLoad(week);
     if (!teams.length || !wpClips[week]) return { wait: true, plays: [] };
+    if (!wpSitLoad(week).done) return { wait: true, plays: [] };
     var win = { key: "wk" + week, clusters: [], cur: 0, week: week, past: true }, out = [], seen = {}, wait = false;
     teams.forEach(function (a) {
       var b = teams.filter(function (t) { return t.rid === a.opp; })[0];
@@ -9411,7 +9428,7 @@
       pm.marks.forEach(function (m) {
         var c = wpClipFor(week, m);
         out.push({ week: week, a: a.name, b: b.name, arid: a.rid, brid: b.rid, d: Math.round(m.d * 1000) / 1000, p0: Math.round(m.p0 * 1000) / 1000, p1: Math.round(m.p1 * 1000) / 1000,
-          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
+          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
       });
     });
     return { wait: wait, plays: out };
