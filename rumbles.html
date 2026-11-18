@@ -9428,7 +9428,7 @@
       pm.marks.forEach(function (m) {
         var c = wpClipFor(week, m);
         out.push({ week: week, a: a.name, b: b.name, arid: a.rid, brid: b.rid, d: Math.round(m.d * 1000) / 1000, p0: Math.round(m.p0 * 1000) / 1000, p1: Math.round(m.p1 * 1000) / 1000,
-          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, by: m.side > 0 ? a.name : b.name, rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
+          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
       });
     });
     return { wait: wait, plays: out };
