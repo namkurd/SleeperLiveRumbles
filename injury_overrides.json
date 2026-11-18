@@ -16,6 +16,14 @@
       "player_id": "11630",
       "name": "Roman Wilson",
       "note": "Exited in the 1st half and did not return (commissioner review)"
+    },
+    {
+      "season": 2026,
+      "week": 10,
+      "roster_id": 1,
+      "player_id": "13276",
+      "name": "Omar Cooper Jr.",
+      "note": "Started, took 1 of the Jets' 71 offensive snaps (nflverse snap counts; Sleeper stats gs 1, off_snp 1) and did not return. Sleeper only marked him Out in the 3rd quarter, after the capture job's first look (commissioner review)"
     }
   ]
 }
