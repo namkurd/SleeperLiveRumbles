@@ -1794,6 +1794,20 @@
   .wp-clipfloat .wp-clipcap { position: absolute; left: 0; top: 100%; margin-top: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
   .wp-clipfloat .wp-clipcap > * { padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--panel-border); white-space: nowrap; margin: 0; }
   .wp-clipfloat .wp-clipbox, .wp-clipfloat .wp-clipbox.auto { padding: 0; background: transparent; } .wp-clipfloat .wp-clipfail, .wp-clipfloat .wp-tapnote, .wp-clipfloat .wp-xlink, .wp-clipfloat .wp-find { padding: 8px 10px; color: var(--text); }
+  /* the big clip overlay (desktop-size screens): above the replay sheet, the video as large as the height allows */
+  .wp-clipmodal { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 10px; background: rgba(0,0,0,0.82); }
+  .wp-clipmodal.pending { opacity: 0; pointer-events: none; }
+  .wp-clipcard { width: min(100%, calc((100dvh - 150px) * 16 / 9), 1500px); background: #0b1410; border-radius: 14px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(34,197,94,0.35); }
+  .wp-cliphd { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 16px; background: #0b1f12; border-bottom: 1px solid rgba(34,197,94,0.3); color: #fff; }
+  .wp-cliptt { flex: 1 1 auto; min-width: 0; } .wp-cliptt b { display: block; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .wp-cliptt small { display: block; font-size: 0.78rem; color: #86efac; }
+  .wp-clipx2 { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.1); color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer; } .wp-clipx2:hover { background: rgba(255,255,255,0.2); }
+  .wp-clipcard .wp-clipbox, .wp-clipcard .wp-clipbox.auto { padding: 0; border-radius: 0; background: #000; }
+  .wp-clipcard .wp-clipbox > div:not(.wp-clipfail):not(.wp-find):not(.wp-tapnote):not(.wp-clipcap) { border-radius: 0; }
+  .wp-clipcard .wp-clipbox iframe { border-radius: 0; }
+  .wp-clipcard .wp-clipcap:empty { display: none; }
+  .wp-clipcard .wp-clipcap { position: static; display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 6px 14px; margin: 0; background: #0b1f12; }
+  .wp-clipcard .wp-clipcap > * { padding: 0; border: 0; background: none; color: #86efac; font-size: 0.8rem; white-space: nowrap; margin: 0; }
+  .wp-clipcard .wp-clipfail, .wp-clipcard .wp-tapnote { padding: 10px 14px; color: #fff; }
   .wp-clipx { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--panel-border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; z-index: 2; }
   .wp-story { font-size: 0.8rem; font-weight: 600; margin-top: 4px; line-height: 1.3; }
   @media (max-width: 700px) { .wp-story { font-size: 0.74rem; } .wp-head { flex-wrap: wrap; } .wp-ttl { flex: 1 1 100%; } .wp-btns { flex: 1 1 100%; justify-content: flex-end; } }
@@ -9548,8 +9562,27 @@
   }
   // Beside the chart (a phone on its side, a desktop window) a playing clip floats over the chart instead of squeezing the ten swings; stacked, it opens under its row.
   function wpSideMode() { return wpRot || wpDesk() || window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches; }
+  // On a desktop-size screen every clip, from the replay or from the scenario window's expanded chart, opens in the same large overlay
+  // (the video as big as the screen allows, the play's name above it, a tap outside or Esc to close). Phones keep the in-page layouts below.
+  function wpBigClip() { return window.matchMedia("(min-width: 900px) and (min-height: 520px) and (pointer: fine)").matches; }
+  function wpClipEsc(e) { if (e.key === "Escape") wpClipsClear(); }
   function wpClipMount(li) {
     var box = document.createElement("div");
+    if (wpBigClip()) {
+      var md = document.createElement("div"); md.className = "wp-clipmodal";
+      var card = document.createElement("div"); card.className = "wp-clipcard";
+      var hd = document.createElement("div"); hd.className = "wp-cliphd";
+      var ph = li && li.querySelector(".wp-ph"), pm2 = li && li.querySelector(".wp-pm");
+      var tt = document.createElement("span"); tt.className = "wp-cliptt";
+      tt.innerHTML = "<b>" + escapeHtml(ph ? ph.textContent : "Play") + "</b>" + (pm2 ? "<small>" + escapeHtml(pm2.textContent) + "</small>" : "");
+      var xb = document.createElement("button"); xb.type = "button"; xb.className = "wp-clipx2"; xb.setAttribute("aria-label", "Close the clip"); xb.innerHTML = "&times;";
+      hd.appendChild(tt); hd.appendChild(xb);
+      box.className = "wp-clipbox auto";
+      card.appendChild(hd); card.appendChild(box); md.appendChild(card);
+      md.addEventListener("click", function (e) { if (e.target === md || e.target.closest(".wp-clipx2")) wpClipsClear(); });
+      document.body.appendChild(md); document.addEventListener("keydown", wpClipEsc);
+      return { root: md, box: box };
+    }
     if (wpSideMode()) {
       var fl = document.createElement("div");
       fl.className = "wp-clipfloat"; box.className = "wp-clipbox auto";
@@ -9564,7 +9597,8 @@
     return { root: box, box: box };
   }
   function wpClipsClear() {
-    [].forEach.call(document.querySelectorAll("#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat"), function (b) { b.parentNode.removeChild(b); });
+    [].forEach.call(document.querySelectorAll("#wp-list .wp-clipbox, #wp-chartwrap .wp-clipfloat, .wp-clipmodal"), function (b) { b.parentNode.removeChild(b); });
+    document.removeEventListener("keydown", wpClipEsc);
     [].forEach.call(document.querySelectorAll("#wp-list li[aria-expanded=true]"), function (l) { l.setAttribute("aria-expanded", "false"); });
   }
   function wpScrubTo(li) {

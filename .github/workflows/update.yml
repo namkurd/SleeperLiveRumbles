@@ -72,6 +72,12 @@ jobs:
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API }}
 
+      - name: Run audit_wp_clips.py (drops press conferences and talk, and videos that have been taken down)
+        run: python audit_wp_clips.py
+        continue-on-error: true
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API }}
+
       - name: Run build_seasons.py (archives each finished past season, once)
         run: python build_seasons.py
         continue-on-error: true

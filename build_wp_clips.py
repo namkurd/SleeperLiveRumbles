@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from embed_probe import EmbedProbe
+from clip_filters import is_interview, is_talk_channel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://www.googleapis.com/youtube/v3"
@@ -126,6 +127,8 @@ def not_a_play(title: str, dur: int = 0) -> bool:
     flat = norm(title).replace("-", " ")
     if NOT_A_PLAY.search(flat) or NOT_A_PLAY.search(title.lower()):
         return True
+    if is_interview(title):   # a press conference, post-game interview, locker-room chat or breakdown (clip_filters.py)
+        return True
     return bool(HIGHLIGHTS_TAG.search(title)) and not (0 < dur <= HIGHLIGHTS_OK_SECONDS)
 
 
@@ -141,7 +144,7 @@ def yards_in(label: str) -> int | None:
 
 
 def score_title(title: str, player: str | None, team: str | None, opp: str | None, label: str, is_def: bool, channel: str = "", loose: bool = False, desc: str = "", actor: str | None = None, dur: int = 0) -> int:
-    if not_a_play(title, dur):
+    if not_a_play(title, dur) or is_talk_channel(channel):
         return 0
     t = norm(title + " " + desc)   # a result's description often names the player, team and distance a short title leaves out
     words = t.split()
@@ -225,7 +228,7 @@ def first_result_ok(u: dict, p: dict) -> bool:
     if u.get("rank") != 0 or p.get("sib") or not 0 < u.get("dur", 0) <= 60:
         return False
     title = u["title"]
-    if not_a_play(title, u.get("dur", 0)):
+    if not_a_play(title, u.get("dur", 0)) or is_talk_channel(u.get("ch")):
         return False
     t, words, ch = norm(title + " " + u.get("desc", "")), norm(title + " " + u.get("desc", "")).split(), norm(u.get("ch", ""))
     nicks, opps = NICK.get(p["team"] or "", []), NICK.get(p["opp"] or "", [])
