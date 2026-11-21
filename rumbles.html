@@ -2404,11 +2404,15 @@
   // pulling the actual scoring categories out of each entry's nested
   // "stats" object.
   function arrayToPlayerMap(arr) {
-    var map = {};
+    var map = {}, teams = {};
+    // map.teams: player_id -> the NFL team he played for THAT week (the stats feed's own team). Sleeper's player metadata only has his team
+    // today, which is wrong for a player who changed teams since (Jacoby Brissett played for ARI in week 8, not the Ravens).
+    Object.defineProperty(map, "teams", { value: teams, enumerable: false });
     if (!arr || !arr.length) return map;
     arr.forEach(function (entry) {
       if (entry && entry.player_id) {
         map[entry.player_id] = entry.stats || {};
+        if (entry.team) teams[entry.player_id] = entry.team;
       }
     });
     return map;
@@ -3283,9 +3287,11 @@
   }
 
   function findBackupQbs(startedPid, meta, playersMeta, teamQbIndex, statsMap, scoringSettings, otherStartedPids) {
-    var team = meta.team;
+    var weekTeams = (statsMap && statsMap.teams) || {}, haveWeek = Object.keys(weekTeams).length > 0;
+    var team = weekTeams[startedPid] || meta.team;   // the team that week, not today's
     if (!team) return [];
-    var candidates = (teamQbIndex[team] || []).filter(function (cid) {
+    var pool = haveWeek ? Object.keys(weekTeams).filter(function (cid) { return weekTeams[cid] === team && (playersMeta[cid] || {}).position === "QB"; }) : (teamQbIndex[team] || []);
+    var candidates = pool.filter(function (cid) {
       // Exclude this roster's OTHER started QB(s) too, not just this one --
       // in a SUPER_FLEX league a manager can deliberately start two QBs
       // from the same NFL team at once (rare, but possible), and that's
@@ -9425,6 +9431,13 @@
     var r = g.p[lo], mine = team === g.home;
     return { team: team, opp: mine ? g.away : g.home, at: mine ? "" : "@", q: r[1], clock: r[2], tm: mine ? r[4] : r[3], op: mine ? r[3] : r[4] };
   }
+  // Everything one play earned the manager whose player made it: the events of the same play (same second) on that side, so a QB-to-WR touchdown
+  // counts both players' points (yards, reception, touchdown) and a defensive play its interception, return yardage and touchdown together.
+  function wpPlayTotal(pm, m) {
+    var tot = 0, sides = pm.model && pm.model.sides || {};
+    ((pm.doc && pm.doc.ev) || []).forEach(function (e) { if (e[0] === m.tt && sides[e[1]] === m.side && e[3] !== "scoring adjustment") tot += e[2]; });
+    return Math.round(tot * 100) / 100;
+  }
   // For the Hub's Top plays tile: every head-to-head of a finished week with its biggest win-probability swings and the clip each one has.
   // Read by tools/build_topplays.py in the Hub (headless browser); { wait: true } until the week's play-by-play and clips have loaded.
   window.__dtfTop = function (week) {
@@ -9442,7 +9455,7 @@
       pm.marks.forEach(function (m) {
         var c = wpClipFor(week, m);
         out.push({ week: week, a: a.name, b: b.name, arid: a.rid, brid: b.rid, d: Math.round(m.d * 1000) / 1000, p0: Math.round(m.p0 * 1000) / 1000, p1: Math.round(m.p1 * 1000) / 1000,
-          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
+          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, tot: wpPlayTotal(pm, m), by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
       });
     });
     return { wait: wait, plays: out };

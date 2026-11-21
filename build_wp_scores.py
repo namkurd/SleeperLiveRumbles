@@ -7,7 +7,7 @@ timeline's own GameClock and t0), so a play at second S can be shown as "Q2 4:12
 
   { "BUF@NYJ": { "away": "BUF", "home": "NYJ", "p": [[sec, qtr, "m:ss", away_score, home_score (before the play)], ...] } }
 
-Only weeks that have a timeline and no file yet are built (a finished week never changes).  python3 build_wp_scores.py [--force]
+Covers this season (wp_sit/) and every archived season (seasons/YYYY/wp_sit/). Only weeks that have a timeline and no file yet are built (a finished week never changes).  python3 build_wp_scores.py [--force]
 """
 import json, os, sys
 
@@ -67,29 +67,41 @@ def build_week(week: int, rows: list, t0: int) -> dict:
     return out
 
 
+def jobs():
+    """(timeline dir, output dir) for this season and every archived season under seasons/."""
+    out = [(T.OUT_DIR, OUT)]
+    base = os.path.join(T.HERE, "seasons")
+    if os.path.isdir(base):
+        for y in sorted(os.listdir(base)):
+            if os.path.isdir(os.path.join(base, y, "wp_timeline")):
+                out.append((os.path.join(base, y, "wp_timeline"), os.path.join(base, y, "wp_sit")))
+    return out
+
+
 def main() -> None:
     force = "--force" in sys.argv
-    idx = json.load(open(os.path.join(T.OUT_DIR, "index.json")))
-    weeks = [int(w) for w in idx.get("weeks", [])]
-    season = None
-    try:
-        season = int(json.load(open(os.path.join(T.OUT_DIR, "week_%d.json" % weeks[0])))["season"])
-    except Exception:  # noqa: BLE001
-        pass
-    todo = [w for w in weeks if force or not os.path.exists(os.path.join(OUT, "week_%d.json" % w))]
-    if not todo or season is None:
-        print("nothing to build"); return
-    rows = T.load_pbp_rows(season)
-    if rows is None:
-        print("[warn] no play-by-play yet"); return
-    os.makedirs(OUT, exist_ok=True)
-    for w in todo:
-        doc = json.load(open(os.path.join(T.OUT_DIR, "week_%d.json" % w)))
-        data = build_week(w, rows, int(doc["t0"]))
-        if not data:
+    for tl_dir, out_dir in jobs():
+        try:
+            idx = json.load(open(os.path.join(tl_dir, "index.json")))
+            weeks = [int(w) for w in idx.get("weeks", [])]
+            season = int(json.load(open(os.path.join(tl_dir, "week_%d.json" % weeks[0])))["season"])
+        except Exception:  # noqa: BLE001
             continue
-        json.dump(data, open(os.path.join(OUT, "week_%d.json" % w), "w"), separators=(",", ":"))
-        print("week %d: %d games, %d KB" % (w, len(data), os.path.getsize(os.path.join(OUT, "week_%d.json" % w)) // 1024))
+        todo = [w for w in weeks if force or not os.path.exists(os.path.join(out_dir, "week_%d.json" % w))]
+        if not todo:
+            continue
+        rows = T.load_pbp_rows(season)
+        if rows is None:
+            print("[warn] no play-by-play for %d yet" % season); continue
+        os.makedirs(out_dir, exist_ok=True)
+        for w in todo:
+            doc = json.load(open(os.path.join(tl_dir, "week_%d.json" % w)))
+            data = build_week(w, rows, int(doc["t0"]))
+            if not data:
+                continue
+            path = os.path.join(out_dir, "week_%d.json" % w)
+            json.dump(data, open(path, "w"), separators=(",", ":"))
+            print("%d week %d: %d games, %d KB" % (season, w, len(data), os.path.getsize(path) // 1024))
 
 
 if __name__ == "__main__":

@@ -24,8 +24,8 @@ INTERVIEW = re.compile(
     r"on (his|her|their|that|this)(?! way\b)|on the (play|touchdown|interception|catch|win|loss|game|injury|moment|pick|sack|fumble))\b|"
     r"[:\-] ?['\"“‘]", re.I)
 
-# Channels that post almost nothing but talk about plays (a few beat-writer sites and commentary channels). Everything else is judged by the title.
-TALK_CHANNEL = re.compile(r"gazette|kmbc|digest|mile high huddle|drift theory", re.I)
+# Channels that post almost nothing but talk about plays (a few beat-writer sites and commentary channels; the Dan Patrick Show is a radio show, its clips have no video of the play). Everything else is judged by the title.
+TALK_CHANNEL = re.compile(r"gazette|kmbc|digest|mile high huddle|drift theory|dan patrick", re.I)
 
 
 def is_interview(title: str) -> bool:
