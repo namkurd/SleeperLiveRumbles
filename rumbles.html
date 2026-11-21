@@ -9438,8 +9438,24 @@
     ((pm.doc && pm.doc.ev) || []).forEach(function (e) { if (e[0] === m.tt && sides[e[1]] === m.side && e[3] !== "scoring adjustment") tot += e[2]; });
     return Math.round(tot * 100) / 100;
   }
-  // For the Hub's Top plays tile: every head-to-head of a finished week with its biggest win-probability swings and the clip each one has.
-  // Read by tools/build_topplays.py in the Hub (headless browser); { wait: true } until the week's play-by-play and clips have loaded.
+  // A play two of one manager's players share (a QB's touchdown pass and the receiver's catch): {who: ["C. Williams", "L. Burden"], label: "1 yd TD pass"},
+  // the passer first and the pass's own wording; null when only one offensive player (or a defense) is involved.
+  function wpPlayStack(pm, m) {
+    var sides = pm.model && pm.model.sides || {}, by = {};
+    ((pm.doc && pm.doc.ev) || []).forEach(function (e) {
+      var sid = e[1];
+      if (e[0] !== m.tt || sides[sid] !== m.side || /^[A-Z]{2,4}$/.test(sid) || /scoring adjustment|stat correction/.test(e[3] || "")) return;
+      (by[sid] = by[sid] || []).push({ sid: sid, pts: e[2], label: e[3] || "" });
+    });
+    var ids = Object.keys(by); if (ids.length < 2) return null;
+    var yd = function (t) { var q = /(\d+) yd/.exec(t || ""); return q ? q[1] : null; };
+    var parts = ids.map(function (sid) { var ev = by[sid].slice().sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); })[0]; return { who: pm.names[sid] || "", label: ev.label, pts: by[sid].reduce(function (a, x) { return a + x.pts; }, 0) }; });
+    // only a real stack: one player's pass and another's catch of the same distance (two unrelated plays can share a clock second)
+    var passer = parts.filter(function (x) { return /pass/i.test(x.label) && !/catch|reception/i.test(x.label); })[0];
+    var catcher = passer && parts.filter(function (x) { return x !== passer && /catch|reception/i.test(x.label) && yd(x.label) === yd(passer.label); })[0];
+    if (!passer || !catcher || !passer.who || !catcher.who) return null;
+    return { who: [passer.who, catcher.who], label: passer.label };
+  }
   window.__dtfTop = function (week) {
     week = Number(week);
     if (!state.epa) { if (!state.epaScenBusy) { state.epaScenBusy = true; epaLoad().then(function () { state.epaScenBusy = false; }, function () { state.epaScenBusy = false; }); } return { wait: true, plays: [] }; }
@@ -9455,7 +9471,7 @@
       pm.marks.forEach(function (m) {
         var c = wpClipFor(week, m);
         out.push({ week: week, a: a.name, b: b.name, arid: a.rid, brid: b.rid, d: Math.round(m.d * 1000) / 1000, p0: Math.round(m.p0 * 1000) / 1000, p1: Math.round(m.p1 * 1000) / 1000,
-          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, tot: wpPlayTotal(pm, m), by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
+          who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, tot: wpPlayTotal(pm, m), stk: (function () { var k = wpPlayStack(pm, m); return k ? k.who : null; })(), slab: (function () { var k = wpPlayStack(pm, m); return k ? k.label : null; })(), by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
       });
     });
     return { wait: wait, plays: out };
