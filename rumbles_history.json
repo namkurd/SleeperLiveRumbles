@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-11-20T18:50:07.756910+00:00",
+  "generated_at": "2026-11-21T17:46:27.278175+00:00",
   "weeks_completed": [
     1,
     2,
@@ -1544,7 +1544,7 @@
       ],
       "backup_points_total": 6.93,
       "confidence": "likely",
-      "injury_status_at_capture": "Questionable",
+      "injury_status_at_capture": null,
       "custom_points_delta": null,
       "captured_at": "2026-11-15T21:06:25.593317+00:00"
     },
