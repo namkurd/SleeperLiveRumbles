@@ -7215,8 +7215,11 @@
         if (pj != null) tiers.forEach(function (tr) { if (pj >= tr[1] && reachedTier == null) reachedTier = tr[0]; });
         var needTxt = '<div class="po-tiers">' + tiers.map(function (tr) { return "<div><em>" + tr[0] + "</em><b>" + tr[1] + '+</b> Rumbles <small>' + tr[2] + "</small></div>"; }).join("") +
           (pj != null ? '<div class="po-tp"><em>Projected</em><b class="' + (reachedTier === "No help" || reachedTier === "Real shot" ? "po-yes" : reachedTier ? "po-mid" : "po-no") + '">' + pj + "</b> Rumbles</div>" : "") + "</div>";
+        // once games start, the big number follows the projected score (the slider's chance at that score) instead of the pre-week average
+        var pHead = p, mkTxt = MK[e][1];
+        if (pj != null) { var pjc = Math.max(0, Math.min(mx, pj)), pw2 = poWin(d, e, pjc, mx, e === 3), nn = 0; for (var q2 = pjc; q2 <= Math.min(mx, pjc + 1); q2++) nn += d.n[q2]; if (pw2 != null && nn >= 4) { pHead = pw2; mkTxt += " at " + pj; } }
         var cur = poSlGet("c:" + t.rid + ":" + e, need);
-        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr"><b>' + flPct("po:c:" + t.rid + ":" + e, p) + '</b><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + MK[e][1] + "</small></div></div>" +
+        cards += '<div class="po-sc2" data-i="' + i + '" data-e="' + e + '"><div class="po-sc2h"><div class="po-sc2t"><b>' + nm + "</b><small>" + poOrd(t.rank) + " \u00b7 " + t.R + ' Rumbles</small></div><div class="po-sc2p"><div class="po-pr"><b>' + flPct("po:c:" + t.rid + ":" + e, pHead) + '</b><span class="po-mk ' + MK[e][2] + '">' + MK[e][0] + "</span></div><small>" + mkTxt + "</small></div></div>" +
           '<div class="po-sc2b"><div>' + needTxt + '</div><div><span class="po-hh">Help' + (sc.proj ? '<button type="button" class="po-snap" data-g="' + sc.proj[i] + '">\u21BA Reset to projected (' + sc.proj[i] + ")</button>" : "") + '</span><label class="po-sl">If ' + nm + ' gets <b class="po-sv">' + cur + '</b> Rumbles <input type="range" class="po-slide" min="0" max="' + mx + '" value="' + cur + '"></label><div class="po-hb">' + poHelpBlock(teams, i, e, cur, sc, P) + "</div></div></div></div>";
       }
     });
