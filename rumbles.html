@@ -8249,7 +8249,7 @@
 
   // Ruled Out after his game started (he played, then his status flipped).
   function rbRuledOut(p) {
-    return !p.replacement && ((isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played) || !!(state.live && INJ_OUT[state.live.season + ":" + state.live.week + ":" + p.player_id]));
+    return !p.replacement && ((isOutStatus(p.injury_status) && p.game_status !== "pre_game" && (p.played || p.game_status === "complete" || p.game_status === "in_progress")) || !!(state.live && INJ_OUT[state.live.season + ":" + state.live.week + ":" + p.player_id]));
   }
 
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
