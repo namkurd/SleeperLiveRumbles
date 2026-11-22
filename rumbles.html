@@ -1381,6 +1381,7 @@
   /* Your own card: a soft glow in your color. */
   .rb-card.me { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 35%, transparent); }
   /* Projected-order swaps: glow and tag that fade out slowly. */
+  .rb-card.rb-spot { box-shadow: 0 0 0 2px #facc15, 0 0 26px rgba(250, 204, 21, .45); transition: box-shadow .4s; }
   .rb-card.rb-swap-up { z-index: 5; animation: rb-glow-up 4.2s ease-out forwards; }
   .rb-card.rb-swap-dn { z-index: 1; animation: rb-glow-dn 4.2s ease-out forwards; }
   @keyframes rb-glow-up { 0%, 40% { box-shadow: 0 0 0 2px var(--good), 0 0 24px color-mix(in srgb, var(--good) 60%, transparent); } 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 0%, transparent), 0 0 24px color-mix(in srgb, var(--good) 0%, transparent); } }
@@ -8249,7 +8250,7 @@
 
   // Ruled Out after his game started (he played, then his status flipped).
   function rbRuledOut(p) {
-    return !p.replacement && ((isOutStatus(p.injury_status) && p.game_status !== "pre_game" && p.played) || !!(state.live && INJ_OUT[state.live.season + ":" + state.live.week + ":" + p.player_id]));
+    return !p.replacement && ((isOutStatus(p.injury_status) && p.game_status !== "pre_game" && (p.played || p.game_status === "complete" || p.game_status === "in_progress")) || !!(state.live && INJ_OUT[state.live.season + ":" + state.live.week + ":" + p.player_id]));
   }
 
   // Tiny on-field markers: a football by a player whose team has the ball, a picket fence by a
@@ -10749,6 +10750,10 @@
       rb.cardEls[rb.me].scrollIntoView({ block: "center", behavior: "smooth" });
     }
     rbStickOffset();
+    if (state.wantCard != null && rb.cardEls[state.wantCard]) {   // opened from a link: bring that manager's card into view and flash it
+      var wc = rb.cardEls[state.wantCard]; state.wantCard = null;
+      setTimeout(function () { wc.scrollIntoView({ block: "center", behavior: "smooth" }); wc.classList.add("rb-spot"); setTimeout(function () { wc.classList.remove("rb-spot"); }, 3500); }, 300);
+    }
     prefsSave();
   }
   // Table headers stick just under the (phone-sticky) controls bar.
@@ -11227,11 +11232,14 @@
     prefsRestore();
     // Opened on its own when no game is live: always the Actual standings for the current week of the current season, whatever was open last time
     var lv = state.live, liveNow = !!(lv && lv.isLive && lv.hasKickedOff && !lv.weekFinal);
-    if (!ARCHIVE && !liveNow && !linkMe && !wl && !(params && (params.get("tab") || params.get("me")))) { state.mode = "actual"; setView("standings"); }
+    if (!ARCHIVE && !liveNow && !linkMe && !wl && !(params && (params.get("tab") || params.get("me") || params.get("card")))) { state.mode = "actual"; setView("standings"); }
     if (ARCHIVE && !me) { state.rb.scenBest = true; state.rb.sub = "scenarios"; }   // a past season with nobody picked: its best matchups
     if (linkMe) { rbSaveMe(linkMe.roster_id); rbEnterMe(); }
     if (ARCHIVE && params && params.get("tab") === "scenarios") { if (me) rbEnterMe(); setView("rumblin"); if (me) state.rb.sub = "scenarios"; }
     else if (ARCHIVE) { /* a past season opens on its standings */ }
+    else if (params && params.get("card") && rbFindManager(params.get("card"))) {   // the Hub's IR alert: that manager's full card, without changing who you are
+      state.wantCard = rbFindManager(params.get("card")).roster_id; state.rb.mode = "all"; rbSetDensity("full"); setView("rumblin");
+    }
     else if (linkMe || (params && params.get("tab") === "rumblin")) setView("rumblin");
     else if (params && params.get("tab") === "playoffs") state.wantPo = true;   // the Hub's Playoff Hunt tile: opens it once the standings are in (and only while the race is on)
     else rbAutoLand();
@@ -11278,7 +11286,7 @@
   function rbAutoLand() {
     var params = null;
     try { params = new URLSearchParams(location.search); } catch (e) { /* old browser */ }
-    if (params && (params.get("tab") || params.get("me") || params.get("wp"))) return;
+    if (params && (params.get("tab") || params.get("me") || params.get("wp") || params.get("card"))) return;
     var live = state.live;
     if (state.rb.me == null || !live || !live.isLive || !live.hasKickedOff || live.weekFinal) return;
     // a game day opens straight on your live matchup (unless you left the page in the Rumblin' view: that is kept as you left it)
