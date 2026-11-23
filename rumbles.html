@@ -9462,15 +9462,42 @@
   }
   // The playoff race for the Hub's weekly recap: each team's chance at a playoff spot, a bye and the 1 seed, and what is already clinched or lost
   // (the same simulation and statuses as the Playoff picture). { wait: true } until the season's scores and schedule are in.
+  // This week's clinching scenarios per team (the Playoffs / Bye / Eliminated cards of the League page): the Rumbles that settle it on your own ("own"),
+  // the lowest score with a 15% chance ("real"), the bare minimum ("long"), and the rivals that must stay under their numbers at that score ("help").
+  function poScenFor(teams, W, P, B) {
+    var sc = poLeagueScen(teams, W); if (!sc) return null;
+    var mx = sc.mx, out = {};
+    teams.forEach(function (t, i) {
+      var d = sc.D[i], o = {};
+      [[0, "p"], [1, "b"], [3, "o"]].forEach(function (ek) {
+        var e = ek[0]; if (e === 1 && B < 2) return;
+        var tot = d.h[e].reduce(function (a, b) { return a + b; }, 0); if (!tot) return;
+        var need = null, g, longShot = false;
+        for (g = 0; g <= mx; g++) { var pw = poWin(d, e, g, mx, e === 3); if (pw != null && pw >= 0.15) { need = g; break; } }
+        if (need == null) { longShot = true; for (g = 0; g <= mx; g++) if (d.h[e][g]) { need = g; break; } }
+        if (need == null) need = mx;
+        var noHelp = null, longMin = null, hq;
+        for (g = 0; g <= mx; g++) {
+          hq = poHelp(teams, i, g, e, sc, P);
+          if (longMin == null && hq.allow >= 0) longMin = g;
+          if (noHelp == null && hq.allow >= 0 && (e === 3 ? hq.list.length - hq.allow <= 0 : hq.list.length <= hq.allow)) noHelp = g;
+        }
+        var hp = poHelp(teams, i, need, e, sc, P);
+        o[ek[1]] = { own: noHelp, real: longShot ? null : need, long: longMin, help: { allow: hp.allow, list: hp.list.slice(0, 6) } };
+      });
+      out[t.rid] = o;
+    });
+    return { wk: sc.wk, mx: mx, byRid: out };
+  }
   window.__dtfRace = function () {
     try {
       var pt = poTeams(); if (!pt) return { wait: true };
       var W = poWeeksLeft(); if (W == null) return { wait: true };
       var P = PLAYOFF_SPOTS, B = poByes(), sim = poLeagueSim(pt); if (!sim) return { wait: true };
-      var st = poStatuses(pt, W, P, B);
-      return { wait: false, weeksLeft: W, spots: P, byes: B, played: poPlayed(), season: poSeason(), teams: pt.map(function (t, j) {
+      var st = poStatuses(pt, W, P, B), sn = W > 0 ? poScenFor(pt, W, P, B) : null;
+      return { wait: false, weeksLeft: W, spots: P, byes: B, played: poPlayed(), season: poSeason(), scenWeek: sn ? sn.wk : null, teams: pt.map(function (t, j) {
         var s0 = st[t.rid] || {};
-        return { m: t.name, rank: t.rank, R: t.R, make: poPct(sim, j, P), bye: B > 1 ? poPct(sim, j, B) : null, one: poPct(sim, j, 1), x: !!s0.x, z: !!s0.bye, top: !!s0.one, dead: !!s0.dead };
+        return { m: t.name, rank: t.rank, R: t.R, make: poPct(sim, j, P), bye: B > 1 ? poPct(sim, j, B) : null, one: poPct(sim, j, 1), x: !!s0.x, z: !!s0.bye, top: !!s0.one, dead: !!s0.dead, scen: sn ? sn.byRid[t.rid] : null };
       }) };
     } catch (e) { return { wait: true, err: String(e) }; }
   };
