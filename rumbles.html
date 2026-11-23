@@ -9507,19 +9507,24 @@
     var teams = rbPastTeams(week); wpClipsLoad(week);
     if (!teams.length || !wpClips[week]) return { wait: true, plays: [] };
     if (!wpSitLoad(week).done) return { wait: true, plays: [] };
-    var win = { key: "wk" + week, clusters: [], cur: 0, week: week, past: true }, out = [], seen = {}, wait = false;
+    var win = { key: "wk" + week, clusters: [], cur: 0, week: week, past: true }, out = [], seen = {}, wait = false, charts = {};
     teams.forEach(function (a) {
       var b = teams.filter(function (t) { return t.rid === a.opp; })[0];
       if (!b) return;
       var k = Math.min(a.rid, b.rid) + "." + Math.max(a.rid, b.rid); if (seen[k]) return; seen[k] = 1;
       var pm = wpPair(win, a, b, rbPairCols(a, b)); if (!pm) { wait = true; return; }
+      var mdl = pm.model, N = mdl.T.length, stp = Math.max(1, Math.ceil(N / 150)), cx = [], cp = [], ci;   // the win-probability curve (the first manager's chance), downsampled, x already squeezed past the idle stretches
+      for (ci = 0; ci < N; ci += stp) { cx.push(Math.round(mdl.x(mdl.T[ci]) * 10000) / 10000); cp.push(Math.round(mdl.P[ci] * 1000) / 1000); }
+      if ((N - 1) % stp) { cx.push(Math.round(mdl.x(mdl.T[N - 1]) * 10000) / 10000); cp.push(Math.round(mdl.P[N - 1] * 1000) / 1000); }
+      charts[a.rid + "." + b.rid] = { x: cx, p: cp, gaps: mdl.blocks.slice(1).map(function (bl, bi) { return Math.round((mdl.x(bl.a) + mdl.x(mdl.blocks[bi].b)) / 2 * 10000) / 10000; }) };
       pm.marks.forEach(function (m) {
         var c = wpClipFor(week, m);
         out.push({ week: week, a: a.name, b: b.name, arid: a.rid, brid: b.rid, d: Math.round(m.d * 1000) / 1000, p0: Math.round(m.p0 * 1000) / 1000, p1: Math.round(m.p1 * 1000) / 1000,
           who: m.who || "", label: m.label || "", pts: m.pts, t: m.tt, sid: m.sid, tot: wpPlayTotal(pm, m), stk: (function () { var k = wpPlayStack(pm, m); return k ? k.who : null; })(), slab: (function () { var k = wpPlayStack(pm, m); return k ? k.label : null; })(), by: m.side > 0 ? a.name : b.name, help: (m.side > 0) === (m.d >= 0), rt: m.t, et: wpEt(pm.doc.t0 + m.t * 1000), sit: wpSitAt(pm.doc, week, m.sid, m.tt), clip: c ? { id: c.id, s: c.s, e: c.e, x: c.x ? { id: c.x.id, s: c.x.s, e: c.x.e } : null } : null });
+        out[out.length - 1].x = Math.round(pm.model.x(m.tt) * 10000) / 10000; out[out.length - 1].pp = Math.round((m.pp != null ? m.pp : m.p1) * 1000) / 1000;
       });
     });
-    return { wait: wait, plays: out };
+    return { wait: wait, plays: out, charts: charts };
   };
   // Tap a numbered play: its clip opens under it and plays at once (YouTube's own player, trimmed to start/end). Tap again to close.
   // Some uploads (the NFL's own, often) refuse to play outside YouTube: the player reports it, the next candidate clip is tried, and
