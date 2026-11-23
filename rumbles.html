@@ -9460,6 +9460,20 @@
     if (!passer || !catcher || !passer.who || !catcher.who) return null;
     return { who: [passer.who, catcher.who], label: passer.label };
   }
+  // The playoff race for the Hub's weekly recap: each team's chance at a playoff spot, a bye and the 1 seed, and what is already clinched or lost
+  // (the same simulation and statuses as the Playoff picture). { wait: true } until the season's scores and schedule are in.
+  window.__dtfRace = function () {
+    try {
+      var pt = poTeams(); if (!pt) return { wait: true };
+      var W = poWeeksLeft(); if (W == null) return { wait: true };
+      var P = PLAYOFF_SPOTS, B = poByes(), sim = poLeagueSim(pt); if (!sim) return { wait: true };
+      var st = poStatuses(pt, W, P, B);
+      return { wait: false, weeksLeft: W, spots: P, byes: B, played: poPlayed(), season: poSeason(), teams: pt.map(function (t, j) {
+        var s0 = st[t.rid] || {};
+        return { m: t.name, rank: t.rank, R: t.R, make: poPct(sim, j, P), bye: B > 1 ? poPct(sim, j, B) : null, one: poPct(sim, j, 1), x: !!s0.x, z: !!s0.bye, top: !!s0.one, dead: !!s0.dead };
+      }) };
+    } catch (e) { return { wait: true, err: String(e) }; }
+  };
   window.__dtfTop = function (week) {
     week = Number(week);
     if (!state.epa) { if (!state.epaScenBusy) { state.epaScenBusy = true; epaLoad().then(function () { state.epaScenBusy = false; }, function () { state.epaScenBusy = false; }); } return { wait: true, plays: [] }; }
