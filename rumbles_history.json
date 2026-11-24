@@ -1,7 +1,7 @@
 {
   "season": "2026",
   "league_id": "1389416556617801728",
-  "generated_at": "2026-11-23T22:14:37.549724+00:00",
+  "generated_at": "2026-11-24T09:41:01.501263+00:00",
   "weeks_completed": [
     1,
     2,
@@ -12,7 +12,8 @@
     7,
     8,
     9,
-    10
+    10,
+    11
   ],
   "max_rumbles_per_week": 20,
   "rumbles_per_h2h_win": 9,
@@ -20,181 +21,181 @@
     {
       "roster_id": 2,
       "manager": "Ben",
-      "rumbles": 149,
-      "rumble_pct": 74.5,
-      "last_completed_week_rumbles": 20,
-      "last_completed_week_points": 217.23,
-      "pf": 1711.8,
-      "pa": 1492.18,
-      "h2h_w": 8,
+      "rumbles": 168,
+      "rumble_pct": 76.4,
+      "last_completed_week_rumbles": 19,
+      "last_completed_week_points": 168.76,
+      "pf": 1880.56,
+      "pa": 1646.66,
+      "h2h_w": 9,
       "h2h_l": 2,
-      "vs_field_w": 77,
-      "vs_field_l": 33,
+      "vs_field_w": 87,
+      "vs_field_l": 34,
       "rank": 1
     },
     {
       "roster_id": 7,
       "manager": "Steven",
-      "rumbles": 137,
-      "rumble_pct": 68.5,
-      "last_completed_week_rumbles": 13,
-      "last_completed_week_points": 138.05,
-      "pf": 1584.69,
-      "pa": 1349.81,
+      "rumbles": 142,
+      "rumble_pct": 64.5,
+      "last_completed_week_rumbles": 5,
+      "last_completed_week_points": 127.14,
+      "pf": 1711.83,
+      "pa": 1529.97,
       "h2h_w": 7,
-      "h2h_l": 3,
-      "vs_field_w": 74,
-      "vs_field_l": 36,
-      "rank": 2
-    },
-    {
-      "roster_id": 12,
-      "manager": "Stephanie",
-      "rumbles": 113,
-      "rumble_pct": 56.5,
-      "last_completed_week_rumbles": 16,
-      "last_completed_week_points": 161.21,
-      "pf": 1483.91,
-      "pa": 1358.51,
-      "h2h_w": 6,
       "h2h_l": 4,
-      "vs_field_w": 59,
-      "vs_field_l": 51,
-      "rank": 3
+      "vs_field_w": 79,
+      "vs_field_l": 42,
+      "rank": 2
     },
     {
       "roster_id": 10,
       "manager": "Ryan",
-      "rumbles": 112,
-      "rumble_pct": 56.0,
-      "last_completed_week_rumbles": 11,
-      "last_completed_week_points": 120.13,
-      "pf": 1454.05,
-      "pa": 1437.76,
-      "h2h_w": 6,
+      "rumbles": 127,
+      "rumble_pct": 57.7,
+      "last_completed_week_rumbles": 15,
+      "last_completed_week_points": 138.42,
+      "pf": 1592.47,
+      "pa": 1564.82,
+      "h2h_w": 7,
       "h2h_l": 4,
-      "vs_field_w": 58,
-      "vs_field_l": 52,
-      "rank": 4
+      "vs_field_w": 64,
+      "vs_field_l": 57,
+      "rank": 3
     },
     {
       "roster_id": 3,
       "manager": "Jake",
-      "rumbles": 108,
-      "rumble_pct": 54.0,
-      "last_completed_week_rumbles": 0,
-      "last_completed_week_points": 90.07,
-      "pf": 1401.49,
-      "pa": 1522.9,
-      "h2h_w": 6,
+      "rumbles": 126,
+      "rumble_pct": 57.3,
+      "last_completed_week_rumbles": 18,
+      "last_completed_week_points": 156.63,
+      "pf": 1558.12,
+      "pa": 1649.04,
+      "h2h_w": 7,
       "h2h_l": 4,
-      "vs_field_w": 54,
-      "vs_field_l": 56,
+      "vs_field_w": 63,
+      "vs_field_l": 58,
+      "rank": 4
+    },
+    {
+      "roster_id": 12,
+      "manager": "Stephanie",
+      "rumbles": 117,
+      "rumble_pct": 53.2,
+      "last_completed_week_rumbles": 4,
+      "last_completed_week_points": 127.06,
+      "pf": 1610.97,
+      "pa": 1496.93,
+      "h2h_w": 6,
+      "h2h_l": 5,
+      "vs_field_w": 63,
+      "vs_field_l": 58,
       "rank": 5
     },
     {
       "roster_id": 4,
       "manager": "Haan",
-      "rumbles": 104,
-      "rumble_pct": 52.0,
-      "last_completed_week_rumbles": 19,
-      "last_completed_week_points": 200.16,
-      "pf": 1551.92,
-      "pa": 1511.71,
+      "rumbles": 111,
+      "rumble_pct": 50.5,
+      "last_completed_week_rumbles": 7,
+      "last_completed_week_points": 154.48,
+      "pf": 1706.4,
+      "pa": 1680.47,
       "h2h_w": 5,
-      "h2h_l": 5,
-      "vs_field_w": 59,
-      "vs_field_l": 51,
+      "h2h_l": 6,
+      "vs_field_w": 66,
+      "vs_field_l": 55,
       "rank": 6
+    },
+    {
+      "roster_id": 11,
+      "manager": "Kaitlyn",
+      "rumbles": 108,
+      "rumble_pct": 49.1,
+      "last_completed_week_rumbles": 17,
+      "last_completed_week_points": 154.5,
+      "pf": 1613.06,
+      "pa": 1639.53,
+      "h2h_w": 5,
+      "h2h_l": 6,
+      "vs_field_w": 63,
+      "vs_field_l": 58,
+      "rank": 7
+    },
+    {
+      "roster_id": 8,
+      "manager": "Ankit",
+      "rumbles": 108,
+      "rumble_pct": 49.1,
+      "last_completed_week_rumbles": 20,
+      "last_completed_week_points": 180.16,
+      "pf": 1577.46,
+      "pa": 1600.88,
+      "h2h_w": 6,
+      "h2h_l": 5,
+      "vs_field_w": 54,
+      "vs_field_l": 67,
+      "rank": 8
     },
     {
       "roster_id": 6,
       "manager": "Alex",
       "rumbles": 93,
-      "rumble_pct": 46.5,
-      "last_completed_week_rumbles": 1,
-      "last_completed_week_points": 105.51,
-      "pf": 1518.87,
-      "pa": 1465.05,
+      "rumble_pct": 42.3,
+      "last_completed_week_rumbles": 0,
+      "last_completed_week_points": 111.29,
+      "pf": 1630.16,
+      "pa": 1589.86,
       "h2h_w": 4,
-      "h2h_l": 6,
+      "h2h_l": 7,
       "vs_field_w": 57,
-      "vs_field_l": 53,
-      "rank": 7
-    },
-    {
-      "roster_id": 11,
-      "manager": "Kaitlyn",
-      "rumbles": 91,
-      "rumble_pct": 45.5,
-      "last_completed_week_rumbles": 3,
-      "last_completed_week_points": 123.55,
-      "pf": 1458.56,
-      "pa": 1521.18,
-      "h2h_w": 4,
-      "h2h_l": 6,
-      "vs_field_w": 55,
-      "vs_field_l": 55,
-      "rank": 8
-    },
-    {
-      "roster_id": 8,
-      "manager": "Ankit",
-      "rumbles": 88,
-      "rumble_pct": 44.0,
-      "last_completed_week_rumbles": 18,
-      "last_completed_week_points": 184.72,
-      "pf": 1397.3,
-      "pa": 1473.74,
-      "h2h_w": 5,
-      "h2h_l": 5,
-      "vs_field_w": 43,
-      "vs_field_l": 67,
+      "vs_field_l": 64,
       "rank": 9
     },
     {
       "roster_id": 9,
       "manager": "Christian",
-      "rumbles": 84,
-      "rumble_pct": 42.0,
-      "last_completed_week_rumbles": 5,
-      "last_completed_week_points": 143.09,
-      "pf": 1379.43,
-      "pa": 1401.95,
+      "rumbles": 87,
+      "rumble_pct": 39.5,
+      "last_completed_week_rumbles": 3,
+      "last_completed_week_points": 126.14,
+      "pf": 1505.57,
+      "pa": 1558.58,
       "h2h_w": 4,
-      "h2h_l": 6,
-      "vs_field_w": 48,
-      "vs_field_l": 62,
+      "h2h_l": 7,
+      "vs_field_w": 51,
+      "vs_field_l": 70,
       "rank": 10
     },
     {
       "roster_id": 5,
       "manager": "Joe",
-      "rumbles": 79,
-      "rumble_pct": 39.5,
-      "last_completed_week_rumbles": 6,
-      "last_completed_week_points": 152.34,
-      "pf": 1376.64,
-      "pa": 1417.81,
+      "rumbles": 80,
+      "rumble_pct": 36.4,
+      "last_completed_week_rumbles": 1,
+      "last_completed_week_points": 118.35,
+      "pf": 1494.99,
+      "pa": 1572.31,
       "h2h_w": 4,
-      "h2h_l": 6,
-      "vs_field_w": 43,
-      "vs_field_l": 67,
+      "h2h_l": 7,
+      "vs_field_w": 44,
+      "vs_field_l": 77,
       "rank": 11
     },
     {
       "roster_id": 1,
       "manager": "Aidan",
-      "rumbles": 42,
-      "rumble_pct": 21.0,
-      "last_completed_week_rumbles": 8,
-      "last_completed_week_points": 168.91,
-      "pf": 1271.84,
-      "pa": 1637.9,
-      "h2h_w": 1,
+      "rumbles": 53,
+      "rumble_pct": 24.1,
+      "last_completed_week_rumbles": 11,
+      "last_completed_week_points": 124.81,
+      "pf": 1396.65,
+      "pa": 1749.19,
+      "h2h_w": 2,
       "h2h_l": 9,
-      "vs_field_w": 33,
-      "vs_field_l": 77,
+      "vs_field_w": 35,
+      "vs_field_l": 86,
       "rank": 12
     }
   ],
@@ -1298,6 +1299,116 @@
         "teams_outscored_by": 8,
         "rumbles": 3
       }
+    },
+    "11": {
+      "1": {
+        "points": 124.81,
+        "opponent_roster_id": 6,
+        "opponent_points": 111.29,
+        "h2h_win": true,
+        "teams_outscored": 2,
+        "teams_outscored_by": 9,
+        "rumbles": 11
+      },
+      "6": {
+        "points": 111.29,
+        "opponent_roster_id": 1,
+        "opponent_points": 124.81,
+        "h2h_win": false,
+        "teams_outscored": 0,
+        "teams_outscored_by": 11,
+        "rumbles": 0
+      },
+      "2": {
+        "points": 168.76,
+        "opponent_roster_id": 4,
+        "opponent_points": 154.48,
+        "h2h_win": true,
+        "teams_outscored": 10,
+        "teams_outscored_by": 1,
+        "rumbles": 19
+      },
+      "4": {
+        "points": 154.48,
+        "opponent_roster_id": 2,
+        "opponent_points": 168.76,
+        "h2h_win": false,
+        "teams_outscored": 7,
+        "teams_outscored_by": 4,
+        "rumbles": 7
+      },
+      "3": {
+        "points": 156.63,
+        "opponent_roster_id": 9,
+        "opponent_points": 126.14,
+        "h2h_win": true,
+        "teams_outscored": 9,
+        "teams_outscored_by": 2,
+        "rumbles": 18
+      },
+      "9": {
+        "points": 126.14,
+        "opponent_roster_id": 3,
+        "opponent_points": 156.63,
+        "h2h_win": false,
+        "teams_outscored": 3,
+        "teams_outscored_by": 8,
+        "rumbles": 3
+      },
+      "5": {
+        "points": 118.35,
+        "opponent_roster_id": 11,
+        "opponent_points": 154.5,
+        "h2h_win": false,
+        "teams_outscored": 1,
+        "teams_outscored_by": 10,
+        "rumbles": 1
+      },
+      "11": {
+        "points": 154.5,
+        "opponent_roster_id": 5,
+        "opponent_points": 118.35,
+        "h2h_win": true,
+        "teams_outscored": 8,
+        "teams_outscored_by": 3,
+        "rumbles": 17
+      },
+      "7": {
+        "points": 127.14,
+        "opponent_roster_id": 8,
+        "opponent_points": 180.16,
+        "h2h_win": false,
+        "teams_outscored": 5,
+        "teams_outscored_by": 6,
+        "rumbles": 5
+      },
+      "8": {
+        "points": 180.16,
+        "opponent_roster_id": 7,
+        "opponent_points": 127.14,
+        "h2h_win": true,
+        "teams_outscored": 11,
+        "teams_outscored_by": 0,
+        "rumbles": 20
+      },
+      "10": {
+        "points": 138.42,
+        "opponent_roster_id": 12,
+        "opponent_points": 127.06,
+        "h2h_win": true,
+        "teams_outscored": 6,
+        "teams_outscored_by": 5,
+        "rumbles": 15
+      },
+      "12": {
+        "points": 127.06,
+        "opponent_roster_id": 10,
+        "opponent_points": 138.42,
+        "h2h_win": false,
+        "teams_outscored": 4,
+        "teams_outscored_by": 7,
+        "rumbles": 4
+      }
     }
   },
   "qb_adjustments": [
@@ -1440,28 +1551,6 @@
     },
     {
       "week": 10,
-      "roster_id": 1,
-      "manager": "Aidan",
-      "injured_qb": {
-        "player_id": "11565",
-        "name": "J.J. McCarthy",
-        "points": 19.27
-      },
-      "backup_qbs": [
-        {
-          "player_id": "2306",
-          "name": "Jameis Winston",
-          "points": 0.3
-        }
-      ],
-      "backup_points_total": 0.3,
-      "confidence": "possible",
-      "injury_status_at_capture": null,
-      "custom_points_delta": null,
-      "captured_at": null
-    },
-    {
-      "week": 10,
       "roster_id": 3,
       "manager": "Jake",
       "injured_qb": {
@@ -1481,50 +1570,6 @@
       "injury_status_at_capture": "Out",
       "custom_points_delta": null,
       "captured_at": "manual"
-    },
-    {
-      "week": 10,
-      "roster_id": 5,
-      "manager": "Joe",
-      "injured_qb": {
-        "player_id": "6804",
-        "name": "Jordan Love",
-        "points": 10.8
-      },
-      "backup_qbs": [
-        {
-          "player_id": "827",
-          "name": "Tyrod Taylor",
-          "points": 0.12
-        }
-      ],
-      "backup_points_total": 0.12,
-      "confidence": "possible",
-      "injury_status_at_capture": null,
-      "custom_points_delta": null,
-      "captured_at": null
-    },
-    {
-      "week": 10,
-      "roster_id": 5,
-      "manager": "Joe",
-      "injured_qb": {
-        "player_id": "96",
-        "name": "Aaron Rodgers",
-        "points": 15.37
-      },
-      "backup_qbs": [
-        {
-          "player_id": "4972",
-          "name": "Mason Rudolph",
-          "points": 0.98
-        }
-      ],
-      "backup_points_total": 0.98,
-      "confidence": "possible",
-      "injury_status_at_capture": null,
-      "custom_points_delta": null,
-      "captured_at": null
     },
     {
       "week": 10,
@@ -1549,18 +1594,40 @@
       "captured_at": "2026-11-15T21:06:25.593317+00:00"
     },
     {
-      "week": 10,
-      "roster_id": 11,
-      "manager": "Kaitlyn",
+      "week": 11,
+      "roster_id": 1,
+      "manager": "Aidan",
       "injured_qb": {
-        "player_id": "4984",
-        "name": "Josh Allen",
-        "points": 23.49
+        "player_id": "11565",
+        "name": "J.J. McCarthy",
+        "points": 15.77
       },
       "backup_qbs": [
         {
-          "player_id": "5127",
-          "name": "Kyle Allen",
+          "player_id": "2306",
+          "name": "Jameis Winston",
+          "points": 6.7
+        }
+      ],
+      "backup_points_total": 6.7,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null,
+      "captured_at": null
+    },
+    {
+      "week": 11,
+      "roster_id": 2,
+      "manager": "Ben",
+      "injured_qb": {
+        "player_id": "4046",
+        "name": "Patrick Mahomes",
+        "points": 28.11
+      },
+      "backup_qbs": [
+        {
+          "player_id": "7591",
+          "name": "Justin Fields",
           "points": -0.2
         }
       ],
@@ -1571,22 +1638,66 @@
       "captured_at": null
     },
     {
-      "week": 10,
-      "roster_id": 12,
-      "manager": "Stephanie",
+      "week": 11,
+      "roster_id": 2,
+      "manager": "Ben",
       "injured_qb": {
-        "player_id": "3163",
-        "name": "Jared Goff",
-        "points": 21.32
+        "player_id": "8183",
+        "name": "Brock Purdy",
+        "points": 24.35
       },
       "backup_qbs": [
         {
-          "player_id": "4179",
-          "name": "Joshua Dobbs",
-          "points": 0.28
+          "player_id": "7527",
+          "name": "Mac Jones",
+          "points": 0.1
         }
       ],
-      "backup_points_total": 0.28,
+      "backup_points_total": 0.1,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null,
+      "captured_at": null
+    },
+    {
+      "week": 11,
+      "roster_id": 10,
+      "manager": "Ryan",
+      "injured_qb": {
+        "player_id": "1166",
+        "name": "Kirk Cousins",
+        "points": 7.05
+      },
+      "backup_qbs": [
+        {
+          "player_id": "3161",
+          "name": "Carson Wentz",
+          "points": 1.36
+        }
+      ],
+      "backup_points_total": 1.36,
+      "confidence": "possible",
+      "injury_status_at_capture": null,
+      "custom_points_delta": null,
+      "captured_at": null
+    },
+    {
+      "week": 11,
+      "roster_id": 11,
+      "manager": "Kaitlyn",
+      "injured_qb": {
+        "player_id": "4984",
+        "name": "Josh Allen",
+        "points": 14.41
+      },
+      "backup_qbs": [
+        {
+          "player_id": "5127",
+          "name": "Kyle Allen",
+          "points": -0.1
+        }
+      ],
+      "backup_points_total": -0.1,
       "confidence": "possible",
       "injury_status_at_capture": null,
       "custom_points_delta": null,
