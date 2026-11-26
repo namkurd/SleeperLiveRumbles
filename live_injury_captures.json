@@ -71,6 +71,24 @@
       "captured_at": "2026-11-26T03:45:31.705954+00:00",
       "second_half_started": true,
       "quarter_at_capture": "4"
+    },
+    {
+      "season": "2026",
+      "week": 12,
+      "roster_id": 3,
+      "manager": "Jake",
+      "player": {
+        "player_id": "12517",
+        "name": "Colston Loveland",
+        "position": "TE",
+        "points": -0.5
+      },
+      "team": "CHI",
+      "injury_status_at_capture": "Out",
+      "game_status_at_capture": "in_progress",
+      "captured_at": "2026-11-26T21:25:19.463966+00:00",
+      "second_half_started": true,
+      "quarter_at_capture": "4"
     }
   ]
 }
